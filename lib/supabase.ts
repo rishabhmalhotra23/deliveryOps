@@ -1,22 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+// Back-compat shim. New code imports directly from `lib/supabase/server` or
+// `lib/supabase/client`. This file keeps the inherited template's chat routes
+// working without a sweep.
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export { supabaseAdmin, supabaseServer as supabase, requireAdmin } from "./supabase/server";
+export { TABLES as TABLES_FULL } from "./supabase/types";
 
-if (!url || !anonKey) {
-  console.warn("Supabase credentials missing — chat persistence disabled");
-}
-
-export const supabase = url && anonKey ? createClient(url, anonKey) : null;
-export const supabaseAdmin = url && serviceKey ? createClient(url, serviceKey) : null;
-
-/**
- * Project-specific table names. Rename this prefix to match your automation
- * (e.g. "invoice_processing_sessions") so multiple apps can share one
- * Supabase project without collisions.
- */
+// Existing chat routes look up `TABLES.sessions` / `TABLES.messages`.
+import { TABLES as ALL_TABLES } from "./supabase/types";
 export const TABLES = {
-  sessions: "chat_sessions",
-  messages: "chat_messages",
+  sessions: ALL_TABLES.chatSessions,
+  messages: ALL_TABLES.chatMessages,
 } as const;

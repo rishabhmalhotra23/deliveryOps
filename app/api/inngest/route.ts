@@ -6,6 +6,7 @@ import { syncSalesforce } from "@/inngest/functions/sync-salesforce";
 import { syncKognitosV2 } from "@/inngest/functions/sync-kognitos-v2";
 import { syncCalendar } from "@/inngest/functions/sync-calendar";
 import { syncMonday } from "@/inngest/functions/sync-monday";
+import { runTask } from "@/inngest/functions/run-task";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -16,5 +17,6 @@ export const { GET, POST, PUT } = serve({
     syncKognitosV2,
     syncCalendar,
     syncMonday,
+    runTask,
   ],
 });
