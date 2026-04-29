@@ -164,24 +164,38 @@ async function toolSendSlackMessage(input: Record<string, unknown>, ctx: Handler
   // Lazy-import to keep this module server-only and avoid pulling slack libs
   // into client bundles.
   const { postMessage } = await import("@/lib/slack/client");
-  await postMessage(channel, String(input.message ?? ""));
+  await postMessage(channel, String(input.message ?? ""), { customerKey: ctx.customerKey });
   return `Message sent to #${channel}.`;
 }
 
 async function toolSendEmail(input: Record<string, unknown>, ctx: HandlerContext) {
-  // Phase-1 first pass — actual Gmail send + Slack approval card lands when
-  // the email approval flow ports (lib/approvals/email-approval.ts). Until
-  // then, queue the request as an event so the dashboard sees it.
+  // Phase-1: route directly to Gmail (which falls back to the dev outbox when
+  // Google creds are missing). The Slack-based approval card lands with the
+  // email-approval port; until then, the email goes out / lands in the outbox
+  // as soon as the agent calls this.
   const to = (input.to as string[]) ?? [];
   const subject = String(input.subject ?? "");
   const body = String(input.body ?? "");
-  const event = await appendEvent(
+  const customer = await requireCustomerByKey(ctx.customerKey);
+  const fromAddr = customer.email_alias ?? `${customer.key}@kognitos.com`;
+
+  const { sendEmail } = await import("@/lib/integrations/google/gmail");
+  const result = await sendEmail({
+    fromAddr,
+    to,
+    subject,
+    bodyMarkdown: body,
+    customerKey: ctx.customerKey,
+  });
+
+  await appendEvent(
     ctx.customerKey,
-    "EMAIL_DRAFT_REQUESTED",
-    { to, subject, body: truncate(body, 4000), attachments: input.attachments ?? [] },
-    { summary: `Email draft requested: ${subject}`, tags: ["email", "draft"] }
+    "EMAIL_SENT",
+    { to, subject, body: truncate(body, 4000), message_id: result.id },
+    { summary: `Email sent → ${to.join(", ")}: ${subject}`, tags: ["email", "outbound"] }
   );
-  return `Email draft queued (event ${event.id}). The Slack approval card lands once the email-approval port is in.`;
+
+  return `Email sent (id ${result.id}). To ${to.join(", ")} — subject "${subject}".`;
 }
 
 async function toolReviseEmailDraft(
@@ -224,7 +238,7 @@ async function toolEscalateToHuman(input: Record<string, unknown>, ctx: HandlerC
     (suggested ? `\n*Suggested action:* ${suggested}` : "");
   try {
     const { postMessage } = await import("@/lib/slack/client");
-    await postMessage("cs-escalations", message);
+    await postMessage("cs-escalations", message, { customerKey: ctx.customerKey });
   } catch (err) {
     console.warn("Slack escalation post failed:", err);
   }

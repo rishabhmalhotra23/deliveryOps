@@ -29,6 +29,12 @@ export default function Home() {
           >
             Talk to the agent
           </Link>
+          <Link
+            href="/dev"
+            className="rounded-md border border-[color:var(--brand-metal)] px-4 py-2 text-sm font-medium hover:border-[color:var(--brand-night)] text-[color:var(--brand-night)]"
+          >
+            Dev console
+          </Link>
         </div>
 
         <div className="rounded-lg border border-[color:var(--brand-metal)] bg-white p-4 text-sm">

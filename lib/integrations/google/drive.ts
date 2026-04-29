@@ -2,8 +2,14 @@
 // Drive is a daily mirror of Supabase Storage in the new architecture, not
 // the source of truth. Cron job (Phase 2) does Supabase → Drive sync once a
 // day so humans can browse customer files in the Drive UI.
+//
+// Dev-mode behaviour: when Google OAuth env vars are missing, ensureFolder
+// returns a mock folder id, findChild returns null, and upload logs to the
+// dev outbox.
 
 import { getGoogleAccessToken } from "./auth";
+import { recordOutbox } from "@/lib/dev/outbox";
+import { driveEnabled } from "@/lib/dev/mode";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -32,6 +38,7 @@ export async function findChild(
   name: string,
   opts: { folderOnly?: boolean } = {}
 ): Promise<DriveFile | null> {
+  if (!driveEnabled()) return null;
   const folderClause = opts.folderOnly
     ? "and mimeType = 'application/vnd.google-apps.folder' "
     : "";
@@ -43,6 +50,7 @@ export async function findChild(
 }
 
 export async function ensureFolder(parentId: string, path: string): Promise<string> {
+  if (!driveEnabled()) return `mock-${Buffer.from(`${parentId}/${path}`).toString("base64").slice(0, 16)}`;
   const segments = path.split("/").filter(Boolean);
   let currentId = parentId;
   for (const segment of segments) {
@@ -70,9 +78,36 @@ export interface UploadInput {
   path: string; // including filename, e.g. "inbox/2026-04/contract.pdf"
   content: Buffer | string;
   contentType: string;
+  customerKey?: string; // for dev-mode outbox tagging
 }
 
 export async function upload(input: UploadInput): Promise<DriveFile> {
+  if (!driveEnabled()) {
+    const filename = input.path.split("/").pop() ?? "upload";
+    const size =
+      typeof input.content === "string"
+        ? Buffer.byteLength(input.content, "utf-8")
+        : input.content.length;
+    const id = `mock-drive-${Date.now()}`;
+    await recordOutbox({
+      kind: "drive.upload",
+      customerKey: input.customerKey ?? "unknown",
+      summary: `Drive upload → ${input.path} (${formatBytes(size)})`,
+      payload: {
+        rootFolderId: input.rootFolderId,
+        path: input.path,
+        contentType: input.contentType,
+        size,
+        mock_file_id: id,
+      },
+    });
+    return {
+      id,
+      name: filename,
+      mimeType: input.contentType,
+      webViewLink: `mock://drive/${id}`,
+    };
+  }
   const segments = input.path.split("/");
   const filename = segments.pop()!;
   const folderPath = segments.join("/");
@@ -104,4 +139,10 @@ export async function upload(input: UploadInput): Promise<DriveFile> {
     throw new Error(`Drive upload failed: ${res.status} ${await res.text()}`);
   }
   return (await res.json()) as DriveFile;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }

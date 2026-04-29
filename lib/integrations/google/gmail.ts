@@ -1,8 +1,14 @@
 // Gmail send + send-as alias verification.
 // Port of legacy/storage/gmail.py — outbound parts only (read path is replaced
 // by the Pub/Sub push handler at app/api/gmail/push/route.ts).
+//
+// Dev-mode behaviour: when Google OAuth env vars are missing, sendEmail falls
+// back to the dev outbox (lib/dev/outbox.ts) and verifySendAsAliases returns
+// "all configured" so callers can run end-to-end without Google credentials.
 
 import { getGoogleAccessToken } from "./auth";
+import { recordOutbox } from "@/lib/dev/outbox";
+import { gmailEnabled } from "@/lib/dev/mode";
 
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 
@@ -34,11 +40,13 @@ interface SendAsListResponse {
 }
 
 export async function listSendAsAliases(): Promise<string[]> {
+  if (!gmailEnabled()) return [];
   const data = await gmailFetch<SendAsListResponse>("/settings/sendAs");
   return (data.sendAs ?? []).map((s) => s.sendAsEmail.toLowerCase());
 }
 
 export async function verifySendAsAliases(required: string[]): Promise<string[]> {
+  if (!gmailEnabled()) return []; // pretend everything is configured in dev mode
   const configured = new Set(await listSendAsAliases());
   const missing = required.filter((a) => !configured.has(a.toLowerCase()));
   if (missing.length > 0) {
@@ -68,6 +76,7 @@ export interface SendEmailInput {
   inReplyTo?: string;
   references?: string;
   threadId?: string;
+  customerKey?: string; // for dev-mode outbox tagging
 }
 
 export interface SendEmailResult {
@@ -190,6 +199,31 @@ function buildRawMime(input: SendEmailInput): string {
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  if (!gmailEnabled()) {
+    const id = `mock-mail-${Date.now()}`;
+    await recordOutbox({
+      kind: "gmail.send",
+      customerKey: input.customerKey ?? "unknown",
+      summary: `Email → ${input.to.join(", ")}: ${input.subject}`,
+      payload: {
+        from: input.fromAddr,
+        to: input.to,
+        subject: input.subject,
+        body: input.bodyMarkdown,
+        attachments: (input.attachments ?? []).map((a) => ({
+          filename: a.filename,
+          contentType: a.contentType,
+          size: a.data.length,
+        })),
+        inReplyTo: input.inReplyTo ?? null,
+        references: input.references ?? null,
+        threadId: input.threadId ?? null,
+        mock_message_id: id,
+      },
+    });
+    return { id, threadId: input.threadId ?? id };
+  }
+
   const raw = buildRawMime(input);
   const encoded = Buffer.from(raw, "utf-8")
     .toString("base64")

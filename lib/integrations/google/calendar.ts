@@ -1,7 +1,12 @@
 // Google Calendar client — Phase 1 ships read-only "list upcoming/past events"
 // helpers. Full Calendar sync ports in Phase 2 (sync-calendar Inngest function).
+//
+// Dev-mode behaviour: when Google OAuth env vars are missing, listEvents
+// returns a small canned set of upcoming meetings so the dashboard has
+// something to render.
 
 import { getGoogleAccessToken } from "./auth";
+import { calendarEnabled } from "@/lib/dev/mode";
 
 const CAL_API = "https://www.googleapis.com/calendar/v3";
 
@@ -34,6 +39,9 @@ export async function listEvents(opts: {
   q?: string;
   maxResults?: number;
 }): Promise<CalEvent[]> {
+  if (!calendarEnabled()) {
+    return mockEvents(opts.timeMin, opts.timeMax);
+  }
   const calendarId = encodeURIComponent(opts.calendarId ?? "primary");
   const params = new URLSearchParams({
     timeMin: opts.timeMin.toISOString(),
@@ -48,4 +56,31 @@ export async function listEvents(opts: {
     `/calendars/${calendarId}/events?${params.toString()}`
   );
   return data.items ?? [];
+}
+
+function mockEvents(timeMin: Date, timeMax: Date): CalEvent[] {
+  const now = Date.now();
+  const candidates: CalEvent[] = [
+    {
+      id: "mock-1",
+      summary: "Acme weekly check-in",
+      description: "Standing weekly with the Acme CSM team.",
+      start: { dateTime: new Date(now + 24 * 3600_000).toISOString() },
+      end: { dateTime: new Date(now + 24 * 3600_000 + 30 * 60_000).toISOString() },
+      attendees: [{ email: "csm@kognitos.com", responseStatus: "accepted" }],
+      htmlLink: "mock://calendar/mock-1",
+    },
+    {
+      id: "mock-2",
+      summary: "Acme QBR",
+      description: "Quarterly business review.",
+      start: { dateTime: new Date(now + 7 * 24 * 3600_000).toISOString() },
+      end: { dateTime: new Date(now + 7 * 24 * 3600_000 + 60 * 60_000).toISOString() },
+      htmlLink: "mock://calendar/mock-2",
+    },
+  ];
+  return candidates.filter((e) => {
+    const start = new Date(e.start.dateTime ?? e.start.date ?? 0).getTime();
+    return start >= timeMin.getTime() && start <= timeMax.getTime();
+  });
 }
