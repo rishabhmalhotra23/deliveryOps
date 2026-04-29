@@ -1,0 +1,135 @@
+---
+globs: "*.html,*.css,*.js,*.tsx,*.ts"
+description: "Lattice design system rules — color tokens, styling philosophy, and UI conventions for the Customer Curator dashboard"
+---
+
+# Lattice Design System Rules
+
+This project follows the **Kognitos Lattice Design System** (`@kognitos/lattice`).
+Even though the frontend is vanilla HTML/JS (not React), we adopt Lattice's design tokens, color system, and styling philosophy to maintain visual consistency with other Kognitos products.
+
+## Core Philosophy
+
+> **Use semantic tokens, not hardcoded values.**
+
+- ❌ NEVER use hardcoded hex/rgb colors (e.g. `#4f46e5`, `rgb(79,70,229)`)
+- ❌ NEVER use Tailwind arbitrary color values (e.g. `bg-[#ff0000]`)
+- ❌ NEVER use inline `style="..."` for colors, fonts, or spacing
+- ✅ USE CSS custom properties defined in `<style>` via `var(--token)`
+- ✅ USE Tailwind utility classes that reference semantic tokens
+- ✅ USE the semantic color classes defined in the project's CSS
+
+## Color Tokens (from Lattice theme.css)
+
+The project defines CSS custom properties on `:root` matching Lattice's token system.
+Always use these — they support future light/dark theme switching.
+
+### Semantic Colors
+
+| Token                    | Purpose                           |
+|--------------------------|-----------------------------------|
+| `--primary`              | Primary brand actions / highlights |
+| `--primary-foreground`   | Text on primary backgrounds        |
+| `--secondary`            | Less prominent elements            |
+| `--secondary-foreground` | Text on secondary backgrounds      |
+| `--accent`               | Accent highlights                  |
+| `--accent-foreground`    | Text on accent backgrounds         |
+| `--background`           | Page background                    |
+| `--foreground`           | Default text color                 |
+| `--card`                 | Card backgrounds                   |
+| `--card-foreground`      | Card text                          |
+| `--muted`                | Muted / subdued backgrounds        |
+| `--muted-foreground`     | Subdued text (metadata, hints)     |
+| `--destructive`          | Error / danger states              |
+| `--border`               | Default borders                    |
+| `--input`                | Input borders                      |
+| `--ring`                 | Focus rings                        |
+| `--brand`                | Kognitos brand color               |
+
+### Status Colors
+
+Each status color has a full numeric scale (50–900) for backgrounds, text, and borders:
+
+| Token family     | Purpose                  | Scale classes                                       |
+|------------------|--------------------------|-----------------------------------------------------|
+| `destructive-*`  | Error / danger states    | `bg-destructive-50` … `bg-destructive-900`, etc.    |
+| `success-*`      | Success / positive       | `bg-success-50` … `bg-success-900`, etc.            |
+| `warning-*`      | Warning / caution        | `bg-warning-50` … `bg-warning-900`, etc.            |
+| `informative-*`  | Informational / neutral  | `bg-informative-50` … `bg-informative-900`, etc.    |
+
+Additional tokens:
+
+| Token                      | Purpose               |
+|----------------------------|-----------------------|
+| `--success-foreground`     | Text on success bg    |
+| `--warning-foreground`     | Text on warning bg    |
+| `--informative-foreground` | Text on info bg       |
+| `--link`                   | Link text color       |
+| `--code-bg`                | Code block background |
+| `--code-fg`                | Code block text       |
+
+### Sidebar Colors
+
+| Token                           | Purpose                        |
+|---------------------------------|--------------------------------|
+| `--sidebar`                     | Sidebar background             |
+| `--sidebar-foreground`          | Sidebar text                   |
+| `--sidebar-primary`             | Sidebar active / selected      |
+| `--sidebar-primary-foreground`  | Text on sidebar primary bg     |
+| `--sidebar-accent`              | Sidebar hover / accent         |
+| `--sidebar-accent-foreground`   | Text on sidebar accent bg      |
+| `--sidebar-border`              | Sidebar borders                |
+| `--sidebar-muted`               | Sidebar muted text             |
+
+## Tailwind Integration
+
+When using Tailwind classes in HTML, reference design tokens through the custom CSS classes:
+
+```css
+/* Good — semantic token classes */
+.bg-primary    { background: var(--primary); }
+.text-fg       { color: var(--foreground); }
+.border-border { border-color: var(--border); }
+
+/* Bad — hardcoded arbitrary values */
+.bg-[#4f46e5]  /* ❌ Never */
+```
+
+## Typography
+
+- **Font family**: `PP Neue Montreal, sans-serif` (Lattice default) — fallback to system sans-serif
+- Use Tailwind `text-sm`, `text-xs`, `text-base`, `text-lg` for sizing
+- Use `font-medium`, `font-semibold`, `font-bold` for weights
+- Headings should use `font-semibold` or `font-bold`
+
+## Component Patterns
+
+When building UI elements, follow these patterns:
+
+1. **Cards**: Use `bg-card text-card-foreground border border-border rounded-xl` — never custom card colors
+2. **Buttons**: Primary = `bg-primary text-primary-foreground`, Secondary = `bg-secondary text-secondary-foreground`
+3. **Inputs**: Use `border-input rounded-lg focus:ring-2 focus:ring-ring` for consistent focus states
+4. **Badges**: Use status token scales — `success-*` (green), `warning-*` (amber), `destructive-*` (red), `informative-*` (blue)
+5. **Empty states**: Center content with muted icon + muted-foreground text
+6. **Sidebar nav**: Use sidebar tokens for background, hover states, and active indicators
+
+## Spacing & Layout
+
+- Use Tailwind spacing scale: `p-4`, `gap-3`, `mb-6` etc.
+- Standard card padding: `p-4` or `p-5`
+- Section spacing: `space-y-5` or `space-y-6`
+- Border radius: `rounded-lg` for inputs, `rounded-xl` for cards/panels
+
+## Accessibility
+
+- All interactive elements need visible focus states (`focus:ring-2 focus:ring-ring`)
+- Use semantic HTML (`<button>`, `<nav>`, `<main>`, `<aside>`)
+- Include `aria-label` for icon-only buttons
+- Ensure sufficient color contrast between foreground/background pairs
+
+## Dark Mode Readiness
+
+Even if dark mode is not yet implemented, structure CSS to be dark-mode ready:
+- All colors defined as CSS custom properties on `:root`
+- A `.dark` class on the root element can override all tokens
+- Never use colors that only work in light mode

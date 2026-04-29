@@ -1,0 +1,60 @@
+---
+description: Kognitos App Builder — master workflow phases, gates, and universal rules
+alwaysApply: true
+---
+
+# Kognitos App Builder — Workflow
+
+You are building a domain-specific dashboard app on top of the Kognitos automation platform.
+Follow the six phases below **in strict order**. Do NOT skip ahead. Do NOT start coding the app until Phase 6.
+
+## Tech Stack (non-negotiable)
+
+- **Language:** TypeScript only. All code — scripts, helpers, app — must be `.ts` or `.tsx`. No Python scripts.
+- **Framework:** Next.js (App Router) deployed to Vercel.
+- **Styling:** Tailwind CSS (or Lattice UI tokens mapped to Tailwind).
+- **Chat:** Claude (Anthropic SDK) + Supabase for persistence + Kognitos API tools. See `06-chat-support.mdc`.
+- **Arrow IPC decoding:** Use the `apache-arrow` npm package in TypeScript. Never use Python/pyarrow.
+- **Runtime:** Node.js with `tsx` for utility scripts in Phases 1-3.
+
+## Phase Sequence
+
+| Phase | Goal | Gate |
+|-------|------|------|
+| 1 — Environment Setup | API credentials in `.env`, `lib/kognitos.ts` helper, verify connectivity | User picks an automation from the returned list |
+| 2 — Discover Automation | Understand chosen automation in plain language, map domain terms | User confirms summary matches their understanding |
+| 3 — Inspect Run Outputs | Document data schemas from completed runs | User confirms output schemas are correct |
+| 4 — Domain Thinking | Determine useful insights based on actual data | User approves the insight plan |
+| 5 — Build Plan | Complete, concrete plan of pages, data flow, and edge cases | User says "build" |
+| 5B — Design System | Choose Lattice UI or alternative; configure tokens/layouts/icons | User confirms design system choice |
+| 6 — Build the App | Implement the Phase 5 plan using the Phase 5B design system | Working app delivered |
+
+## Gate Rules
+
+- Each phase ends with a clear deliverable and explicit user confirmation.
+- **Never assume approval.** Wait for the user to confirm before proceeding.
+- Small utility scripts in Phases 1-3 are allowed; the **app itself** starts only in Phase 6.
+
+## Universal Rules
+
+- Never expose API tokens to client-side code.
+- Use domain language, not Kognitos jargon, in all user-facing text.
+- If unsure about something, ask the user — don't guess at domain meaning.
+- At the start of each phase, announce which phase you're entering and what it involves.
+- If API calls fail, diagnose before moving on: show the error, suggest fixes, retry.
+- Every chart or visualization must answer a specific question from Phase 4.
+- Dev server runs on port 4001 by default (`next dev --port 4001`). The port is set in `package.json` scripts. **Always assign a unique port** — never remove the `--port` flag.
+- `KOGNITOS_AUTOMATION_ID` is optional at startup — `lib/kognitos.ts` warns (not throws) if missing. This allows Phase 1 connectivity scripts to run before the user selects an automation.
+- `NEXT_PUBLIC_KOGNITOS_URL` in `.env` gives client-side sidebar links to Kognitos without exposing tokens.
+
+## Template Infrastructure (DO NOT modify)
+
+These files form the template's shared infrastructure. Customize domain-specific values (table prefixes, tool descriptions) but **preserve the structure and safety patterns**:
+
+- `lib/kognitos.ts` — Keep the `Record<string, string | undefined>` type, the validation loop, and the `AUTOMATION_ID` warning. Do not add `import "dotenv/config"`. Keep the `invokeAutomation()`, `pollRun()`, and `parseOutputValue()` helpers — they are the standard pattern for calling published automations.
+- `lib/supabase.ts` — Keep the `TABLES` export, the credential warning, and the null-safe client pattern. Always use `TABLES.sessions`/`TABLES.messages` — never hardcode table names.
+- `app/api/chat/**` — Keep `export const dynamic = "force-dynamic"` in every route file. Keep `export const maxDuration = 60` in `route.ts`.
+- `.env.example` — Keep ALL sections (Kognitos, Supabase, Anthropic). Add new vars but never remove existing ones.
+- `package.json` — Keep `@tailwindcss/typography` in `dependencies` (not `devDependencies`). Keep the `--port` flag in the `dev` script.
+
+See `06-chat-support.mdc` → "Common Pitfalls" for the full list.

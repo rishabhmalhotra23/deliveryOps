@@ -1,0 +1,132 @@
+---
+description: Lattice UI design system — installation, component mapping, tokens, and gotchas
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# Lattice UI Design System
+
+Package: `@kognitos/lattice` — installed from a local tarball (`kognitos-lattice-*.tgz`).
+Source: Cloned into `packages/lattice/` for builds.
+Reference: See `packages/lattice/dist/llm.txt` for full API docs.
+
+## Installation (CRITICAL — read this first)
+
+### The problem with `file:` directory links
+
+NEVER install Lattice (or any local package with peer deps) via `file:` pointing to a directory:
+
+```
+❌ "@kognitos/lattice": "file:/tmp/lattice-ui"
+❌ "@kognitos/lattice": "file:packages/lattice"
+```
+
+This preserves the target's `node_modules/`, creating **duplicate React, recharts, etc.** Symptoms:
+- Charts render as empty boxes (no error, just blank SVG)
+- Console: `width(-1) and height(-1)` from recharts
+- React hooks may throw "invalid hook call" errors
+- `npm ls react` shows multiple copies
+
+### The fix: pack into a tarball
+
+```bash
+cd packages/lattice
+npm install && npm run build && npm pack
+mv kognitos-lattice-*.tgz ../../
+```
+
+Then in `package.json`:
+
+```
+✅ "@kognitos/lattice": "file:kognitos-lattice-1.18.0.tgz"
+```
+
+npm treats `.tgz` like a published package and deduplicates peer deps properly. Verify with `npm ls react` — every entry should say `deduped`.
+
+### Post-install checklist
+
+- [ ] `npm ls react` — single version, all `deduped`
+- [ ] `npm ls recharts` — single version (must be v3.x to match Lattice)
+- [ ] `tsconfig.json` excludes `packages/` to avoid compiling Lattice source files
+- [ ] `.gitignore` includes `packages/lattice/node_modules/`
+
+## API Gotchas
+
+- **`ThemeProvider`**: Use `defaultTheme="light"` only. There is NO `enableSystem` prop.
+- **`Icon` names**: Lattice re-exports Lucide icons. Some use newer naming — check `packages/lattice/src/icons/lucide-icons.ts` for exact names. Examples: `CircleCheck` (not `CheckCircle`), `CircleAlert` (not `AlertCircle` — though `AlertCircle` also exists as a legacy alias).
+- **`ChartContainer`**: Wraps Recharts `ResponsiveContainer` internally. Uses `flex aspect-video` CSS. Works correctly once React/recharts deduplication is solved — do NOT add custom wrappers or explicit dimensions.
+- **Recharts version**: Must be v3.x (e.g. `^3.0.0`). Lattice's `ChartContainer` imports from recharts v3. Version 2.x is incompatible.
+
+## Component Choices (use these, don't reinvent)
+
+- **Metric cards:** `InsightsCard` / `InsightsCardTrend`
+- **Status badges:** `Badge` with `variant`: `success`, `warning`, `destructive`, `secondary`
+- **Page shell:** Plain `<div className="p-6 space-y-6">` inside `SidebarInset`. Do NOT use `PageLayout`/`PageHeader`/`PageContent` — they impose max-width constraints that make content too narrow and cause overlapping issues when a sidebar is present.
+- **Sidebar nav:** `SidebarProvider` + `Sidebar` + `SidebarMenu` + `SidebarMenuItem` + `SidebarMenuButton`
+- **Data tables:** `DataTable` (AG Grid) for rich tables, `Table` for simple HTML tables
+- **Charts:** `ChartContainer` + `ChartTooltip` + `ChartTooltipContent` wrapping Recharts v3
+- **Accordions:** `Accordion` + `AccordionItem` + `AccordionTrigger` + `AccordionContent`
+- **Empty states:** `EmptyState` with `Icon`
+- **Loading:** `Skeleton` for layout placeholders, `Spinner` for inline loading
+- **Errors:** `Alert` with `AlertTitle` + `AlertDescription`
+- **Typography:** `Title` (h1-h4), `Text` (xSmall/small/base/large)
+- **Icons:** `Icon` component — look up names in `packages/lattice/src/icons/lucide-icons.ts`
+- **Theme:** `ThemeProvider defaultTheme="light"` in root layout. `ModeToggle` in sidebar footer alongside "Powered by Kognitos" branding.
+
+## Layout Rules
+
+- **Sidebar is always open.** Use `SidebarProvider open={true}` — no toggle, no `SidebarTrigger`. The sidebar is permanently visible.
+- **Sidebar steals width.** When using `SidebarProvider` + `SidebarInset`, the main content area is narrower than the viewport. Account for this in grid breakpoints — e.g. use `grid-cols-2 md:grid-cols-3 xl:grid-cols-5` instead of `md:grid-cols-5`, so cards don't overlap or truncate.
+- As a rule of thumb, delay high column counts (4+) to `xl:` or `2xl:` breakpoints when a sidebar is present.
+- **Root layout structure:** `SidebarInset` wraps a `<div className="flex-1 overflow-auto">` that contains page content. Each page provides its own padding and layout via plain divs — no shared header bar above the content area.
+- **Page title goes inside the page**, not in a shared layout header. Each page renders its own `Title` and subtitle.
+
+## Sidebar Footer
+
+The sidebar footer must always contain:
+1. `ModeToggle` for light/dark theme switching
+2. "Powered by Kognitos" branding text
+
+```tsx
+<SidebarFooter className="p-3">
+  <div className="flex items-center justify-between">
+    <Text level="xSmall" color="muted">Powered by Kognitos</Text>
+    <ModeToggle />
+  </div>
+</SidebarFooter>
+```
+
+## Dark Mode Gotchas
+
+Lattice's `@layer base` applies `text-foreground` to `<body>`, which flips to white in dark mode. This causes two problems:
+
+1. **Primary-colored containers** (e.g. user chat bubbles with `bg-primary`): child `Text` components inherit white text even though `text-primary-foreground` is set on the parent div. Fix: apply `className="text-primary-foreground"` directly on the `Text` component, not just the wrapper.
+
+2. **Any container with a light background in both themes**: explicitly set the text color on the content element, don't rely on inheritance through Lattice components.
+
+## Chat Markdown Sizing
+
+Lattice `Markdown` renders headings via `Title` which uses page-level sizes (`h1`=`text-5xl`, `h2`=`text-3xl`). These are far too large for chat bubbles.
+
+**Required:** Add a `.chat-markdown` class in `globals.css` and wrap chat message `<Markdown>` in it. Also pass `textProps={{ level: "small" }}` for proportional body text.
+
+```css
+.chat-markdown h1 { font-size: 1.125rem; line-height: 1.75rem; font-weight: 600; }
+.chat-markdown h2 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
+.chat-markdown h3 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; }
+.chat-markdown h4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
+```
+
+```tsx
+<div className="chat-markdown">
+  <Markdown textProps={{ level: "small" }}>{msg.content}</Markdown>
+</div>
+```
+
+Do NOT use Tailwind `prose` / `prose-sm` wrappers — they conflict with Lattice's own typography components.
+
+## Styling Rules
+
+- Semantic Tailwind tokens: `bg-primary`, `text-muted-foreground`, `bg-success`, `border-border`
+- Chart colors: `var(--chart-1)` through `var(--chart-10)`
+- Never hardcode hex values or use `bg-[#xxx]`

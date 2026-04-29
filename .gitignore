@@ -1,0 +1,10 @@
+.env
+.env.local
+.env.*.local
+node_modules/
+.next/
+packages/*/node_modules/
+*.tgz
+!kognitos-lattice-*.tgz
+.vercel
+.DS_Store

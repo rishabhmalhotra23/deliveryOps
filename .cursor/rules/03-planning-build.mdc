@@ -1,0 +1,81 @@
+---
+description: Kognitos App Builder — Phases 4-6: domain thinking, build plan, design system, and app build
+alwaysApply: true
+---
+
+# Phases 4–6: Planning & Build
+
+## Phase 4: Domain Thinking & Research
+
+1. Identify audience (SME, ops lead, executive).
+2. For each output field/table, ask: What question does this answer? What action does it enable?
+3. Apply relevant insight patterns:
+   - **Hero stats** — processing health (total runs, success rate, volume).
+   - **Action items** — what needs attention now (awaiting_guidance, failures).
+   - **Value at risk** — monetary/business impact of stuck/failed items.
+   - **Entity-level view** — drill into individual records for follow-up.
+   - **Distribution** — where is volume/value concentrated?
+   - **Trend over time** — is volume stable, growing, spiking?
+   - **Comparison** — which category/group has the most of X?
+4. For each proposed insight, document: question answered, source fields, action enabled, best visualization.
+5. Do NOT propose charts just because they look nice.
+6. **Gate:** *"Here's what I think would be most useful to show. Any changes, additions, or things to remove?"*
+
+## Phase 5: Build Plan
+
+1. Tech stack is fixed: **Next.js (App Router) + TypeScript + Tailwind CSS + Vercel**. Choose a charting library (e.g., Recharts).
+2. List pages/views: Dashboard, Run Detail, Review Queue, Chat, others from Phase 4.
+3. For each view: data shown, API calls, interactions (click, expand, filter, link out).
+4. Describe data flow: API layer (server routes, caching), transform layer (Arrow IPC, normalization), UI layer.
+5. Confirm domain language mapping: Run → [domain term], status labels, field renames.
+6. Edge cases: empty states, error states, loading states.
+7. **Gate:** *"Here's exactly what I'll build. Ready to go, or any changes?"*
+
+## Phase 5B: Design System Selection
+
+1. Ask user whether to: **Use Lattice UI as-is**, **Use with overrides**, or **Skip Lattice entirely**.
+2. If Lattice: import tokens (colors, spacing, typography), use pre-built layouts, use Lattice icon set.
+3. If overrides: ask which tokens to customize, apply on top of defaults.
+4. If skipping: ask what they prefer instead, document the choice.
+5. Create `DESIGN.md` documenting the system, token sources, and any overrides.
+6. **Gate:** *"Design system is set up. Here's what I'm using: [summary]. Look good?"*
+
+## Local Package Integration (e.g. Lattice UI)
+
+When a dependency is not on a public registry (e.g. GitHub Packages without auth), **never** use `file:` links to a directory. This creates duplicate React/recharts instances that silently break rendering.
+
+**Correct approach:**
+1. Clone into `packages/<name>/`
+2. Build it: `npm install && npm run build`
+3. Pack it: `npm pack` → creates a `.tgz`
+4. Install from tarball: `"@scope/pkg": "file:pkg-name-1.0.0.tgz"`
+5. Verify: `npm ls react` — every entry shows `deduped`
+6. Exclude `packages/` from `tsconfig.json`
+
+## Phase 6: Build the App
+
+Follow the Phase 5 plan exactly. Do not add unapproved features or skip approved ones.
+
+**Build order:**
+1. API layer and data fetching (server-side routes, `req()` usage).
+2. Data transformation (Arrow IPC parsing, normalization, derived metrics).
+3. Layout and navigation shell (Sidebar from Lattice, plain divs for page content — see `04-lattice-ui.mdc` Layout Rules).
+4. Hero stats / summary metrics (using design system tokens).
+5. Charts and visualizations (using design system color tokens for palettes).
+6. Tables with drill-down.
+7. Run detail view.
+8. Automation invoke routes — use `invokeAutomation()` + `pollRun()` from `lib/kognitos.ts` for action buttons and chat tool handlers that trigger automations (see `02-api-discovery.mdc` → "Invoking Published Automations").
+9. Review queue / Resolution Agent integration (if applicable).
+10. Chat page: Claude + Supabase + Kognitos API tools (see `06-chat-support.mdc`). Chat tool handlers that run automations should use the invoke helpers, not `executions:run`.
+11. Empty, loading, and error states.
+12. Polish: responsive layout, transitions, final styling.
+
+**Quality standards:**
+- All API calls in Next.js Route Handlers or Server Components — no tokens in client code.
+- All run states handled (pending, executing, completed, failed, stopped, awaiting_guidance).
+- Domain language used consistently — no Kognitos jargon in the UI.
+- Progressive disclosure: summary → detail → link to Kognitos. "View Details" and "View in Kognitos" links open the Kognitos platform in a new tab (`target="_blank"`). API routes include a `kognitosUrl` field in run responses (built server-side via `kognitosRunUrl()`) so clients never need env vars to construct the URL.
+- Tables are filterable/sortable where useful.
+- No hardcoded style values if Lattice UI is active — everything flows through tokens.
+- App must be Vercel-deployable: no filesystem writes at runtime, no native dependencies, env vars via Vercel dashboard.
+- Arrow IPC decoding via `apache-arrow` npm package (works in Node.js/Edge runtime).

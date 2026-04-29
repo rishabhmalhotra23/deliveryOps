@@ -1,0 +1,59 @@
+---
+globs: "*.py"
+description: "Python backend conventions for the Customer Curator service"
+---
+
+# Python Backend Conventions
+
+## Project Structure
+
+The backend is organized as a Python package `curator/` with these subpackages:
+
+- [main.py](mdc:curator/main.py) — Orchestrates startup of all subsystems
+- [config.py](mdc:curator/config.py) — Environment variables, paths, constants
+- [customers.py](mdc:curator/customers.py) — Customer configurations, cache management
+- `brain/` — Claude agent with tool-use loop ([agent.py](mdc:curator/brain/agent.py), [tools.py](mdc:curator/brain/tools.py), [prompts.py](mdc:curator/brain/prompts.py))
+- `ingestion/` — Document pipeline ([pipeline.py](mdc:curator/ingestion/pipeline.py), [converters.py](mdc:curator/ingestion/converters.py), [classifier.py](mdc:curator/ingestion/classifier.py))
+- `listeners/` — Slack and email listeners ([slack_listener.py](mdc:curator/listeners/slack_listener.py), [email_listener.py](mdc:curator/listeners/email_listener.py))
+- `storage/` — Google Drive, Gmail, profiles, event log, conversations
+- `search/` — Ripgrep and semantic search
+- `scheduler/` — APScheduler-based task store and executor
+- `slidebot/` — Weekly update generation
+- `web/` — FastAPI dashboard ([app.py](mdc:curator/web/app.py), [index.html](mdc:curator/web/static/index.html))
+
+## Coding Conventions
+
+### Async/Await
+- All I/O operations MUST be async
+- Use `asyncio.to_thread()` to wrap synchronous library calls (Google API, marker, etc.)
+- Never block the event loop with synchronous I/O
+
+### Google API Calls
+- Use `threading.local()` for service objects (see [google_auth.py](mdc:curator/storage/google_auth.py))
+- Always wrap in `asyncio.to_thread()`
+- Apply `@_retry` decorator for transient network errors
+
+### Customer Isolation
+- **HARD RULE**: Information between customers MUST NOT leak
+- Every agent call, search, storage operation scopes to a single `customer_key`
+- Customer data lives in isolated directory trees: `CURATOR_CACHE_DIR / customer_key /`
+- Google Drive folders are per-customer subfolders
+
+### Profile System
+- Customer-facing profile: `meta/profile.json` — agent can read and update
+- Internal-only profile: `meta/internal_profile.json` — UI-only, agent has ZERO access
+- **HARD RULE**: Agent tools must NEVER expose internal profile fields (health_score, churn_risk, etc.)
+
+### Error Handling
+- Wrap subsystem startups in try/except to ensure resilient startup
+- Log exceptions with `logger.exception()` or `logger.warning(..., exc_info=True)`
+- Return graceful fallbacks (empty lists, default values) rather than crashing
+
+### Imports
+- Use `from __future__ import annotations` at the top of every module
+- Group imports: stdlib → third-party → local `curator.*`
+- Use lazy imports for heavy modules inside functions when appropriate
+
+### Logging
+- Use `logging.getLogger(__name__)` in every module
+- Use structured log messages: `logger.info("[%s] Action: %s", customer_key, detail)`

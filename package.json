@@ -1,0 +1,40 @@
+{
+  "name": "delivery-ops",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 4001",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@kognitos/lattice": "file:./kognitos-lattice-1.36.0.tgz",
+    "@supabase/supabase-js": "^2.49.4",
+    "@tailwindcss/typography": "^0.5.16",
+    "apache-arrow": "^21.1.0",
+    "dayjs": "^1.11.13",
+    "dotenv": "^17.3.1",
+    "inngest": "^3.54.0",
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.56.0",
+    "react-markdown": "^10.1.0",
+    "recharts": "^3.8.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^25.3.5",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "husky": "^9.1.7",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.21.0",
+    "tw-animate-css": "^1.3.0",
+    "typescript": "^5.9.3"
+  }
+}

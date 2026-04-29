@@ -1,0 +1,69 @@
+---
+description: DeliveryOps brand-voice rules for any outbound copy (UI strings, agent responses, emails, Slack messages, QBR decks, README, error messages)
+globs: **/*.{ts,tsx,sql,md,html}
+---
+
+# DeliveryOps brand voice
+
+Every word DeliveryOps writes — agent replies, monthly digests, QBR deck copy, Slack messages, Gmail drafts, dashboard microcopy, error messages, even commit messages — sounds like the same person wrote it. This is not a style guide. It's how the product talks.
+
+## The five voice traits (in priority order)
+
+1. **Intelligent wit.** Dry, observant, occasionally amused. Never sarcastic at the user's expense, never trying to be funny. The cleverness lives in the word choice and the framing, not in punchlines.
+2. **Plainspoken.** Short sentences. Concrete nouns. Active verbs. If a sentence has more than two clauses, break it. If a word has a shorter equivalent, use the shorter one.
+3. **Confident.** Make claims, don't apologize for them. No "we think", no "perhaps", no "could potentially". If we don't know, we say "we don't know yet" — confidently.
+4. **Disruptive / Unapologetic.** Take a position. Say what we see. Don't soften the truth to be polite. "The renewal date is in 14 days and we still haven't scheduled the QBR" beats "It might be worth considering scheduling the QBR sometime soon if possible."
+5. **Purposeful.** Every sentence either teaches the reader something, asks them to do something, or moves the conversation forward. Cut the rest.
+
+## Banned moves (do not generate these — full stop)
+
+- **Hedging.** "I think", "perhaps", "might want to consider", "it could be worth", "if you'd like", "feel free to". Delete on sight.
+- **Corporate jargon.** "leverage", "synergy", "stakeholders", "circle back", "touch base", "deep dive", "low-hanging fruit", "north star", "best-in-class", "robust solution", "delight customers", "robust", "seamless", "frictionless", "empower", "unlock value", "enable", "ecosystem", "holistic".
+- **AI / chatbot tells.** "As an AI", "I'd be happy to help", "Certainly!", "Of course!", "Great question!", "I hope this helps", "Let me know if you have any other questions". The product talks like a sharp colleague, not a customer-service bot.
+- **Padding.** "It is important to note that", "please be aware that", "in order to", "at this point in time", "due to the fact that". Delete every one of these on sight.
+- **Cute marketing lines.** No exclamation points (one is fine in a real moment of celebration; two means delete). No emoji unless the user themselves asked for it. No "✨", "🚀", "💡".
+
+## Word choices (preferred → avoided)
+
+| Use | Don't use |
+| --- | --- |
+| customer | client, user, account holder |
+| we | the team, our organisation |
+| see | observe, identify |
+| broken / failing | suboptimal, encountering issues |
+| renewed / closed / shipped | finalized, concluded, delivered (when meaning shipped) |
+| meeting | sync, touchpoint, alignment |
+| problem | challenge, opportunity, pain point |
+| fix it | address it, remediate, mitigate |
+| done | completed, accomplished |
+| now / today | at this time, currently |
+| tell us | reach out, raise this with |
+
+## Headlines, buttons, status text
+
+- **Buttons** are verbs in the imperative: `Send digest`, `Approve`, `Open in Salesforce`, `Re-run`. Never `Click here`, never `Submit`, rarely `Save` (prefer the verb that describes the action).
+- **Empty states** state the fact, then the next step. "No events this week. The brain logs every conversation, upload, and integration sync — give it a day." Not "There's nothing here yet!"
+- **Errors** name what broke, name the next move, never blame the user. "Salesforce auth expired. Re-authorize in Settings → Integrations." Not "Oops! Something went wrong."
+- **Confirmations** are calm. "Digest sent to 4 customers." Not "Awesome — your digest is on its way! 🎉"
+
+## Outbound (emails, Slack, decks)
+
+- **Emails** open with a single fact-bearing sentence — never "Hope you're well" or "Quick update".
+- **Slack messages** to customers stay under 80 words. If it's longer, attach a doc.
+- **QBR deck headlines** are statements, not labels. "Credits used jumped 4× in March" beats "March credits".
+- **Monthly digest** leads with the most surprising number from the month, then explains it. Never lead with "This month was an exciting month full of progress."
+
+## When the agent doesn't know
+
+> "We don't have that yet. The Salesforce sync runs every 4 hours; the next run is at 18:00 UTC."
+
+Not:
+
+> "I'm sorry, but I don't currently have access to that information. You may want to check Salesforce directly."
+
+## Quick gut check before sending any string
+
+1. Could this have been written by a SaaS vendor in 2018? → rewrite.
+2. Does any sentence start with "I"? → usually rewrite.
+3. Is there an exclamation point? → almost certainly delete it.
+4. Could a smart, busy CSM read this in two seconds and act on it? → if no, cut words until yes.

@@ -1,0 +1,2512 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Curator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            /* Lattice design tokens mapped to Tailwind — use `brand-*` classes */
+            brand: {
+              DEFAULT: 'var(--brand)',
+              50:  'var(--brand-50)',
+              100: 'var(--brand-100)',
+              200: 'var(--brand-200)',
+              300: 'var(--brand-300)',
+              400: 'var(--brand-400)',
+              500: 'var(--brand-500)',
+              600: 'var(--brand-600)',
+              700: 'var(--brand-700)',
+              800: 'var(--brand-800)',
+              900: 'var(--brand-900)',
+            },
+            primary:              { DEFAULT: 'var(--primary)',              foreground: 'var(--primary-foreground)' },
+            secondary:            { DEFAULT: 'var(--secondary)',            foreground: 'var(--secondary-foreground)' },
+            accent:               { DEFAULT: 'var(--accent)',               foreground: 'var(--accent-foreground)' },
+            muted:                { DEFAULT: 'var(--muted)',                foreground: 'var(--muted-foreground)' },
+            destructive: {
+              DEFAULT: 'var(--destructive)',
+              50:  'var(--destructive-50)',  100: 'var(--destructive-100)', 200: 'var(--destructive-200)',
+              300: 'var(--destructive-300)', 400: 'var(--destructive-400)', 500: 'var(--destructive-500)',
+              600: 'var(--destructive-600)', 700: 'var(--destructive-700)', 800: 'var(--destructive-800)',
+              900: 'var(--destructive-900)',
+            },
+            success: {
+              DEFAULT: 'var(--success)', foreground: 'var(--success-foreground)',
+              50:  'var(--success-50)',  100: 'var(--success-100)', 200: 'var(--success-200)',
+              300: 'var(--success-300)', 400: 'var(--success-400)', 500: 'var(--success-500)',
+              600: 'var(--success-600)', 700: 'var(--success-700)', 800: 'var(--success-800)',
+              900: 'var(--success-900)',
+            },
+            warning: {
+              DEFAULT: 'var(--warning)', foreground: 'var(--warning-foreground)',
+              50:  'var(--warning-50)',  100: 'var(--warning-100)', 200: 'var(--warning-200)',
+              300: 'var(--warning-300)', 400: 'var(--warning-400)', 500: 'var(--warning-500)',
+              600: 'var(--warning-600)', 700: 'var(--warning-700)', 800: 'var(--warning-800)',
+              900: 'var(--warning-900)',
+            },
+            informative: {
+              DEFAULT: 'var(--informative)', foreground: 'var(--informative-foreground)',
+              50:  'var(--informative-50)',  100: 'var(--informative-100)', 200: 'var(--informative-200)',
+              300: 'var(--informative-300)', 400: 'var(--informative-400)', 500: 'var(--informative-500)',
+              600: 'var(--informative-600)', 700: 'var(--informative-700)', 800: 'var(--informative-800)',
+              900: 'var(--informative-900)',
+            },
+            card:                 { DEFAULT: 'var(--card)',                 foreground: 'var(--card-foreground)' },
+            border:               'var(--border)',
+            input:                'var(--input)',
+            ring:                 'var(--ring)',
+            background:           'var(--background)',
+            foreground:           'var(--foreground)',
+            link:                 'var(--link)',
+            sidebar: {
+              DEFAULT: 'var(--sidebar)',
+              foreground: 'var(--sidebar-foreground)',
+              primary: 'var(--sidebar-primary)',
+              'primary-foreground': 'var(--sidebar-primary-foreground)',
+              accent: 'var(--sidebar-accent)',
+              'accent-foreground': 'var(--sidebar-accent-foreground)',
+              border: 'var(--sidebar-border)',
+              muted: 'var(--sidebar-muted)',
+            },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* ── Lattice Design Tokens (from @kognitos/lattice theme.css) ───────── */
+    :root {
+      /* Brand palette — Kognitos green-gold (OKLCH) */
+      --brand:     oklch(0.963 0.166 113.862);
+      --brand-50:  oklch(0.975 0.050 114);
+      --brand-100: oklch(0.960 0.090 114);
+      --brand-200: oklch(0.940 0.130 114);
+      --brand-300: oklch(0.910 0.155 114);
+      --brand-400: oklch(0.892 0.165 114.154);
+      --brand-500: oklch(0.858 0.164 114.307);
+      --brand-600: oklch(0.785 0.160 114.696);
+      --brand-700: oklch(0.714 0.154 115.167);
+      --brand-800: oklch(0.637 0.144 115.822);
+      --brand-900: oklch(0.509 0.116 115.905);
+
+      /* Semantic colors — light mode */
+      --background:           oklch(0.985 0 0);
+      --foreground:           oklch(0.145 0 0);
+      --card:                 oklch(1 0 0);
+      --card-foreground:      oklch(0.145 0 0);
+      --primary:              var(--brand-500);
+      --primary-foreground:   oklch(0.269 0 0);
+      --secondary:            oklch(0.97 0 0);
+      --secondary-foreground: oklch(0.205 0 0);
+      --muted:                oklch(0.97 0 0);
+      --muted-foreground:     oklch(0.556 0 0);
+      --accent:               oklch(0.97 0 0);
+      --accent-foreground:    oklch(0.205 0 0);
+      --destructive:          oklch(0.577 0.245 27.325);
+      --border:               oklch(0.922 0 0);
+      --input:                oklch(0.922 0 0);
+      --ring:                 var(--brand-500);
+
+      /* Status colors */
+      --success:              oklch(0.635 0.185 147.775);
+      --success-foreground:   oklch(0.941 0.023 151.642);
+      --warning:              oklch(0.769 0.165 70.08);
+      --warning-foreground:   oklch(0.987 0.026 102.212);
+      --informative:          oklch(0.615 0.133 261.34);
+      --informative-foreground: oklch(0.969 0.006 255.475);
+      --link:                 oklch(0.551 0.124 239.032);
+
+      /* Destructive scale (red) */
+      --destructive-50:  oklch(0.971 0.013 17.38);
+      --destructive-100: oklch(0.936 0.032 17.717);
+      --destructive-200: oklch(0.885 0.062 18.334);
+      --destructive-300: oklch(0.808 0.114 19.571);
+      --destructive-400: oklch(0.704 0.191 22.216);
+      --destructive-500: oklch(0.637 0.237 25.331);
+      --destructive-600: var(--destructive);
+      --destructive-700: oklch(0.505 0.213 27.518);
+      --destructive-800: oklch(0.444 0.177 26.899);
+      --destructive-900: oklch(0.396 0.141 25.723);
+
+      /* Success scale (green) */
+      --success-50:  oklch(0.962 0.044 156.743);
+      --success-100: oklch(0.925 0.084 155.995);
+      --success-200: oklch(0.871 0.150 154.449);
+      --success-300: oklch(0.792 0.209 151.711);
+      --success-400: oklch(0.723 0.219 149.579);
+      --success-500: var(--success);
+      --success-600: oklch(0.532 0.157 145.071);
+      --success-700: oklch(0.462 0.135 144.308);
+      --success-800: oklch(0.395 0.109 143.671);
+      --success-900: oklch(0.339 0.088 143.025);
+
+      /* Warning scale (amber/yellow) */
+      --warning-50:  oklch(0.987 0.026 102.212);
+      --warning-100: oklch(0.962 0.059 95.617);
+      --warning-200: oklch(0.924 0.120 95.746);
+      --warning-300: oklch(0.879 0.169 91.605);
+      --warning-400: oklch(0.828 0.189 84.429);
+      --warning-500: var(--warning);
+      --warning-600: oklch(0.666 0.179 58.318);
+      --warning-700: oklch(0.555 0.163 48.998);
+      --warning-800: oklch(0.473 0.137 46.201);
+      --warning-900: oklch(0.414 0.112 45.904);
+
+      /* Informative scale (blue) */
+      --informative-50:  oklch(0.969 0.006 255.475);
+      --informative-100: oklch(0.932 0.032 255);
+      --informative-200: oklch(0.882 0.059 254.128);
+      --informative-300: oklch(0.809 0.105 259.117);
+      --informative-400: oklch(0.707 0.165 259.126);
+      --informative-500: var(--informative);
+      --informative-600: oklch(0.546 0.245 262.881);
+      --informative-700: oklch(0.488 0.243 264.376);
+      --informative-800: oklch(0.424 0.199 265.638);
+      --informative-900: oklch(0.379 0.146 265.522);
+
+      /* Sidebar */
+      --sidebar:                      oklch(0.985 0 0);
+      --sidebar-foreground:           oklch(0.145 0 0);
+      --sidebar-primary:              oklch(0.205 0 0);
+      --sidebar-primary-foreground:   oklch(0.985 0 0);
+      --sidebar-accent:               oklch(0.97 0 0);
+      --sidebar-accent-foreground:    oklch(0.205 0 0);
+      --sidebar-border:               oklch(0.922 0 0);
+      --sidebar-muted:                oklch(0.715 0 0);
+
+      /* Code block */
+      --code-bg: oklch(0.205 0 0);
+      --code-fg: oklch(0.922 0 0);
+    }
+
+    /* Dark mode tokens (ready for .dark class toggle) */
+    .dark {
+      --background:           oklch(0.145 0 0);
+      --foreground:           oklch(0.985 0 0);
+      --card:                 oklch(0.205 0 0);
+      --card-foreground:      oklch(0.985 0.001 106.424);
+      --primary:              var(--brand);
+      --primary-foreground:   oklch(0.205 0 0);
+      --secondary:            oklch(0.269 0 0);
+      --secondary-foreground: oklch(0.985 0 0);
+      --muted:                oklch(0.269 0 0);
+      --muted-foreground:     oklch(0.708 0 0);
+      --accent:               oklch(0.372 0 0);
+      --accent-foreground:    oklch(0.985 0 0);
+      --destructive:          oklch(0.704 0.191 22.216);
+      --border:               oklch(1 0 0 / 10%);
+      --input:                oklch(1 0 0 / 15%);
+      --ring:                 var(--brand);
+      --success:              oklch(0.635 0.185 147.775);
+      --success-foreground:   oklch(0.344 0.031 158.856);
+      --warning:              oklch(0.837 0.164 84.429);
+      --warning-foreground:   oklch(0.369 0.076 86.33);
+      --informative:          oklch(0.615 0.133 261.34);
+      --informative-foreground: oklch(0.337 0.022 267.371);
+      --link:                 oklch(0.839 0.1 229.594);
+      --sidebar:              oklch(0.205 0 0);
+      --sidebar-foreground:   oklch(0.715 0 0);
+      --sidebar-accent:       oklch(0.269 0 0);
+      --sidebar-accent-foreground: oklch(0.985 0 0);
+      --sidebar-border:       oklch(1 0 0 / 10%);
+      --sidebar-muted:        oklch(0.439 0 0);
+      --code-bg: oklch(0.145 0 0);
+      --code-fg: oklch(0.922 0 0);
+    }
+
+    /* ── Base styles ────────────────────────────────────────────────────── */
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; width: 24px; height: 24px; animation: spin 0.7s linear infinite; }
+    .spinner-sm { border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.7s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    [x-cloak] { display: none !important; }
+    .badge { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* ── Markdown prose styling (uses semantic tokens) ──────────────────── */
+    .prose h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--foreground); }
+    .prose h2 { font-size: 1.1rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.4rem; color: var(--foreground); }
+    .prose h3 { font-size: 1rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.3rem; color: var(--foreground); }
+    .prose p { margin-bottom: 0.5rem; line-height: 1.6; }
+    .prose ul, .prose ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }
+    .prose ul { list-style-type: disc; }
+    .prose ol { list-style-type: decimal; }
+    .prose li { margin-bottom: 0.25rem; line-height: 1.5; }
+    .prose strong { font-weight: 600; color: var(--foreground); }
+    .prose em { font-style: italic; }
+    .prose code { background: var(--muted); padding: 0.15rem 0.35rem; border-radius: 0.25rem; font-size: 0.85em; font-family: ui-monospace, monospace; }
+    .prose pre { background: var(--code-bg); color: var(--code-fg); padding: 0.75rem 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 0.75rem; }
+    .prose pre code { background: none; padding: 0; color: inherit; }
+    .prose a { color: var(--link); text-decoration: underline; }
+    .prose blockquote { border-left: 3px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); margin-bottom: 0.5rem; }
+    .prose hr { border-top: 1px solid var(--border); margin: 0.75rem 0; }
+    .prose table { width: 100%; border-collapse: collapse; margin-bottom: 0.75rem; }
+    .prose th, .prose td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; font-size: 0.875rem; }
+    .prose th { background: var(--muted); font-weight: 600; }
+
+    /* ── Search match highlights ─────────────────────────────────────────── */
+    mark.search-match { transition: background-color 0.2s, color 0.2s, box-shadow 0.2s; scroll-margin-top: 80px; }
+    .doc-overlay-body { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="h-full bg-background text-foreground">
+  <div id="app" class="h-full flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-sidebar border-r border-sidebar-border flex flex-col shrink-0">
+      <div class="p-5 border-b border-sidebar-border">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <div>
+            <div class="font-semibold text-sm text-sidebar-foreground">Customer Curator</div>
+            <div class="text-[11px] text-sidebar-muted">Post-Sales AI</div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        <button onclick="navigate('overview')" id="nav-overview" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+          Overview
+        </button>
+
+        <div class="pt-4 pb-1.5 px-3 flex items-center justify-between">
+          <div class="text-[11px] font-semibold text-sidebar-muted uppercase tracking-wider">Customers</div>
+          <button onclick="openNewCustomerModal()" title="Add customer" class="w-5 h-5 rounded flex items-center justify-center text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          </button>
+        </div>
+        <div id="customer-nav"></div>
+      </nav>
+
+      <!-- User menu -->
+      <div id="user-menu" class="p-3 border-t border-sidebar-border">
+        <div class="flex items-center gap-2.5 px-2 py-1.5">
+          <img id="user-avatar" src="" alt="" class="w-7 h-7 rounded-full hidden" referrerpolicy="no-referrer" />
+          <div class="flex-1 min-w-0">
+            <div id="user-name" class="text-xs font-medium text-sidebar-foreground truncate"></div>
+            <div id="user-email" class="text-[10px] text-sidebar-muted truncate"></div>
+          </div>
+          <a href="/auth/logout" title="Sign out"
+             class="w-6 h-6 rounded flex items-center justify-center text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors shrink-0">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <!-- Top bar -->
+      <header class="bg-card border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
+        <h1 id="page-title" class="text-lg font-semibold text-foreground">Overview</h1>
+        <div class="flex items-center gap-3">
+          <div id="status-dot" class="w-2 h-2 rounded-full bg-success-400" title="System running"></div>
+          <span class="text-xs text-muted-foreground">Live</span>
+        </div>
+      </header>
+
+      <!-- Content area -->
+      <div id="content" class="flex-1 overflow-y-auto p-6">
+        <div class="flex items-center justify-center h-40"><div class="spinner"></div></div>
+      </div>
+    </main>
+  </div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let currentView = 'overview';
+let currentCustomer = null;
+let currentTab = 'profile';
+let customersCache = null;
+
+const API = '/api';
+
+// ── SVG Icon helper (Heroicons outline, 24×24) ──────────────────────────────
+function icon(name, cls = 'w-4 h-4') {
+  const paths = {
+    'user-circle':        'M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z',
+    'clipboard-list':     'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
+    'clock':              'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+    'document-text':      'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
+    'sparkles':           'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z',
+    'envelope':           'M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75',
+    'chat-bubble':        'M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z',
+    'user':               'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z',
+    'building-office':    'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
+    'exclamation-circle': 'M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z',
+    'document-arrow-down':'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
+    'pencil-square':      'M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10',
+    'bell-alert':         'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0M3.124 7.5A8.969 8.969 0 015.292 3m13.416 0a8.969 8.969 0 012.168 4.5',
+    'flag':               'M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5',
+    'user-plus':          'M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z',
+    'chart-bar':          'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z',
+    'bookmark':           'M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z',
+    'cog':                'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z',
+    'currency-dollar':    'M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    'exclamation-triangle':'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z',
+    'pencil':             'M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z',
+    'arrow-trending-up':  'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941',
+    'shield-check':       'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z',
+    'check-circle':       'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    'x-circle':           'M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    'book-open':          'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25',
+    'arrow-down-tray':    'M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3',
+    'cloud-arrow-up':     'M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z',
+    'arrow-path':         'M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3',
+  };
+  // Multi-path icons (cog has inner circle)
+  const multiPaths = {
+    'cog': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>',
+  };
+  const d = paths[name];
+  if (!d) return '';
+  return `<svg class="${cls}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${d}"/>${multiPaths[name] || ''}</svg>`;
+}
+
+// ── Fetch helper ─────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+function navigate(view, customer = null) {
+  currentView = view;
+  currentCustomer = customer;
+  render();
+}
+
+function setActiveNav(id) {
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.remove('bg-brand-100', 'text-brand-800', 'font-medium');
+    b.classList.add('text-sidebar-foreground');
+  });
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.add('bg-brand-100', 'text-brand-800', 'font-medium');
+    el.classList.remove('text-sidebar-foreground');
+  }
+}
+
+// ── Render router ────────────────────────────────────────────────────────────
+async function render() {
+  const content = document.getElementById('content');
+  const title = document.getElementById('page-title');
+
+  content.innerHTML = '<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>';
+
+  try {
+    if (currentView === 'overview') {
+      title.textContent = 'Overview';
+      setActiveNav('nav-overview');
+      await renderOverview(content);
+    } else if (currentView === 'customer') {
+      const c = await api(`/customers/${currentCustomer}`);
+      title.textContent = c.display_name || currentCustomer;
+      setActiveNav(`nav-${currentCustomer}`);
+      await renderCustomer(content, currentCustomer, c);
+    }
+  } catch (err) {
+    content.innerHTML = `<div class="text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-6"><strong>Error:</strong> ${err.message}</div>`;
+  }
+}
+
+// ── Overview page ────────────────────────────────────────────────────────────
+async function renderOverview(el) {
+  const data = await api('/overview');
+  const customers = data.customers || [];
+
+  el.innerHTML = `
+    <div class="fade-in space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        ${statCard('Total Customers', customers.length, 'brand')}
+        ${statCard('Active Tasks', customers.reduce((s, c) => s + (c.active_tasks || 0), 0), 'warning')}
+        ${statCard('Documents', customers.reduce((s, c) => s + (c.documents || 0), 0), 'success')}
+        ${statCard('Recent Events', customers.reduce((s, c) => s + (c.recent_events || 0), 0), 'informative')}
+      </div>
+
+      <div class="bg-card rounded-xl border border-border overflow-hidden">
+        <div class="px-5 py-4 border-b border-border">
+          <h2 class="font-semibold text-foreground">All Customers</h2>
+        </div>
+        <table class="w-full">
+          <thead>
+            <tr class="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <th class="px-5 py-3">Customer</th>
+              <th class="px-5 py-3">Tier</th>
+              <th class="px-5 py-3">Renewal</th>
+              <th class="px-5 py-3">Tasks</th>
+              <th class="px-5 py-3">Docs</th>
+              <th class="px-5 py-3">Latest Event</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            ${customers.map(c => `
+              <tr class="hover:bg-muted cursor-pointer transition-colors" onclick="navigate('customer', '${c.key}')">
+                <td class="px-5 py-3.5">
+                  <div class="font-medium text-foreground">${c.display_name}</div>
+                  <div class="text-xs text-muted-foreground">${c.key}</div>
+                </td>
+                <td class="px-5 py-3.5">${tierBadge(c.tier)}</td>
+                <td class="px-5 py-3.5 text-sm text-secondary-foreground">${c.renewal_date || '—'}</td>
+                <td class="px-5 py-3.5 text-sm text-secondary-foreground">${c.active_tasks || 0}</td>
+                <td class="px-5 py-3.5 text-sm text-secondary-foreground">${c.documents || 0}</td>
+                <td class="px-5 py-3.5 text-xs text-muted-foreground">${c.latest_event ? c.latest_event.summary?.substring(0, 50) || c.latest_event.event_type : '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── Customer detail page ─────────────────────────────────────────────────────
+async function renderCustomer(el, key, customer) {
+  // Fetch profile data for the header card
+  let headerProfile = {};
+  try {
+    const profileData = await api(`/customers/${key}/profile`);
+    headerProfile = profileData.profile || {};
+  } catch (e) { /* fall back to config */ }
+
+  // Source from profile first, fall back to config
+  const champion = headerProfile.champion || (customer.contacts || {}).primary || '—';
+  const tier = headerProfile.tier || (customer.contract || {}).tier || '';
+  const renewalDate = headerProfile.renewal_date || (customer.contract || {}).renewal_date || '?';
+  const creditLimit = headerProfile.credit_limit || (customer.contract || {}).credit_limit || 0;
+  const industry = headerProfile.industry || '';
+  const deploymentStage = headerProfile.deployment_stage || '';
+
+  el.innerHTML = `
+    <div class="fade-in space-y-6">
+      <!-- Profile header -->
+      <div class="bg-card rounded-xl border border-border p-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-foreground">${customer.display_name || key}</h2>
+            <div class="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
+              <span class="inline-flex items-center gap-1">${icon('envelope', 'w-3.5 h-3.5')} ${customer.email_alias || '—'}</span>
+              <span class="inline-flex items-center gap-1">${icon('chat-bubble', 'w-3.5 h-3.5')} #${customer.slack_channel || '—'}</span>
+              <span class="inline-flex items-center gap-1">${icon('user', 'w-3.5 h-3.5')} ${champion}</span>
+              ${industry ? `<span class="inline-flex items-center gap-1">${icon('building-office', 'w-3.5 h-3.5')} ${escapeHtml(industry)}</span>` : ''}
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            ${tierBadge(tier)}
+            ${deploymentStage ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent text-accent-foreground">${escapeHtml(deploymentStage)}</span>` : ''}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
+              Renews ${escapeHtml(String(renewalDate))}
+            </span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-informative-50 text-informative-700">
+              ${Number(creditLimit).toLocaleString()} credits
+            </span>
+            <button onclick="startSlackBackfill('${key}')" id="backfill-btn-${key}"
+              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-brand-100 text-brand-800 hover:bg-brand-200 transition-colors"
+              title="Import full Slack channel history into the knowledge base">
+              ${icon('clock', 'w-3.5 h-3.5')} Fill in from Slack
+            </button>
+            <span id="backfill-status-${key}" class="text-xs text-muted-foreground hidden"></span>
+            <button onclick="startDriveResync('${key}')" id="resync-btn-${key}"
+              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-brand-100 text-brand-800 hover:bg-brand-200 transition-colors"
+              title="Pull latest files from Google Drive into local cache">
+              ${icon('arrow-path', 'w-3.5 h-3.5')} Resync from Drive
+            </button>
+            <span id="resync-status-${key}" class="text-xs text-muted-foreground hidden"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-1 bg-card rounded-xl border border-border p-1">
+        ${['profile', 'rules', 'events', 'tasks', 'documents', 'ask'].map(t => `
+          <button onclick="switchTab('${t}', '${key}')" id="tab-${t}"
+            class="tab-btn flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${currentTab === t ? 'bg-brand-600 text-white' : 'text-secondary-foreground hover:bg-muted'}">
+            ${{profile: icon('user-circle') + ' Profile', rules: icon('book-open') + ' Rules', events: icon('clipboard-list') + ' Events', tasks: icon('clock') + ' Tasks', documents: icon('document-text') + ' Documents', ask: icon('sparkles') + ' Ask Agent'}[t]}
+          </button>
+        `).join('')}
+      </div>
+
+      <!-- Tab content -->
+      <div id="tab-content">
+        <div class="flex items-center justify-center h-32"><div class="spinner"></div></div>
+      </div>
+    </div>`;
+
+  await loadTab(currentTab, key);
+}
+
+async function switchTab(tab, key) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('bg-brand-600', 'text-white');
+    b.classList.add('text-secondary-foreground', 'hover:bg-muted');
+  });
+  const active = document.getElementById(`tab-${tab}`);
+  if (active) {
+    active.classList.add('bg-brand-600', 'text-white');
+    active.classList.remove('text-secondary-foreground', 'hover:bg-muted');
+  }
+  await loadTab(tab, key);
+}
+
+async function loadTab(tab, key) {
+  const el = document.getElementById('tab-content');
+  el.innerHTML = '<div class="flex items-center justify-center h-32"><div class="spinner"></div></div>';
+
+  try {
+    switch (tab) {
+      case 'profile': await renderProfile(el, key); break;
+      case 'rules': await renderRules(el, key); break;
+      case 'events': await renderEvents(el, key); break;
+      case 'tasks': await renderTasks(el, key); break;
+      case 'documents': await renderDocuments(el, key); break;
+      case 'metrics': await renderMetrics(el, key); break;
+      case 'ask': renderAskAgent(el, key); break;
+    }
+  } catch (err) {
+    el.innerHTML = `<div class="text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-4">${err.message}</div>`;
+  }
+}
+
+// ── Profile tab ──────────────────────────────────────────────────────────────
+
+let _profileData = null;     // customer-facing profile cache
+let _internalData = null;    // internal-only profile cache
+let _profileEditing = false;
+
+async function renderProfile(el, key) {
+  // Fetch both profiles in parallel
+  const [extData, intData] = await Promise.all([
+    api(`/customers/${key}/profile`),
+    api(`/customers/${key}/internal-profile`),
+  ]);
+  _profileData = extData;
+  _internalData = intData;
+  _profileEditing = false;
+
+  const profile = extData.profile || {};
+  const schema = extData.schema || [];
+  const sections = extData.sections || [];
+
+  const intProfile = intData.profile || {};
+  const intSchema = intData.schema || [];
+  const intSections = intData.sections || [];
+
+  // Group schema fields by section
+  const grouped = {};
+  for (const s of sections) grouped[s.key] = [];
+  for (const f of schema) {
+    if (!grouped[f.section]) grouped[f.section] = [];
+    grouped[f.section].push(f);
+  }
+
+  const intGrouped = {};
+  for (const s of intSections) intGrouped[s.key] = [];
+  for (const f of intSchema) {
+    if (!intGrouped[f.section]) intGrouped[f.section] = [];
+    intGrouped[f.section].push(f);
+  }
+
+  el.innerHTML = `
+    <div class="space-y-4 fade-in">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-foreground">Customer Profile</h3>
+        <div class="flex gap-2">
+          <span id="profile-save-status" class="text-xs text-muted-foreground"></span>
+          <button id="profile-edit-btn" onclick="toggleProfileEdit('${key}')"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg border border-input text-secondary-foreground hover:bg-muted transition-colors inline-flex items-center gap-1">
+            ${icon('pencil', 'w-3.5 h-3.5')} Edit
+          </button>
+          <button id="profile-save-btn" onclick="saveProfile('${key}')"
+            class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors inline-flex items-center gap-1">
+            ${icon('arrow-down-tray', 'w-3.5 h-3.5')} Save Changes
+          </button>
+          <button id="profile-cancel-btn" onclick="renderProfile(document.getElementById('tab-content'), '${key}')"
+            class="hidden px-3 py-1.5 text-xs font-medium rounded-lg border border-input text-secondary-foreground hover:bg-muted transition-colors">
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <!-- Customer-facing sections -->
+      ${sections.map(sec => {
+        if (sec.key === 'custom') return renderCustomSection(profile, sec, 'ext');
+        if (sec.key === 'contacts') return renderContactsSection(profile, schema, sec, key);
+        const fields = grouped[sec.key] || [];
+        if (fields.length === 0) return '';
+        return renderProfileSection(sec, fields, profile, false);
+      }).join('')}
+
+      <!-- Internal-only divider -->
+      <div class="flex items-center gap-3 pt-2">
+        <div class="flex-1 h-px bg-destructive-200"></div>
+        <div class="flex items-center gap-1.5 px-3 py-1 bg-destructive-50 border border-destructive-200 rounded-full">
+          <svg class="w-3.5 h-3.5 text-destructive-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <span class="text-xs font-bold text-destructive-600 tracking-wide uppercase">Internal Only — Not visible to AI agent or customer</span>
+        </div>
+        <div class="flex-1 h-px bg-destructive-200"></div>
+      </div>
+
+      <!-- Internal-only sections -->
+      ${intSections.map(sec => {
+        if (sec.key === 'custom') return renderCustomSection(intProfile, sec, 'int');
+        const fields = intGrouped[sec.key] || [];
+        if (fields.length === 0) return '';
+        return renderProfileSection(sec, fields, intProfile, true);
+      }).join('')}
+    </div>`;
+}
+
+function renderProfileSection(sec, fields, profile, isInternal) {
+  const sectionIcons = {
+    company: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>',
+    contract: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+    adoption: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>',
+    health: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>',
+    stakeholders: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>',
+    goals: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>',
+    notes: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>',
+    internal_notes: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>',
+  };
+
+  const prefix = isInternal ? 'int' : 'ext';
+  const secId = `${prefix}-${sec.key}`;
+  const borderClass = isInternal ? 'border-l-4 border-l-destructive-400 border border-destructive-200' : 'border border-border';
+  const bgClass = isInternal ? 'bg-destructive-50' : 'bg-card';
+  const iconColor = isInternal ? 'text-destructive-500' : 'text-brand-500';
+
+  return `
+    <div class="${bgClass} rounded-xl ${borderClass} overflow-hidden" data-profile-type="${prefix}">
+      <button onclick="toggleProfileSection('${secId}')" class="w-full px-4 py-3 flex items-center justify-between hover:bg-muted transition-colors">
+        <div class="flex items-center gap-2">
+          <span class="${iconColor}">${sectionIcons[sec.key] || ''}</span>
+          <span class="text-sm font-semibold text-foreground">${escapeHtml(sec.label)}</span>
+          <span class="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">${fields.length} fields</span>
+          ${isInternal ? '<span class="text-[10px] bg-destructive-100 text-destructive-600 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>INTERNAL</span>' : ''}
+        </div>
+        <svg id="profile-chevron-${secId}" class="w-4 h-4 text-muted-foreground transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="profile-section-${secId}" class="border-t border-border">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 p-4">
+          ${fields.map(f => renderProfileField(f, profile, prefix)).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderProfileField(field, profile, prefix) {
+  const val = profile[field.field];
+  const displayVal = formatProfileValue(val, field);
+  const fieldId = `pf-${prefix}-${field.field}`;
+
+  return `
+    <div class="profile-field" data-field="${field.field}" data-profile-type="${prefix}">
+      <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1" for="${fieldId}">${escapeHtml(field.description)}</label>
+      <!-- Read-only view -->
+      <div class="profile-view text-sm text-foreground min-h-[28px] flex items-center">
+        ${displayVal || '<span class="text-muted-foreground italic">—</span>'}
+      </div>
+      <!-- Edit input (hidden until edit mode) -->
+      <div class="profile-edit hidden">
+        ${renderProfileInput(field, val, fieldId, prefix)}
+      </div>
+    </div>`;
+}
+
+function renderProfileInput(field, val, fieldId, prefix) {
+  const t = field.type;
+  if (t === 'enum') {
+    const opts = field.options || [];
+    return `<select id="${fieldId}" data-field="${field.field}" data-profile-type="${prefix}" class="profile-input w-full border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none">
+      <option value="">—</option>
+      ${opts.map(o => `<option value="${escapeHtml(o)}" ${val === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+    </select>`;
+  }
+  if (t === 'text') {
+    return `<textarea id="${fieldId}" data-field="${field.field}" data-profile-type="${prefix}" rows="3" class="profile-input w-full border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none resize-y">${escapeHtml(String(val || ''))}</textarea>`;
+  }
+  if (t === 'list') {
+    const items = Array.isArray(val) ? val : [];
+    return `<div class="space-y-1">
+      <div id="${fieldId}-list" class="space-y-1">
+        ${items.map((item, i) => `
+          <div class="flex gap-1">
+            <input type="text" value="${escapeHtml(String(item))}" data-field="${field.field}" data-profile-type="${prefix}" data-list-idx="${i}" class="profile-input profile-list-item flex-1 border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none" />
+            <button onclick="removeListItem('${fieldId}', ${i})" class="px-1.5 text-destructive-400 hover:text-destructive-600">${icon('x-circle', 'w-4 h-4')}</button>
+          </div>
+        `).join('')}
+      </div>
+      <button onclick="addListItem('${fieldId}', '${field.field}', '${prefix}')" class="text-xs text-brand-600 hover:text-brand-800 font-medium">+ Add item</button>
+    </div>`;
+  }
+  const inputType = t === 'int' || t === 'float' ? 'number' : t === 'date' ? 'date' : 'text';
+  const step = t === 'float' ? 'step="0.01"' : '';
+  return `<input type="${inputType}" ${step} id="${fieldId}" data-field="${field.field}" data-profile-type="${prefix}" value="${escapeHtml(String(val ?? ''))}" class="profile-input w-full border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none" />`;
+}
+
+function formatProfileValue(val, field) {
+  if (val === null || val === undefined || val === '' || val === 0) {
+    // Special: show 0 for scores
+    if (field.type === 'int' && (field.field.includes('score') || field.field.includes('count') || field.field.includes('users'))) {
+      return '<span class="text-muted-foreground">0</span>';
+    }
+    return '';
+  }
+  if (field.type === 'list' && Array.isArray(val)) {
+    if (val.length === 0) return '';
+    return val.map(v => `<span class="inline-block bg-brand-50 text-brand-700 text-xs px-2 py-0.5 rounded-full mr-1 mb-0.5">${escapeHtml(String(v))}</span>`).join('');
+  }
+  if (field.type === 'enum') {
+    const colors = {
+      low: 'bg-success-100 text-success-700',
+      medium: 'bg-warning-100 text-warning-700',
+      high: 'bg-destructive-100 text-destructive-700',
+      onboarding: 'bg-informative-100 text-informative-700',
+      pilot: 'bg-accent text-accent-foreground',
+      scaling: 'bg-warning-100 text-warning-700',
+      mature: 'bg-success-100 text-success-700',
+      starter: 'bg-muted text-foreground',
+      growth: 'bg-informative-100 text-informative-700',
+      enterprise: 'bg-brand-100 text-brand-800',
+    };
+    const cls = colors[val] || 'bg-muted text-foreground';
+    return `<span class="text-xs font-semibold px-2 py-0.5 rounded-full ${cls}">${escapeHtml(String(val))}</span>`;
+  }
+  if (field.type === 'float' && field.field === 'arr') {
+    return `$${Number(val).toLocaleString()}`;
+  }
+  if (field.type === 'int' && field.field === 'credit_limit') {
+    return Number(val).toLocaleString();
+  }
+  if (field.type === 'int' && field.field === 'health_score') {
+    const score = Number(val);
+    const color = score >= 70 ? 'text-success-600' : score >= 40 ? 'text-warning-600' : 'text-destructive-600';
+    return `<span class="font-bold ${color}">${score}</span><span class="text-muted-foreground text-xs"> / 100</span>`;
+  }
+  return escapeHtml(String(val));
+}
+
+function renderContactsSection(profile, schema, sec, customerKey) {
+  const contacts = profile.contacts || [];
+  const field = schema.find(f => f.field === 'contacts');
+  const columns = field?.columns || [
+    {key: 'name', label: 'Name'}, {key: 'role', label: 'Role'},
+    {key: 'email', label: 'Email'}, {key: 'phone', label: 'Phone'}, {key: 'notes', label: 'Notes'},
+  ];
+  const secId = 'ext-contacts';
+
+  const contactsIcon = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>';
+
+  return `
+    <div class="bg-card rounded-xl border border-border overflow-hidden" data-profile-type="ext">
+      <button onclick="toggleProfileSection('${secId}')" class="w-full px-4 py-3 flex items-center justify-between hover:bg-muted transition-colors">
+        <div class="flex items-center gap-2">
+          <span class="text-brand-500">${contactsIcon}</span>
+          <span class="text-sm font-semibold text-foreground">${escapeHtml(sec.label)}</span>
+          <span class="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">${contacts.length} contacts</span>
+        </div>
+        <svg id="profile-chevron-${secId}" class="w-4 h-4 text-muted-foreground transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="profile-section-${secId}" class="border-t border-border">
+        <div class="p-4">
+          <!-- Read-only table -->
+          <div class="profile-view">
+            ${contacts.length === 0
+              ? '<div class="text-sm text-muted-foreground italic">No contacts added yet</div>'
+              : `<div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="border-b border-border">
+                        ${columns.map(c => `<th class="text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2 pr-3">${escapeHtml(c.label)}</th>`).join('')}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${contacts.map(row => `
+                        <tr class="border-b border-border/50 last:border-0">
+                          ${columns.map(c => `<td class="py-2 pr-3 text-foreground">${escapeHtml(row[c.key] || '—')}</td>`).join('')}
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>`
+            }
+          </div>
+
+          <!-- Edit mode table -->
+          <div class="profile-edit hidden">
+            <div id="contacts-table-edit" class="space-y-2">
+              <!-- Header -->
+              <div class="flex gap-2 items-center">
+                ${columns.map(c => `<div class="flex-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">${escapeHtml(c.label)}</div>`).join('')}
+                <div class="w-8"></div>
+              </div>
+              <!-- Rows -->
+              ${contacts.map((row, idx) => `
+                <div class="flex gap-2 items-center contacts-row" data-row-idx="${idx}">
+                  ${columns.map(c => `<input type="text" value="${escapeHtml(row[c.key] || '')}" data-col="${c.key}" class="contacts-input flex-1 border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none" placeholder="${c.label}" />`).join('')}
+                  <button onclick="this.closest('.contacts-row').remove()" class="w-8 flex items-center justify-center text-destructive-400 hover:text-destructive-600 shrink-0">${icon('x-circle', 'w-4 h-4')}</button>
+                </div>
+              `).join('')}
+            </div>
+            <button onclick="addContactRow()" class="mt-2 px-3 py-1.5 text-xs font-medium rounded-lg border border-dashed border-input text-secondary-foreground hover:bg-muted transition-colors inline-flex items-center gap-1">
+              ${icon('user-circle', 'w-3.5 h-3.5')} Add Contact
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function addContactRow() {
+  const container = document.getElementById('contacts-table-edit');
+  if (!container) return;
+  const columns = ['name', 'role', 'email', 'phone', 'notes'];
+  const labels = ['Name', 'Role / Designation', 'Email', 'Phone', 'Notes'];
+  const idx = container.querySelectorAll('.contacts-row').length;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-center contacts-row';
+  div.dataset.rowIdx = idx;
+  div.innerHTML = columns.map((c, i) =>
+    `<input type="text" value="" data-col="${c}" class="contacts-input flex-1 border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none" placeholder="${labels[i]}" />`
+  ).join('') + `<button onclick="this.closest('.contacts-row').remove()" class="w-8 flex items-center justify-center text-destructive-400 hover:text-destructive-600 shrink-0">${icon('x-circle', 'w-4 h-4')}</button>`;
+  container.appendChild(div);
+  div.querySelector('input').focus();
+}
+
+function _collectContactsUpdates() {
+  const rows = document.querySelectorAll('.contacts-row');
+  const contacts = [];
+  rows.forEach(row => {
+    const entry = {};
+    let hasValue = false;
+    row.querySelectorAll('.contacts-input').forEach(inp => {
+      entry[inp.dataset.col] = inp.value.trim();
+      if (inp.value.trim()) hasValue = true;
+    });
+    if (hasValue) contacts.push(entry);
+  });
+  return contacts;
+}
+
+function renderCustomSection(profile, sec, prefix) {
+  const custom = profile.custom || {};
+  const keys = Object.keys(custom);
+  const isInternal = prefix === 'int';
+  const secId = `${prefix}-custom`;
+  const borderClass = isInternal ? 'border-l-4 border-l-destructive-400 border border-destructive-200' : 'border border-border';
+  const bgClass = isInternal ? 'bg-destructive-50' : 'bg-card';
+  const iconColor = isInternal ? 'text-destructive-500' : 'text-brand-500';
+
+  return `
+    <div class="${bgClass} rounded-xl ${borderClass} overflow-hidden" data-profile-type="${prefix}">
+      <button onclick="toggleProfileSection('${secId}')" class="w-full px-4 py-3 flex items-center justify-between hover:bg-muted transition-colors">
+        <div class="flex items-center gap-2">
+          <span class="${iconColor}"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg></span>
+          <span class="text-sm font-semibold text-foreground">${escapeHtml(sec.label)}</span>
+          <span class="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">${keys.length} fields</span>
+          ${isInternal ? '<span class="text-[10px] bg-destructive-100 text-destructive-600 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>INTERNAL</span>' : ''}
+        </div>
+        <svg id="profile-chevron-${secId}" class="w-4 h-4 text-muted-foreground transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="profile-section-${secId}" class="border-t border-border">
+        <div class="p-4 space-y-3">
+          ${keys.length === 0 ? '<div class="text-sm text-muted-foreground italic">No custom fields yet</div>' : ''}
+          ${keys.map(k => `
+            <div class="flex items-center gap-3 profile-field" data-field="custom.${k}" data-profile-type="${prefix}">
+              <label class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-36 shrink-0">${escapeHtml(k)}</label>
+              <div class="profile-view text-sm text-foreground flex-1">${escapeHtml(String(custom[k]))}</div>
+              <div class="profile-edit hidden flex-1">
+                <input type="text" data-field="custom.${k}" data-profile-type="${prefix}" value="${escapeHtml(String(custom[k]))}" class="profile-input w-full border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none" />
+              </div>
+            </div>
+          `).join('')}
+          <!-- Add custom field (only visible in edit mode) -->
+          <div class="profile-edit hidden pt-2 border-t border-border">
+            <div class="flex gap-2">
+              <input type="text" id="${prefix}-custom-field-name" placeholder="Field name" class="flex-1 border border-input rounded-lg px-2.5 py-1.5 text-sm" />
+              <input type="text" id="${prefix}-custom-field-value" placeholder="Value" class="flex-1 border border-input rounded-lg px-2.5 py-1.5 text-sm" />
+              <button onclick="addCustomField('${prefix}')" class="px-3 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700">+ Add</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleProfileSection(sectionId) {
+  const content = document.getElementById(`profile-section-${sectionId}`);
+  const chevron = document.getElementById(`profile-chevron-${sectionId}`);
+  if (!content) return;
+  content.classList.toggle('hidden');
+  chevron?.classList.toggle('rotate-180');
+}
+
+function toggleProfileEdit(key) {
+  _profileEditing = !_profileEditing;
+  const views = document.querySelectorAll('.profile-view');
+  const edits = document.querySelectorAll('.profile-edit');
+  const editBtn = document.getElementById('profile-edit-btn');
+  const saveBtn = document.getElementById('profile-save-btn');
+  const cancelBtn = document.getElementById('profile-cancel-btn');
+
+  if (_profileEditing) {
+    views.forEach(v => v.classList.add('hidden'));
+    edits.forEach(e => e.classList.remove('hidden'));
+    editBtn.classList.add('hidden');
+    saveBtn.classList.remove('hidden');
+    cancelBtn.classList.remove('hidden');
+  } else {
+    views.forEach(v => v.classList.remove('hidden'));
+    edits.forEach(e => e.classList.add('hidden'));
+    editBtn.classList.remove('hidden');
+    saveBtn.classList.add('hidden');
+    cancelBtn.classList.add('hidden');
+  }
+}
+
+async function saveProfile(key) {
+  // Collect updates for customer-facing profile (ext)
+  const extUpdates = _collectUpdates('ext', _profileData);
+  // Collect contacts table if in edit mode
+  const contactsRows = document.querySelectorAll('.contacts-row');
+  if (contactsRows.length > 0 || document.getElementById('contacts-table-edit')) {
+    const newContacts = _collectContactsUpdates();
+    const oldContacts = (_profileData?.profile?.contacts) || [];
+    if (JSON.stringify(newContacts) !== JSON.stringify(oldContacts)) {
+      extUpdates.contacts = newContacts;
+    }
+  }
+  // Collect updates for internal-only profile (int)
+  const intUpdates = _collectUpdates('int', _internalData);
+
+  if (Object.keys(extUpdates).length === 0 && Object.keys(intUpdates).length === 0) {
+    document.getElementById('profile-save-status').textContent = 'No changes';
+    setTimeout(() => { document.getElementById('profile-save-status').textContent = ''; }, 2000);
+    return;
+  }
+
+  const saveBtn = document.getElementById('profile-save-btn');
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled = true;
+
+  try {
+    const promises = [];
+    if (Object.keys(extUpdates).length > 0) {
+      promises.push(api(`/customers/${key}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: extUpdates }),
+      }));
+    }
+    if (Object.keys(intUpdates).length > 0) {
+      promises.push(api(`/customers/${key}/internal-profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: intUpdates }),
+      }));
+    }
+    await Promise.all(promises);
+
+    document.getElementById('profile-save-status').innerHTML = icon('check-circle', 'w-3.5 h-3.5 text-success inline') + ' Saved';
+    setTimeout(() => {
+      document.getElementById('profile-save-status').textContent = '';
+    }, 3000);
+    // Reload both profiles
+    await renderProfile(document.getElementById('tab-content'), key);
+  } catch (err) {
+    document.getElementById('profile-save-status').innerHTML = icon('x-circle', 'w-3.5 h-3.5 text-destructive inline') + ' Error: ' + err.message;
+    saveBtn.innerHTML = icon('arrow-down-tray', 'w-3.5 h-3.5') + ' Save Changes';
+    saveBtn.disabled = false;
+  }
+}
+
+function _collectUpdates(prefix, dataObj) {
+  const updates = {};
+  const profile = dataObj?.profile || {};
+  const schema = dataObj?.schema || [];
+
+  // Collect regular inputs
+  document.querySelectorAll(`.profile-input[data-profile-type="${prefix}"]`).forEach(inp => {
+    const field = inp.dataset.field;
+    if (!field) return;
+    if (inp.dataset.listIdx !== undefined) return;
+    if (field.startsWith('custom.')) return;
+
+    let val = inp.value;
+    const sEntry = schema.find(s => s.field === field);
+    if (sEntry) {
+      if (sEntry.type === 'int') val = parseInt(val) || 0;
+      else if (sEntry.type === 'float') val = parseFloat(val) || 0;
+    }
+    if (JSON.stringify(val) !== JSON.stringify(profile[field])) {
+      updates[field] = val;
+    }
+  });
+
+  // Collect list fields
+  const listFields = {};
+  document.querySelectorAll(`.profile-list-item[data-profile-type="${prefix}"]`).forEach(inp => {
+    const field = inp.dataset.field;
+    if (!listFields[field]) listFields[field] = [];
+    if (inp.value.trim()) listFields[field].push(inp.value.trim());
+  });
+  for (const [field, items] of Object.entries(listFields)) {
+    if (JSON.stringify(items) !== JSON.stringify(profile[field])) {
+      updates[field] = items;
+    }
+  }
+
+  // Collect custom field changes
+  const customUpdates = {};
+  document.querySelectorAll(`.profile-input[data-profile-type="${prefix}"][data-field^="custom."]`).forEach(inp => {
+    const rawKey = inp.dataset.field.replace('custom.', '');
+    const oldVal = (profile.custom || {})[rawKey];
+    if (inp.value !== String(oldVal ?? '')) {
+      customUpdates[rawKey] = inp.value;
+    }
+  });
+  if (Object.keys(customUpdates).length > 0) {
+    updates.custom = customUpdates;
+  }
+
+  return updates;
+}
+
+function addListItem(fieldId, fieldName, prefix) {
+  const container = document.getElementById(`${fieldId}-list`);
+  if (!container) return;
+  const idx = container.children.length;
+  const div = document.createElement('div');
+  div.className = 'flex gap-1';
+  div.innerHTML = `
+    <input type="text" value="" data-field="${fieldName}" data-profile-type="${prefix}" data-list-idx="${idx}" class="profile-input profile-list-item flex-1 border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none" />
+    <button onclick="this.parentElement.remove()" class="px-1.5 text-destructive-400 hover:text-destructive-600">${icon('x-circle', 'w-4 h-4')}</button>`;
+  container.appendChild(div);
+  div.querySelector('input').focus();
+}
+
+function removeListItem(fieldId, idx) {
+  const container = document.getElementById(`${fieldId}-list`);
+  if (!container) return;
+  const items = container.querySelectorAll('.flex');
+  if (items[idx]) items[idx].remove();
+}
+
+function addCustomField(prefix) {
+  const nameInput = document.getElementById(`${prefix}-custom-field-name`);
+  const valueInput = document.getElementById(`${prefix}-custom-field-value`);
+  const name = nameInput?.value.trim();
+  const value = valueInput?.value.trim();
+  if (!name) return;
+
+  const secId = `${prefix}-custom`;
+  const container = document.getElementById(`profile-section-${secId}`);
+  const addRow = container.querySelector('.profile-edit.pt-2');
+  if (!addRow) return;
+
+  const div = document.createElement('div');
+  div.className = 'flex items-center gap-3 profile-field';
+  div.dataset.field = `custom.${name}`;
+  div.dataset.profileType = prefix;
+  div.innerHTML = `
+    <label class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-36 shrink-0">${escapeHtml(name)}</label>
+    <div class="profile-view hidden text-sm text-foreground flex-1">${escapeHtml(value)}</div>
+    <div class="profile-edit flex-1">
+      <input type="text" data-field="custom.${name}" data-profile-type="${prefix}" value="${escapeHtml(value)}" class="profile-input w-full border border-input rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-ring outline-none" />
+    </div>`;
+  addRow.parentElement.insertBefore(div, addRow);
+
+  nameInput.value = '';
+  valueInput.value = '';
+}
+
+// ── Rules tab ────────────────────────────────────────────────────────────────
+
+let _rulesEditing = false;
+let _rulesRaw = '';
+
+async function renderRules(el, key) {
+  const data = await api(`/customers/${key}/rules`);
+  _rulesRaw = data.rules || '';
+  _rulesEditing = false;
+
+  el.innerHTML = `
+    <div class="space-y-4 fade-in">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="font-semibold text-foreground">Customer Rules</h3>
+          <p class="text-xs text-muted-foreground mt-0.5">Dos and don'ts that guide the AI agent's behavior for this customer. Editable by humans and the agent.</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <span id="rules-save-status" class="text-xs text-muted-foreground"></span>
+          <button id="rules-edit-btn" onclick="toggleRulesEdit('${key}')"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg border border-input text-secondary-foreground hover:bg-muted transition-colors inline-flex items-center gap-1">
+            ${icon('pencil', 'w-3.5 h-3.5')} Edit
+          </button>
+          <button id="rules-save-btn" onclick="saveRules('${key}')"
+            class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors inline-flex items-center gap-1">
+            ${icon('arrow-down-tray', 'w-3.5 h-3.5')} Save
+          </button>
+          <button id="rules-cancel-btn" onclick="renderRules(document.getElementById('tab-content'), '${key}')"
+            class="hidden px-3 py-1.5 text-xs font-medium rounded-lg border border-input text-secondary-foreground hover:bg-muted transition-colors">
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <!-- Read mode: rendered markdown -->
+      <div id="rules-view" class="bg-card border border-border rounded-xl p-5 prose prose-sm max-w-none text-foreground">
+        ${window.marked ? marked.parse(_rulesRaw) : escapeHtml(_rulesRaw).replace(/\\n/g, '<br>')}
+      </div>
+
+      <!-- Edit mode: raw markdown textarea -->
+      <div id="rules-edit" class="hidden">
+        <textarea id="rules-textarea"
+          class="w-full h-96 bg-card border border-border rounded-xl p-4 text-sm font-mono text-foreground focus:ring-2 focus:ring-ring outline-none resize-y"
+          placeholder="Enter customer rules in markdown..."
+        >${escapeHtml(_rulesRaw)}</textarea>
+        <p class="text-[11px] text-muted-foreground mt-1.5">Markdown supported. These rules are injected into the agent's system prompt for every interaction.</p>
+      </div>
+    </div>`;
+}
+
+function toggleRulesEdit(key) {
+  _rulesEditing = !_rulesEditing;
+  const view = document.getElementById('rules-view');
+  const edit = document.getElementById('rules-edit');
+  const editBtn = document.getElementById('rules-edit-btn');
+  const saveBtn = document.getElementById('rules-save-btn');
+  const cancelBtn = document.getElementById('rules-cancel-btn');
+
+  if (_rulesEditing) {
+    view.classList.add('hidden');
+    edit.classList.remove('hidden');
+    editBtn.classList.add('hidden');
+    saveBtn.classList.remove('hidden');
+    cancelBtn.classList.remove('hidden');
+    document.getElementById('rules-textarea').focus();
+  } else {
+    view.classList.remove('hidden');
+    edit.classList.add('hidden');
+    editBtn.classList.remove('hidden');
+    saveBtn.classList.add('hidden');
+    cancelBtn.classList.add('hidden');
+  }
+}
+
+async function saveRules(key) {
+  const textarea = document.getElementById('rules-textarea');
+  const content = textarea.value;
+  const status = document.getElementById('rules-save-status');
+
+  try {
+    status.innerHTML = 'Saving…';
+    await fetch(`/api/customers/${key}/rules`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules: content }),
+    });
+    status.innerHTML = `<span class="text-success-600 inline-flex items-center gap-0.5">${icon('check-circle', 'w-3.5 h-3.5')} Saved</span>`;
+    setTimeout(() => { status.textContent = ''; }, 3000);
+
+    // Re-render to show updated rendered markdown
+    await renderRules(document.getElementById('tab-content'), key);
+  } catch (err) {
+    status.innerHTML = `<span class="text-destructive-600 inline-flex items-center gap-0.5">${icon('x-circle', 'w-3.5 h-3.5')} Error</span>`;
+  }
+}
+
+// ── Events tab ───────────────────────────────────────────────────────────────
+
+/** Build a human-readable details panel for an event. */
+function renderEventDetails(details, eventType) {
+  if (!details || Object.keys(details).length === 0) return '';
+
+  const sections = [];
+
+  // Conversation events: show inbound + outbound clearly
+  if (eventType === 'SLACK_CONVERSATION' || eventType === 'EMAIL_CONVERSATION') {
+    const inLabel = eventType === 'EMAIL_CONVERSATION' ? 'Inbound Email' : 'Inbound Message';
+    const outLabel = 'Agent Response';
+    const inbound = details.message || details.body || '';
+    const outbound = details.response || '';
+    if (details.subject) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Subject</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.subject)}</div></div>`);
+    if (details.to) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">To</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(typeof details.to === 'string' ? details.to : details.to.join(', '))}</div></div>`);
+    if (details.channel) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Channel</span><div class="text-sm text-foreground mt-0.5">#${escapeHtml(details.channel)}</div></div>`);
+    if (inbound) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">${inLabel}</span><div class="text-sm text-secondary-foreground mt-1 whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-40 overflow-y-auto">${escapeHtml(inbound)}</div></div>`);
+    if (outbound) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">${outLabel}</span><div class="text-sm text-secondary-foreground mt-1 whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-40 overflow-y-auto">${escapeHtml(outbound)}</div></div>`);
+    if (details.response_status) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Status</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.response_status)}</div></div>`);
+  }
+  // Email sent/rejected events
+  else if (eventType === 'EMAIL_RESPONSE_SENT' || eventType === 'EMAIL_RESPONSE_REJECTED') {
+    if (details.to) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">To</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(Array.isArray(details.to) ? details.to.join(', ') : details.to)}</div></div>`);
+    if (details.subject) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Subject</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.subject)}</div></div>`);
+    if (details.body) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Email Body</span><div class="text-sm text-secondary-foreground mt-1 whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-40 overflow-y-auto">${escapeHtml(details.body)}</div></div>`);
+    if (details.approved_by) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Approved By</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.approved_by)}</div></div>`);
+    if (details.rejected_by) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Rejected By</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.rejected_by)}</div></div>`);
+  }
+  // Action approved/rejected events
+  else if (eventType === 'ACTION_APPROVED' || eventType === 'ACTION_REJECTED') {
+    if (details.tool_name) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Tool</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.tool_name)}</div></div>`);
+    if (details.tool_input) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Input</span><div class="text-sm text-secondary-foreground mt-1 whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-40 overflow-y-auto font-mono text-xs">${escapeHtml(JSON.stringify(details.tool_input, null, 2))}</div></div>`);
+    if (details.result) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Result</span><div class="text-sm text-secondary-foreground mt-1 whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-40 overflow-y-auto">${escapeHtml(details.result)}</div></div>`);
+    if (details.approved_by) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Approved By</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.approved_by)}</div></div>`);
+    if (details.rejected_by) sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Rejected By</span><div class="text-sm text-foreground mt-0.5">${escapeHtml(details.rejected_by)}</div></div>`);
+  }
+  // Generic fallback: show all key-value pairs
+  else {
+    for (const [k, v] of Object.entries(details)) {
+      if (v === null || v === undefined || v === '') continue;
+      const val = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
+      const isLong = val.length > 100;
+      sections.push(`<div class="mb-2"><span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">${escapeHtml(k.replace(/_/g, ' '))}</span><div class="text-sm text-secondary-foreground mt-0.5 ${isLong ? 'whitespace-pre-wrap bg-muted rounded-lg p-3 max-h-40 overflow-y-auto' : ''}">${escapeHtml(val)}</div></div>`);
+    }
+  }
+
+  if (sections.length === 0) return '';
+  return `<div class="mt-2 pl-8 border-l-2 border-border ml-2">${sections.join('')}</div>`;
+}
+
+async function renderEvents(el, key) {
+  const data = await api(`/customers/${key}/events?limit=100`);
+  const events = data.events || [];
+
+  el.innerHTML = `
+    <div class="bg-card rounded-xl border border-border overflow-hidden fade-in">
+      <div class="px-5 py-4 border-b border-border flex justify-between items-center">
+        <h3 class="font-semibold text-foreground">Event Log</h3>
+        <span class="text-xs text-muted-foreground">${events.length} events</span>
+      </div>
+      ${events.length === 0 ? '<div class="p-8 text-center text-muted-foreground">No events yet</div>' : `
+      <div class="divide-y divide-border max-h-[700px] overflow-y-auto">
+        ${events.map((e, idx) => {
+          const details = e.details || {};
+          const attribution = details.user_name || details.from || details.user || '';
+          const hasDetails = Object.keys(details).length > 0;
+          return `
+          <div class="px-5 py-3 hover:bg-muted transition-colors">
+            <div class="flex items-start gap-3 ${hasDetails ? 'cursor-pointer' : ''}" ${hasDetails ? `onclick="toggleEventDetails(${idx})"` : ''}>
+              <div class="mt-0.5">${eventIcon(e.event_type)}</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-medium text-foreground">${escapeHtml(e.summary || e.event_type)}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">${e.event_type}</span>
+                  ${attribution ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 font-medium inline-flex items-center gap-0.5">${icon('user', 'w-3 h-3')} ${escapeHtml(attribution)}</span>` : ''}
+                  ${hasDetails ? `<span class="text-[10px] text-muted-foreground" id="evt-chevron-${idx}">${icon('chevron-right', 'w-3.5 h-3.5 transition-transform')}</span>` : ''}
+                </div>
+                ${e.tags && e.tags.length ? `<div class="flex gap-1 mt-1">${e.tags.map(t => `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-600">${t}</span>`).join('')}</div>` : ''}
+              </div>
+              <div class="text-xs text-muted-foreground whitespace-nowrap">${timeAgo(e.timestamp)}</div>
+            </div>
+            <div id="evt-details-${idx}" class="hidden">${renderEventDetails(details, e.event_type)}</div>
+          </div>`;
+        }).join('')}
+      </div>`}
+    </div>`;
+}
+
+function toggleEventDetails(idx) {
+  const panel = document.getElementById('evt-details-' + idx);
+  const chevron = document.getElementById('evt-chevron-' + idx);
+  if (!panel) return;
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden');
+  if (chevron) {
+    const svg = chevron.querySelector('svg');
+    if (svg) svg.style.transform = isHidden ? 'rotate(90deg)' : '';
+  }
+}
+
+// ── Tasks tab ────────────────────────────────────────────────────────────────
+async function renderTasks(el, key) {
+  const data = await api(`/customers/${key}/tasks?include_completed=true`);
+  const tasks = data.tasks || [];
+
+  el.innerHTML = `
+    <div class="space-y-4 fade-in">
+      <div class="flex justify-between items-center">
+        <h3 class="font-semibold text-foreground">Scheduled Tasks</h3>
+        <button onclick="showCreateTask('${key}')" class="px-3 py-1.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors">+ New Task</button>
+      </div>
+      <div id="create-task-form"></div>
+      <div class="bg-card rounded-xl border border-border overflow-hidden">
+        ${tasks.length === 0 ? '<div class="p-8 text-center text-muted-foreground">No tasks</div>' : `
+        <div class="divide-y divide-border">
+          ${tasks.map(t => {
+            const sched = t.schedule || {};
+            const schedStr = sched.at || sched.cron || sched.every || '—';
+            const statusColor = t.status === 'active' ? 'green' : t.status === 'cancelled' ? 'red' : 'gray';
+            return `
+            <div class="px-5 py-3.5 hover:bg-muted transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-${statusColor}-400"></span>
+                    <span class="text-sm font-medium text-foreground">${t.description}</span>
+                  </div>
+                  <div class="flex gap-3 mt-1 text-xs text-muted-foreground">
+                    <span>${sched.type || '?'}: ${schedStr}</span>
+                    <span>Action: ${t.action?.type || '?'} → ${t.action?.channel || '?'}</span>
+                    ${t.last_run ? `<span>Last run: ${timeAgo(t.last_run)}</span>` : ''}
+                  </div>
+                </div>
+                ${t.status === 'active' ? `<button onclick="cancelTask('${key}', '${t.id}')" class="text-xs text-destructive hover:text-destructive/80 px-2 py-1">Cancel</button>` : `<span class="text-xs text-muted-foreground">${t.status}</span>`}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`}
+      </div>
+    </div>`;
+}
+
+function showCreateTask(key) {
+  const el = document.getElementById('create-task-form');
+  el.innerHTML = `
+    <div class="bg-card rounded-xl border border-border p-5 fade-in space-y-4">
+      <h4 class="font-medium text-foreground">Create Task</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Description</label>
+          <input id="task-desc" class="w-full border border-input rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:border-ring outline-none" placeholder="Follow up with Jane…" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Schedule type</label>
+          <select id="task-sched-type" class="w-full border border-input rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none">
+            <option value="once">One-time</option>
+            <option value="recurring">Recurring</option>
+            <option value="cron">Cron</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">When (ISO datetime / interval / cron)</label>
+          <input id="task-sched-value" class="w-full border border-input rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none" placeholder="2026-02-18T09:00:00-08:00" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Action type</label>
+          <select id="task-action-type" class="w-full border border-input rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none">
+            <option value="remind">Remind</option>
+            <option value="check">Check</option>
+            <option value="run_prompt">Run Prompt</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Channel</label>
+          <select id="task-channel" class="w-full border border-input rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none">
+            <option value="slack">Slack</option>
+            <option value="email">Email</option>
+            <option value="internal">Internal</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Message / Prompt</label>
+          <input id="task-message" class="w-full border border-input rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none" placeholder="Reminder text or prompt…" />
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="submitTask('${key}')" class="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors">Create</button>
+        <button onclick="document.getElementById('create-task-form').innerHTML=''" class="px-4 py-2 bg-muted text-foreground text-sm font-medium rounded-lg hover:bg-muted transition-colors">Cancel</button>
+      </div>
+    </div>`;
+}
+
+async function submitTask(key) {
+  const schedType = document.getElementById('task-sched-type').value;
+  const schedValue = document.getElementById('task-sched-value').value;
+  const schedule = { type: schedType };
+  if (schedType === 'once') schedule.at = schedValue;
+  else if (schedType === 'recurring') schedule.every = schedValue;
+  else schedule.cron = schedValue;
+
+  const actionType = document.getElementById('task-action-type').value;
+  const action = { type: actionType, channel: document.getElementById('task-channel').value };
+  if (actionType === 'remind') action.message = document.getElementById('task-message').value;
+  else if (actionType === 'run_prompt') action.prompt = document.getElementById('task-message').value;
+
+  await api(`/customers/${key}/tasks`, {
+    method: 'POST',
+    body: JSON.stringify({
+      description: document.getElementById('task-desc').value,
+      schedule, action, tags: [],
+    }),
+  });
+  await loadTab('tasks', key);
+}
+
+async function cancelTask(key, taskId) {
+  if (!confirm('Cancel this task?')) return;
+  await api(`/customers/${key}/tasks/${taskId}`, { method: 'DELETE' });
+  await loadTab('tasks', key);
+}
+
+// ── Documents tab ────────────────────────────────────────────────────────────
+async function renderDocuments(el, key) {
+  const data = await api(`/customers/${key}/documents`);
+  const docs = data.documents || [];
+
+  el.innerHTML = `
+    <div class="space-y-5 fade-in">
+      <!-- Search bar -->
+      <div class="bg-card rounded-xl border border-border p-4">
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input id="doc-search" class="w-full border border-input rounded-lg pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-ring focus:border-ring outline-none" placeholder="Search across all documents…" onkeydown="if(event.key==='Enter')searchDocs('${key}')" />
+          </div>
+          <button onclick="searchDocs('${key}')" class="px-5 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            Search
+          </button>
+        </div>
+      </div>
+
+      <!-- Search results -->
+      <div id="search-results"></div>
+
+      <!-- Upload zone -->
+      <div id="upload-zone" class="bg-card rounded-xl border-2 border-dashed border-input hover:border-brand-400 transition-colors cursor-pointer"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault(); this.classList.add('border-brand-500','bg-brand-50')"
+           ondragleave="this.classList.remove('border-brand-500','bg-brand-50')"
+           ondrop="event.preventDefault(); this.classList.remove('border-brand-500','bg-brand-50'); handleFileDrop(event, '${key}')">
+        <div class="p-6 text-center">
+          ${icon('cloud-arrow-up', 'w-10 h-10 text-muted-foreground mx-auto mb-2')}
+          <div class="text-sm font-medium text-secondary-foreground">Drop files here or <span class="text-brand-600 underline">browse</span></div>
+          <div class="text-xs text-muted-foreground mt-1">PDF, DOCX, PPTX, XLSX, images, text — up to 50 MB</div>
+        </div>
+        <input id="file-input" type="file" multiple class="hidden" onchange="handleFileSelect(event, '${key}')" accept=".pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.txt,.md,.csv,.json" />
+      </div>
+
+      <!-- Upload progress -->
+      <div id="upload-progress" class="hidden space-y-2"></div>
+
+      <!-- Document list header -->
+      <div class="flex justify-between items-center">
+        <h3 class="font-semibold text-foreground flex items-center gap-2">${icon('book-open', 'w-4 h-4 text-muted-foreground')} Document Library</h3>
+        <span class="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">${docs.length} document${docs.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      ${docs.length === 0 ? `
+        <div class="bg-card rounded-xl border border-border p-12 text-center">
+          <svg class="w-16 h-16 text-muted-foreground mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <div class="text-muted-foreground font-medium">No documents ingested yet</div>
+          <div class="text-muted-foreground text-sm mt-1">Drop files above or send them via Slack / email</div>
+        </div>` : `
+      <div class="grid gap-3">
+        ${docs.map((d, i) => `
+          <div class="bg-card rounded-xl border border-border hover:border-brand-300 hover:shadow-sm transition-all">
+            <div class="p-4 cursor-pointer" onclick="toggleDocPreview(${i})">
+              <div class="flex items-start gap-3.5">
+                <!-- File icon -->
+                <div class="shrink-0 w-11 h-11 rounded-lg flex items-center justify-center ${fileIconBg(d.mime_type)}">
+                  ${fileIconSvg(d.mime_type)}
+                </div>
+
+                <!-- File info -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-semibold text-foreground">${escapeHtml(d.title || d.original_filename || '?')}</span>
+                    ${categoryBadge(d.category)}
+                  </div>
+                  <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                    <span class="flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                      ${mimeLabel(d.mime_type)}
+                    </span>
+                    ${d.page_count ? `<span class="flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>${d.page_count} page${d.page_count > 1 ? 's' : ''}</span>` : ''}
+                    <span class="flex items-center gap-1">
+                      ${sourceIcon(d.source)} ${d.source || '—'}
+                    </span>
+                    <span class="flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      ${timeAgo(d.ingested_at)}
+                    </span>
+                  </div>
+                  ${d.preview ? `<div class="mt-2 text-xs text-muted-foreground line-clamp-2 leading-relaxed">${escapeHtml(d.preview.substring(0, 200))}${d.preview.length > 200 ? '…' : ''}</div>` : ''}
+                </div>
+
+                <!-- Expand chevron -->
+                <svg id="doc-chevron-${i}" class="w-5 h-5 text-muted-foreground shrink-0 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
+
+            <!-- Expandable content preview -->
+            <div id="doc-preview-${i}" class="hidden border-t border-border">
+              <div class="p-5 bg-muted/50 max-h-[500px] overflow-y-auto">
+                <div class="flex items-center gap-2 mb-3">
+                  <svg class="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Document Preview</span>
+                </div>
+                <div class="prose text-sm bg-card rounded-lg border border-border p-4">${d.full_text ? marked.parse(d.full_text.substring(0, 5000)) : '<span class="text-muted-foreground italic">No content preview available</span>'}</div>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>`}
+    </div>`;
+}
+
+// ── Upload helpers ──────────────────────────────────────────────────────────
+
+function handleFileDrop(event, customerKey) {
+  const files = event.dataTransfer.files;
+  if (files.length) uploadFiles(Array.from(files), customerKey);
+}
+
+function handleFileSelect(event, customerKey) {
+  const files = event.target.files;
+  if (files.length) uploadFiles(Array.from(files), customerKey);
+  event.target.value = '';  // reset so same file can be re-selected
+}
+
+async function uploadFiles(files, customerKey) {
+  const progressEl = document.getElementById('upload-progress');
+  if (!progressEl) return;
+  progressEl.classList.remove('hidden');
+  progressEl.innerHTML = '';
+
+  // Build a progress card per file
+  const items = files.map((f, i) => {
+    const id = `upload-item-${i}`;
+    progressEl.insertAdjacentHTML('beforeend', `
+      <div id="${id}" class="bg-card rounded-lg border border-border p-3 flex items-center gap-3">
+        <div class="shrink-0 w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
+          <svg class="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-foreground truncate">${escapeHtml(f.name)}</div>
+          <div class="text-xs text-muted-foreground" id="${id}-status">Uploading…</div>
+        </div>
+        <div id="${id}-icon" class="shrink-0">
+          <div class="spinner w-5 h-5"></div>
+        </div>
+      </div>
+    `);
+    return { file: f, id };
+  });
+
+  // Upload sequentially to avoid overwhelming the server during ingestion
+  for (const { file, id } of items) {
+    const statusEl = document.getElementById(`${id}-status`);
+    const iconEl = document.getElementById(`${id}-icon`);
+    const cardEl = document.getElementById(id);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const resp = await fetch(`/api/customers/${customerKey}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || 'Upload failed');
+      }
+      const result = await resp.json();
+      statusEl.textContent = result.message || 'Upload accepted';
+      statusEl.classList.replace('text-muted-foreground', 'text-success-600');
+      iconEl.innerHTML = '<svg class="w-5 h-5 text-success-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+      cardEl.classList.replace('border-border', 'border-success-200');
+    } catch (err) {
+      statusEl.textContent = `Failed: ${err.message}`;
+      statusEl.classList.replace('text-muted-foreground', 'text-destructive-500');
+      iconEl.innerHTML = '<svg class="w-5 h-5 text-destructive-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+      cardEl.classList.replace('border-border', 'border-destructive-200');
+    }
+  }
+
+  // After all uploads complete, refresh the document list after a short delay
+  setTimeout(async () => {
+    const el = document.getElementById('tab-content');
+    if (el && currentTab === 'documents') {
+      await renderDocuments(el, customerKey);
+    }
+  }, 1500);
+}
+
+function toggleDocPreview(idx) {
+  const preview = document.getElementById(`doc-preview-${idx}`);
+  const chevron = document.getElementById(`doc-chevron-${idx}`);
+  if (!preview) return;
+  const isOpen = !preview.classList.contains('hidden');
+  // Close all previews first
+  document.querySelectorAll('[id^="doc-preview-"]').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('[id^="doc-chevron-"]').forEach(el => el.classList.remove('rotate-180'));
+  if (!isOpen) {
+    preview.classList.remove('hidden');
+    chevron?.classList.add('rotate-180');
+  }
+}
+
+// ── Search — Document Overlay Viewer ──────────────────────────────────────────
+
+// Global state for match navigation
+let _searchMatchState = { query: '', currentIdx: 0, totalMatches: 0 };
+
+async function searchDocs(key) {
+  const q = document.getElementById('doc-search').value.trim();
+  if (!q) return;
+  const el = document.getElementById('search-results');
+  el.innerHTML = `
+    <div class="bg-card rounded-xl border border-border p-6 text-center">
+      <div class="spinner mx-auto mb-2"></div>
+      <div class="text-sm text-muted-foreground">Searching documents…</div>
+    </div>`;
+  try {
+    const data = await api(`/customers/${key}/search?q=${encodeURIComponent(q)}`);
+    const docs = data.documents || [];
+
+    if (docs.length === 0) {
+      el.innerHTML = `
+        <div class="bg-card rounded-xl border border-border p-8 text-center">
+          <svg class="w-12 h-12 text-muted-foreground mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <div class="text-muted-foreground font-medium">No results for "${escapeHtml(q)}"</div>
+          <div class="text-xs text-muted-foreground mt-1">Try different keywords or broader terms</div>
+        </div>`;
+      return;
+    }
+
+    const totalMatches = data.total_matches || 0;
+
+    // Render header + per-document sections
+    el.innerHTML = `
+      <div class="fade-in space-y-4">
+        <!-- Global search header -->
+        <div class="bg-card rounded-xl border border-border overflow-hidden">
+          <div class="px-4 py-3 bg-brand-50/50 border-b border-brand-100 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <span class="text-sm font-semibold text-foreground">"${escapeHtml(q)}" found in ${docs.length} document${docs.length !== 1 ? 's' : ''}</span>
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-warning-100 text-warning-800">${totalMatches} match${totalMatches !== 1 ? 'es' : ''}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <!-- Match navigation -->
+              <button onclick="searchMatchNav(-1)" class="p-1 rounded hover:bg-muted text-muted-foreground" title="Previous match (Shift+Enter)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+              </button>
+              <span id="match-counter" class="text-xs text-muted-foreground font-mono min-w-[60px] text-center">0 / ${totalMatches}</span>
+              <button onclick="searchMatchNav(1)" class="p-1 rounded hover:bg-muted text-muted-foreground" title="Next match (Enter)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div class="w-px h-4 bg-border mx-1"></div>
+              <button onclick="closeSearchResults()" class="p-1 rounded hover:bg-muted text-muted-foreground" title="Close">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-document sections -->
+        ${docs.map((doc, di) => renderDocOverlay(doc, di, q, key)).join('')}
+      </div>`;
+
+    // Post-render: highlight all matches in the rendered HTML
+    highlightAllMatches(q);
+
+  } catch (err) {
+    el.innerHTML = `<div class="bg-destructive/10 rounded-xl border border-destructive/20 p-4 text-destructive text-sm">${err.message}</div>`;
+  }
+}
+
+function closeSearchResults() {
+  document.getElementById('search-results').innerHTML = '';
+  _searchMatchState = { query: '', currentIdx: 0, totalMatches: 0 };
+}
+
+function renderDocOverlay(doc, docIdx, query, customerKey) {
+  const hasPages = doc.page_images && doc.page_images.length > 0;
+  const pageMap = doc.page_map || [];
+
+  // Split content by page boundaries if we have a page map
+  let pageContents = [];
+  if (pageMap.length > 0 && doc.content) {
+    for (const pm of pageMap) {
+      pageContents.push({
+        page: pm.page,
+        text: doc.content.substring(pm.char_start, pm.char_end),
+        imageUrl: (doc.page_images || [])[pm.page - 1] || null,
+      });
+    }
+  } else if (doc.content) {
+    pageContents = [{ page: 1, text: doc.content, imageUrl: null }];
+  }
+
+  return `
+    <div class="bg-card rounded-xl border border-border overflow-hidden" id="search-doc-${docIdx}">
+      <!-- Document header (sticky) -->
+      <div class="px-4 py-3 border-b border-border bg-muted sticky top-0 z-10 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center ${fileIconBg(doc.mime_type)}">
+            ${fileIconSvg(doc.mime_type)}
+          </div>
+          <div>
+            <div class="text-sm font-semibold text-foreground">${escapeHtml(doc.title)}</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              ${categoryBadge(doc.category)}
+              ${doc.page_count ? `<span class="text-[10px] text-muted-foreground">${doc.page_count} pages</span>` : ''}
+              <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-warning-100 text-warning-800">${doc.match_count} match${doc.match_count !== 1 ? 'es' : ''}</span>
+            </div>
+          </div>
+        </div>
+        ${hasPages ? `
+          <button onclick="togglePageImages(${docIdx})" class="text-xs text-brand-600 hover:text-brand-800 font-medium flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Toggle page images
+          </button>` : ''}
+      </div>
+
+      <!-- Document body with pages -->
+      <div class="doc-overlay-body max-h-[600px] overflow-y-auto" id="doc-body-${docIdx}">
+        ${pageContents.map((pg, pi) => `
+          <div class="border-b border-border last:border-b-0">
+            ${pageContents.length > 1 ? `
+              <div class="px-4 py-1.5 bg-muted/50 border-b border-border flex items-center gap-2">
+                <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Page ${pg.page}</span>
+              </div>` : ''}
+            <div class="flex">
+              <!-- Page image (hidden by default) -->
+              ${pg.imageUrl ? `
+                <div class="page-img-panel hidden shrink-0 w-48 border-r border-border bg-muted p-2" data-doc="${docIdx}">
+                  <img src="${pg.imageUrl}" alt="Page ${pg.page}" class="w-full rounded shadow-sm border border-border" loading="lazy" />
+                </div>` : ''}
+              <!-- Rendered markdown content -->
+              <div class="flex-1 p-4 prose text-sm doc-highlight-zone" data-doc="${docIdx}" data-page="${pg.page}">
+                ${marked.parse(pg.text)}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+}
+
+function togglePageImages(docIdx) {
+  const panels = document.querySelectorAll(`.page-img-panel[data-doc="${docIdx}"]`);
+  panels.forEach(p => p.classList.toggle('hidden'));
+}
+
+function highlightAllMatches(query) {
+  if (!query) return;
+  const zones = document.querySelectorAll('.doc-highlight-zone');
+  let globalIdx = 0;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(escaped, 'gi');
+
+  zones.forEach(zone => {
+    // Walk text nodes and wrap matches
+    const walker = document.createTreeWalker(zone, NodeFilter.SHOW_TEXT, null);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+    for (const node of textNodes) {
+      const text = node.nodeValue;
+      if (!re.test(text)) continue;
+      re.lastIndex = 0;
+
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      let match;
+
+      while ((match = re.exec(text)) !== null) {
+        // Text before the match
+        if (match.index > lastIdx) {
+          frag.appendChild(document.createTextNode(text.substring(lastIdx, match.index)));
+        }
+        // The match itself
+        const mark = document.createElement('mark');
+        mark.className = 'search-match bg-warning-200 text-warning-900 rounded-sm px-0.5';
+        mark.id = `search-match-${globalIdx}`;
+        mark.dataset.matchIdx = globalIdx;
+        mark.textContent = match[0];
+        frag.appendChild(mark);
+        globalIdx++;
+        lastIdx = re.lastIndex;
+      }
+
+      // Remaining text
+      if (lastIdx < text.length) {
+        frag.appendChild(document.createTextNode(text.substring(lastIdx)));
+      }
+
+      node.parentNode.replaceChild(frag, node);
+    }
+  });
+
+  _searchMatchState = { query, currentIdx: -1, totalMatches: globalIdx };
+  const counter = document.getElementById('match-counter');
+  if (counter) counter.textContent = `0 / ${globalIdx}`;
+
+  // Jump to first match
+  if (globalIdx > 0) searchMatchNav(1);
+}
+
+function searchMatchNav(direction) {
+  const st = _searchMatchState;
+  if (st.totalMatches === 0) return;
+
+  // Remove active highlight from current
+  const prev = document.getElementById(`search-match-${st.currentIdx}`);
+  if (prev) {
+    prev.classList.remove('bg-warning-400', 'text-warning-900', 'font-bold', 'ring-2', 'ring-warning-500');
+    prev.classList.add('bg-warning-200', 'text-warning-900');
+  }
+
+  // Move index
+  st.currentIdx += direction;
+  if (st.currentIdx >= st.totalMatches) st.currentIdx = 0;
+  if (st.currentIdx < 0) st.currentIdx = st.totalMatches - 1;
+
+  // Apply active highlight
+  const curr = document.getElementById(`search-match-${st.currentIdx}`);
+  if (curr) {
+    curr.classList.remove('bg-warning-200', 'text-warning-900');
+    curr.classList.add('bg-warning-400', 'text-warning-900', 'font-bold', 'ring-2', 'ring-warning-500');
+    // Scroll within the scrollable doc-overlay-body container
+    const container = curr.closest('.doc-overlay-body');
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const markRect = curr.getBoundingClientRect();
+      const scrollTop = container.scrollTop + (markRect.top - containerRect.top) - containerRect.height / 2;
+      container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    }
+    // Also ensure the document card is visible in the viewport
+    const docCard = curr.closest('[id^="search-doc-"]');
+    if (docCard) {
+      const cardRect = docCard.getBoundingClientRect();
+      if (cardRect.top < 0 || cardRect.bottom > window.innerHeight) {
+        docCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }
+
+  // Update counter
+  const counter = document.getElementById('match-counter');
+  if (counter) counter.textContent = `${st.currentIdx + 1} / ${st.totalMatches}`;
+}
+
+// ── Metrics tab ──────────────────────────────────────────────────────────────
+async function renderMetrics(el, key) {
+  const data = await api(`/customers/${key}/metrics`);
+  const auto = data.automation || {};
+  const cred = data.credits || {};
+
+  el.innerHTML = `
+    <div class="space-y-4 fade-in">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Automation Health -->
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <h3 class="font-semibold text-foreground flex items-center gap-2">${icon('cog', 'w-4 h-4 text-muted-foreground')} Automation Health</h3>
+          <div class="grid grid-cols-2 gap-3">
+            ${metricBox('Total Runs', auto.total_runs ?? '—')}
+            ${metricBox('Successful', auto.successful_runs ?? '—')}
+            ${metricBox('Failed', auto.failed_runs ?? '—')}
+            ${metricBox('Exception Rate', typeof auto.exception_rate === 'number' ? (auto.exception_rate * 100).toFixed(1) + '%' : '—')}
+            ${metricBox('Active Builders', auto.active_builders ?? '—')}
+            ${metricBox('Coverage', typeof auto.automation_coverage === 'number' ? (auto.automation_coverage * 100).toFixed(0) + '%' : '—')}
+          </div>
+          ${auto.note ? `<div class="text-xs text-warning-600 bg-warning-50 rounded-lg p-2 flex items-start gap-1.5">${icon('exclamation-triangle', 'w-3.5 h-3.5 shrink-0 mt-0.5')} <span>${auto.note}</span></div>` : ''}
+        </div>
+
+        <!-- Credit Usage -->
+        <div class="bg-card rounded-xl border border-border p-5 space-y-4">
+          <h3 class="font-semibold text-foreground flex items-center gap-2">${icon('currency-dollar', 'w-4 h-4 text-muted-foreground')} Credit Usage</h3>
+          <div class="grid grid-cols-2 gap-3">
+            ${metricBox('Used', (cred.credits_used ?? 0).toLocaleString())}
+            ${metricBox('Remaining', (cred.credits_remaining ?? 0).toLocaleString())}
+            ${metricBox('Limit', (cred.credit_limit ?? 0).toLocaleString())}
+            ${metricBox('Utilization', typeof cred.utilization_pct === 'number' ? (cred.utilization_pct * 100).toFixed(0) + '%' : '—')}
+            ${metricBox('Burn Rate', cred.burn_rate != null ? cred.burn_rate + '/day' : '—')}
+            ${metricBox('Exhaustion', cred.projected_exhaustion_date || '—')}
+          </div>
+          ${cred.note ? `<div class="text-xs text-warning-600 bg-warning-50 rounded-lg p-2 flex items-start gap-1.5">${icon('exclamation-triangle', 'w-3.5 h-3.5 shrink-0 mt-0.5')} <span>${cred.note}</span></div>` : ''}
+          ${typeof cred.utilization_pct === 'number' ? `
+          <div class="mt-2">
+            <div class="flex justify-between text-xs text-muted-foreground mb-1"><span>Usage</span><span>${(cred.utilization_pct * 100).toFixed(0)}%</span></div>
+            <div class="w-full bg-muted rounded-full h-2.5">
+              <div class="h-2.5 rounded-full transition-all ${cred.utilization_pct > 0.8 ? 'bg-destructive-500' : cred.utilization_pct > 0.5 ? 'bg-warning-500' : 'bg-success-500'}" style="width: ${Math.min(100, cred.utilization_pct * 100)}%"></div>
+            </div>
+          </div>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Ask Agent tab ────────────────────────────────────────────────────────────
+function renderAskAgent(el, key) {
+  el.innerHTML = `
+    <div class="bg-card rounded-xl border border-border p-5 space-y-4 fade-in">
+      <h3 class="font-semibold text-foreground flex items-center gap-2">${icon('sparkles', 'w-4 h-4 text-brand-500')} Ask the Curator Agent</h3>
+      <p class="text-sm text-muted-foreground">Ask anything about this customer — the agent has access to their docs, metrics, and history.</p>
+      <div class="flex gap-2">
+        <input id="agent-input" class="flex-1 border border-input rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-ring outline-none" placeholder="What's the renewal date? / Summarize recent activity / Check credit usage…" onkeydown="if(event.key==='Enter')askAgent('${key}')" />
+        <button onclick="askAgent('${key}')" class="px-5 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors">Ask</button>
+      </div>
+      <div id="agent-response"></div>
+    </div>`;
+}
+
+async function askAgent(key) {
+  const input = document.getElementById('agent-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  const el = document.getElementById('agent-response');
+  el.innerHTML = '<div class="flex items-center gap-2 text-sm text-muted-foreground py-4"><div class="spinner"></div> Thinking…</div>';
+  try {
+    const data = await api(`/customers/${key}/ask`, {
+      method: 'POST',
+      body: JSON.stringify({ message: msg }),
+    });
+    el.innerHTML = `
+      <div class="bg-muted rounded-xl p-4 mt-2 space-y-2">
+        <div class="text-xs text-muted-foreground">Agent response</div>
+        <div class="text-sm text-foreground prose">${marked.parse(data.response || '')}</div>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div class="text-destructive text-sm mt-2">${err.message}</div>`;
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function statCard(label, value, color) {
+  const colors = {
+    brand: 'bg-brand-50 text-brand-800',
+    warning: 'bg-warning/10 text-foreground',
+    success: 'bg-success/10 text-foreground',
+    informative: 'bg-informative/10 text-foreground',
+    // Legacy aliases
+    indigo: 'bg-brand-50 text-brand-800',
+    amber: 'bg-warning/10 text-foreground',
+    emerald: 'bg-success/10 text-foreground',
+    sky: 'bg-informative/10 text-foreground',
+  };
+  return `
+    <div class="bg-card rounded-xl border border-border p-5">
+      <div class="text-xs font-medium text-muted-foreground uppercase tracking-wider">${label}</div>
+      <div class="mt-2 text-3xl font-bold ${colors[color] || 'text-foreground'} inline-block px-2 py-1 rounded-lg">${value}</div>
+    </div>`;
+}
+
+function tierBadge(tier) {
+  const colors = {
+    growth: 'bg-informative-50 text-informative-700',
+    enterprise: 'bg-accent text-accent-foreground',
+    starter: 'bg-muted text-secondary-foreground',
+    premium: 'bg-warning-50 text-warning-700',
+  };
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[tier] || 'bg-muted text-secondary-foreground'}">${tier || '—'}</span>`;
+}
+
+function categoryBadge(cat) {
+  const colors = {
+    contracts: 'bg-accent text-accent-foreground border-border',
+    'meeting-notes': 'bg-informative-50 text-informative-700 border-informative-200',
+    sops: 'bg-success-50 text-success-700 border-success-200',
+    support: 'bg-destructive-50 text-destructive-700 border-destructive-200',
+    onboarding: 'bg-warning-50 text-warning-700 border-warning-200',
+    invoices: 'bg-success-50 text-success-700 border-success-200',
+    reports: 'bg-brand-50 text-brand-700 border-brand-200',
+    other: 'bg-muted text-secondary-foreground border-border',
+  };
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${colors[cat] || 'bg-muted text-secondary-foreground border-border'}">${(cat || '—').toUpperCase()}</span>`;
+}
+
+function eventIcon(type) {
+  const map = {
+    EXCEPTION:           { name: 'exclamation-circle', color: 'text-destructive' },
+    DOCUMENT_INGESTED:   { name: 'document-arrow-down', color: 'text-informative-500' },
+    HUMAN_NOTE:          { name: 'pencil-square', color: 'text-muted-foreground' },
+    ESCALATION:          { name: 'bell-alert', color: 'text-warning-600' },
+    MILESTONE:           { name: 'flag', color: 'text-success-600' },
+    CONTACT_CHANGE:      { name: 'user-plus', color: 'text-informative-600' },
+    WEEKLY_UPDATE_SENT:  { name: 'chart-bar', color: 'text-brand-600' },
+    TASK_EXECUTED:        { name: 'clock', color: 'text-brand-500' },
+    SLACK_CONVERSATION:  { name: 'chat-bubble', color: 'text-brand-600' },
+    EMAIL_CONVERSATION:  { name: 'envelope', color: 'text-brand-600' },
+  };
+  const entry = map[type] || { name: 'bookmark', color: 'text-muted-foreground' };
+  return icon(entry.name, `w-4 h-4 ${entry.color}`);
+}
+
+function fileIconBg(mime) {
+  if (!mime) return 'bg-muted';
+  if (mime.includes('pdf')) return 'bg-destructive-100';
+  if (mime.includes('word') || mime.includes('docx')) return 'bg-informative-100';
+  if (mime.includes('presentation') || mime.includes('pptx')) return 'bg-warning-100';
+  if (mime.includes('spreadsheet') || mime.includes('xlsx') || mime.includes('csv')) return 'bg-success-100';
+  if (mime.includes('image')) return 'bg-accent';
+  if (mime.includes('text') || mime.includes('markdown')) return 'bg-muted';
+  return 'bg-muted';
+}
+
+function fileIconSvg(mime) {
+  const color = (mime || '').includes('pdf') ? 'text-destructive-600'
+    : (mime || '').includes('word') ? 'text-informative-600'
+    : (mime || '').includes('presentation') ? 'text-warning-600'
+    : (mime || '').includes('spreadsheet') ? 'text-success-600'
+    : (mime || '').includes('image') ? 'text-accent-foreground'
+    : 'text-muted-foreground';
+
+  if ((mime || '').includes('pdf')) {
+    return `<svg class="w-5 h-5 ${color}" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18H17V16H7V18M17 14H7V12H17V14M7 10H11V8H7V10M15 4H5V20H19V8L15 4M15 9V5L18 9H15Z" /></svg>`;
+  }
+  if ((mime || '').includes('image')) {
+    return `<svg class="w-5 h-5 ${color}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`;
+  }
+  return `<svg class="w-5 h-5 ${color}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`;
+}
+
+function sourceIcon(source) {
+  if (source === 'slack') return icon('chat-bubble', 'w-3.5 h-3.5 text-brand-500');
+  if (source === 'email') return icon('envelope', 'w-3.5 h-3.5 text-brand-500');
+  if (source === 'upload') return icon('document-arrow-down', 'w-3.5 h-3.5 text-brand-500');
+  return icon('document-text', 'w-3.5 h-3.5 text-muted-foreground');
+}
+
+function mimeLabel(mime) {
+  if (!mime) return 'Unknown';
+  if (mime.includes('pdf')) return 'PDF';
+  if (mime.includes('word') || mime.includes('docx')) return 'Word';
+  if (mime.includes('presentation') || mime.includes('pptx')) return 'PowerPoint';
+  if (mime.includes('spreadsheet') || mime.includes('xlsx')) return 'Excel';
+  if (mime.includes('csv')) return 'CSV';
+  if (mime.includes('image/png')) return 'PNG';
+  if (mime.includes('image/jpeg') || mime.includes('image/jpg')) return 'JPEG';
+  if (mime.includes('image')) return 'Image';
+  if (mime.includes('text/plain')) return 'Text';
+  if (mime.includes('text/markdown')) return 'Markdown';
+  return mime.split('/').pop() || 'File';
+}
+
+function metricBox(label, value) {
+  return `
+    <div class="bg-muted rounded-lg p-3">
+      <div class="text-[11px] font-medium text-muted-foreground uppercase">${label}</div>
+      <div class="text-lg font-semibold text-foreground mt-0.5">${value}</div>
+    </div>`;
+}
+
+function timeAgo(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return d.toLocaleDateString();
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  // Load user info
+  try {
+    const me = await api('/auth/me');
+    if (me.authenticated) {
+      const avatar = document.getElementById('user-avatar');
+      if (me.picture) { avatar.src = me.picture; avatar.classList.remove('hidden'); }
+      document.getElementById('user-name').textContent = me.name || '';
+      document.getElementById('user-email').textContent = me.email || '';
+    }
+  } catch (err) {
+    // If 401, redirect to login
+    if (err.message && err.message.includes('401')) {
+      window.location.href = '/auth/login';
+      return;
+    }
+  }
+
+  // Load customer nav
+  try {
+    const data = await api('/customers');
+    customersCache = data.customers || [];
+    const nav = document.getElementById('customer-nav');
+    nav.innerHTML = customersCache.map(c => `
+      <button onclick="navigate('customer', '${c.key}')" id="nav-${c.key}"
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <span class="w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+          ${(c.display_name || c.key).charAt(0).toUpperCase()}
+        </span>
+        <span class="truncate">${c.display_name || c.key}</span>
+      </button>
+    `).join('');
+  } catch (err) {
+    console.error('Failed to load customers:', err);
+  }
+  navigate('overview');
+}
+
+init();
+
+// ── Slack Backfill ────────────────────────────────────────────────────────────
+
+let _backfillPollers = {};  // customer_key → interval ID
+
+async function startSlackBackfill(key) {
+  const btn = document.getElementById(`backfill-btn-${key}`);
+  const status = document.getElementById(`backfill-status-${key}`);
+  if (!btn || !status) return;
+
+  // Confirm
+  if (!confirm(`This will import the entire Slack channel history for this customer into the knowledge base.\n\nConversations and shared files will be indexed. Already-imported items will be skipped.\n\nContinue?`)) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.classList.add('opacity-50', 'cursor-not-allowed');
+  status.classList.remove('hidden');
+  status.textContent = 'Starting…';
+
+  try {
+    await api(`/customers/${key}/backfill-slack`, { method: 'POST' });
+    // Start polling for progress
+    pollBackfillProgress(key);
+  } catch (err) {
+    status.textContent = `Error: ${err.message.replace(/^API \d+:\s*/, '').replace(/^"/, '').replace(/"$/, '')}`;
+    btn.disabled = false;
+    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+}
+
+function pollBackfillProgress(key) {
+  // Clear any existing poller
+  if (_backfillPollers[key]) clearInterval(_backfillPollers[key]);
+
+  const poll = async () => {
+    const status = document.getElementById(`backfill-status-${key}`);
+    const btn = document.getElementById(`backfill-btn-${key}`);
+    if (!status) {
+      clearInterval(_backfillPollers[key]);
+      delete _backfillPollers[key];
+      return;
+    }
+
+    try {
+      const data = await api(`/customers/${key}/backfill-slack`);
+
+      if (data.status === 'fetching') {
+        status.textContent = 'Fetching Slack history…';
+      } else if (data.status === 'processing') {
+        const pct = data.total_messages > 0
+          ? Math.round((data.processed / data.total_messages) * 100)
+          : 0;
+        status.textContent = `Processing: ${data.processed}/${data.total_messages} messages (${pct}%) · ${data.conversations_logged || 0} convos · ${data.files_ingested || 0} files`;
+      } else if (data.status === 'complete') {
+        status.innerHTML = `<span class="text-success">${icon('check-circle', 'w-3.5 h-3.5 inline')} Done: ${data.conversations_logged || 0} conversations, ${data.files_ingested || 0} files imported</span>`;
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        clearInterval(_backfillPollers[key]);
+        delete _backfillPollers[key];
+        return;
+      } else if (data.status === 'error') {
+        status.innerHTML = `<span class="text-destructive">${icon('exclamation-circle', 'w-3.5 h-3.5 inline')} Error: ${data.error || 'Unknown error'}</span>`;
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        clearInterval(_backfillPollers[key]);
+        delete _backfillPollers[key];
+        return;
+      }
+    } catch (err) {
+      // Network error — keep polling
+    }
+  };
+
+  poll(); // Immediate first check
+  _backfillPollers[key] = setInterval(poll, 2000);
+}
+
+// ── Drive Resync ──────────────────────────────────────────────────────────────
+
+let _resyncPollers = {};
+
+async function startDriveResync(key) {
+  const btn = document.getElementById(`resync-btn-${key}`);
+  const status = document.getElementById(`resync-status-${key}`);
+  if (!btn || !status) return;
+
+  if (!confirm('Pull the latest files from Google Drive into the local cache?\n\nExisting local files will be overwritten with the Drive version.\n\nContinue?')) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.classList.add('opacity-50', 'cursor-not-allowed');
+  status.classList.remove('hidden');
+  status.textContent = 'Starting…';
+
+  try {
+    await api(`/customers/${key}/resync-drive`, { method: 'POST' });
+    pollResyncProgress(key);
+  } catch (err) {
+    status.textContent = `Error: ${err.message.replace(/^API \d+:\s*/, '').replace(/^"/, '').replace(/"$/, '')}`;
+    btn.disabled = false;
+    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+}
+
+function pollResyncProgress(key) {
+  if (_resyncPollers[key]) clearInterval(_resyncPollers[key]);
+
+  const poll = async () => {
+    const status = document.getElementById(`resync-status-${key}`);
+    const btn = document.getElementById(`resync-btn-${key}`);
+    if (!status) {
+      clearInterval(_resyncPollers[key]);
+      delete _resyncPollers[key];
+      return;
+    }
+
+    try {
+      const data = await api(`/customers/${key}/resync-drive`);
+
+      if (data.status === 'syncing' || data.status === 'starting') {
+        status.textContent = 'Syncing from Drive…';
+      } else if (data.status === 'complete') {
+        status.innerHTML = `<span class="text-success">${icon('check-circle', 'w-3.5 h-3.5 inline')} Done: ${data.files_synced || 0} files synced</span>`;
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        clearInterval(_resyncPollers[key]);
+        delete _resyncPollers[key];
+        return;
+      } else if (data.status === 'error') {
+        status.innerHTML = `<span class="text-destructive">${icon('exclamation-circle', 'w-3.5 h-3.5 inline')} Error: ${data.error || 'Unknown error'}</span>`;
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        clearInterval(_resyncPollers[key]);
+        delete _resyncPollers[key];
+        return;
+      }
+    } catch (err) {
+      // Network error — keep polling
+    }
+  };
+
+  poll();
+  _resyncPollers[key] = setInterval(poll, 2000);
+}
+
+// ── New Customer Modal ────────────────────────────────────────────────────────
+function openNewCustomerModal() {
+  // Remove existing modal if any
+  const existing = document.getElementById('new-customer-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'new-customer-modal';
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm';
+  modal.innerHTML = `
+    <div class="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+      <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+        <h2 class="font-semibold text-foreground flex items-center gap-2">
+          ${icon('user-plus', 'w-5 h-5 text-brand-600')} New Customer
+        </h2>
+        <button onclick="closeNewCustomerModal()" class="text-muted-foreground hover:text-foreground transition-colors">
+          ${icon('x-circle', 'w-5 h-5')}
+        </button>
+      </div>
+      <form id="new-customer-form" class="p-6 space-y-4" onsubmit="submitNewCustomer(event)">
+        <div>
+          <label class="block text-sm font-medium text-foreground mb-1">Customer Key</label>
+          <input type="text" id="nc-key" required pattern="[a-z][a-z0-9_]{1,30}"
+            placeholder="e.g. globex"
+            class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+          <p class="text-[11px] text-muted-foreground mt-1">Lowercase letters, numbers, underscores. Used as the internal identifier.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-foreground mb-1">Display Name</label>
+          <input type="text" id="nc-display-name" required
+            placeholder="e.g. Globex Corp"
+            class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-foreground mb-1">Primary Contact Email</label>
+          <input type="email" id="nc-email"
+            placeholder="e.g. jane@globex.com"
+            class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+          <p class="text-[11px] text-muted-foreground mt-1">Optional. Can be added later in the profile.</p>
+        </div>
+
+        <div id="nc-preview" class="bg-muted rounded-lg p-3 text-xs text-muted-foreground space-y-1 hidden">
+          <div class="font-medium text-foreground mb-1">Will be created:</div>
+          <div id="nc-preview-slack"></div>
+          <div id="nc-preview-email"></div>
+        </div>
+
+        <div id="nc-error" class="text-destructive text-sm hidden"></div>
+        <div id="nc-warnings" class="hidden"></div>
+
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" onclick="closeNewCustomerModal()"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-foreground bg-muted hover:bg-muted/80 transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="nc-submit"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 transition-colors flex items-center gap-2">
+            ${icon('user-plus', 'w-4 h-4')} Create Customer
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeNewCustomerModal();
+  });
+
+  // Live preview
+  const keyInput = document.getElementById('nc-key');
+  keyInput.addEventListener('input', updateNewCustomerPreview);
+  keyInput.focus();
+}
+
+function updateNewCustomerPreview() {
+  const key = (document.getElementById('nc-key')?.value || '').trim().toLowerCase();
+  const preview = document.getElementById('nc-preview');
+  if (!key || key.length < 2) {
+    preview.classList.add('hidden');
+    return;
+  }
+  preview.classList.remove('hidden');
+  document.getElementById('nc-preview-slack').textContent = `Slack channel: #customer_${key}`;
+  document.getElementById('nc-preview-email').textContent = `Email alias: cx_${key}@leadership.kognitos.com`;
+}
+
+function closeNewCustomerModal() {
+  const modal = document.getElementById('new-customer-modal');
+  if (modal) modal.remove();
+}
+
+async function submitNewCustomer(e) {
+  e.preventDefault();
+  const errorEl = document.getElementById('nc-error');
+  const warningsEl = document.getElementById('nc-warnings');
+  const submitBtn = document.getElementById('nc-submit');
+  errorEl.classList.add('hidden');
+  warningsEl.classList.add('hidden');
+
+  const key = (document.getElementById('nc-key').value || '').trim().toLowerCase();
+  const displayName = (document.getElementById('nc-display-name').value || '').trim();
+  const email = (document.getElementById('nc-email').value || '').trim();
+
+  if (!key || !displayName) {
+    errorEl.textContent = 'Key and display name are required.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<div class="spinner-sm"></div> Creating…';
+
+  try {
+    const result = await api('/customers', {
+      method: 'POST',
+      body: JSON.stringify({
+        key,
+        display_name: displayName,
+        primary_contact_email: email,
+      }),
+    });
+
+    // Show warnings if any
+    if (result.warnings && result.warnings.length > 0) {
+      warningsEl.innerHTML = result.warnings.map(w =>
+        `<div class="flex items-start gap-2 text-warning text-xs bg-warning/10 border border-warning/20 rounded-lg p-2.5 mb-2">
+          ${icon('exclamation-triangle', 'w-4 h-4 shrink-0 mt-0.5')}
+          <span>${w}</span>
+        </div>`
+      ).join('');
+      warningsEl.classList.remove('hidden');
+
+      // Show success with warnings — let user close manually
+      submitBtn.innerHTML = `${icon('check-circle', 'w-4 h-4')} Created!`;
+      submitBtn.disabled = true;
+
+      // Refresh sidebar in the background
+      await refreshSidebar();
+
+      // Auto-close after 3s and navigate to the new customer
+      setTimeout(() => {
+        closeNewCustomerModal();
+        navigate('customer', key);
+      }, 3000);
+    } else {
+      // Clean success — close and navigate
+      await refreshSidebar();
+      closeNewCustomerModal();
+      navigate('customer', key);
+    }
+  } catch (err) {
+    errorEl.textContent = err.message.replace(/^API \d+:\s*/, '').replace(/^"/, '').replace(/"$/, '');
+    errorEl.classList.remove('hidden');
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `${icon('user-plus', 'w-4 h-4')} Create Customer`;
+  }
+}
+
+async function refreshSidebar() {
+  try {
+    const data = await api('/customers');
+    customersCache = data.customers || [];
+    const nav = document.getElementById('customer-nav');
+    nav.innerHTML = customersCache.map(c => `
+      <button onclick="navigate('customer', '${c.key}')" id="nav-${c.key}"
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <span class="w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+          ${(c.display_name || c.key).charAt(0).toUpperCase()}
+        </span>
+        <span class="truncate">${c.display_name || c.key}</span>
+      </button>
+    `).join('');
+  } catch (err) {
+    console.error('Failed to refresh sidebar:', err);
+  }
+}
+
+// ── Keyboard shortcuts for match navigation ──────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (_searchMatchState.totalMatches === 0) return;
+  // Don't capture keys when typing in inputs/textareas
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape') { closeSearchResults(); return; }
+  if (e.shiftKey && e.key === 'Enter') { e.preventDefault(); searchMatchNav(-1); return; }
+  if (e.key === 'n' || e.key === 'Enter') { e.preventDefault(); searchMatchNav(1); return; }
+  if (e.key === 'p' || e.key === 'N') { e.preventDefault(); searchMatchNav(-1); return; }
+});
+</script>
+</body>
+</html>

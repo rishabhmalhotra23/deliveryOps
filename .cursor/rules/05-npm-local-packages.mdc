@@ -1,0 +1,44 @@
+---
+description: Avoid duplicate dependency issues when installing local/private npm packages
+globs: package.json
+alwaysApply: false
+---
+
+# Local npm Package Installation
+
+## Never use `file:` links to directories
+
+```json
+❌ "@scope/pkg": "file:../some-package"
+❌ "@scope/pkg": "file:/tmp/some-package"
+```
+
+`file:` to a **directory** creates a symlink. The target's `node_modules/` stays intact, so npm does NOT deduplicate shared dependencies (React, etc.). This causes:
+- Multiple React instances → broken hooks, context, rendering
+- Multiple library instances (recharts, etc.) → silent failures
+- Console errors about invalid hook calls or blank components
+
+## Use `file:` links to tarballs instead
+
+```bash
+cd /path/to/package
+npm pack  # creates package-name-1.0.0.tgz
+```
+
+```json
+✅ "@scope/pkg": "file:package-name-1.0.0.tgz"
+```
+
+npm unpacks the `.tgz` like a published package and deduplicates peer deps normally.
+
+## Verification
+
+After `npm install`, always verify deduplication:
+
+```bash
+npm ls react        # every entry should say "deduped"
+npm ls react-dom    # same
+npm ls recharts     # or any shared library
+```
+
+If you see two different paths without "deduped", you have a duplicate problem.

@@ -1,0 +1,27 @@
+---
+description: Product is called DeliveryOps everywhere. Never Curator, never delivery-ops in user-facing copy.
+alwaysApply: true
+---
+
+# Product naming
+
+The product is **DeliveryOps**. One word, capital D, capital O. Use it everywhere a user might read it.
+
+## Required usage
+
+- **User-facing copy** — UI strings, page titles, button labels, error messages, email subjects, Slack messages, QBR slides, README, marketing — always **DeliveryOps**.
+- **Code identifiers** — internal package name is `delivery-ops` (kebab-case, lowercase) for npm and `delivery_ops` (snake_case) only if a Postgres / Python context demands it. Variables, types, and functions that surface a name to humans use **DeliveryOps**.
+- **Inngest app id** — `delivery-ops` (kebab-case is required by Inngest).
+- **Vercel project name** — `delivery-ops`.
+- **Supabase project name** — `delivery-ops-dev`, `delivery-ops-prod`.
+- **GitHub repo** — `deliveryOps` (legacy from the original repo creation, kept as-is).
+
+## Banned
+
+- **Curator** — the legacy Python prototype. Never use this name in DeliveryOps code, UI, docs, commit messages, or PR titles. The only exception is the `legacy/README.md` which explicitly references the predecessor.
+- **delivery-ops** in user-facing copy — kebab-case is for code only. Buttons, headers, and emails always say "DeliveryOps".
+- **DeliveryOPS / Delivery Ops / DELIVERYOPS / Delivery-Ops** — wrong capitalisation / spacing / hyphenation. Use **DeliveryOps** verbatim.
+
+## When in doubt
+
+If a user could read it, it's **DeliveryOps**. If only an engineer reads it, it's `delivery-ops` (kebab) or `deliveryOps` (camel). If in doubt, default to **DeliveryOps**.

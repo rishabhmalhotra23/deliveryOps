@@ -1,0 +1,235 @@
+---
+description: Kognitos App Builder — Phases 1-3: API setup, automation discovery, and run output inspection
+alwaysApply: true
+---
+
+# Phases 1–3: Setup & Discovery
+
+## Kognitos API Reference
+
+These are hard-won facts about the Kognitos API. Do NOT guess or trial-and-error your way through API calls.
+
+### Base URL
+
+- The `KOGNITOS_BASE_URL` must include the `/api/v1` prefix. The `/api/v1` is required — `/api` alone returns 403.
+- Production pattern: `https://app.{region}.kognitos.com/api/v1` (e.g. `https://app.us-1.kognitos.com/api/v1`)
+- Staging pattern: `https://app.{region}.stg.kognitos.com/api/v1`
+- If the user provides a bare app URL (e.g. `https://app.us-1.stg.kognitos.com/`), append `/api/v1` yourself.
+
+### Authentication
+
+- Use `Authorization: Bearer <KOGNITOS_TOKEN>` header. Tokens have the `kgn_pat_` prefix.
+
+### Response format
+
+- **List endpoints** return an object keyed by the resource type (e.g. `{ "automations": [...] }`, `{ "runs": [...] }`), NOT `{ "items": [...] }`.
+- **Resource identifiers** use a `name` field containing a full resource path: `organizations/{ORG_ID}/workspaces/{WS_ID}/automations/{AUTO_ID}`. Extract the ID with `.split("/").pop()`.
+- **Display names** are in `display_name`, not `name`. The `name` field is the resource path.
+
+### Inline Code Execution (spy code)
+
+Run arbitrary Kognitos code in a workspace without creating an automation:
+
+```
+POST /organizations/{ORG_ID}/workspaces/{WS_ID}/executions:run
+```
+
+```json
+{
+  "start_execution": {
+    "organization_id": "{ORG_ID}",
+    "workspace_id": "{WS_ID}",
+    "code": "x = 1 + 1\nset_output(\"result\", value=x)",
+    "no_recording": {}
+  }
+}
+```
+
+- Uses the same `Authorization: Bearer` header.
+- Returns immediately with `execution_status.completed.outputs` on success.
+- Useful for testing connectivity, running quick computations, or prototyping logic.
+- Use `set_output("name", value=expr)` to return values.
+- Output numbers come as `{ "number": { "lo": N } }`.
+- Table outputs come as `{ "table": { "inline": { "data": "<base64 Arrow IPC>" } } }`.
+
+#### Connections (CRITICAL)
+
+If the spy code calls any connection (e.g. `kognitos.sp.sharepoint.*`, `kognitos.excel_online.excel.*`), you **must** pass the `connections` map in `start_execution`:
+
+```json
+{
+  "start_execution": {
+    "organization_id": "{ORG_ID}",
+    "workspace_id": "{WS_ID}",
+    "connections": {
+      "sp": { "connection_id": "sharepoint-XXXXX" },
+      "excel_online": { "connection_id": "excel-XXXXX" }
+    },
+    "code": "file_ref = kognitos.sp.sharepoint.retrieve_file_by_url(url=\"...\")\n...",
+    "no_recording": {}
+  }
+}
+```
+
+Without the `connections` field, the execution fails: `"book connection not provided: <alias>"`.
+
+To discover connection aliases and IDs:
+1. **From the automation**: `GET /automations/{ID}` → `connections` field maps alias → `connection_id` (e.g. `"sp" → "sharepoint-6l69q"`).
+2. **From the workspace**: `GET /workspaces/{WS_ID}/connections` lists all available connections.
+
+#### Reading Excel files via spy code
+
+The automation's `code` field shows the exact pattern. Copy it:
+
+```python
+file_ref = kognitos.sp.sharepoint.retrieve_file_by_url(url="<sharepoint_url>")
+sheets = kognitos.excel_online.excel.retrieve_sheets(file=file_ref)
+ehr_sheet = None
+for sheet in sheets:
+    if sheet["name"] == "Sheet1":
+        ehr_sheet = sheet
+        break
+used_range = kognitos.excel_online.excel.retrieve_sheets_used_range(sheet=ehr_sheet)
+data = kognitos.excel_online.excel.read_range(worksheet_range=used_range)
+set_output("data", value=data)
+```
+
+Requires connections: `sp` (SharePoint) and `excel_online` (Excel Online).
+
+### Quill Chat API (automation agent)
+
+Quill is the Kognitos agent that creates and updates automation code. Interact via the threads API.
+
+#### 1. Create a thread for an automation
+
+```
+POST /organizations/{ORG_ID}/workspaces/{WS_ID}/agents/quill/threads
+```
+
+```json
+{ "automation": "organizations/{ORG_ID}/workspaces/{WS_ID}/automations/{AUTOMATION_ID}" }
+```
+
+Extract the thread ID from the response `name` field (last segment after `/threads/`).
+
+#### 2. Send a message to Quill
+
+```
+POST /organizations/{ORG_ID}/workspaces/{WS_ID}/agents/quill/threads/{THREAD_ID}:sendMessage
+```
+
+```json
+{
+  "user_message": {
+    "user_message": {
+      "user_message_type": "user_query",
+      "content_list": {
+        "items": [{ "text": "YOUR_INSTRUCTION_HERE" }]
+      }
+    }
+  }
+}
+```
+
+**Required header**: `Accept: application/x-ndjson` — response is streamed as NDJSON.
+
+#### 3. What Quill can do
+
+- **Answer data questions**: "How many rows have Status = Pending?" — Quill reads the automation code, figures out connections/files, runs spy code, and returns a plain-English answer.
+- **Create automations**: "compute the sum of the first 5 natural numbers and print the result"
+- **Update automations**: "Add a field for trip distance in miles"
+- **Fix exceptions**: "fix the exception: the IDP returns a dict with a 'fields' key"
+
+#### 4. Parsing the NDJSON response
+
+The streamed response contains multiple JSON objects, each with a `state` field. Key message types:
+
+- `progress_notification` — Quill's thinking/heartbeat (informational)
+- `tool_call_request` — Quill calling internal tools (e.g. `execute_code`, `read_automation_code`, `search_workspace_book_procedures`)
+- `agent_message` — Quill's text responses to the user
+- `artifact` — references to executions/outputs (e.g. `execution_reference` with `execution_id`)
+- `completion_response` — the final answer (state = `STATE_COMPLETE`)
+
+To extract Quill's answer, find the last message with `completion_response.content` or `agent_message.content`.
+
+### Invoking Published Automations
+
+Use `:invoke` to trigger a published automation with structured inputs. This is the production pattern — use it for chat tool handlers, action buttons, and any feature that runs an automation on behalf of the user.
+
+```
+POST /organizations/{ORG_ID}/workspaces/{WS_ID}/automations/{AUTOMATION_ID}:invoke
+```
+
+```json
+{
+  "inputs": {
+    "Case ID": { "text": "AIQ-2024-0031" },
+    "Amount": { "number": { "lo": 5000 } }
+  },
+  "stage": "AUTOMATION_STAGE_PUBLISHED"
+}
+```
+
+- **`stage`**: Always `"AUTOMATION_STAGE_PUBLISHED"` for production invocations. Use `"AUTOMATION_STAGE_DRAFT"` only during development/testing.
+- **`inputs`**: Keys must match the automation's declared input names exactly. Values use the same typed wrappers as spy code outputs: `{ "text": "..." }`, `{ "number": { "lo": N } }`, `{ "bool_value": true }`.
+- **Response**: Returns `{ "run_id": "organizations/.../runs/{RUN_ID}" }`. Extract the run ID with `.split("/runs/").pop()`.
+- **Polling**: The invocation is asynchronous. Poll `GET .../automations/{AUTOMATION_ID}/runs/{RUN_ID}` until `state.completed`, `state.failed`, or `state.awaiting_guidance` appears. Poll every 1.5–2 seconds with a timeout (45s recommended for chat tools, longer for batch).
+- **Output parsing**: Completed run outputs live in `state.completed.outputs`. Each value uses the same typed wrappers: `{ "text": "..." }`, `{ "number": { "lo": N, "flags": F } }`, `{ "bool_value": true }`, `{ "list": { "items": [...] } }`.
+
+#### When to use `:invoke` vs `executions:run`
+
+| | `:invoke` | `executions:run` (spy code) |
+|---|---|---|
+| **Use case** | Trigger a published automation | Run arbitrary inline code |
+| **Inputs** | Typed, matches automation signature | Embedded in code string |
+| **Execution** | Async — must poll for result | Synchronous — returns immediately |
+| **Connections** | Inherited from automation config | Must be passed explicitly |
+| **In the app** | Chat tool handlers, action buttons | Phase 1-3 discovery scripts |
+
+#### Template helpers
+
+`lib/kognitos.ts` exports `invokeAutomation()` and `pollRun()` for this pattern. See the file for usage — they handle the full invoke → poll → parse cycle with timeout and error handling.
+
+### Extracting IDs from user-provided URLs
+
+Users often paste Kognitos app URLs like:
+`https://app.{env}.kognitos.com/organizations/{ORG_ID}/workspaces/{WS_ID}/...`
+Parse `ORG_ID` and `WORKSPACE_ID` directly from the URL path segments.
+
+---
+
+## Phase 1: Environment Setup
+
+1. Collect from user: `KOGNITOS_TOKEN`, `KOGNITOS_ORG_ID`, `KOGNITOS_WORKSPACE_ID`, `KOGNITOS_BASE_URL`.
+   - Infer org/workspace IDs from URLs if the user pastes one.
+   - Always append `/api/v1` to the base URL if the user provides only the app host.
+2. Create `.env` with these values (base URL must end with `/api/v1`).
+3. Create `lib/kognitos.ts` that:
+   - Reads and validates all env vars at import time (throw if missing).
+   - Exports `req(path, options?)` — builds full URL, attaches `Authorization: Bearer <token>`.
+   - Exports `APP_URL` (base URL without `/api/v1`) and `kognitosRunUrl(runId)` — builds a full Kognitos platform URL for a run (used by API routes to return `kognitosUrl` in run responses, so clients can link out without exposing env vars).
+   - Never exposes tokens to client-side code.
+4. Verify connectivity: `GET /organizations/{ORG_ID}/workspaces/{WORKSPACE_ID}/automations?pageSize=50` → confirm 200 and JSON response.
+5. Parse response: automations are in `data.automations[]`, each has `name` (resource path) and `display_name`.
+6. Show the user the automation list (display_name + extracted ID).
+7. **Gate:** *"Connection successful. Here are your automations. Which one should I build the app for?"*
+
+## Phase 2: Discover the Automation
+
+1. Store chosen `AUTOMATION_ID` in `.env` or config.
+2. Fetch `GET /automations/{AUTOMATION_ID}` — read `display_name`, `english_code`, and metadata.
+3. Fetch `GET /automations/{AUTOMATION_ID}/runs?pageSize=20` — response key is `runs[]`. Summarize count and state breakdown.
+4. Map domain language: What does a "run" represent? What do statuses mean in business terms?
+5. **Gate:** *"Here's what I found about this automation. Does this match your understanding? Any corrections?"*
+
+## Phase 3: Inspect Run Outputs
+
+1. Find a completed run; fetch `GET /automations/{AUTOMATION_ID}/runs/{RUN_ID}`.
+2. Inspect `state.completed.outputs` — identify every output key.
+3. For `table.inline.data` (base64 Arrow IPC): decode using the `apache-arrow` npm package in TypeScript. Extract columns/types/sample rows, normalize to `snake_case`.
+4. Document non-table outputs (scalars, file references).
+5. If failed/awaiting_guidance runs exist, inspect one:
+   - Check `stateData.exception`.
+   - Fetch Resolution Agent events: `GET .../runs/{RUN_ID}/agents/astral/events?page_size=100`.
+6. Present full output schemas (columns, types, samples), scalars, files, and exception structures.
+7. **Gate:** *"Here's the data each run produces. Does this look right? Anything I'm missing or should ignore?"*
