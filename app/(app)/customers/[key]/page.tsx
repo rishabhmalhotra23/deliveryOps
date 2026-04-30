@@ -1,10 +1,11 @@
 import Link from "next/link";
 
-import { getCustomerByKey } from "@/lib/customers";
+import { getCustomerByKey, listCustomers } from "@/lib/customers";
 import { getProfile } from "@/lib/profile/profile";
 import { listEvents } from "@/lib/events/events";
 import { listTasks } from "@/lib/tasks/tasks";
 import { loadCustomerEnrichment } from "@/lib/cache/integrations";
+import { CUSTOMER_CATEGORIES } from "@/lib/supabase/types";
 import {
   CategoryChip,
   PageHeader,
@@ -14,6 +15,7 @@ import {
   formatTimeAgo,
   categoryFromCustomer,
 } from "@/app/_components/brand";
+import { InlineEdit } from "@/app/_components/inline-edit";
 
 export const dynamic = "force-dynamic";
 
@@ -37,13 +39,27 @@ export default async function CustomerOverview({ params }: Props) {
     );
   }
 
-  // Pull cached enrichment + Postgres-side data concurrently.
-  const [enrichment, profile, events, tasks] = await Promise.all([
+  // Pull cached enrichment + Postgres-side data concurrently. listCustomers
+  // is used to build AE + partner suggestion lists so the inline editor
+  // autocompletes against existing values rather than asking the user to
+  // remember exact spellings.
+  const [enrichment, profile, events, tasks, allCustomers] = await Promise.all([
     loadCustomerEnrichment(customer.id).catch(() => null),
     getProfile(key).catch(() => null),
     listEvents(key, { limit: 20 }).catch(() => []),
     listTasks(key).catch(() => []),
+    listCustomers().catch(() => []),
   ]);
+
+  const knownAes = Array.from(
+    new Set(allCustomers.map((c) => c.ae_owner).filter((v): v is string => !!v))
+  ).sort();
+  const knownPartners = Array.from(
+    new Set(allCustomers.map((c) => c.partner).filter((v): v is string => !!v))
+  ).sort();
+  const knownCategories = Array.from(
+    new Set([...CUSTOMER_CATEGORIES, ...allCustomers.map((c) => c.custom_category).filter((v): v is string => !!v)])
+  );
 
   const account = enrichment?.account ?? null;
   const opps = enrichment?.opportunities ?? [];
@@ -62,15 +78,7 @@ export default async function CustomerOverview({ params }: Props) {
       <PageHeader
         eyebrow="Customer"
         title={customer.display_name}
-        subtitle={
-          [
-            customer.ae_owner ? `AE · ${customer.ae_owner}` : null,
-            customer.partner ? `Partner · ${customer.partner}` : null,
-            account?.industry ?? null,
-          ]
-            .filter(Boolean)
-            .join(" · ") || undefined
-        }
+        subtitle={account?.industry ?? undefined}
         actions={
           <div className="flex items-center gap-2">
             <CategoryChip category={categoryFromCustomer(customer)} />
@@ -82,6 +90,50 @@ export default async function CustomerOverview({ params }: Props) {
           </div>
         }
       />
+
+      {/* Editable ownership + categorisation strip */}
+      <div className="rounded-lg border border-line bg-white p-5 grid gap-5 md:grid-cols-3 text-sm">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1">
+            AE
+          </div>
+          <InlineEdit
+            customerKey={customer.key}
+            field="ae_owner"
+            initialValue={customer.ae_owner}
+            label="AE"
+            placeholder="(unassigned)"
+            suggestions={knownAes}
+          />
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1">
+            Category
+          </div>
+          <InlineEdit
+            customerKey={customer.key}
+            field="custom_category"
+            initialValue={customer.custom_category}
+            label="Category"
+            placeholder="(unassigned)"
+            options={knownCategories.map((c) => ({ value: c, label: c }))}
+            allowNull={false}
+          />
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1">
+            Partner
+          </div>
+          <InlineEdit
+            customerKey={customer.key}
+            field="partner"
+            initialValue={customer.partner}
+            label="Partner"
+            placeholder="(direct)"
+            suggestions={knownPartners}
+          />
+        </div>
+      </div>
 
       {/* Stat row */}
       <section className="grid gap-3 md:grid-cols-4">
