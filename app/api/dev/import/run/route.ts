@@ -18,7 +18,7 @@ interface ImportSelection {
   proposed_key?: string;
   salesforce_account_id?: string | null;
   partner?: string | null;
-  ce_owner?: string | null;
+  ae_owner?: string | null;
   lifecycle_group?: string | null;
   email_alias?: string | null;
   slack_channel?: string | null;
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       monday_workspace_id: sel.monday_workspace_id ?? null,
       salesforce_account_id: sel.salesforce_account_id ?? null,
       partner: sel.partner ?? null,
-      ce_owner: sel.ce_owner ?? null,
+      ae_owner: sel.ae_owner ?? null,
       lifecycle_group: sel.lifecycle_group ?? null,
     };
 

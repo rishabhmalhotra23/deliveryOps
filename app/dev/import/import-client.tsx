@@ -17,7 +17,7 @@ interface MondayCustomer {
   item_id: string;
   name: string;
   group: string;
-  ce_owner: string | null;
+  ae_owner: string | null;
   primary_owner: string | null;
   secondary_owner: string | null;
   topic: string | null;
@@ -123,7 +123,7 @@ export function ImportClient() {
           proposed_key: c.proposed_key,
           salesforce_account_id: selections[c.monday.item_id]?.salesforce_account_id ?? null,
           partner: c.monday.partner,
-          ce_owner: c.monday.ce_owner,
+          ae_owner: c.monday.ae_owner,
           lifecycle_group: c.monday.group,
           slack_channel: c.proposed_key,
         })),
@@ -294,7 +294,7 @@ export function ImportClient() {
                     </span>
                   </td>
                   <td className="px-3 py-2 align-top text-xs">
-                    {c.monday.ce_owner ? <div>CE: {c.monday.ce_owner}</div> : null}
+                    {c.monday.ae_owner ? <div>AE: {c.monday.ae_owner}</div> : null}
                     {c.monday.partner ? (
                       <div className="text-[color:var(--brand-gray)]">{c.monday.partner}</div>
                     ) : null}

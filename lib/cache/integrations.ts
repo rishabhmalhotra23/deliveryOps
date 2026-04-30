@@ -104,7 +104,8 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
 
 export interface PortfolioSummary {
   total: number;
-  by_lifecycle: Record<string, number>;
+  by_category: Record<string, number>;
+  by_ae: Record<string, number>;
   by_partner: Record<string, number>;
   total_arr: number;
   total_open_opportunities: number;
@@ -119,21 +120,26 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
 
   const { data: customers } = await sb
     .from("customers")
-    .select("id, lifecycle_group, partner, salesforce_account_id, monday_workspace_id")
+    .select("id, custom_category, lifecycle_group, partner, ae_owner, salesforce_account_id, monday_workspace_id")
     .is("deleted_at", null);
   const list = (customers ?? []) as Array<{
     id: string;
+    custom_category: string | null;
     lifecycle_group: string | null;
     partner: string | null;
+    ae_owner: string | null;
     salesforce_account_id: string | null;
     monday_workspace_id: string | null;
   }>;
 
-  const byLifecycle: Record<string, number> = {};
+  const byCategory: Record<string, number> = {};
+  const byAe: Record<string, number> = {};
   const byPartner: Record<string, number> = {};
   for (const c of list) {
-    const g = c.lifecycle_group ?? "Other";
-    byLifecycle[g] = (byLifecycle[g] ?? 0) + 1;
+    const cat = c.custom_category ?? "Active";
+    byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+    const ae = c.ae_owner ?? "(unassigned)";
+    byAe[ae] = (byAe[ae] ?? 0) + 1;
     const p = c.partner ?? "Direct";
     byPartner[p] = (byPartner[p] ?? 0) + 1;
   }
@@ -154,7 +160,8 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
 
   return {
     total: list.length,
-    by_lifecycle: byLifecycle,
+    by_category: byCategory,
+    by_ae: byAe,
     by_partner: byPartner,
     total_arr: totalArr,
     total_open_opportunities: opps.count ?? 0,

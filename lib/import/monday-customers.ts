@@ -12,8 +12,10 @@ export const CUSTOMERS_BOARD_ID = "18395281568";
 export const PROJECTS_BOARD_ID = "18395281570";
 
 // Map of Monday column id → semantic field name.
+// On the Monday board this column is informally "CE owner"; DeliveryOps
+// treats it as ae_owner (Account Executive) — same data, our naming.
 const COLUMN_MAP = {
-  ce_owner: "text_mm0w4gvm",
+  ae_owner: "text_mm0w4gvm",
   primary_owner: "multiple_person_mm0ywg19",
   secondary_owner: "multiple_person_mm0yy4re",
   topic: "text_mm0wejh5",
@@ -31,7 +33,7 @@ export interface MondayCustomerRow {
   item_id: string;
   name: string;
   group: string; // "High Risk" | "Upcoming Renewal" | "Growth / Focus" | ...
-  ce_owner: string | null;
+  ae_owner: string | null;
   primary_owner: string | null;
   secondary_owner: string | null;
   topic: string | null;
@@ -104,7 +106,7 @@ export async function listCustomerRows(): Promise<MondayCustomerRow[]> {
       item_id: it.id,
       name: it.name,
       group: it.group.title,
-      ce_owner: pick(raw, COLUMN_MAP.ce_owner),
+      ae_owner: pick(raw, COLUMN_MAP.ae_owner),
       primary_owner: pick(raw, COLUMN_MAP.primary_owner),
       secondary_owner: pick(raw, COLUMN_MAP.secondary_owner),
       topic: pick(raw, COLUMN_MAP.topic),

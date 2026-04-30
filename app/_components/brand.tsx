@@ -2,16 +2,78 @@
 
 import type { ReactNode } from "react";
 
-const TONE_BY_LIFECYCLE: Record<string, { class: string; label?: string }> = {
-  "High Risk": { class: "tone-high-risk" },
-  "Upcoming Renewal": { class: "tone-renewal" },
-  "Growth / Focus": { class: "tone-growth" },
-  "Tier 2 - Secondary Priority": { class: "tone-tier2", label: "Tier 2" },
-  "Partner Managed": { class: "tone-partner" },
-  POV: { class: "tone-pov" },
-  "Churned/Dropped": { class: "tone-churned", label: "Churned" },
+// DeliveryOps category vocabulary — the operational truth. Source order +
+// tones. Custom categories minted by the team via the operations chat fall
+// through to a neutral tone.
+export const CATEGORY_ORDER = [
+  "At Risk",
+  "Upcoming Renewals",
+  "Strategic Growth",
+  "Active",
+  "Partner Managed",
+  "POV",
+  "Churned",
+] as const;
+
+const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: number }> = {
+  "At Risk": { class: "tone-high-risk", weight: 0 },
+  "Upcoming Renewals": { class: "tone-renewal", weight: 1 },
+  "Strategic Growth": { class: "tone-growth", weight: 2 },
+  Active: { class: "tone-tier2", weight: 3 },
+  "Partner Managed": { class: "tone-partner", weight: 4 },
+  POV: { class: "tone-pov", weight: 5 },
+  Churned: { class: "tone-churned", weight: 6 },
 };
 
+// Legacy lifecycle group → category mapping for any customer that still
+// hasn't been backfilled. Mirrors migration 0005.
+const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
+  "High Risk": "At Risk",
+  "Upcoming Renewal": "Upcoming Renewals",
+  "Growth / Focus": "Strategic Growth",
+  "Tier 2 - Secondary Priority": "Active",
+  "Partner Managed": "Partner Managed",
+  POV: "POV",
+  "Churned/Dropped": "Churned",
+};
+
+export function categoryFromCustomer(customer: {
+  custom_category: string | null;
+  lifecycle_group: string | null;
+}): string {
+  if (customer.custom_category?.trim()) return customer.custom_category.trim();
+  if (customer.lifecycle_group && LIFECYCLE_TO_CATEGORY[customer.lifecycle_group]) {
+    return LIFECYCLE_TO_CATEGORY[customer.lifecycle_group];
+  }
+  return "Active";
+}
+
+export function categorySortIndex(category: string): number {
+  return CATEGORY_TONE[category]?.weight ?? 99;
+}
+
+export function CategoryChip({
+  category,
+  size = "md",
+}: {
+  category: string | null;
+  size?: "sm" | "md";
+}) {
+  if (!category) return null;
+  const tone = CATEGORY_TONE[category] ?? { class: "tone-other" };
+  const label = tone.label ?? category;
+  const sizeClass = size === "sm" ? "text-[10px] px-2 py-0.5" : "text-xs px-2.5 py-1";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border font-medium uppercase tracking-wider ${sizeClass} ${tone.class}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+// Back-compat: kept for the import page (which still shows the raw Monday
+// lifecycle_group with the old-name palette). New pages use CategoryChip.
 export const LIFECYCLE_ORDER = [
   "High Risk",
   "Upcoming Renewal",
@@ -22,24 +84,8 @@ export const LIFECYCLE_ORDER = [
   "Churned/Dropped",
 ] as const;
 
-export function LifecycleChip({
-  group,
-  size = "md",
-}: {
-  group: string | null;
-  size?: "sm" | "md";
-}) {
-  if (!group) return null;
-  const tone = TONE_BY_LIFECYCLE[group] ?? { class: "tone-other" };
-  const label = tone.label ?? group;
-  const sizeClass = size === "sm" ? "text-[10px] px-2 py-0.5" : "text-xs px-2.5 py-1";
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border font-medium uppercase tracking-wider ${sizeClass} ${tone.class}`}
-    >
-      {label}
-    </span>
-  );
+export function LifecycleChip({ group, size = "md" }: { group: string | null; size?: "sm" | "md" }) {
+  return <CategoryChip category={group ? LIFECYCLE_TO_CATEGORY[group] ?? group : null} size={size} />;
 }
 
 export function SectionMark({ children }: { children: ReactNode }) {

@@ -3,13 +3,15 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/customers";
 import { loadPortfolioSummary } from "@/lib/cache/integrations";
 import {
-  LifecycleChip,
+  CategoryChip,
   PageHeader,
   SectionMark,
   StatBlock,
   formatMoney,
   formatTimeAgo,
-  LIFECYCLE_ORDER,
+  CATEGORY_ORDER,
+  categoryFromCustomer,
+  categorySortIndex,
 } from "@/app/_components/brand";
 
 export const dynamic = "force-dynamic";
@@ -22,14 +24,22 @@ export default async function Dashboard() {
 
   const totalArr = summary?.total_arr ?? 0;
   const needAttention =
-    (summary?.by_lifecycle["High Risk"] ?? 0) + (summary?.by_lifecycle["Upcoming Renewal"] ?? 0);
+    (summary?.by_category["At Risk"] ?? 0) + (summary?.by_category["Upcoming Renewals"] ?? 0);
 
-  const recentlyActive = customers.slice().sort((a, b) =>
-    (b.updated_at ?? "").localeCompare(a.updated_at ?? "")
-  ).slice(0, 6);
+  const recentlyActive = customers
+    .slice()
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+    .slice(0, 6);
 
-  const highRisk = customers.filter((c) => c.lifecycle_group === "High Risk");
-  const renewals = customers.filter((c) => c.lifecycle_group === "Upcoming Renewal");
+  const atRisk = customers.filter((c) => categoryFromCustomer(c) === "At Risk");
+  const renewals = customers.filter((c) => categoryFromCustomer(c) === "Upcoming Renewals");
+
+  // Discover any custom categories the team has minted via the operations chat.
+  const knownCategories = new Set<string>(CATEGORY_ORDER);
+  const extraCategories = Object.keys(summary?.by_category ?? {})
+    .filter((c) => !knownCategories.has(c))
+    .sort();
+  const allCategories = [...CATEGORY_ORDER, ...extraCategories];
 
   return (
     <div className="px-8 lg:px-12 py-10 max-w-7xl mx-auto space-y-12">
@@ -45,9 +55,16 @@ export default async function Dashboard() {
             ? `Monday ${formatTimeAgo(summary.last_sync.monday)}`
             : "Monday never"
         }.`}
+        actions={
+          <Link
+            href="/operations"
+            className="btn-primary inline-flex items-center rounded-md px-3 py-1.5 text-sm"
+          >
+            Operations chat
+          </Link>
+        }
       />
 
-      {/* Top stats — Kognitos hero treatment */}
       <section className="grid gap-3 md:grid-cols-4">
         <StatBlock
           label="Total ARR"
@@ -58,7 +75,7 @@ export default async function Dashboard() {
         <StatBlock
           label="Need attention"
           value={String(needAttention)}
-          hint="High Risk + Upcoming Renewal"
+          hint="At Risk + Upcoming Renewals"
         />
         <StatBlock
           label="Open opportunities"
@@ -72,17 +89,17 @@ export default async function Dashboard() {
         />
       </section>
 
-      {/* Lifecycle distribution */}
       <section>
-        <SectionMark>Lifecycle distribution</SectionMark>
+        <SectionMark>Category distribution</SectionMark>
         <div className="rounded-lg border border-line bg-white p-6">
           <div className="grid gap-4 md:grid-cols-7">
-            {LIFECYCLE_ORDER.map((group) => {
-              const count = summary?.by_lifecycle[group] ?? 0;
+            {allCategories.map((category) => {
+              const count = summary?.by_category[category] ?? 0;
+              if (count === 0) return null;
               const pct = summary?.total ? Math.round((count / summary.total) * 100) : 0;
               return (
-                <div key={group} className="space-y-2">
-                  <LifecycleChip group={group} size="sm" />
+                <div key={category} className="space-y-2">
+                  <CategoryChip category={category} size="sm" />
                   <div className="text-display text-3xl tracking-tight tabular-nums">{count}</div>
                   <div className="text-xs text-[color:var(--brand-gray)]">{pct}% of book</div>
                 </div>
@@ -92,21 +109,19 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      {/* Need attention sections */}
       <div className="grid gap-6 lg:grid-cols-2">
         <FocusList
-          title="High risk"
-          subtitle="Customers flagged on the Monday board"
-          customers={highRisk}
+          title="At risk"
+          subtitle="Conversations to start now, not later"
+          customers={atRisk}
         />
         <FocusList
           title="Upcoming renewals"
-          subtitle="Conversations to start now, not later"
+          subtitle="Renewal cycles entering the danger zone"
           customers={renewals}
         />
       </div>
 
-      {/* Recent activity */}
       <section>
         <SectionMark>Recently updated</SectionMark>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -118,10 +133,10 @@ export default async function Dashboard() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="text-display text-base">{c.display_name}</div>
-                <LifecycleChip group={c.lifecycle_group} size="sm" />
+                <CategoryChip category={categoryFromCustomer(c)} size="sm" />
               </div>
               <div className="mt-2 text-xs text-[color:var(--brand-gray)] space-y-0.5">
-                {c.ce_owner ? <div>CE · {c.ce_owner}</div> : null}
+                {c.ae_owner ? <div>AE · {c.ae_owner}</div> : null}
                 {c.partner ? <div>Partner · {c.partner}</div> : null}
               </div>
             </Link>
@@ -129,7 +144,6 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      {/* Sync prompt */}
       {!summary?.last_sync.salesforce ? (
         <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5 text-sm">
           <div className="font-display text-base mb-1">No data synced yet.</div>
@@ -137,10 +151,7 @@ export default async function Dashboard() {
             DeliveryOps caches Salesforce + Monday weekly so the dashboard stays fast. Trigger the
             first sync now to populate.
           </p>
-          <Link
-            href="/dev/sync"
-            className="inline-flex btn-primary rounded-md px-4 py-1.5 text-sm"
-          >
+          <Link href="/dev/sync" className="inline-flex btn-primary rounded-md px-4 py-1.5 text-sm">
             Run sync now
           </Link>
         </section>
@@ -158,15 +169,16 @@ function FocusList({
   subtitle: string;
   customers: Awaited<ReturnType<typeof listCustomers>>;
 }) {
+  const sorted = customers.slice().sort((a, b) => a.display_name.localeCompare(b.display_name));
   return (
     <section className="rounded-lg border border-line bg-white p-6">
       <SectionMark>{title}</SectionMark>
       <p className="text-xs text-[color:var(--brand-gray)] mb-4">{subtitle}</p>
-      {customers.length === 0 ? (
+      {sorted.length === 0 ? (
         <div className="text-sm text-[color:var(--brand-gray)]">Nothing in this bucket.</div>
       ) : (
         <ul className="divide-y divide-[color:var(--brand-metal-line)]">
-          {customers.map((c) => (
+          {sorted.map((c) => (
             <li key={c.id}>
               <Link
                 href={`/customers/${c.key}`}
@@ -174,8 +186,8 @@ function FocusList({
               >
                 <div>
                   <div className="font-medium">{c.display_name}</div>
-                  {c.ce_owner ? (
-                    <div className="text-xs text-[color:var(--brand-gray)]">CE · {c.ce_owner}</div>
+                  {c.ae_owner ? (
+                    <div className="text-xs text-[color:var(--brand-gray)]">AE · {c.ae_owner}</div>
                   ) : null}
                 </div>
                 {c.partner ? (
@@ -189,3 +201,7 @@ function FocusList({
     </section>
   );
 }
+
+// Suppress lint warning when categorySortIndex isn't used — kept for future
+// custom category orderings via the operations chat.
+void categorySortIndex;

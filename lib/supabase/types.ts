@@ -22,12 +22,30 @@ export interface Customer {
   kognitos_v1_workspace_id: string | null;
   kognitos_v2_workspace_id: string | null;
   partner: string | null;
-  ce_owner: string | null;
-  lifecycle_group: string | null;
+  ae_owner: string | null;
+  lifecycle_group: string | null;        // raw Monday signal, kept for reference
+  custom_category: string | null;        // DeliveryOps-owned bucket, the operational truth
+  deliveryops_protected_fields: string[]; // field names locked from sync overwrite
+  last_manually_edited_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
+// DeliveryOps's customer category vocabulary. Free-text in Postgres so the
+// agent can mint new ones via chat ("create a category called Strategic
+// Logos"); these constants drive the canonical sort order + tones.
+export const CUSTOMER_CATEGORIES = [
+  "At Risk",
+  "Upcoming Renewals",
+  "Strategic Growth",
+  "Active",
+  "Partner Managed",
+  "POV",
+  "Churned",
+] as const;
+
+export type CustomerCategory = (typeof CUSTOMER_CATEGORIES)[number];
 
 export interface ContactRow {
   name: string;

@@ -6,12 +6,13 @@ import { listEvents } from "@/lib/events/events";
 import { listTasks } from "@/lib/tasks/tasks";
 import { loadCustomerEnrichment } from "@/lib/cache/integrations";
 import {
-  LifecycleChip,
+  CategoryChip,
   PageHeader,
   SectionMark,
   StatBlock,
   formatMoney,
   formatTimeAgo,
+  categoryFromCustomer,
 } from "@/app/_components/brand";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +64,7 @@ export default async function CustomerOverview({ params }: Props) {
         title={customer.display_name}
         subtitle={
           [
-            customer.ce_owner ? `CE owner · ${customer.ce_owner}` : null,
+            customer.ae_owner ? `AE · ${customer.ae_owner}` : null,
             customer.partner ? `Partner · ${customer.partner}` : null,
             account?.industry ?? null,
           ]
@@ -72,7 +73,7 @@ export default async function CustomerOverview({ params }: Props) {
         }
         actions={
           <div className="flex items-center gap-2">
-            <LifecycleChip group={customer.lifecycle_group} />
+            <CategoryChip category={categoryFromCustomer(customer)} />
             {customer.salesforce_account_id ? (
               <span className="chip-yellow text-[10px] uppercase tracking-wider rounded px-2 py-1 font-medium">
                 SF mapped
@@ -219,6 +220,31 @@ export default async function CustomerOverview({ params }: Props) {
               <ExternalId label="Kognitos v2 ws" value={customer.kognitos_v2_workspace_id} />
             </dl>
           </section>
+
+          {/* Source-of-truth protected fields */}
+          {customer.deliveryops_protected_fields?.length > 0 ? (
+            <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5">
+              <SectionMark>DeliveryOps-owned</SectionMark>
+              <p className="text-xs text-[color:var(--brand-night)] mb-2">
+                These fields were edited in DeliveryOps and are locked from sync overwrites:
+              </p>
+              <ul className="flex flex-wrap gap-1.5">
+                {customer.deliveryops_protected_fields.map((f) => (
+                  <li
+                    key={f}
+                    className="text-[10px] uppercase tracking-wider rounded border border-[color:var(--brand-night)] px-2 py-0.5 bg-white"
+                  >
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              {customer.last_manually_edited_at ? (
+                <div className="text-[10px] text-[color:var(--brand-gray)] mt-2 uppercase tracking-wider">
+                  Last edited {formatTimeAgo(customer.last_manually_edited_at)}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           {/* Renewal callout */}
           {nextRenewal ? (
