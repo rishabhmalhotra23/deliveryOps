@@ -15,6 +15,15 @@ export interface Customer {
   slack_channel: string | null;
   email_alias: string | null;
   drive_folder_id: string | null;
+  monday_item_id: string | null;
+  monday_workspace_id: string | null;
+  salesforce_account_id: string | null;
+  kognitos_v1_department_id: string | null;
+  kognitos_v1_workspace_id: string | null;
+  kognitos_v2_workspace_id: string | null;
+  partner: string | null;
+  ce_owner: string | null;
+  lifecycle_group: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

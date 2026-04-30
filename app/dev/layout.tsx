@@ -5,6 +5,7 @@ const TABS: Array<{ href: string; label: string }> = [
   { href: "/dev/simulate", label: "Simulate inbound" },
   { href: "/dev/outbox", label: "Outbox" },
   { href: "/dev/integrations", label: "Integrations" },
+  { href: "/dev/import", label: "Import customers" },
 ];
 
 export default function DevLayout({ children }: { children: React.ReactNode }) {
