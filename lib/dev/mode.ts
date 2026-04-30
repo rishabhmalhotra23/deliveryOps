@@ -55,6 +55,24 @@ export function inngestEnabled(): boolean {
   return has("INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY");
 }
 
+export function salesforceEnabled(): boolean {
+  if (overrideFlag() === "on") return false;
+  if (overrideFlag() === "off") return true;
+  return has("SALESFORCE_CLIENT_ID", "SALESFORCE_CLIENT_SECRET", "SALESFORCE_INSTANCE_URL");
+}
+
+export function mondayEnabled(): boolean {
+  if (overrideFlag() === "on") return false;
+  if (overrideFlag() === "off") return true;
+  return has("MONDAY_API_TOKEN");
+}
+
+export function kognitosV2Enabled(): boolean {
+  if (overrideFlag() === "on") return false;
+  if (overrideFlag() === "off") return true;
+  return has("KOGNITOS_V2_TOKEN", "KOGNITOS_V2_BASE_URL", "KOGNITOS_V2_ORG_ID", "KOGNITOS_V2_WORKSPACE_ID");
+}
+
 export interface IntegrationStatus {
   name: string;
   live: boolean;
@@ -97,6 +115,21 @@ export function integrationStatus(): IntegrationStatus[] {
       name: "Inngest (cloud)",
       live: inngestEnabled(),
       hint: "Set INNGEST_EVENT_KEY + INNGEST_SIGNING_KEY. The dev server at localhost:8288 picks up /api/inngest automatically without these.",
+    },
+    {
+      name: "Salesforce",
+      live: salesforceEnabled(),
+      hint: "Set SALESFORCE_CLIENT_ID + SALESFORCE_CLIENT_SECRET + SALESFORCE_INSTANCE_URL. Powers Phase 2 sf_accounts / sf_opportunities / sf_cases sync.",
+    },
+    {
+      name: "Monday.com",
+      live: mondayEnabled(),
+      hint: "Set MONDAY_API_TOKEN. Powers Phase 2 customer-board sync into monday_items.",
+    },
+    {
+      name: "Kognitos v2",
+      live: kognitosV2Enabled(),
+      hint: "Set KOGNITOS_V2_TOKEN + _BASE_URL + _ORG_ID + _WORKSPACE_ID. Powers credit usage / runs / exceptions data.",
     },
   ];
 }

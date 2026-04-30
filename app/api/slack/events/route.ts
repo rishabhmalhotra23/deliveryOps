@@ -317,7 +317,12 @@ async function customerKeyForChannel(channelId: string): Promise<string | null> 
   }
 
   const customer = await resolveCustomerFromChannel(resolvedName);
-  customerKeyCache.set(channelId, customer?.key ?? null);
+  // Only cache positive lookups. Caching null here means a transient failure
+  // (missing scope, Slack 5xx, race against DB seed) gets baked in for the
+  // life of the process and the bot silently drops every subsequent message.
+  if (customer?.key) {
+    customerKeyCache.set(channelId, customer.key);
+  }
   return customer?.key ?? null;
 }
 
