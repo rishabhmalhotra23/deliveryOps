@@ -6,81 +6,114 @@
 @import '../node_modules/@kognitos/lattice/dist/fonts.css';
 @source '../node_modules/@kognitos/lattice/dist/**/*.{js}';
 
-/* DeliveryOps brand palette (Kognitos guide). */
+/* DeliveryOps brand palette — verbatim from Kognitos brand guide v01 (July 2025).
+ * Yellow is the "neuron firing" accent — used sparingly, never as a fill.
+ * Night/Black is the foundation. Seasalt is the canvas. */
 :root {
   --brand-yellow: #F2FF70;
+  --brand-yellow-soft: rgba(242, 255, 112, 0.18);
+  --brand-yellow-line: rgba(242, 255, 112, 0.55);
   --brand-seasalt: #FAFAFA;
   --brand-metal: #A3A3A3;
+  --brand-metal-line: #E5E5E5;
   --brand-gray: #737373;
   --brand-night: #171717;
+  --brand-night-soft: #262626;
+  --brand-canvas: #F4F4F2;
 
-  /* Font stacks — Neue Machina (display) + Neue Montreal (body) once licensed
-   * files land; today the Inter / Inter Tight Google fallbacks drive all of it.
-   * --font-neue-machina + --font-neue-montreal are intentionally undefined
-   * until the local fonts are wired in app/fonts.ts. */
+  /* Font stacks. Inter Tight (display) + Inter (body) until the licensed Neue
+   * Machina + Neue Montreal woff2 files are dropped in app/fonts/. */
   --font-display: var(--font-neue-machina, var(--font-inter-tight)), system-ui, sans-serif;
   --font-body: var(--font-neue-montreal, var(--font-inter)), system-ui, sans-serif;
 }
 
-/* Lattice theme overrides — light. Brand-yellow primary, night-black foreground. */
+/* Lattice theme overrides — light mode is the default for DeliveryOps. */
 @layer base {
   :root {
-    --primary: var(--brand-yellow);
-    --primary-foreground: var(--brand-night);
+    --primary: var(--brand-night);
+    --primary-foreground: var(--brand-seasalt);
     --foreground: var(--brand-night);
-    --background: var(--brand-seasalt);
+    --background: var(--brand-canvas);
     --muted: var(--brand-seasalt);
     --muted-foreground: var(--brand-gray);
-    --border: var(--brand-metal);
-    --input: var(--brand-metal);
+    --border: var(--brand-metal-line);
+    --input: var(--brand-metal-line);
     --ring: var(--brand-yellow);
     --accent: var(--brand-yellow);
     --accent-foreground: var(--brand-night);
-  }
-
-  .dark {
-    --primary: var(--brand-yellow);
-    --primary-foreground: var(--brand-night);
-    --foreground: var(--brand-seasalt);
-    --background: var(--brand-night);
-    --muted: #262626;
-    --muted-foreground: var(--brand-metal);
-    --border: #404040;
-    --input: #404040;
-    --ring: var(--brand-yellow);
-    --accent: var(--brand-yellow);
-    --accent-foreground: var(--brand-night);
+    --card: #FFFFFF;
+    --card-foreground: var(--brand-night);
   }
 
   body {
     font-family: var(--font-body);
     background: var(--background);
     color: var(--foreground);
+    font-feature-settings: "ss01", "cv11";
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1, h2, h3, h4, h5, h6, .font-display {
     font-family: var(--font-display);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
+    font-weight: 600;
   }
+
+  .text-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+
+  /* Number callouts get tabular figures so columns line up. */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Dotted divider line — used in stat rows + section breaks. */
+  .border-line { border-color: var(--brand-metal-line); }
 }
 
-.chat-markdown h1 {
-  font-size: 1.125rem;
-  line-height: 1.75rem;
+/* Sparkle marker — the ✴ pattern from kognitos.com section headers. */
+.sparkle::before {
+  content: "✴";
+  display: inline-block;
+  margin-right: 0.5rem;
+  color: var(--brand-night);
+  font-size: 0.75em;
+  vertical-align: middle;
+}
+
+/* Primary CTA — yellow fill, night text, bold. The "neuron firing" moment. */
+.btn-primary {
+  background: var(--brand-yellow);
+  color: var(--brand-night);
   font-weight: 600;
+  letter-spacing: -0.01em;
+  border: 1px solid var(--brand-night);
+  transition: transform 100ms ease, background 200ms ease;
 }
-.chat-markdown h2 {
-  font-size: 1rem;
-  line-height: 1.5rem;
-  font-weight: 600;
+.btn-primary:hover {
+  background: #E8F560;
+  transform: translateY(-1px);
 }
-.chat-markdown h3 {
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  font-weight: 600;
+
+/* Soft yellow chip — for active state highlights, badges that need to pop. */
+.chip-yellow {
+  background: var(--brand-yellow-soft);
+  color: var(--brand-night);
+  border: 1px solid var(--brand-yellow-line);
 }
-.chat-markdown h4 {
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  font-weight: 500;
-}
+
+/* Lifecycle group tone — used on chips and customer cards. */
+.tone-high-risk     { background: #FEF2F2; color: #991B1B; border-color: #FECACA; }
+.tone-renewal       { background: #FFFBEB; color: #92400E; border-color: #FDE68A; }
+.tone-growth        { background: #ECFDF5; color: #065F46; border-color: #A7F3D0; }
+.tone-tier2         { background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE; }
+.tone-partner       { background: #F5F3FF; color: #5B21B6; border-color: #DDD6FE; }
+.tone-pov           { background: var(--brand-yellow-soft); color: var(--brand-night); border-color: var(--brand-yellow-line); }
+.tone-churned       { background: #F5F5F5; color: #525252; border-color: #E5E5E5; }
+.tone-other         { background: var(--brand-seasalt); color: var(--brand-gray); border-color: var(--brand-metal-line); }
+
+/* Markdown styles for the chat bubbles — unchanged from previous. */
+.chat-markdown h1 { font-size: 1.125rem; line-height: 1.75rem; font-weight: 600; }
+.chat-markdown h2 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
+.chat-markdown h3 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; }
+.chat-markdown h4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
