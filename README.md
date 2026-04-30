@@ -54,7 +54,7 @@ Open <http://localhost:4001> and you're running. No real Slack workspace, no Goo
 
 When you're ready to point at real Slack / Google / Vercel, paste the corresponding tokens into `.env.local` and the mock layer turns off automatically for that integration. There's no flag to flip — the modules in `lib/dev/mode.ts` auto-detect which credentials are present.
 
-For each integration, the [Phase 0 plan in `.cursor/plans/`](./.cursor/plans/curator_full_vercel_rewrite_4412b274.plan.md) covers the dashboard steps (creating the Slack app, the Google project, the Pub/Sub topic, the Vercel project, etc.).
+**Step-by-step for every integration:** see [`docs/CREDENTIALS.md`](./docs/CREDENTIALS.md) — a tickable checklist with the exact dashboard clicks, scopes, callback URLs, and verification commands for each one (Slack Events API, Google OAuth + Gmail watch + Pub/Sub, Salesforce Connected App, Kognitos v2 PAT, Monday API token, plus the production deploy stack — Supabase Cloud, Inngest Cloud, Vercel).
 
 ## What it does
 

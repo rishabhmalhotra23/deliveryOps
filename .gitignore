@@ -8,3 +8,7 @@ packages/*/node_modules/
 !kognitos-lattice-*.tgz
 .vercel
 .DS_Store
+
+# Supabase CLI runtime artifacts (regenerated on `supabase start`)
+supabase/.branches/
+supabase/.temp/
