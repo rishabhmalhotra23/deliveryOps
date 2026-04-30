@@ -65,6 +65,11 @@ export default async function CustomerOverview({ params }: Props) {
   const opps = enrichment?.opportunities ?? [];
   const cases = enrichment?.cases ?? [];
   const projects = enrichment?.projects ?? [];
+  const activities = enrichment?.activities ?? [];
+  const openActivities = activities.filter(
+    (a) => (a.status ?? "").toLowerCase() !== "closed" && !a.resolved_date
+  );
+  const npsResponses = enrichment?.nps ?? [];
 
   const openOpps = opps.filter((o) => !o.is_closed);
   const wonOpps = opps.filter((o) => o.is_won);
@@ -340,6 +345,59 @@ export default async function CustomerOverview({ params }: Props) {
         </section>
       ) : null}
 
+      {/* Activity Log — action items / blockers / change requests pulled from
+          Monday's Activity Log board, matched per customer via the
+          "Customer:" header that Fireflies-generated items carry. */}
+      <section className="rounded-lg border border-line bg-white p-6">
+        <div className="flex items-baseline justify-between mb-4">
+          <SectionMark>
+            {openActivities.length > 0
+              ? `Open action items · ${openActivities.length}`
+              : "Activity log"}
+          </SectionMark>
+          <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
+            {activities.length} total
+          </span>
+        </div>
+        {activities.length === 0 ? (
+          <Empty
+            text={`No Activity Log entries match this customer yet. Items get linked when their Monday "Customer:" header (or board-relation column) names "${customer.display_name}".`}
+          />
+        ) : (
+          <ul className="space-y-3">
+            {activities.slice(0, 12).map((a) => (
+              <ActivityRow key={a.monday_item_id} activity={a} />
+            ))}
+            {activities.length > 12 ? (
+              <li className="text-xs text-[color:var(--brand-gray)] tabular-nums">
+                + {activities.length - 12} more
+              </li>
+            ) : null}
+          </ul>
+        )}
+      </section>
+
+      {/* NPS Tracking */}
+      <section className="rounded-lg border border-line bg-white p-6">
+        <div className="flex items-baseline justify-between mb-4">
+          <SectionMark>NPS responses</SectionMark>
+          <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
+            {npsResponses.length} cached
+          </span>
+        </div>
+        {npsResponses.length === 0 ? (
+          <Empty
+            text='No NPS data linked to this customer yet. Items on the Monday "NPS Tracking" board are named after the respondent (e.g. "Tia Bell"), so we match them via the board-relation "Customer" column. Populate that column on the NPS board and the responses will appear on the next sync.'
+          />
+        ) : (
+          <ul className="grid gap-2 md:grid-cols-2">
+            {npsResponses.slice(0, 10).map((n) => (
+              <NpsRow key={n.monday_item_id} response={n} />
+            ))}
+          </ul>
+        )}
+      </section>
+
       {/* Events + tasks */}
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-line bg-white p-6">
@@ -446,4 +504,162 @@ function ExternalId({ label, value }: { label: string; value: string | null | un
 
 function Empty({ text }: { text: string }) {
   return <div className="text-sm text-[color:var(--brand-gray)] italic">{text}</div>;
+}
+
+const PRIORITY_TONE: Record<string, string> = {
+  Critical: "bg-red-50 text-red-800 border-red-200",
+  High: "bg-amber-50 text-amber-800 border-amber-200",
+  Medium: "bg-sky-50 text-sky-800 border-sky-200",
+  Low: "bg-neutral-50 text-neutral-700 border-neutral-200",
+};
+
+const STATUS_TONE: Record<string, string> = {
+  Open: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  "In Progress": "bg-sky-50 text-sky-800 border-sky-200",
+  Closed: "bg-neutral-50 text-neutral-600 border-neutral-200",
+  Resolved: "bg-neutral-50 text-neutral-600 border-neutral-200",
+  Blocked: "bg-red-50 text-red-800 border-red-200",
+};
+
+function ActivityRow({
+  activity,
+}: {
+  activity: {
+    monday_item_id: string;
+    name: string;
+    group_title: string | null;
+    priority: string | null;
+    status: string | null;
+    due_date: string | null;
+    created_date: string | null;
+    resolved_date: string | null;
+    ai_summary: string | null;
+    source_link: string | null;
+    meeting_excerpt: string | null;
+  };
+}) {
+  const priorityClass = activity.priority
+    ? PRIORITY_TONE[activity.priority] ?? "bg-neutral-50 text-neutral-700 border-neutral-200"
+    : null;
+  const statusClass = activity.status
+    ? STATUS_TONE[activity.status] ?? "bg-neutral-50 text-neutral-600 border-neutral-200"
+    : null;
+
+  // Pull link from Monday's link column. The cell value is "View Transcript - https://…"
+  const linkMatch = activity.source_link?.match(/https?:\/\/\S+/);
+  const transcriptUrl = linkMatch?.[0] ?? null;
+
+  // The displayed title — prefer the AI summary (concise) over the raw item
+  // name (often a verbose paragraph).
+  const title = activity.ai_summary ?? activity.name;
+
+  return (
+    <li className="border-l-2 border-[color:var(--brand-yellow-line)] pl-3 py-1">
+      <div className="flex flex-wrap items-baseline gap-2 mb-1">
+        {priorityClass ? (
+          <span
+            className={`text-[10px] uppercase tracking-wider rounded border px-1.5 py-0.5 font-medium ${priorityClass}`}
+          >
+            {activity.priority}
+          </span>
+        ) : null}
+        {statusClass ? (
+          <span
+            className={`text-[10px] uppercase tracking-wider rounded border px-1.5 py-0.5 font-medium ${statusClass}`}
+          >
+            {activity.status}
+          </span>
+        ) : null}
+        {activity.group_title ? (
+          <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
+            {activity.group_title}
+          </span>
+        ) : null}
+        {activity.due_date ? (
+          <span className="text-[10px] text-[color:var(--brand-gray)] tabular-nums ml-auto">
+            due {activity.due_date}
+          </span>
+        ) : null}
+      </div>
+      <div className="text-sm font-medium text-[color:var(--brand-night)]">{title}</div>
+      {activity.meeting_excerpt ? (
+        <details className="mt-1">
+          <summary className="text-xs text-[color:var(--brand-gray)] cursor-pointer hover:text-[color:var(--brand-night)]">
+            meeting context
+          </summary>
+          <div className="text-xs text-[color:var(--brand-gray)] mt-1 leading-relaxed whitespace-pre-line max-w-prose">
+            {activity.meeting_excerpt}
+          </div>
+        </details>
+      ) : null}
+      <div className="flex gap-3 text-[10px] text-[color:var(--brand-gray)] tabular-nums mt-1">
+        {activity.created_date ? <span>logged {activity.created_date}</span> : null}
+        {transcriptUrl ? (
+          <a
+            href={transcriptUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline decoration-[color:var(--brand-yellow)] decoration-2 underline-offset-4 hover:text-[color:var(--brand-night)]"
+          >
+            transcript
+          </a>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+const NPS_CATEGORY_TONE: Record<string, string> = {
+  Promoter: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  Passive: "bg-amber-50 text-amber-800 border-amber-200",
+  Detractor: "bg-red-50 text-red-800 border-red-200",
+};
+
+function NpsRow({
+  response,
+}: {
+  response: {
+    monday_item_id: string;
+    respondent: string;
+    quarter: string | null;
+    score: number | null;
+    category: string | null;
+    response_date: string | null;
+    feedback: string | null;
+    respondent_type: string | null;
+  };
+}) {
+  const categoryClass = response.category
+    ? NPS_CATEGORY_TONE[response.category] ?? "bg-neutral-50 text-neutral-700 border-neutral-200"
+    : null;
+  return (
+    <li className="rounded-md border border-line bg-[color:var(--brand-seasalt)] p-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <div>
+          <div className="font-medium text-sm">{response.respondent}</div>
+          <div className="text-xs text-[color:var(--brand-gray)]">
+            {response.respondent_type ?? "—"}
+            {response.quarter ? ` · ${response.quarter}` : ""}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-display text-2xl tabular-nums leading-none">
+            {response.score ?? "—"}
+          </div>
+          {categoryClass ? (
+            <span
+              className={`text-[10px] uppercase tracking-wider rounded border px-1.5 py-0.5 font-medium ${categoryClass} inline-block mt-1`}
+            >
+              {response.category}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {response.feedback ? (
+        <div className="text-xs text-[color:var(--brand-gray)] mt-2 italic leading-relaxed">
+          &ldquo;{response.feedback}&rdquo;
+        </div>
+      ) : null}
+    </li>
+  );
 }

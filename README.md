@@ -39,6 +39,8 @@ npm run inngest:dev          # serves http://localhost:8288
 npm run dev                  # http://localhost:4001
 ```
 
+`npm run dev` uses **Turbopack** (Next 15's modern bundler). If you ever need the legacy webpack-based dev server, run `npm run dev:webpack` — it wipes `.next/` first to avoid stale-chunk corruption.
+
 Open <http://localhost:4001> and you're running. No real Slack workspace, no Google project, no Vercel deploy. Everything outbound (Slack messages, emails, Drive uploads) routes through a **mock layer** to `/dev/outbox`, and you can simulate inbound traffic at `/dev/simulate`.
 
 ### What you can do without any external integration
