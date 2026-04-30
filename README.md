@@ -4,6 +4,8 @@ The single source of truth for everything that happens to a customer after the d
 
 This repo is the production rewrite of an internal Python prototype called Curator. Curator's brain — tools, prompts, profile schema, ingestion pipeline — lives under `legacy/` as a port-from reference and never deploys.
 
+> **The why.** This README is the *how*. For the long-form *why* — the problem we're solving, the principle behind one customer / one source of truth / one agent, what "done" looks like, what we deliberately won't build — read [**`docs/VISION.md`**](./docs/VISION.md). It's the doc to send a new engineer or stakeholder.
+
 ## Run locally in 5 minutes (no Slack / Google / Vercel apps needed)
 
 You need:

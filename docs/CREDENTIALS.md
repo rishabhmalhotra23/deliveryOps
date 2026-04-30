@@ -745,6 +745,12 @@ When you're ready to ship, in this order:
 
 ---
 
+# Related reading
+
+- [`docs/VISION.md`](./VISION.md) — the long-form *why* behind everything in this repo. What problem we're solving, what "done" looks like, what we deliberately won't build.
+- [`README.md`](../README.md) — quickstart for running locally in 5 minutes.
+- [`.cursor/plans/curator_full_vercel_rewrite_4412b274.plan.md`](../.cursor/plans/curator_full_vercel_rewrite_4412b274.plan.md) — full architecture + every Phase 0/1/2/3 todo with rationale.
+
 # Where to ask for help
 
 - **In this repo:** open an issue, or for ad-hoc help mention me in your next prompt and I'll dig into the specific step.
