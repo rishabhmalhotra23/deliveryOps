@@ -39,6 +39,44 @@ export async function syncSalesforce(opts: { customerKey?: string } = {}): Promi
     errors: [],
   };
 
+  // Scrub orphaned cache rows BEFORE writing fresh data. An orphan is any
+  // row whose customer_id no longer matches a currently-mapped account
+  // (mapping changed or got unmapped). Without this, stale industry /
+  // contacts / opportunities from prior mappings linger in the cache.
+  // Scoped to full syncs only — per-customer runs leave others alone.
+  if (!opts.customerKey) {
+    const currentMappings = new Map(
+      allCustomers
+        .filter((c) => c.salesforce_account_id)
+        .map((c) => [c.id, c.salesforce_account_id!])
+    );
+    const unmappedCustomerIds = allCustomers
+      .filter((c) => !c.salesforce_account_id)
+      .map((c) => c.id);
+
+    // Drop opps + cases for any customer who lost their mapping. The
+    // per-customer loop below handles re-mapped customers (wipe-and-replace).
+    if (unmappedCustomerIds.length > 0) {
+      await sb.from("sf_opportunities").delete().in("customer_id", unmappedCustomerIds);
+      await sb.from("sf_cases").delete().in("customer_id", unmappedCustomerIds);
+    }
+
+    // For sf_accounts, find rows whose sf_id doesn't match the current
+    // mapping (either customer unmapped or remapped to a different sf_id).
+    const { data: cachedAccounts } = await sb
+      .from("sf_accounts")
+      .select("id, customer_id, sf_id");
+    const orphanIds = ((cachedAccounts as Array<{ id: string; customer_id: string; sf_id: string }>) ?? [])
+      .filter((row) => {
+        const currentSfId = currentMappings.get(row.customer_id);
+        return !currentSfId || currentSfId !== row.sf_id;
+      })
+      .map((row) => row.id);
+    if (orphanIds.length > 0) {
+      await sb.from("sf_accounts").delete().in("id", orphanIds);
+    }
+  }
+
   for (const customer of customers) {
     if (!customer.salesforce_account_id) continue;
     const sfId = customer.salesforce_account_id;

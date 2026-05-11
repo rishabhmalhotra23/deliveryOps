@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { getCustomerByKey, listCustomers } from "@/lib/customers";
-import { getProfile } from "@/lib/profile/profile";
+import { getProfile, getInternalProfile } from "@/lib/profile/profile";
 import { listEvents } from "@/lib/events/events";
 import { listTasks } from "@/lib/tasks/tasks";
 import { loadCustomerEnrichment } from "@/lib/cache/integrations";
@@ -43,9 +43,10 @@ export default async function CustomerOverview({ params }: Props) {
   // is used to build AE + partner suggestion lists so the inline editor
   // autocompletes against existing values rather than asking the user to
   // remember exact spellings.
-  const [enrichment, profile, events, tasks, allCustomers] = await Promise.all([
+  const [enrichment, profile, internalProfile, events, tasks, allCustomers] = await Promise.all([
     loadCustomerEnrichment(customer.id).catch(() => null),
     getProfile(key).catch(() => null),
+    getInternalProfile(key).catch(() => null),
     listEvents(key, { limit: 20 }).catch(() => []),
     listTasks(key).catch(() => []),
     listCustomers().catch(() => []),
@@ -143,10 +144,15 @@ export default async function CustomerOverview({ params }: Props) {
       {/* Stat row */}
       <section className="grid gap-3 md:grid-cols-4">
         <StatBlock
-          label="Annual revenue"
+          label="Kognitos ARR"
+          value={formatMoney(profile?.arr ?? null)}
+          hint={profile?.renewal_date ? `renews ${profile.renewal_date}` : "from latest SF contract"}
+          emphasis
+        />
+        <StatBlock
+          label="Company revenue"
           value={formatMoney(account?.annual_revenue ?? null)}
           hint={account?.industry ?? "Salesforce"}
-          emphasis
         />
         <StatBlock
           label="Open opportunities"
@@ -156,12 +162,7 @@ export default async function CustomerOverview({ params }: Props) {
         <StatBlock
           label="Active projects"
           value={String(projects.length)}
-          hint="from Monday Projects board"
-        />
-        <StatBlock
-          label="Open cases"
-          value={String(openCases.length)}
-          hint={`${cases.length} total in Salesforce`}
+          hint={`${openCases.length} open SF cases`}
         />
       </section>
 
@@ -278,6 +279,51 @@ export default async function CustomerOverview({ params }: Props) {
             </dl>
           </section>
 
+          {/* Internal health (CSM-only — agent has zero access to internal_profiles) */}
+          {internalProfile ? (
+            <section className="rounded-lg border border-line bg-white p-5">
+              <div className="flex items-baseline justify-between mb-3">
+                <SectionMark>Internal health</SectionMark>
+                <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
+                  CSM only
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <HealthScore
+                  label="Health"
+                  value={internalProfile.health_score}
+                  tone={
+                    internalProfile.health_score >= 70
+                      ? "good"
+                      : internalProfile.health_score >= 50
+                      ? "warn"
+                      : "bad"
+                  }
+                />
+                <HealthScore
+                  label="NPS"
+                  value={internalProfile.nps_score}
+                  tone={
+                    internalProfile.nps_score >= 7
+                      ? "good"
+                      : internalProfile.nps_score >= 0
+                      ? "warn"
+                      : "bad"
+                  }
+                />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <KV label="Churn risk" value={internalProfile.churn_risk} />
+                <KV label="Next QBR" value={internalProfile.next_qbr_date} />
+              </div>
+              {internalProfile.last_updated_by ? (
+                <div className="text-[10px] text-[color:var(--brand-gray)] mt-3 uppercase tracking-wider">
+                  Last updated by {internalProfile.last_updated_by}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           {/* Source-of-truth protected fields */}
           {customer.deliveryops_protected_fields?.length > 0 ? (
             <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5">
@@ -317,6 +363,49 @@ export default async function CustomerOverview({ params }: Props) {
           ) : null}
         </aside>
       </div>
+
+      {/* Contacts (from SF Account → Contact relationship, populated on backfill) */}
+      {profile && profile.contacts.length > 0 ? (
+        <section className="rounded-lg border border-line bg-white p-6">
+          <div className="flex items-baseline justify-between mb-4">
+            <SectionMark>Contacts ({profile.contacts.length})</SectionMark>
+            <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
+              from Salesforce
+            </span>
+          </div>
+          <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {profile.contacts.slice(0, 12).map((c, i) => (
+              <li
+                key={`${c.email || c.name}-${i}`}
+                className="rounded-md border border-line bg-[color:var(--brand-seasalt)] p-3"
+              >
+                <div className="font-medium text-sm">{c.name || "(unnamed)"}</div>
+                {c.role ? (
+                  <div className="text-xs text-[color:var(--brand-gray)] mt-0.5">{c.role}</div>
+                ) : null}
+                <div className="mt-2 space-y-1 text-xs">
+                  {c.email ? (
+                    <a
+                      href={`mailto:${c.email}`}
+                      className="block truncate underline decoration-[color:var(--brand-yellow)] decoration-2 underline-offset-4"
+                    >
+                      {c.email}
+                    </a>
+                  ) : null}
+                  {c.phone ? (
+                    <a
+                      href={`tel:${c.phone.replace(/\s+/g, "")}`}
+                      className="block text-[color:var(--brand-gray)]"
+                    >
+                      {c.phone}
+                    </a>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {/* Monday projects */}
       {projects.length > 0 ? (
@@ -465,6 +554,31 @@ export default async function CustomerOverview({ params }: Props) {
           </div>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function HealthScore({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "good" | "warn" | "bad";
+}) {
+  const toneClass =
+    tone === "good"
+      ? "text-emerald-700"
+      : tone === "warn"
+      ? "text-amber-700"
+      : "text-red-700";
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)] mb-1">
+        {label}
+      </div>
+      <div className={`text-display text-3xl tabular-nums ${toneClass}`}>{value}</div>
     </div>
   );
 }

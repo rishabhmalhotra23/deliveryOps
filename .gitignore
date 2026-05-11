@@ -12,3 +12,7 @@ packages/*/node_modules/
 # Supabase CLI runtime artifacts (regenerated on `supabase start`)
 supabase/.branches/
 supabase/.temp/
+
+# Generated outputs from scripts/ utilities (write plans, audit snapshots,
+# publish logs). These are local-only — committing them leaks state.
+scripts/.*.json
