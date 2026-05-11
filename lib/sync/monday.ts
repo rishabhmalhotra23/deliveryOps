@@ -48,7 +48,17 @@ interface RawItem {
   state: string;
   updated_at: string;
   group: { id: string; title: string };
-  column_values: Array<{ id: string; type: string; text: string | null; value: string | null }>;
+  // The BoardRelationValue fragment populates `linked_item_ids` on
+  // relation columns. The plain `value` field returns null or {} for
+  // relation columns even when populated — Monday's API requires the
+  // typed fragment to read them. Hard-won fact from the NPS board.
+  column_values: Array<{
+    id: string;
+    type: string;
+    text: string | null;
+    value: string | null;
+    linked_item_ids?: string[];
+  }>;
 }
 
 async function fetchBoardItems(boardId: string, limit: number = 500): Promise<RawItem[]> {
@@ -62,7 +72,10 @@ async function fetchBoardItems(boardId: string, limit: number = 500): Promise<Ra
             state
             updated_at
             group { id title }
-            column_values { id type text value }
+            column_values {
+              id type text value
+              ... on BoardRelationValue { linked_item_ids }
+            }
           }
         }
       }
@@ -101,34 +114,40 @@ function matchItemToCustomerByName(itemName: string, customers: Customer[]): Cus
   return null;
 }
 
-// Match by Monday board-relation column. The cell's `value` field is JSON
-// of the shape:
-//   { "linkedPulseIds": [{ "linkedPulseId": 12345 }, ...] }
-// We map those IDs to the customer rows whose monday_item_id matches.
+// Match by Monday board-relation column. We pull `linked_item_ids` via the
+// BoardRelationValue typed fragment (returns string IDs of the linked items
+// on the target board) and look them up in customersByMondayId. As a legacy
+// fallback we still parse cell.value if present, but most boards now return
+// the typed field cleanly.
 function matchItemToCustomerByRelation(
   item: RawItem,
   relationColumnId: string,
   customersByMondayId: Map<string, Customer>
 ): Customer | null {
   const cell = item.column_values.find((c) => c.id === relationColumnId);
-  if (!cell?.value) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cell.value);
-  } catch {
-    return null;
-  }
-  const ids: number[] = [];
-  if (parsed && typeof parsed === "object") {
-    const links =
-      (parsed as { linkedPulseIds?: Array<{ linkedPulseId?: number }> }).linkedPulseIds ?? [];
-    for (const l of links) {
-      if (typeof l?.linkedPulseId === "number") ids.push(l.linkedPulseId);
-    }
-  }
-  for (const id of ids) {
-    const c = customersByMondayId.get(String(id));
+  if (!cell) return null;
+
+  // Preferred: typed `linked_item_ids` from BoardRelationValue.
+  for (const id of cell.linked_item_ids ?? []) {
+    const c = customersByMondayId.get(id);
     if (c) return c;
+  }
+
+  // Fallback: legacy JSON-in-value parsing for older Monday API responses.
+  if (cell.value) {
+    try {
+      const parsed = JSON.parse(cell.value) as {
+        linkedPulseIds?: Array<{ linkedPulseId?: number }>;
+      };
+      for (const link of parsed.linkedPulseIds ?? []) {
+        if (typeof link?.linkedPulseId === "number") {
+          const c = customersByMondayId.get(String(link.linkedPulseId));
+          if (c) return c;
+        }
+      }
+    } catch {
+      /* swallow — bad JSON shouldn't break the whole sync */
+    }
   }
   return null;
 }
@@ -177,10 +196,102 @@ interface BoardSyncResult {
 
 export interface MondaySyncResult {
   customers_indexed: number;
+  registry_updates: { checked: number; updated: number; skipped_protected: number };
   projects: BoardSyncResult;
   activities: BoardSyncResult;
   nps: BoardSyncResult;
   errors: Array<{ board: string; error: string }>;
+}
+
+// Customers-board column IDs the sync pulls into the customers table.
+// Captured from the live board 2026-05-11. Column IDs are stable; rename in
+// Monday doesn't invalidate them. Mirrors lib/import/monday-customers.ts.
+const CUSTOMERS_BOARD_COLS = {
+  ae_owner: "text_mm0w4gvm",
+  partner: "dropdown_mkzjqgxj",
+  customer_health: "color_mkzj3vw0", // Healthy / Watch / At Risk / Churned / Dropped
+  account_type: "color_mm0yjq7b", // Long Term / Partner / POV
+} as const;
+
+// Monday group titles → DeliveryOps custom_category. Kept in sync with
+// app/_components/brand.tsx LIFECYCLE_TO_CATEGORY. When a customer's
+// lifecycle_group changes from one Monday group to another, we also flip
+// custom_category in lockstep — UNLESS the CSM has manually pinned it via
+// the operations chat or inline editor (tracked by protected_fields).
+const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
+  "High Risk": "At Risk",
+  "Upcoming Renewal": "Upcoming Renewals",
+  "Growth / Focus": "Strategic Growth",
+  "Tier 2 - Secondary Priority": "Active",
+  "Partner Managed": "Partner Managed",
+  POV: "POV",
+  "To be Dropped": "To Drop",
+  "Churned/Dropped": "Churned",
+};
+
+// Sync customers' lifecycle_group + ae_owner + partner from the Customers
+// board into the customers table. Respects deliveryops_protected_fields.
+// Returns counts so the caller can report on what changed.
+async function syncCustomerRegistry(
+  customers: Customer[],
+  sb: ReturnType<typeof requireAdmin>
+): Promise<MondaySyncResult["registry_updates"]> {
+  const result = { checked: 0, updated: 0, skipped_protected: 0 };
+
+  const items = await fetchBoardItems("18395281568", 200);
+  const byId = new Map(items.map((i) => [i.id, i]));
+
+  for (const cust of customers) {
+    if (!cust.monday_item_id) continue;
+    const item = byId.get(cust.monday_item_id);
+    if (!item) continue;
+    result.checked++;
+
+    const cols = indexCols(item);
+    const protectedFields = new Set(cust.deliveryops_protected_fields ?? []);
+
+    const updates: Record<string, string | null> = {};
+
+    // Monday group = lifecycle_group (always pulled — never protected; the
+    // CSM's primary lever for moving customers between buckets lives in
+    // Monday's group, not in our DB).
+    const newLifecycle = item.group?.title ?? null;
+    if (newLifecycle && newLifecycle !== cust.lifecycle_group) {
+      updates.lifecycle_group = newLifecycle;
+      // Cascade to custom_category unless the CSM has pinned it manually.
+      // This is what propagates "I moved them to To be Dropped on Monday"
+      // into the DeliveryOps dashboard and chart filters.
+      if (!protectedFields.has("custom_category")) {
+        const newCategory = LIFECYCLE_TO_CATEGORY[newLifecycle];
+        if (newCategory && newCategory !== cust.custom_category) {
+          updates.custom_category = newCategory;
+        }
+      } else if (LIFECYCLE_TO_CATEGORY[newLifecycle] !== cust.custom_category) {
+        result.skipped_protected++;
+      }
+    }
+
+    // ae_owner / partner — respect protected fields.
+    const newAe = cols[CUSTOMERS_BOARD_COLS.ae_owner]?.text?.trim() || null;
+    if (newAe !== cust.ae_owner && !protectedFields.has("ae_owner")) {
+      updates.ae_owner = newAe;
+    } else if (protectedFields.has("ae_owner") && newAe !== cust.ae_owner) {
+      result.skipped_protected++;
+    }
+
+    const newPartner = cols[CUSTOMERS_BOARD_COLS.partner]?.text?.trim() || null;
+    if (newPartner !== cust.partner && !protectedFields.has("partner")) {
+      updates.partner = newPartner;
+    } else if (protectedFields.has("partner") && newPartner !== cust.partner) {
+      result.skipped_protected++;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await sb.from("customers").update(updates).eq("id", cust.id);
+      if (!error) result.updated++;
+    }
+  }
+  return result;
 }
 
 export async function syncMonday(): Promise<MondaySyncResult> {
@@ -194,11 +305,20 @@ export async function syncMonday(): Promise<MondaySyncResult> {
 
   const result: MondaySyncResult = {
     customers_indexed: customers.length,
+    registry_updates: { checked: 0, updated: 0, skipped_protected: 0 },
     projects: { fetched: 0, matched: 0, inserted: 0 },
     activities: { fetched: 0, matched: 0, inserted: 0 },
     nps: { fetched: 0, matched: 0, inserted: 0 },
     errors: [],
   };
+
+  // First: pull customer registry changes (groups / AE / partner). This
+  // closes the gap where Monday status changes never reached Postgres.
+  try {
+    result.registry_updates = await syncCustomerRegistry(customers, sb);
+  } catch (err) {
+    result.errors.push({ board: "customers_registry", error: err instanceof Error ? err.message : String(err) });
+  }
 
   await syncBoard(
     "projects",
@@ -223,13 +343,25 @@ export async function syncMonday(): Promise<MondaySyncResult> {
     result,
     sb
   );
+  // Build the Contact-name matcher for the NPS board (relies on SF Contacts
+  // we backfilled into profiles.contacts). Loaded once, reused per item.
+  let contactMatcher: Map<string, Customer> | undefined;
+  try {
+    contactMatcher = await buildContactMatcher(customers, sb);
+  } catch (err) {
+    result.errors.push({ board: "nps_contact_matcher", error: err instanceof Error ? err.message : String(err) });
+  }
+
   await syncBoard(
     "nps",
     BOARDS.nps.id,
     "monday_nps_responses",
     customers,
     customersByMondayId,
-    { relationColumnId: BOARDS.nps.customerRelationColumn },
+    {
+      relationColumnId: BOARDS.nps.customerRelationColumn,
+      matchByContactName: contactMatcher,
+    },
     result,
     sb
   );
@@ -240,6 +372,54 @@ export async function syncMonday(): Promise<MondaySyncResult> {
 interface MatcherConfig {
   relationColumnId?: string;
   longTextHeaderColumnId?: string;
+  // SF Contact-based matching: item.name is matched against
+  // profile.contacts[].name across all customers. Used for the NPS board,
+  // where items are named after the respondent (e.g. "Paul Plunkett") and
+  // the Monday Customer board-relation column is rarely populated. The
+  // SF Contact→Account link in profile.contacts (backfilled from SF) tells
+  // us which customer owns each respondent.
+  matchByContactName?: Map<string, Customer>;
+}
+
+interface ContactRow {
+  name: string;
+}
+interface ProfileRow {
+  customer_id: string;
+  contacts: ContactRow[] | null;
+}
+
+// Build a map from normalized contact name → Customer. Loaded once per
+// sync run and passed to the NPS board matcher. Contacts come from the
+// profiles.contacts JSONB column, which gets backfilled from SF.
+async function buildContactMatcher(
+  customers: Customer[],
+  sb: ReturnType<typeof requireAdmin>
+): Promise<Map<string, Customer>> {
+  const out = new Map<string, Customer>();
+  const customerById = new Map(customers.map((c) => [c.id, c]));
+  const { data } = await sb.from("profiles").select("customer_id, contacts");
+  for (const row of (data as ProfileRow[] | null) ?? []) {
+    const cust = customerById.get(row.customer_id);
+    if (!cust) continue;
+    for (const contact of row.contacts ?? []) {
+      const n = (contact?.name ?? "").toLowerCase().trim();
+      if (n.length < 4) continue;
+      // First-wins to keep deterministic; collisions across customers (rare
+      // for full names) keep the first match.
+      if (!out.has(n)) out.set(n, cust);
+    }
+  }
+  return out;
+}
+
+function matchItemByContactName(
+  item: RawItem,
+  contactMap: Map<string, Customer>
+): Customer | null {
+  const name = (item.name ?? "").toLowerCase().trim();
+  if (name.length < 4) return null;
+  return contactMap.get(name) ?? null;
 }
 
 async function syncBoard(
@@ -276,7 +456,13 @@ async function syncBoard(
         customers
       );
     }
-    // 3. Item name prefix (legacy fallback).
+    // 3. SF Contact-name match — used for the NPS board where item.name is
+    //    a respondent (e.g. "Paul Plunkett") and the customer is whoever
+    //    that respondent works for (from the SF Account→Contact link).
+    if (!customer && matcher.matchByContactName) {
+      customer = matchItemByContactName(it, matcher.matchByContactName);
+    }
+    // 4. Item name prefix (legacy fallback).
     if (!customer) {
       customer = matchItemToCustomerByName(it.name, customers);
     }

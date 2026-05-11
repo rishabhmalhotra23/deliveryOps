@@ -27,6 +27,10 @@ describe("categoryFromCustomer", () => {
     expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "Churned/Dropped" })).toBe(
       "Churned"
     );
+    // New in Phase 2 Pass I — Monday added "To be Dropped" as a group.
+    expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "To be Dropped" })).toBe(
+      "To Drop"
+    );
   });
 
   it("defaults to Active when both fields are missing or unrecognised", () => {
@@ -55,9 +59,10 @@ describe("categorySortIndex", () => {
     const sorted = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sorted);
   });
-  it("puts At Risk first and Churned last", () => {
+  it("puts At Risk first, To Drop near the bottom, Churned last", () => {
     expect(categorySortIndex("At Risk")).toBe(0);
-    expect(categorySortIndex("Churned")).toBe(6);
+    expect(categorySortIndex("To Drop")).toBe(6);
+    expect(categorySortIndex("Churned")).toBe(7);
   });
   it("sends unknown categories to the bottom (99)", () => {
     expect(categorySortIndex("Strategic Logos")).toBe(99);

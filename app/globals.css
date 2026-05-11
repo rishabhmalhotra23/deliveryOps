@@ -109,6 +109,7 @@
 .tone-tier2         { background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE; }
 .tone-partner       { background: #F5F3FF; color: #5B21B6; border-color: #DDD6FE; }
 .tone-pov           { background: var(--brand-yellow-soft); color: var(--brand-night); border-color: var(--brand-yellow-line); }
+.tone-todrop        { background: #FEF2F2; color: #B91C1C; border-color: #FCA5A5; }
 .tone-churned       { background: #F5F5F5; color: #525252; border-color: #E5E5E5; }
 .tone-other         { background: var(--brand-seasalt); color: var(--brand-gray); border-color: var(--brand-metal-line); }
 

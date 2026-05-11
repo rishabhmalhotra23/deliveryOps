@@ -95,6 +95,7 @@ export function deriveTier(category: string | null): ContractTier | null {
       return "growth";
     case "pov":
       return "starter";
+    case "to drop":
     case "churned":
       return "enterprise"; // historical signal; they were enterprise when active
     default:
@@ -106,6 +107,7 @@ export function deriveDeploymentStage(category: string | null): DeploymentStage 
   switch ((category ?? "").toLowerCase()) {
     case "pov":
       return "pilot";
+    case "to drop":
     case "churned":
       return "mature";
     case "active":
@@ -123,6 +125,8 @@ export function deriveHealthScore(category: string | null): number {
   switch ((category ?? "").toLowerCase()) {
     case "at risk":
       return 30;
+    case "to drop":
+      return 15; // worse than At Risk (we've decided to drop) but not zero (they're still active)
     case "upcoming renewals":
       return 60;
     case "strategic growth":
@@ -143,6 +147,7 @@ export function deriveHealthScore(category: string | null): number {
 export function deriveChurnRisk(category: string | null): ChurnRisk {
   switch ((category ?? "").toLowerCase()) {
     case "at risk":
+    case "to drop":
     case "churned":
       return "high";
     case "upcoming renewals":

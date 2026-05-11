@@ -42,6 +42,7 @@ export const CUSTOMER_CATEGORIES = [
   "Active",
   "Partner Managed",
   "POV",
+  "To Drop",
   "Churned",
 ] as const;
 

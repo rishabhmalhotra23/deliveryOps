@@ -93,13 +93,14 @@ describe("deriveArr", () => {
 });
 
 describe("deriveTier", () => {
-  it("maps the seven canonical categories", () => {
+  it("maps the eight canonical categories", () => {
     expect(deriveTier("Strategic Growth")).toBe("enterprise");
     expect(deriveTier("Upcoming Renewals")).toBe("enterprise");
     expect(deriveTier("At Risk")).toBe("enterprise");
     expect(deriveTier("Active")).toBe("growth");
     expect(deriveTier("Partner Managed")).toBe("growth");
     expect(deriveTier("POV")).toBe("starter");
+    expect(deriveTier("To Drop")).toBe("enterprise");
     expect(deriveTier("Churned")).toBe("enterprise");
   });
   it("is case-insensitive", () => {
@@ -117,8 +118,9 @@ describe("deriveDeploymentStage", () => {
   it("POV → pilot", () => {
     expect(deriveDeploymentStage("POV")).toBe("pilot");
   });
-  it("Churned → mature", () => {
+  it("Churned / To Drop → mature (historical)", () => {
     expect(deriveDeploymentStage("Churned")).toBe("mature");
+    expect(deriveDeploymentStage("To Drop")).toBe("mature");
   });
   it("active categories → scaling", () => {
     for (const cat of ["Active", "Strategic Growth", "Upcoming Renewals", "At Risk", "Partner Managed"]) {
@@ -133,14 +135,17 @@ describe("deriveDeploymentStage", () => {
 });
 
 describe("deriveHealthScore", () => {
-  it("monotonically reflects category health intuition", () => {
+  it("orders categories by health intuition", () => {
     expect(deriveHealthScore("Churned")).toBe(0);
+    // "To Drop" is worse than At Risk (we've already decided to drop)
+    // but not 0 (they're still paying us until renewal).
+    expect(deriveHealthScore("To Drop")).toBeLessThan(deriveHealthScore("At Risk"));
     expect(deriveHealthScore("At Risk")).toBeLessThan(deriveHealthScore("Upcoming Renewals"));
     expect(deriveHealthScore("Upcoming Renewals")).toBeLessThan(deriveHealthScore("Active"));
     expect(deriveHealthScore("Active")).toBeLessThan(deriveHealthScore("Strategic Growth"));
   });
   it("stays in the 0-100 range", () => {
-    for (const cat of [null, "", "POV", "Churned", "Active", "At Risk", "Strategic Growth"]) {
+    for (const cat of [null, "", "POV", "Churned", "Active", "At Risk", "Strategic Growth", "To Drop"]) {
       const s = deriveHealthScore(cat);
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThanOrEqual(100);
@@ -149,8 +154,9 @@ describe("deriveHealthScore", () => {
 });
 
 describe("deriveChurnRisk", () => {
-  it("high for At Risk and Churned", () => {
+  it("high for At Risk, To Drop, and Churned", () => {
     expect(deriveChurnRisk("At Risk")).toBe("high");
+    expect(deriveChurnRisk("To Drop")).toBe("high");
     expect(deriveChurnRisk("Churned")).toBe("high");
   });
   it("medium for Upcoming Renewals", () => {

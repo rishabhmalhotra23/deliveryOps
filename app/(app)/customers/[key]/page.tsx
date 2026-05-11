@@ -407,30 +407,50 @@ export default async function CustomerOverview({ params }: Props) {
         </section>
       ) : null}
 
-      {/* Monday projects */}
+      {/* Projects — Monday Projects board, lifted columns: health, phase,
+          dev platform, kickoff + go-live dates, complexity. Grouped by the
+          board's Monday groups (Active / Pipeline / On Hold / Backlog). */}
       {projects.length > 0 ? (
         <section className="rounded-lg border border-line bg-white p-6">
           <div className="flex items-baseline justify-between mb-4">
-            <SectionMark>Active projects · Monday</SectionMark>
+            <SectionMark>Projects · {projects.length}</SectionMark>
             <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
               {enrichment?.freshness.monday_synced_at
                 ? `synced ${formatTimeAgo(enrichment.freshness.monday_synced_at)}`
                 : "not synced"}
             </span>
           </div>
-          <ul className="grid gap-2 md:grid-cols-2">
-            {projects.map((p) => (
-              <li
-                key={p.monday_item_id}
-                className="rounded-md border border-line bg-[color:var(--brand-seasalt)] p-3"
-              >
-                <div className="font-medium text-sm">{p.name.replace(`${customer.display_name} - `, "")}</div>
-                <div className="text-xs text-[color:var(--brand-gray)] mt-1">
-                  {p.group_title ?? "—"}
+          {(() => {
+            // Group projects by Monday group_title (Active / Pipeline / On Hold / Backlog).
+            const GROUP_ORDER = ["Active", "Pipeline", "On Hold", "Backlog"];
+            const grouped = new Map<string, typeof projects>();
+            for (const p of projects) {
+              const key = p.group_title ?? "(other)";
+              const list = grouped.get(key) ?? [];
+              list.push(p);
+              grouped.set(key, list);
+            }
+            const ordered = [
+              ...GROUP_ORDER.filter((g) => grouped.has(g)).map((g) => [g, grouped.get(g)!] as const),
+              ...[...grouped.entries()].filter(([g]) => !GROUP_ORDER.includes(g)),
+            ];
+            return ordered.map(([groupName, list]) => (
+              <div key={groupName} className="mb-6 last:mb-0">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-2">
+                  {groupName} · {list.length}
                 </div>
-              </li>
-            ))}
-          </ul>
+                <ul className="space-y-2">
+                  {list.map((p) => (
+                    <ProjectRow
+                      key={p.monday_item_id}
+                      project={p}
+                      customerName={customer.display_name}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ));
+          })()}
         </section>
       ) : null}
 
@@ -555,6 +575,94 @@ export default async function CustomerOverview({ params }: Props) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+const PROJECT_HEALTH_TONE: Record<string, string> = {
+  "On Track": "bg-emerald-50 text-emerald-800 border-emerald-200",
+  Healthy: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  Watch: "bg-amber-50 text-amber-800 border-amber-200",
+  "At Risk": "bg-red-50 text-red-800 border-red-200",
+  Blocked: "bg-red-50 text-red-800 border-red-200",
+  "Off Track": "bg-red-50 text-red-800 border-red-200",
+};
+
+const PROJECT_STATUS_TONE: Record<string, string> = {
+  Delivered: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  Live: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  "In Progress": "bg-sky-50 text-sky-800 border-sky-200",
+  "On Hold": "bg-neutral-100 text-neutral-700 border-neutral-300",
+  Cancelled: "bg-neutral-100 text-neutral-500 border-neutral-200",
+  Backlog: "bg-neutral-50 text-neutral-600 border-neutral-200",
+};
+
+function ProjectRow({
+  project,
+  customerName,
+}: {
+  project: {
+    monday_item_id: string;
+    name: string;
+    group_title: string | null;
+    health: string | null;
+    project_status: string | null;
+    current_phase: string | null;
+    dev_platform: string | null;
+    complexity: string | null;
+    kickoff_date: string | null;
+    go_live_date: string | null;
+    tam: string | null;
+    dev: string | null;
+  };
+  customerName: string;
+}) {
+  const cleanName = project.name.replace(new RegExp(`^${customerName}\\s*[-—]\\s*`), "");
+  const healthClass = project.health
+    ? PROJECT_HEALTH_TONE[project.health] ?? "bg-neutral-50 text-neutral-700 border-neutral-200"
+    : null;
+  const statusClass = project.project_status
+    ? PROJECT_STATUS_TONE[project.project_status] ?? "bg-neutral-50 text-neutral-600 border-neutral-200"
+    : null;
+
+  return (
+    <li className="rounded-md border border-line bg-[color:var(--brand-seasalt)] p-3">
+      <div className="flex items-baseline justify-between gap-3 mb-1.5">
+        <div className="font-medium text-sm">{cleanName}</div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {project.dev_platform ? (
+            <span className="text-[10px] uppercase tracking-wider rounded border border-[color:var(--brand-night)] px-1.5 py-0.5 font-medium bg-white">
+              {project.dev_platform}
+            </span>
+          ) : null}
+          {healthClass ? (
+            <span className={`text-[10px] uppercase tracking-wider rounded border px-1.5 py-0.5 font-medium ${healthClass}`}>
+              {project.health}
+            </span>
+          ) : null}
+          {statusClass ? (
+            <span className={`text-[10px] uppercase tracking-wider rounded border px-1.5 py-0.5 font-medium ${statusClass}`}>
+              {project.project_status}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-[color:var(--brand-gray)]">
+        {project.current_phase ? <span>Phase: {project.current_phase}</span> : null}
+        {project.complexity ? <span>Complexity: {project.complexity}</span> : null}
+        {project.kickoff_date ? (
+          <span className="tabular-nums">
+            Kickoff: {project.kickoff_date}
+          </span>
+        ) : null}
+        {project.go_live_date ? (
+          <span className="tabular-nums">
+            Go live: <strong className="text-[color:var(--brand-night)]">{project.go_live_date}</strong>
+          </span>
+        ) : null}
+        {project.tam ? <span>TAM: {project.tam.split("@")[0]}</span> : null}
+        {project.dev ? <span>Dev: {project.dev.split("@")[0]}</span> : null}
+      </div>
+    </li>
   );
 }
 

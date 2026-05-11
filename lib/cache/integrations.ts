@@ -51,6 +51,17 @@ export interface MondayProjectCache {
   group_title: string | null;
   state: string | null;
   monday_updated_at: string | null;
+  // Lifted from raw_columns for rendering in the UI.
+  health: string | null; // On Track / At Risk / etc.
+  project_status: string | null; // In Progress / Delivered / On Hold / etc.
+  current_phase: string | null; // M1 / M2 - Development / M3 - Testing/UAT / etc.
+  dev_platform: string | null; // V1 / V2
+  complexity: string | null; // Low / Medium / High
+  kickoff_date: string | null;
+  go_live_date: string | null;
+  partner: string | null;
+  tam: string | null;
+  dev: string | null;
 }
 
 export interface MondayActivityCache {
@@ -120,6 +131,20 @@ const NPS_COLS = {
   product_satisfaction: "color_mm0amv8q",
 };
 
+// Monday Projects board column IDs. Captured live on 2026-05-11.
+const PROJECT_COLS = {
+  health: "color_mm01ft4",
+  project_status: "color_mkzj8fw8",
+  current_phase: "color_mm06sdrj",
+  dev_platform: "color_mm0698sb",
+  complexity: "dropdown_mm06r92k",
+  kickoff_date: "date_mm011n1f",
+  go_live_date: "date_mm01dz3b",
+  partner: "dropdown_mm06hne3",
+  tam: "multiple_person_mkzrppyd",
+  dev: "multiple_person_mkzrgk3b",
+};
+
 interface RawColumns {
   [columnId: string]: { type: string; text: string | null; value: string | null } | undefined;
 }
@@ -150,7 +175,7 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
       .select("*")
       .eq("customer_id", customerId)
       .order("monday_updated_at", { ascending: false })
-      .limit(50),
+      .limit(100),
     sb
       .from("monday_activities")
       .select("*")
@@ -226,11 +251,42 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     };
   });
 
+  type ProjectRow = {
+    monday_item_id: string;
+    name: string;
+    group_title: string | null;
+    state: string | null;
+    monday_updated_at: string | null;
+    raw_columns: RawColumns;
+  };
+  const projectCache: MondayProjectCache[] = (
+    (projects.data as ProjectRow[] | null) ?? []
+  ).map((p) => {
+    const cols = p.raw_columns ?? {};
+    return {
+      monday_item_id: p.monday_item_id,
+      name: p.name,
+      group_title: p.group_title,
+      state: p.state,
+      monday_updated_at: p.monday_updated_at,
+      health: txt(cols, PROJECT_COLS.health),
+      project_status: txt(cols, PROJECT_COLS.project_status),
+      current_phase: txt(cols, PROJECT_COLS.current_phase),
+      dev_platform: txt(cols, PROJECT_COLS.dev_platform),
+      complexity: txt(cols, PROJECT_COLS.complexity),
+      kickoff_date: txt(cols, PROJECT_COLS.kickoff_date),
+      go_live_date: txt(cols, PROJECT_COLS.go_live_date),
+      partner: txt(cols, PROJECT_COLS.partner),
+      tam: txt(cols, PROJECT_COLS.tam),
+      dev: txt(cols, PROJECT_COLS.dev),
+    };
+  });
+
   return {
     account: (acc.data as SfAccountCache | null) ?? null,
     opportunities: (opps.data as SfOpportunityCache[] | null) ?? [],
     cases: (cases.data as SfCaseCache[] | null) ?? [],
-    projects: (projects.data as MondayProjectCache[] | null) ?? [],
+    projects: projectCache,
     activities: activityCache,
     nps: npsCache,
     freshness: {
@@ -246,7 +302,11 @@ export interface PortfolioSummary {
   by_category: Record<string, number>;
   by_ae: Record<string, number>;
   by_partner: Record<string, number>;
+  // total_arr = sum of profiles.arr across all customers (Kognitos deal ARR).
+  // NOT sum of sf_accounts.annual_revenue — that's the customer's company-wide
+  // revenue, which is meaningless to aggregate and was producing $billions.
   total_arr: number;
+  total_company_revenue: number;
   total_open_opportunities: number;
   total_open_cases: number;
   with_salesforce: number;
@@ -283,7 +343,8 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     byPartner[p] = (byPartner[p] ?? 0) + 1;
   }
 
-  const [arr, opps, cases, lastSf, lastMon] = await Promise.all([
+  const [arr, companyRev, opps, cases, lastSf, lastMon] = await Promise.all([
+    sb.from("profiles").select("arr"),
     sb.from("sf_accounts").select("annual_revenue"),
     sb.from("sf_opportunities").select("id", { count: "exact", head: true }).eq("is_closed", false),
     sb.from("sf_cases").select("id", { count: "exact", head: true }).eq("is_closed", false),
@@ -291,8 +352,12 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
-  const totalArr =
-    ((arr.data as Array<{ annual_revenue: number | null }> | null) ?? []).reduce(
+  const totalArr = ((arr.data as Array<{ arr: number | null }> | null) ?? []).reduce(
+    (sum, a) => sum + (a.arr ?? 0),
+    0
+  );
+  const totalCompanyRevenue =
+    ((companyRev.data as Array<{ annual_revenue: number | null }> | null) ?? []).reduce(
       (sum, a) => sum + (a.annual_revenue ?? 0),
       0
     );
@@ -303,6 +368,7 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     by_ae: byAe,
     by_partner: byPartner,
     total_arr: totalArr,
+    total_company_revenue: totalCompanyRevenue,
     total_open_opportunities: opps.count ?? 0,
     total_open_cases: cases.count ?? 0,
     with_salesforce: list.filter((c) => c.salesforce_account_id).length,

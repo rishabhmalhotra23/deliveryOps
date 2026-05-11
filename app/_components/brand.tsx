@@ -12,6 +12,7 @@ export const CATEGORY_ORDER = [
   "Active",
   "Partner Managed",
   "POV",
+  "To Drop",
   "Churned",
 ] as const;
 
@@ -22,18 +23,23 @@ const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: num
   Active: { class: "tone-tier2", weight: 3 },
   "Partner Managed": { class: "tone-partner", weight: 4 },
   POV: { class: "tone-pov", weight: 5 },
-  Churned: { class: "tone-churned", weight: 6 },
+  // "To Drop" — customers we've decided to drop at renewal. Distinct from
+  // Churned (already gone) and At Risk (could still be saved). Visually
+  // adjacent to Churned but with its own warmer-warning tone.
+  "To Drop": { class: "tone-todrop", weight: 6 },
+  Churned: { class: "tone-churned", weight: 7 },
 };
 
 // Legacy lifecycle group → category mapping for any customer that still
-// hasn't been backfilled. Mirrors migration 0005.
+// hasn't been backfilled. Mirrors migration 0005 + the live Monday board.
 const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
-  "High Risk": "At Risk",
+  "High Risk": "At Risk", // historical Monday label, no longer in use
   "Upcoming Renewal": "Upcoming Renewals",
   "Growth / Focus": "Strategic Growth",
   "Tier 2 - Secondary Priority": "Active",
   "Partner Managed": "Partner Managed",
   POV: "POV",
+  "To be Dropped": "To Drop",
   "Churned/Dropped": "Churned",
 };
 
