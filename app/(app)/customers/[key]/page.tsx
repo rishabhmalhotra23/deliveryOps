@@ -18,6 +18,8 @@ import {
 } from "@/app/_components/brand";
 import { InlineEdit } from "@/app/_components/inline-edit";
 import { InfoTooltip } from "@/app/_components/tooltip";
+import { CollapsibleSection } from "@/app/_components/collapsible-section";
+import { ArrHistoryChart, NpsTrendChart, type ArrPoint, type NpsTrendPoint } from "./_inline-charts";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +82,62 @@ export default async function CustomerOverview({ params }: Props) {
   const nextRenewal = openOpps
     .filter((o) => o.close_date)
     .sort((a, b) => a.close_date!.localeCompare(b.close_date!))[0]?.close_date ?? null;
+
+  // ARR history points — every Won contract event + the current open expected.
+  // Drives the inline ARR-over-time chart (the JBI expansion story).
+  const arrPoints: ArrPoint[] = opps
+    .filter(
+      (o) =>
+        (o.is_won || (!o.is_closed && (o.probability ?? 0) >= 50)) &&
+        o.amount != null &&
+        o.close_date != null
+    )
+    .map((o) => ({
+      date: o.close_date!,
+      amount: o.amount!,
+      type: (o.is_won ? "Won" : "Open") as "Won" | "Open",
+      name: o.name,
+    }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  // NPS trend points — quarter average + promoter/passive/detractor counts.
+  // Mirrors the QoQ groupings below; charted with NpsTrendChart.
+  const npsTrendByQuarter = new Map<
+    string,
+    { sum: number; count: number; promoter: number; passive: number; detractor: number }
+  >();
+  for (const r of npsResponses) {
+    if (!r.quarter || r.score == null) continue;
+    const prev = npsTrendByQuarter.get(r.quarter) ?? {
+      sum: 0,
+      count: 0,
+      promoter: 0,
+      passive: 0,
+      detractor: 0,
+    };
+    prev.sum += r.score;
+    prev.count++;
+    if (r.category === "Promoter") prev.promoter++;
+    else if (r.category === "Passive") prev.passive++;
+    else if (r.category === "Detractor") prev.detractor++;
+    npsTrendByQuarter.set(r.quarter, prev);
+  }
+  const npsTrendPoints: NpsTrendPoint[] = [...npsTrendByQuarter.entries()]
+    .map(([quarter, v]) => ({
+      quarter,
+      average: Math.round((v.sum / v.count) * 10) / 10,
+      count: v.count,
+      promoter: v.promoter,
+      passive: v.passive,
+      detractor: v.detractor,
+    }))
+    .sort((a, b) => {
+      const parse = (s: string) => {
+        const m = /^(\d)Q(\d{2})$/.exec(s);
+        return m ? Number(m[2]) * 10 + Number(m[1]) : 0;
+      };
+      return parse(a.quarter) - parse(b.quarter);
+    });
 
   return (
     <div className="px-8 lg:px-12 py-10 max-w-7xl mx-auto space-y-10">
@@ -255,6 +313,59 @@ export default async function CustomerOverview({ params }: Props) {
           </section>
         );
       })()}
+
+      {/* Inline trend charts — surface ARR + NPS history right above the
+          detail sections, so the customer's commercial story is visible
+          without scrolling to /analytics. Hidden when there's nothing to
+          plot. */}
+      {arrPoints.length > 0 || npsTrendPoints.length > 0 ? (
+        <section className="grid gap-6 lg:grid-cols-2">
+          {arrPoints.length > 0 ? (
+            <CollapsibleSection
+              id="arr-history"
+              title="ARR over time"
+              count={
+                arrPoints.length > 1
+                  ? `${formatMoney(arrPoints[0].amount)} → ${formatMoney(
+                      arrPoints[arrPoints.length - 1].amount
+                    )}`
+                  : `${arrPoints.length} point`
+              }
+              meta="from Salesforce won + open opps"
+            >
+              <div className="mt-2 -mx-2">
+                <ArrHistoryChart data={arrPoints} />
+              </div>
+              <p className="text-[10px] text-[color:var(--brand-gray)] mt-2 italic">
+                Each step = a Salesforce contract event (Won amount or the current
+                open renewal). The yellow dot marks the currently-expected ARR.
+              </p>
+            </CollapsibleSection>
+          ) : null}
+          {npsTrendPoints.length > 0 ? (
+            <CollapsibleSection
+              id="nps-trend"
+              title="NPS over time"
+              count={
+                npsTrendPoints.length > 1
+                  ? `${npsTrendPoints[0].average.toFixed(1)} → ${npsTrendPoints[
+                      npsTrendPoints.length - 1
+                    ].average.toFixed(1)}`
+                  : `${npsTrendPoints.length} quarter`
+              }
+              meta="from Monday NPS Tracking board"
+            >
+              <div className="mt-2 -mx-2">
+                <NpsTrendChart data={npsTrendPoints} />
+              </div>
+              <p className="text-[10px] text-[color:var(--brand-gray)] mt-2 italic">
+                Solid line = average score per quarter. Dashed lines = promoter
+                + detractor counts.
+              </p>
+            </CollapsibleSection>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Salesforce commercial card — first thing after the stats */}
@@ -669,23 +780,15 @@ export default async function CustomerOverview({ params }: Props) {
         )}
       </section>
 
-      {/* Contacts (from SF Account → Contact relationship) */}
+      {/* Contacts — default closed; reference data, not daily-work */}
       {profile && profile.contacts.length > 0 ? (
-        <section className="rounded-lg border border-line bg-white p-6">
-          <div className="flex items-baseline justify-between mb-4">
-            <SectionMark>
-              <span className="inline-flex items-center gap-1.5">
-                Contacts ({profile.contacts.length})
-                <InfoTooltip source="Salesforce Contact records">
-                  Every Contact linked to this Salesforce Account. Tap an email
-                  to draft; tap a phone to dial.
-                </InfoTooltip>
-              </span>
-            </SectionMark>
-            <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
-              from Salesforce
-            </span>
-          </div>
+        <CollapsibleSection
+          id="contacts"
+          title="Contacts"
+          count={`${profile.contacts.length}`}
+          meta="from Salesforce"
+          defaultOpen={false}
+        >
           <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {profile.contacts.slice(0, 12).map((c, i) => (
               <li
@@ -717,29 +820,16 @@ export default async function CustomerOverview({ params }: Props) {
               </li>
             ))}
           </ul>
-        </section>
+        </CollapsibleSection>
       ) : null}
 
-      {/* Activity Log */}
-      <section className="rounded-lg border border-line bg-white p-6">
-        <div className="flex items-baseline justify-between mb-4">
-          <SectionMark>
-            <span className="inline-flex items-center gap-1.5">
-              {openActivities.length > 0
-                ? `Open action items · ${openActivities.length}`
-                : "Activity log"}
-              <InfoTooltip source="Monday Activity Log board">
-                Action items, blockers, and change requests typically generated
-                from meeting transcripts (Fireflies). Linked per customer via
-                Monday&apos;s Customer relation or the &quot;Customer:&quot;
-                header parsed out of the meeting summary.
-              </InfoTooltip>
-            </span>
-          </SectionMark>
-          <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
-            {activities.length} total
-          </span>
-        </div>
+      {/* Activity Log — default closed; open when there are open items */}
+      <CollapsibleSection
+        id="activity-log"
+        title={openActivities.length > 0 ? "Open action items" : "Activity log"}
+        count={openActivities.length > 0 ? `${openActivities.length}` : `${activities.length} total`}
+        defaultOpen={openActivities.length > 0}
+      >
         {activities.length === 0 ? (
           <Empty text={`No Activity Log entries match this customer yet. Items get linked when their Monday "Customer:" header (or board-relation column) names "${customer.display_name}".`} />
         ) : (
@@ -754,116 +844,91 @@ export default async function CustomerOverview({ params }: Props) {
             ) : null}
           </ul>
         )}
-      </section>
+      </CollapsibleSection>
 
-      {/* Events + tasks */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>
-            <span className="inline-flex items-center gap-1.5">
+      {/* Events + Tasks — default closed; audit + reminders */}
+      <CollapsibleSection
+        id="events-tasks"
+        title="Events + scheduled tasks"
+        count={`${events.length} events · ${tasks.filter((t) => t.status === "active").length} active tasks`}
+        defaultOpen={false}
+      >
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-3">
               Recent events
-              <InfoTooltip source="DeliveryOps audit log">
-                Append-only system event log. Every profile/rules/owner change,
-                ingested document, exception, and agent action lands here.
-              </InfoTooltip>
-            </span>
-          </SectionMark>
-          {events.length === 0 ? (
-            <Empty text="No events yet." />
-          ) : (
-            <ul className="divide-y divide-[color:var(--brand-metal-line)]">
-              {events.map((e) => (
-                <li key={e.id} className="py-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-medium text-sm">{e.summary}</span>
-                    <span className="text-[10px] tabular-nums text-[color:var(--brand-gray)] shrink-0">
-                      {new Date(e.ts).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                  <div className="text-xs text-[color:var(--brand-gray)]">
-                    {e.event_type}
-                    {e.tags.length > 0 ? ` · ${e.tags.join(", ")}` : ""}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>
-            <span className="inline-flex items-center gap-1.5">
-              Active tasks
-              <InfoTooltip source="DeliveryOps scheduled jobs">
-                Scheduled or recurring reminders the agent / a human created.
-                Fire times come from Inngest. One-shot, recurring, or cron.
-              </InfoTooltip>
-            </span>
-          </SectionMark>
-          {tasks.filter((t) => t.status === "active").length === 0 ? (
-            <Empty text="No active tasks." />
-          ) : (
-            <ul className="divide-y divide-[color:var(--brand-metal-line)]">
-              {tasks
-                .filter((t) => t.status === "active")
-                .map((t) => (
-                  <li key={t.id} className="py-2">
+            </div>
+            {events.length === 0 ? (
+              <Empty text="No events yet." />
+            ) : (
+              <ul className="divide-y divide-[color:var(--brand-metal-line)]">
+                {events.map((e) => (
+                  <li key={e.id} className="py-2">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-medium text-sm">{t.description ?? t.name}</span>
+                      <span className="font-medium text-sm">{e.summary}</span>
                       <span className="text-[10px] tabular-nums text-[color:var(--brand-gray)] shrink-0">
-                        next {t.next_run ?? "—"}
+                        {new Date(e.ts).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
+                    </div>
+                    <div className="text-xs text-[color:var(--brand-gray)]">
+                      {e.event_type}
+                      {e.tags.length > 0 ? ` · ${e.tags.join(", ")}` : ""}
                     </div>
                   </li>
                 ))}
-            </ul>
-          )}
-        </section>
-      </div>
+              </ul>
+            )}
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-3">
+              Active tasks
+            </div>
+            {tasks.filter((t) => t.status === "active").length === 0 ? (
+              <Empty text="No active tasks." />
+            ) : (
+              <ul className="divide-y divide-[color:var(--brand-metal-line)]">
+                {tasks
+                  .filter((t) => t.status === "active")
+                  .map((t) => (
+                    <li key={t.id} className="py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-medium text-sm">{t.description ?? t.name}</span>
+                        <span className="text-[10px] tabular-nums text-[color:var(--brand-gray)] shrink-0">
+                          next {t.next_run ?? "—"}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </CollapsibleSection>
 
+      {/* Profile fragment — default closed; high-level derived facts */}
       {profile ? (
-        <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>
-            <span className="inline-flex items-center gap-1.5">
-              Profile
-              <InfoTooltip source="DeliveryOps — derived from category">
-                A small set of normalized fields the agent and dashboard read.
-                Tier, renewal date, and deployment stage flow from the
-                customer&apos;s category + Salesforce data. Edits via the
-                operations chat lock against future sync overwrites.
-              </InfoTooltip>
-            </span>
-          </SectionMark>
+        <CollapsibleSection id="profile" title="Profile" defaultOpen={false}>
           <div className="grid gap-x-6 gap-y-3 md:grid-cols-3 text-sm">
             <KV label="Tier" value={profile.tier} />
-            <KV
-              label="Renewal"
-              value={profile.renewal_date ?? nextRenewal ?? null}
-            />
+            <KV label="Renewal" value={profile.renewal_date ?? nextRenewal ?? null} />
             <KV label="Deployment stage" value={profile.deployment_stage} />
           </div>
-        </section>
+        </CollapsibleSection>
       ) : null}
 
-      {/* Technical IDs — moved to the bottom. Useful for plumbing but not
-          part of "what's going on with this customer". */}
-      <section className="rounded-lg border border-line bg-white p-5">
-        <SectionMark>
-          <span className="inline-flex items-center gap-1.5">
-            Technical IDs
-            <InfoTooltip source="DeliveryOps customers row">
-              External system identifiers for this customer — for debugging
-              syncs, mapping fixes, and integration plumbing. The CSM workflow
-              doesn&apos;t need these.
-            </InfoTooltip>
-          </span>
-        </SectionMark>
-        <dl className="text-xs space-y-2 mt-2 grid gap-y-2 md:grid-cols-2 md:gap-x-6">
+      {/* Technical IDs — default closed, at the very bottom */}
+      <CollapsibleSection
+        id="technical-ids"
+        title="Technical IDs"
+        meta="for debugging syncs + integration plumbing"
+        defaultOpen={false}
+      >
+        <dl className="text-xs space-y-2 grid gap-y-2 md:grid-cols-2 md:gap-x-6">
           <ExternalId label="Salesforce account" value={customer.salesforce_account_id} />
           <ExternalId label="Monday item" value={customer.monday_item_id} />
           <ExternalId label="Monday workspace" value={customer.monday_workspace_id} />
@@ -873,7 +938,7 @@ export default async function CustomerOverview({ params }: Props) {
           <ExternalId label="Drive folder" value={customer.drive_folder_id} />
           <ExternalId label="Email alias" value={customer.email_alias} />
         </dl>
-      </section>
+      </CollapsibleSection>
     </div>
   );
 }
