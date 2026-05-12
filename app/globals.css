@@ -50,6 +50,13 @@
     background: var(--background);
     color: var(--foreground);
     font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Content area gets the page background gradient */
+  main {
+    background-image: var(--page-bg-gradient, none);
   }
 
   h1, h2, h3, h4, h5, h6, .font-display {
@@ -120,62 +127,69 @@
 .chat-markdown h4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
 
 /* ─── Dark mode token overrides ──────────────────────────────────────────── */
-/* Applied when next-themes sets class="dark" on <html>. */
+/* RULE: NEVER change --brand-* primitives here. They are absolute brand
+ * colors used directly by sidebar and brand components. Only override
+ * Lattice's semantic tokens so the content area switches themes. */
 .dark {
-  --brand-canvas:         #030303;
-  --brand-night:          #F2FF70;       /* yellow becomes the accent text in dark */
-  --brand-night-soft:     #1a1a1a;
-  --brand-seasalt:        #0f0f0f;
-  --brand-metal:          #666666;
-  --brand-metal-line:     rgba(255, 255, 255, 0.08);
-  --brand-gray:           #888888;
-
-  /* Glass system */
-  --glass-bg:             rgba(255, 255, 255, 0.03);
-  --glass-border:         rgba(255, 255, 255, 0.08);
-  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-
-  /* Lattice token overrides for dark */
-  --background:           #030303;
-  --foreground:           #FAFAFA;
-  --card:                 #0f0f0f;
-  --card-foreground:      #FAFAFA;
-  --muted:                #111111;
-  --muted-foreground:     #666666;
-  --border:               rgba(255, 255, 255, 0.08);
-  --input:                rgba(255, 255, 255, 0.08);
+  --background:           #0B0B0F;
+  --foreground:           #F0F0F0;
+  --card:                 #111115;
+  --card-foreground:      #F0F0F0;
+  --muted:                #1a1a20;
+  --muted-foreground:     #6b6b7b;
+  --border:               rgba(255, 255, 255, 0.09);
+  --input:                rgba(255, 255, 255, 0.09);
   --primary:              #F2FF70;
-  --primary-foreground:   #030303;
+  --primary-foreground:   #0B0B0F;
   --accent:               #F2FF70;
-  --accent-foreground:    #030303;
+  --accent-foreground:    #0B0B0F;
   --ring:                 #F2FF70;
+
+  /* Glass system — dark variant */
+  --glass-bg:             rgba(255, 255, 255, 0.03);
+  --glass-border:         rgba(255, 255, 255, 0.09);
+  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-/* Light mode glass vars */
+/* Light mode glass + page background vars */
 :root {
-  --glass-bg:             rgba(255, 255, 255, 0.70);
+  --glass-bg:             rgba(255, 255, 255, 0.75);
   --glass-border:         rgba(0, 0, 0, 0.08);
-  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.80);
+  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.90);
+  /* Subtle dot-grid texture for content area depth in light mode */
+  --page-bg-gradient:     radial-gradient(circle at 20% 20%, rgba(242,255,112,0.04) 0%, transparent 50%),
+                          radial-gradient(circle at 80% 80%, rgba(23,23,23,0.03) 0%, transparent 50%);
 }
 
 /* ─── Glass card utility ─────────────────────────────────────────────────── */
-/* Use .glass-card on any container for the glassmorphism treatment. */
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow: var(--glass-inner-glow), 0 1px 3px rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--glass-inner-glow), 0 2px 8px rgba(0, 0, 0, 0.07);
   border: 1px solid var(--glass-border);
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
+}
+
+/* In light mode, cards need stronger presence so they read against the page */
+:root .glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.07);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,0.9);
 }
 
 /* Hover glow — brand yellow soft shadow. */
 .glass-card-hover {
-  transition: box-shadow 200ms ease, border-color 200ms ease;
+  transition: box-shadow 200ms ease, border-color 200ms ease, transform 150ms ease;
 }
 .glass-card-hover:hover {
-  box-shadow: 0 0 24px var(--brand-yellow-soft), var(--glass-inner-glow);
-  border-color: rgba(242, 255, 112, 0.25);
+  box-shadow: 0 0 20px var(--brand-yellow-soft), 0 4px 20px rgba(0,0,0,0.08), var(--glass-inner-glow);
+  border-color: rgba(242, 255, 112, 0.30);
+  transform: translateY(-1px);
+}
+.dark .glass-card-hover:hover {
+  box-shadow: 0 0 24px rgba(242, 255, 112, 0.12), 0 4px 24px rgba(0,0,0,0.4), var(--glass-inner-glow);
+  border-color: rgba(242, 255, 112, 0.18);
 }
 
 /* ─── Animations ─────────────────────────────────────────────────────────── */
