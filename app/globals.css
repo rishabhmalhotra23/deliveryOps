@@ -118,3 +118,135 @@
 .chat-markdown h2 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
 .chat-markdown h3 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; }
 .chat-markdown h4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
+
+/* ─── Dark mode token overrides ──────────────────────────────────────────── */
+/* Applied when next-themes sets class="dark" on <html>. */
+.dark {
+  --brand-canvas:         #030303;
+  --brand-night:          #F2FF70;       /* yellow becomes the accent text in dark */
+  --brand-night-soft:     #1a1a1a;
+  --brand-seasalt:        #0f0f0f;
+  --brand-metal:          #666666;
+  --brand-metal-line:     rgba(255, 255, 255, 0.08);
+  --brand-gray:           #888888;
+
+  /* Glass system */
+  --glass-bg:             rgba(255, 255, 255, 0.03);
+  --glass-border:         rgba(255, 255, 255, 0.08);
+  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  /* Lattice token overrides for dark */
+  --background:           #030303;
+  --foreground:           #FAFAFA;
+  --card:                 #0f0f0f;
+  --card-foreground:      #FAFAFA;
+  --muted:                #111111;
+  --muted-foreground:     #666666;
+  --border:               rgba(255, 255, 255, 0.08);
+  --input:                rgba(255, 255, 255, 0.08);
+  --primary:              #F2FF70;
+  --primary-foreground:   #030303;
+  --accent:               #F2FF70;
+  --accent-foreground:    #030303;
+  --ring:                 #F2FF70;
+}
+
+/* Light mode glass vars */
+:root {
+  --glass-bg:             rgba(255, 255, 255, 0.70);
+  --glass-border:         rgba(0, 0, 0, 0.08);
+  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.80);
+}
+
+/* ─── Glass card utility ─────────────────────────────────────────────────── */
+/* Use .glass-card on any container for the glassmorphism treatment. */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: var(--glass-inner-glow), 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+}
+
+/* Hover glow — brand yellow soft shadow. */
+.glass-card-hover {
+  transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+.glass-card-hover:hover {
+  box-shadow: 0 0 24px var(--brand-yellow-soft), var(--glass-inner-glow);
+  border-color: rgba(242, 255, 112, 0.25);
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+
+/* ScanningLine: a subtle horizontal light beam that sweeps across a card. */
+@keyframes scanBeam {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translateX(200%); opacity: 0; }
+}
+
+.scanning-line {
+  position: relative;
+  overflow: hidden;
+}
+.scanning-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(242, 255, 112, 0.6) 40%,
+    rgba(242, 255, 112, 0.9) 50%,
+    rgba(242, 255, 112, 0.6) 60%,
+    transparent 100%
+  );
+  animation: scanBeam 4s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+/* VerifyFlicker: "Last verified" timestamps shimmer on mount. */
+@keyframes verifyFlicker {
+  0%   { opacity: 0.3; }
+  20%  { opacity: 1; }
+  40%  { opacity: 0.5; }
+  60%  { opacity: 1; }
+  80%  { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+.verify-flicker {
+  animation: verifyFlicker 1.2s ease-out forwards;
+}
+
+/* Pulsing status dot — for integration connection indicators. */
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+.status-dot-pulse {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+/* ─── Typography helpers ─────────────────────────────────────────────────── */
+/* Data labels: monospaced, slightly smaller, higher contrast. */
+.data-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* Eyebrow labels on sections. */
+.eyebrow {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}

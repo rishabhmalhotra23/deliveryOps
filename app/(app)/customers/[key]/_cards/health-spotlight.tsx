@@ -1,24 +1,34 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Badge,
-  Text,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from "@kognitos/lattice";
+import { Badge } from "@kognitos/lattice";
 import type { HealthSpotlightProps } from "@/lib/customers/view-model";
 
-function scoreTone(score: number): "success" | "warning" | "destructive" {
-  if (score >= 70) return "success";
-  if (score >= 50) return "warning";
-  return "destructive";
+function scoreTone(score: number) {
+  if (score >= 70) return "success" as const;
+  if (score >= 50) return "warning" as const;
+  return "destructive" as const;
 }
+
+const TONE_STYLES = {
+  success: {
+    bg: "bg-emerald-500/10 dark:bg-emerald-500/8",
+    text: "text-emerald-600 dark:text-emerald-400",
+    border: "border-emerald-500/20",
+    label: "Healthy",
+  },
+  warning: {
+    bg: "bg-amber-500/10 dark:bg-amber-500/8",
+    text: "text-amber-600 dark:text-amber-400",
+    border: "border-amber-500/20",
+    label: "Needs attention",
+  },
+  destructive: {
+    bg: "bg-red-500/10 dark:bg-red-500/8",
+    text: "text-red-600 dark:text-red-400",
+    border: "border-red-500/20",
+    label: "At risk",
+  },
+};
 
 function riskVariant(risk: string): "destructive" | "warning" | "secondary" {
   if (risk === "high") return "destructive";
@@ -27,7 +37,6 @@ function riskVariant(risk: string): "destructive" | "warning" | "secondary" {
 }
 
 export function HealthSpotlight({
-  category,
   healthScore,
   healthExplanation,
   churnRisk,
@@ -37,98 +46,75 @@ export function HealthSpotlight({
   sfAccountOwner,
   className,
 }: HealthSpotlightProps & { className?: string }) {
+  const tone = scoreTone(healthScore);
+  const styles = TONE_STYLES[tone];
+  const npsColor =
+    (npsAverage ?? 0) >= 7
+      ? "text-emerald-600 dark:text-emerald-400"
+      : (npsAverage ?? 0) >= 5
+      ? "text-amber-600 dark:text-amber-400"
+      : npsAverage == null
+      ? "text-[color:var(--muted-foreground)]"
+      : "text-red-600 dark:text-red-400";
+
   return (
-    <Card className={`${className ?? ""} bg-card`}>
-      <CardHeader className="pb-2">
-        <CardTitle>
-          <Text level="xSmall" color="muted" weight="semibold" as="span" className="uppercase tracking-widest">
-            Internal health
-          </Text>
-        </CardTitle>
-        <Text level="xSmall" color="muted">
-          CSM-only · computed live
-        </Text>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        {/* Scores row */}
-        <div className="grid grid-cols-2 gap-4">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="cursor-default">
-                  <Text level="xSmall" color="muted">
-                    Health
-                  </Text>
-                  <div
-                    className={`text-3xl font-bold font-display tabular-nums ${
-                      scoreTone(healthScore) === "success"
-                        ? "text-green-600"
-                        : scoreTone(healthScore) === "warning"
-                        ? "text-amber-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {healthScore}
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-64 text-xs">{healthExplanation}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+    <div
+      className={`scanning-line glass-card overflow-hidden ${className ?? ""}`}
+    >
+      {/* Color-tinted header */}
+      <div className={`${styles.bg} border-b ${styles.border} px-4 pt-4 pb-3`}>
+        <div className="eyebrow text-[color:var(--muted-foreground)] mb-2">Internal health · CSM only</div>
+        <div className="flex items-end gap-3">
+          <span className={`text-5xl font-display font-semibold tracking-tighter tabular-nums ${styles.text}`}>
+            {healthScore}
+          </span>
+          <div className="pb-1">
+            <div className={`text-sm font-semibold ${styles.text}`}>{styles.label}</div>
+            <div className="data-label text-[color:var(--muted-foreground)]">out of 100</div>
+          </div>
+        </div>
+      </div>
 
-          <div>
-            <Text level="xSmall" color="muted">
-              NPS avg
-            </Text>
-            <div
-              className={`text-3xl font-bold font-display tabular-nums ${
-                (npsAverage ?? 0) >= 7
-                  ? "text-green-600"
-                  : (npsAverage ?? 0) >= 5
-                  ? "text-amber-600"
-                  : npsAverage == null
-                  ? "text-muted-foreground"
-                  : "text-red-600"
-              }`}
-            >
+      {/* Explanation */}
+      {healthExplanation ? (
+        <div className="px-4 py-3 border-b border-[var(--glass-border)]">
+          <p className="text-xs text-[color:var(--muted-foreground)] leading-relaxed">{healthExplanation}</p>
+        </div>
+      ) : null}
+
+      {/* Detail grid */}
+      <div className="px-4 py-3 space-y-3">
+        {/* NPS avg */}
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">NPS avg</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className={`data-label text-[14px] font-semibold tabular-nums ${npsColor}`}>
               {npsAverage != null ? npsAverage.toFixed(1) : "—"}
-            </div>
-            <Text level="xSmall" color="muted">
-              {npsCount} response{npsCount === 1 ? "" : "s"}
-            </Text>
+            </span>
+            <span className="data-label text-[color:var(--muted-foreground)]">{npsCount} resp.</span>
           </div>
         </div>
 
-        {/* Detail row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Text level="xSmall" color="muted">
-              Churn risk
-            </Text>
-            <Badge variant={riskVariant(churnRisk)} className="mt-1 text-xs capitalize">
-              {churnRisk}
-            </Badge>
-          </div>
-          <div>
-            <Text level="xSmall" color="muted">
-              Next QBR
-            </Text>
-            <Text level="small" className="mt-0.5">
-              {nextQbrDate ?? "—"}
-            </Text>
-          </div>
-          {sfAccountOwner ? (
-            <div className="col-span-2">
-              <Text level="xSmall" color="muted">
-                SF Account owner
-              </Text>
-              <Text level="small" className="mt-0.5">
-                {sfAccountOwner}
-              </Text>
-            </div>
-          ) : null}
+        {/* Churn risk */}
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">Churn risk</span>
+          <Badge variant={riskVariant(churnRisk)} className="text-[10px] capitalize">{churnRisk}</Badge>
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Next QBR */}
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">Next QBR</span>
+          <span className="data-label text-[color:var(--foreground)]">{nextQbrDate ?? "—"}</span>
+        </div>
+
+        {/* SF owner */}
+        {sfAccountOwner ? (
+          <div className="flex items-center justify-between">
+            <span className="eyebrow">SF owner</span>
+            <span className="data-label text-[color:var(--foreground)] truncate max-w-[120px]">{sfAccountOwner}</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

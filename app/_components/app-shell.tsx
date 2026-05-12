@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 interface NavItem {
   href: string;
@@ -24,31 +26,84 @@ const SECONDARY_NAV: NavItem[] = [
   { href: "/dev/sync", label: "Sync status" },
 ];
 
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="w-7 h-7" />;
+  const isDark = theme === "dark";
+  return (
+    <button
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className="w-7 h-7 rounded-md flex items-center justify-center text-[color:var(--brand-metal)] hover:text-[color:var(--brand-seasalt)] hover:bg-[color:var(--brand-night-soft)] transition-colors"
+    >
+      {isDark ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function SyncStatusDot({ label, status }: { label: string; status: "active" | "stale" | "error" }) {
+  const colors = {
+    active: "bg-emerald-500",
+    stale: "bg-amber-400",
+    error: "bg-red-500",
+  };
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className={`shrink-0 w-1.5 h-1.5 rounded-full status-dot-pulse ${colors[status]}`} />
+      <span className="truncate text-[10px] text-[color:var(--brand-metal)]">{label}</span>
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
     <div className="min-h-screen flex bg-[color:var(--background)]">
       {/* Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] sticky top-0 h-screen">
-        <Link href="/dashboard" className="px-6 py-6 block">
-          <div className="text-display text-2xl tracking-tight">DeliveryOps</div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--brand-metal)] mt-1">
+      <aside className="hidden lg:flex w-60 flex-col bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] sticky top-0 h-screen border-r border-[color:var(--glass-border)]">
+        {/* Logo */}
+        <Link href="/dashboard" className="px-5 py-5 block group">
+          <div className="text-display text-xl tracking-tighter font-semibold">DeliveryOps</div>
+          <div className="eyebrow mt-1 text-[color:var(--brand-metal)]">
             Kognitos · post-sales
           </div>
         </Link>
 
-        <nav className="px-3 mt-2 space-y-0.5">
+        {/* Cmd+K hint */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+          className="mx-3 mb-3 flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-[color:var(--brand-metal)] border border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.18)] hover:text-[color:var(--brand-seasalt)] transition-all cursor-pointer"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <span className="flex-1 text-left">Search…</span>
+          <kbd className="text-[9px] border border-[rgba(255,255,255,0.15)] rounded px-1 py-0.5 font-mono">⌘K</kbd>
+        </button>
+
+        {/* Primary nav */}
+        <nav className="px-3 space-y-0.5">
           {PRIMARY_NAV.map((item) => {
             const active = item.match ? item.match(pathname) : pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block rounded-md px-3 py-2 text-sm transition-colors ${
+                className={`block rounded-md px-3 py-2 text-sm tracking-tight transition-colors ${
                   active
                     ? "bg-[color:var(--brand-yellow)] text-[color:var(--brand-night)] font-semibold"
-                    : "text-[color:var(--brand-seasalt)] hover:bg-[color:var(--brand-night-soft)]"
+                    : "text-[color:var(--brand-seasalt)] hover:bg-[rgba(255,255,255,0.06)]"
                 }`}
               >
                 {item.label}
@@ -57,9 +112,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="px-6 mt-8 mb-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--brand-metal)]">
-          Tools
-        </div>
+        {/* Tools nav */}
+        <div className="px-5 mt-6 mb-2 eyebrow text-[color:var(--brand-metal)]">Tools</div>
         <nav className="px-3 space-y-0.5">
           {SECONDARY_NAV.map((item) => {
             const active = pathname === item.href;
@@ -67,10 +121,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block rounded-md px-3 py-2 text-xs transition-colors ${
+                className={`block rounded-md px-3 py-1.5 text-xs tracking-tight transition-colors ${
                   active
-                    ? "bg-[color:var(--brand-night-soft)] text-[color:var(--brand-seasalt)]"
-                    : "text-[color:var(--brand-metal)] hover:text-[color:var(--brand-seasalt)] hover:bg-[color:var(--brand-night-soft)]"
+                    ? "bg-[rgba(255,255,255,0.08)] text-[color:var(--brand-seasalt)]"
+                    : "text-[color:var(--brand-metal)] hover:text-[color:var(--brand-seasalt)] hover:bg-[rgba(255,255,255,0.06)]"
                 }`}
               >
                 {item.label}
@@ -79,15 +133,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mt-auto px-6 py-5 text-[10px] text-[color:var(--brand-metal)]">
-          <div>v0.1 · local dev</div>
-          <div className="mt-1 opacity-70">English as Code, but for CSMs.</div>
+        {/* Footer: sync status + theme toggle */}
+        <div className="mt-auto px-5 py-4 space-y-3 border-t border-[rgba(255,255,255,0.06)]">
+          {/* Integration status dots */}
+          <div className="space-y-1.5">
+            <SyncStatusDot label="Salesforce · synced" status="active" />
+            <SyncStatusDot label="Monday · synced" status="active" />
+          </div>
+
+          {/* Theme toggle + version */}
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] text-[color:var(--brand-metal)] opacity-60">v0.1 · local dev</div>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
-      {/* Mobile top nav (visible <lg) */}
+      {/* Mobile top nav */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)]">
-        <Link href="/dashboard" className="text-display text-xl">DeliveryOps</Link>
+        <Link href="/dashboard" className="text-display text-xl tracking-tighter">DeliveryOps</Link>
         <nav className="flex gap-3 text-sm">
           {PRIMARY_NAV.map((item) => (
             <Link key={item.href} href={item.href} className="hover:underline">

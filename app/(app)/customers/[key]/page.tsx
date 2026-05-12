@@ -21,18 +21,11 @@ import {
   buildMetadataCardProps,
 } from "@/lib/customers/view-model";
 
-import { HeroCard } from "./_cards/hero-card";
+import { CustomerHero } from "./_components/customer-hero";
+import { StickyStatsRail } from "./_components/sticky-stats-rail";
+import { CustomerTabs } from "./_components/customer-tabs";
 import { HealthSpotlight } from "./_cards/health-spotlight";
-import { ArrStat } from "./_cards/arr-stat";
-import { NpsStat } from "./_cards/nps-stat";
-import { ProjectsStat } from "./_cards/projects-stat";
-import { ArrTrend } from "./_cards/arr-trend";
-import { NpsTrend } from "./_cards/nps-trend";
-import { OpportunitiesCard } from "./_cards/opportunities-card";
-import { ProjectsCard } from "./_cards/projects-card";
-import { NpsResponsesCard } from "./_cards/nps-responses-card";
 import { ContactsCard } from "./_cards/contacts-card";
-import { ActivityLogCard } from "./_cards/activity-log-card";
 import { EventsTasksCard } from "./_cards/events-tasks-card";
 import { MetadataCard } from "./_cards/metadata-card";
 
@@ -57,11 +50,15 @@ export default async function CustomerPage({ params }: Props) {
     listCustomers().catch(() => []),
   ]);
 
-  // ─── View-model assembly ───────────────────────────────────────────────
   const opps = enrichment?.opportunities ?? [];
   const npsResponses = enrichment?.nps ?? [];
 
-  const heroProps = buildHeroProps(customer, profile, allCustomers);
+  const heroProps = buildHeroProps(
+    customer,
+    profile,
+    allCustomers,
+    enrichment?.account?.website ?? null
+  );
   const healthProps = buildHealthSpotlightProps(
     customer,
     internalProfile,
@@ -80,53 +77,45 @@ export default async function CustomerPage({ params }: Props) {
   const metadataProps = buildMetadataCardProps(customer, profile);
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Page eyebrow */}
-      <div>
-        <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground">
-          Customer
-        </p>
-        <h1 className="text-3xl font-display font-semibold tracking-tight mt-1">
-          {customer.display_name}
-        </h1>
-      </div>
+    <div className="min-h-screen">
+      {/* Brand Chameleon hero strip */}
+      <CustomerHero {...heroProps} />
 
-      {/* 12-column responsive grid */}
-      <div className="grid gap-4 lg:grid-cols-12">
-        {/* Row 1 — Hero context + Health */}
-        <HeroCard {...heroProps} className="lg:col-span-8" />
-        <HealthSpotlight {...healthProps} className="lg:col-span-4" />
+      {/* Sticky stats bar — client component, shows when hero scrolls out */}
+      <StickyStatsRail
+        displayName={customer.display_name}
+        arrStat={arrStatProps}
+        npsStat={npsStatProps}
+        projectsStat={projectsStatProps}
+        healthScore={healthProps.healthScore}
+        renewalDate={heroProps.renewalDate}
+      />
 
-        {/* Row 2 — Top metric tiles */}
-        <ArrStat {...arrStatProps} className="lg:col-span-4" />
-        <NpsStat {...npsStatProps} className="lg:col-span-4" />
-        <ProjectsStat {...projectsStatProps} className="lg:col-span-4" />
+      {/* Two-column body */}
+      <div className="max-w-[1400px] mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left: tabs (8 cols) */}
+          <div className="lg:col-span-8">
+            <CustomerTabs
+              arrPoints={arrPoints}
+              npsTrendPoints={npsTrendPoints}
+              opportunitiesCardProps={opportunitiesCardProps}
+              projectsCardProps={projectsCardProps}
+              npsResponses={npsResponses}
+              contacts={profile?.contacts ?? []}
+              activityLogProps={activityLogProps}
+              eventsTasksProps={eventsTasksProps}
+            />
+          </div>
 
-        {/* Row 3 — Trend charts (only rendered when there's data to plot) */}
-        {arrPoints.length > 0 || npsTrendPoints.length > 0 ? (
-          <>
-            <ArrTrend data={arrPoints} className="lg:col-span-6" />
-            <NpsTrend data={npsTrendPoints} className="lg:col-span-6" />
-          </>
-        ) : null}
-
-        {/* Row 4 — Commercial detail */}
-        <OpportunitiesCard {...opportunitiesCardProps} className="lg:col-span-6" />
-        <ProjectsCard {...projectsCardProps} className="lg:col-span-6" />
-
-        {/* Row 5 — Relationship */}
-        <NpsResponsesCard responses={npsResponses} className="lg:col-span-6" />
-        <ContactsCard
-          contacts={profile?.contacts ?? []}
-          className="lg:col-span-6"
-        />
-
-        {/* Row 6 — Audit (default collapsed — set in each card) */}
-        <ActivityLogCard {...activityLogProps} className="lg:col-span-6" />
-        <EventsTasksCard {...eventsTasksProps} className="lg:col-span-6" />
-
-        {/* Row 7 — Technical metadata */}
-        <MetadataCard {...metadataProps} className="lg:col-span-12" />
+          {/* Right rail: sticky (4 cols) */}
+          <div className="lg:col-span-4 space-y-4 lg:sticky lg:top-[72px] self-start">
+            <HealthSpotlight {...healthProps} />
+            <ContactsCard contacts={profile?.contacts ?? []} />
+            <EventsTasksCard {...eventsTasksProps} />
+            <MetadataCard {...metadataProps} />
+          </div>
+        </div>
       </div>
     </div>
   );

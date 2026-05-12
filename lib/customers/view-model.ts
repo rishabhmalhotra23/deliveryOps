@@ -44,12 +44,29 @@ export interface HeroCardProps {
   knownAes: string[];
   knownPartners: string[];
   knownCategories: string[];
+  brandColor: string | null;
+  logoUrl: string | null;
+  sfWebsiteDomain: string | null;  // for Clearbit logo fallback
+  sfAccountUrl: string | null;
+  mondayUrl: string | null;
+}
+
+/** Extract a clean domain from a URL string for Clearbit logo lookup. */
+function extractDomain(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.startsWith("http") ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 export function buildHeroProps(
   customer: Customer,
   profile: Profile | null,
-  allCustomers: Customer[]
+  allCustomers: Customer[],
+  sfWebsite: string | null = null
 ): HeroCardProps {
   const knownAes = Array.from(
     new Set(allCustomers.map((c) => c.ae_owner).filter((v): v is string => !!v))
@@ -63,8 +80,13 @@ export function buildHeroProps(
     ...Array.from(new Set(allCustomers.map((c) => c.custom_category).filter((v): v is string => !!v))),
   ].filter((v, i, a) => a.indexOf(v) === i);
 
-  const account = null; // passed from enrichment at the page level; hero uses profile
-  void account;
+  const sfDomain = extractDomain(sfWebsite ?? profile?.website);
+  const sfAccountUrl = customer.salesforce_account_id
+    ? `https://kognitos.lightning.force.com/lightning/r/Account/${customer.salesforce_account_id}/view`
+    : null;
+  const mondayUrl = customer.monday_item_id
+    ? `https://kognitos-company.monday.com/boards/18395281568/pulses/${customer.monday_item_id}`
+    : null;
 
   return {
     customerKey: customer.key,
@@ -77,6 +99,11 @@ export function buildHeroProps(
     renewalDate: profile?.renewal_date ?? null,
     protectedFields: customer.deliveryops_protected_fields ?? [],
     lastManuallyEditedAt: customer.last_manually_edited_at,
+    brandColor: customer.brand_color ?? null,
+    logoUrl: customer.logo_url ?? null,
+    sfWebsiteDomain: sfDomain,
+    sfAccountUrl,
+    mondayUrl,
     knownAes,
     knownPartners,
     knownCategories,

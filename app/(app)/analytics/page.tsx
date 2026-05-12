@@ -50,7 +50,7 @@ export default async function AnalyticsPage() {
       />
 
       {/* ─── Top stat row ─────────────────────────────────────────── */}
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-4 glass-card-hover">
         <StatBlock
           label="Total ARR"
           value={formatMoney(bundle.totals.total_arr)}
@@ -119,16 +119,16 @@ export default async function AnalyticsPage() {
 
       {/* ─── Project phase breakdown table ──────────────────────── */}
       {bundle.projects_by_phase.length > 0 ? (
-        <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>Projects by milestone</SectionMark>
+        <section className="glass-card p-6">
+          <div className="eyebrow text-[color:var(--muted-foreground)] mb-3">Projects by milestone</div>
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4 mt-4">
             {bundle.projects_by_phase.map((p) => (
               <div
                 key={p.phase}
-                className="rounded-md border border-[color:var(--brand-metal-line)] bg-[color:var(--brand-seasalt)] p-3"
+                className="glass-card glass-card-hover p-3"
               >
-                <div className="text-display text-2xl tabular-nums">{p.count}</div>
-                <div className="text-xs text-[color:var(--brand-gray)] mt-0.5">{p.phase}</div>
+                <div className="data-label text-2xl font-semibold tabular-nums text-[color:var(--foreground)]">{p.count}</div>
+                <div className="eyebrow text-[color:var(--muted-foreground)] mt-0.5">{p.phase}</div>
               </div>
             ))}
           </div>
@@ -137,14 +137,14 @@ export default async function AnalyticsPage() {
 
       {/* ─── NPS by customer category ───────────────────────────── */}
       {bundle.nps_by_customer_category.length > 0 ? (
-        <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>Average NPS by customer category</SectionMark>
+        <section className="glass-card p-6">
+          <div className="eyebrow text-[color:var(--muted-foreground)] mb-3">Average NPS by customer category</div>
           <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-7 mt-4">
             {bundle.nps_by_customer_category.map((row) => (
-              <div key={row.category}>
-                <div className="text-display text-2xl tabular-nums">{row.average.toFixed(1)}</div>
-                <div className="text-xs text-[color:var(--brand-gray)] mt-0.5">{row.category}</div>
-                <div className="text-[10px] text-[color:var(--brand-gray)] tabular-nums">
+              <div key={row.category} className="glass-card p-3">
+                <div className="data-label text-xl font-semibold tabular-nums text-[color:var(--foreground)]">{row.average.toFixed(1)}</div>
+                <div className="eyebrow text-[color:var(--muted-foreground)] mt-0.5">{row.category}</div>
+                <div className="data-label text-[color:var(--muted-foreground)] tabular-nums">
                   n = {row.responses}
                 </div>
               </div>
@@ -166,11 +166,11 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-line bg-white p-6">
+    <section className="glass-card glass-card-hover p-6">
       <div className="mb-4">
-        <SectionMark>{title}</SectionMark>
+        <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">{title}</div>
         {subtitle ? (
-          <p className="text-xs text-[color:var(--brand-gray)] mt-1">{subtitle}</p>
+          <p className="text-xs text-[color:var(--muted-foreground)]">{subtitle}</p>
         ) : null}
       </div>
       {children}

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/customers";
 import { loadPortfolioSummary } from "@/lib/cache/integrations";
 import {
-  CategoryChip,
   PageHeader,
   SectionMark,
   formatTimeAgo,
@@ -15,13 +14,113 @@ import type { Customer } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
 
+const CATEGORY_VARIANT: Record<string, string> = {
+  "At Risk": "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  "To Drop": "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  "Upcoming Renewals": "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  "Strategic Growth": "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  Active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  "Partner Managed": "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  POV: "bg-[var(--brand-yellow-soft)] text-[color:var(--brand-night)] border-[var(--brand-yellow-line)]",
+  Churned: "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+};
+
+const CATEGORY_DOT: Record<string, string> = {
+  "At Risk": "bg-red-500",
+  "To Drop": "bg-red-500",
+  "Upcoming Renewals": "bg-amber-500",
+  "Strategic Growth": "bg-emerald-500",
+  Active: "bg-emerald-500",
+  "Partner Managed": "bg-purple-500",
+  POV: "bg-[#F2FF70]",
+  Churned: "bg-[color:var(--muted-foreground)]",
+};
+
+function InitialsAvatar({ name, category }: { name: string; category: string }) {
+  const dot = CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]";
+  return (
+    <div className="relative shrink-0">
+      <div className="w-9 h-9 rounded-lg bg-[color:var(--brand-yellow)] text-[color:var(--brand-night)] flex items-center justify-center text-xs font-bold font-mono">
+        {name.slice(0, 2).toUpperCase()}
+      </div>
+      <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[color:var(--background)] ${dot}`} />
+    </div>
+  );
+}
+
+function CustomerStrip({ customer }: { customer: Customer }) {
+  const category = categoryFromCustomer(customer);
+  const catStyle = CATEGORY_VARIANT[category] ?? "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
+
+  return (
+    <Link
+      href={`/customers/${customer.key}`}
+      className="glass-card glass-card-hover flex items-center gap-4 px-4 py-3 transition-all"
+    >
+      <InitialsAvatar name={customer.display_name} category={category} />
+
+      {/* Name + metadata */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-semibold tracking-tight text-[color:var(--foreground)] truncate">
+            {customer.display_name}
+          </span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${catStyle}`}>
+            {category}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 mt-0.5">
+          {customer.ae_owner ? (
+            <span className="data-label text-[color:var(--muted-foreground)] truncate">
+              {customer.ae_owner}
+            </span>
+          ) : null}
+          {customer.partner ? (
+            <span className="data-label text-[color:var(--muted-foreground)] truncate">
+              via {customer.partner}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Integration badges */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        {customer.salesforce_account_id ? (
+          <span className="data-label px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+            SF
+          </span>
+        ) : null}
+        {customer.monday_item_id ? (
+          <span className="data-label px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20">
+            MON
+          </span>
+        ) : null}
+        {(customer.deliveryops_protected_fields?.length ?? 0) > 0 ? (
+          <span
+            title={`${customer.deliveryops_protected_fields.length} field(s) manually edited`}
+            className="data-label px-1.5 py-0.5 rounded bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border border-[var(--glass-border)]"
+          >
+            {customer.deliveryops_protected_fields.length} edited
+          </span>
+        ) : null}
+        {/* Arrow */}
+        <svg
+          className="w-3.5 h-3.5 text-[color:var(--muted-foreground)] ml-1 transition-transform group-hover:translate-x-0.5"
+          fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+        >
+          <path d="m9 18 6-6-6-6"/>
+        </svg>
+      </div>
+    </Link>
+  );
+}
+
 export default async function CustomersPage() {
   const [customers, summary] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
   ]);
 
-  // Group by DeliveryOps custom_category. Unknown categories sort last.
   const grouped = new Map<string, Customer[]>();
   for (const c of customers) {
     const cat = categoryFromCustomer(c);
@@ -36,11 +135,11 @@ export default async function CustomersPage() {
   );
 
   return (
-    <div className="px-8 lg:px-12 py-10 max-w-7xl mx-auto space-y-10">
+    <div className="px-6 lg:px-8 py-8 max-w-[1400px] mx-auto space-y-8">
       <PageHeader
         eyebrow="Customers"
-        title={`${summary?.total ?? customers.length} post-sales accounts.`}
-        subtitle="DeliveryOps owns the categorisation. Monday gives us the lifecycle signal; we map it into the buckets the team actually uses. Manual edits via the operations chat lock those fields against future sync."
+        title={`${summary?.total ?? customers.length} post-sales accounts`}
+        subtitle="DeliveryOps is the source of truth. Monday gives the lifecycle signal; Salesforce gives the commercial context."
         actions={
           <Link
             href="/operations"
@@ -51,102 +150,53 @@ export default async function CustomersPage() {
         }
       />
 
-      <section className="rounded-lg border border-line bg-white p-5">
-        <SectionMark>Distribution</SectionMark>
-        <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
+      {/* Distribution bar */}
+      <div className="glass-card px-5 py-4">
+        <div className="eyebrow text-[color:var(--muted-foreground)] mb-3">Distribution</div>
+        <div className="flex flex-wrap gap-4">
           {CATEGORY_ORDER.map((category) => {
             const count = grouped.get(category)?.length ?? 0;
             if (count === 0) return null;
+            const dot = CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]";
             return (
-              <div key={category} className="space-y-1">
-                <CategoryChip category={category} size="sm" />
-                <div className="text-display text-2xl tracking-tight tabular-nums">{count}</div>
+              <div key={category} className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${dot}`} />
+                <span className="data-label text-[color:var(--muted-foreground)]">{category}</span>
+                <span className="data-label font-semibold text-[color:var(--foreground)] tabular-nums">{count}</span>
               </div>
             );
           })}
         </div>
-        <div className="mt-4 pt-4 border-t border-[color:var(--brand-metal-line)] flex flex-wrap items-center justify-between gap-3 text-xs text-[color:var(--brand-gray)]">
-          <div>
-            {summary?.with_salesforce ?? 0} mapped to Salesforce ·{" "}
-            {summary?.with_monday_workspace ?? 0} with Monday workspace
-          </div>
-          <div className="flex gap-3">
-            <span>SF synced {formatTimeAgo(summary?.last_sync.salesforce ?? null)}</span>
-            <span>Monday synced {formatTimeAgo(summary?.last_sync.monday ?? null)}</span>
-          </div>
+        <div className="mt-3 pt-3 border-t border-[var(--glass-border)] flex flex-wrap items-center justify-between gap-3">
+          <span className="data-label text-[color:var(--muted-foreground)]">
+            {summary?.with_salesforce ?? 0} mapped to Salesforce · {summary?.with_monday_workspace ?? 0} with Monday workspace
+          </span>
+          <span className="data-label text-[color:var(--muted-foreground)]">
+            SF {formatTimeAgo(summary?.last_sync.salesforce ?? null)} · Monday {formatTimeAgo(summary?.last_sync.monday ?? null)}
+          </span>
         </div>
-      </section>
+      </div>
 
+      {/* Customer groups */}
       {orderedGroups.map(([category, list]) => {
         if (list.length === 0) return null;
         return (
-          <section key={category} className="space-y-3">
-            <div className="flex items-baseline justify-between">
-              <SectionMark>{category}</SectionMark>
-              <span className="text-xs text-[color:var(--brand-gray)] tabular-nums">{list.length}</span>
+          <section key={category} className="space-y-2">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]"}`} />
+                <span className="text-sm font-semibold tracking-tight text-[color:var(--foreground)]">{category}</span>
+              </div>
+              <span className="data-label text-[color:var(--muted-foreground)] tabular-nums">{list.length}</span>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2">
               {list.map((c) => (
-                <CustomerCard key={c.id} customer={c} />
+                <CustomerStrip key={c.id} customer={c} />
               ))}
             </div>
           </section>
         );
       })}
     </div>
-  );
-}
-
-function CustomerCard({ customer }: { customer: Customer }) {
-  const protectedCount = customer.deliveryops_protected_fields?.length ?? 0;
-  return (
-    <Link
-      href={`/customers/${customer.key}`}
-      className="group block rounded-lg border border-line bg-white p-5 hover:border-[color:var(--brand-night)] hover:-translate-y-0.5 transition-all relative overflow-hidden"
-    >
-      <span className="absolute left-0 top-0 bottom-0 w-1 bg-[color:var(--brand-yellow)] scale-y-0 group-hover:scale-y-100 origin-top transition-transform" />
-
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="text-display text-lg leading-tight">{customer.display_name}</div>
-          <div className="text-[11px] uppercase tracking-wider text-[color:var(--brand-gray)] mt-1">
-            {customer.key}
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          {customer.salesforce_account_id ? (
-            <span className="chip-yellow text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5">
-              SF
-            </span>
-          ) : null}
-          {protectedCount > 0 ? (
-            <span
-              title={`${protectedCount} field${protectedCount === 1 ? "" : "s"} locked from sync`}
-              className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider"
-            >
-              {protectedCount} edited
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-1 text-sm text-[color:var(--brand-gray)]">
-        {customer.ae_owner ? (
-          <div>
-            <span className="text-[color:var(--brand-night)]">AE</span> · {customer.ae_owner}
-          </div>
-        ) : null}
-        {customer.partner ? (
-          <div>
-            <span className="text-[color:var(--brand-night)]">Partner</span> · {customer.partner}
-          </div>
-        ) : null}
-        {customer.monday_workspace_id ? (
-          <div className="text-[10px] tabular-nums">
-            Monday workspace · {customer.monday_workspace_id}
-          </div>
-        ) : null}
-      </div>
-    </Link>
   );
 }

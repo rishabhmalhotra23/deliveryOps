@@ -27,6 +27,8 @@ export interface Customer {
   custom_category: string | null;        // DeliveryOps-owned bucket, the operational truth
   deliveryops_protected_fields: string[]; // field names locked from sync overwrite
   last_manually_edited_at: string | null;
+  brand_color: string | null;  // hex e.g. "#E2231A" — drives hero accent
+  logo_url: string | null;     // manual logo override; falls back to Clearbit
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
