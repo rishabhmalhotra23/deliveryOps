@@ -6,7 +6,7 @@ import { listEvents } from "@/lib/events/events";
 import { listTasks } from "@/lib/tasks/tasks";
 import { loadCustomerEnrichment } from "@/lib/cache/integrations";
 import { CUSTOMER_CATEGORIES } from "@/lib/supabase/types";
-import { deriveArrTrend, explainHealthScore, type OppForArr } from "@/lib/profile/derive";
+import { deriveArrTrend, deriveHealthScore, deriveChurnRisk, explainHealthScore, type OppForArr } from "@/lib/profile/derive";
 import {
   CategoryChip,
   PageHeader,
@@ -378,108 +378,135 @@ export default async function CustomerOverview({ params }: Props) {
         {/* Right rail — focused on CSM signals, not technical IDs */}
         <aside className="space-y-6">
           {/* Internal health — the CSM's at-a-glance read on the account.
-              Tooltips explain how each number is computed. */}
-          {internalProfile ? (
-            <section className="rounded-lg border border-line bg-white p-5">
-              <div className="flex items-baseline justify-between mb-3">
-                <SectionMark>
-                  <span className="inline-flex items-center gap-1.5">
-                    Internal health
-                    <InfoTooltip source="DeliveryOps — derived">
-                      The CSM&apos;s at-a-glance read. <strong>Agent has zero access
-                      to this panel</strong> — it lives in the
-                      <code className="px-1">internal_profiles</code> table which the
-                      agent&apos;s tools cannot read or write. Structural isolation,
-                      not a "please don&apos;t read this" comment.
-                    </InfoTooltip>
+              IMPORTANT: every metric is computed live from the freshest data
+              on every page load (NPS from monday_nps_responses, health from
+              the current category). The internal_profiles row exists for
+              future manual overrides + as an audit trail, but its cached
+              snapshot can drift behind the live data — so we don't render
+              it directly. Both numbers below will always match the rest of
+              the page. */}
+          {(() => {
+            // Live derivation — same source as the stat row above, so they agree.
+            const liveScores = npsResponses
+              .map((n) => n.score)
+              .filter((s): s is number => typeof s === "number");
+            const liveNps = liveScores.length
+              ? Math.round((liveScores.reduce((a, b) => a + b, 0) / liveScores.length) * 10) / 10
+              : null;
+            const liveHealth = deriveHealthScore(customer.custom_category);
+            const liveChurnRisk = deriveChurnRisk(customer.custom_category);
+            // Internal profile gives us the cached snapshot — useful to show
+            // drift for transparency, not to drive UI numbers.
+            const cachedNps = internalProfile?.nps_score ?? 0;
+            const cachedHealth = internalProfile?.health_score ?? 0;
+            const npsDrift = liveNps != null && Math.abs((liveNps ?? 0) - cachedNps) >= 1;
+            const healthDrift = Math.abs(liveHealth - cachedHealth) >= 5;
+            return (
+              <section className="rounded-lg border border-line bg-white p-5">
+                <div className="flex items-baseline justify-between mb-3">
+                  <SectionMark>
+                    <span className="inline-flex items-center gap-1.5">
+                      Internal health
+                      <InfoTooltip source="Live — re-computed per page load">
+                        The CSM&apos;s at-a-glance read. <strong>Both numbers
+                        below are computed live</strong> from the current
+                        category (for Health) and the current NPS responses
+                        (for the average). The agent has zero access to this
+                        panel — it lives in a separate table the agent&apos;s
+                        tools cannot read or write.
+                      </InfoTooltip>
+                    </span>
+                  </SectionMark>
+                  <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
+                    CSM only · live
                   </span>
-                </SectionMark>
-                <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
-                  CSM only
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <HealthScore
-                  label={
-                    <span className="inline-flex items-center gap-1.5">
-                      Health
-                      <InfoTooltip source="Computed">
-                        <strong>Score 0–100.</strong>
-                        <span className="block mt-1 text-[11px]">
-                          {explainHealthScore(customer.custom_category)}
-                        </span>
-                        <span className="block mt-2 text-[11px]">
-                          Future iterations will fold in signal beyond category:
-                          ticket volume, login frequency, exception rate, NPS trend.
-                        </span>
-                      </InfoTooltip>
-                    </span>
-                  }
-                  value={internalProfile.health_score}
-                  tone={
-                    internalProfile.health_score >= 70
-                      ? "good"
-                      : internalProfile.health_score >= 50
-                      ? "warn"
-                      : "bad"
-                  }
-                />
-                <HealthScore
-                  label={
-                    <span className="inline-flex items-center gap-1.5">
-                      NPS
-                      <InfoTooltip source="Monday — averaged">
-                        Average NPS across this customer&apos;s responses (0–10 scale).
-                        9–10 = Promoter, 7–8 = Passive, 0–6 = Detractor. We currently
-                        average all responses; a future pass will weight by recency.
-                      </InfoTooltip>
-                    </span>
-                  }
-                  value={internalProfile.nps_score}
-                  tone={
-                    internalProfile.nps_score >= 7
-                      ? "good"
-                      : internalProfile.nps_score >= 0
-                      ? "warn"
-                      : "bad"
-                  }
-                />
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                <KV
-                  label={
-                    <span className="inline-flex items-center gap-1.5">
-                      Churn risk
-                      <InfoTooltip>
-                        <strong>low / medium / high.</strong> Derived from category:
-                        At Risk, To Drop, Churned → high. Upcoming Renewals → medium.
-                        Everything else → low.
-                      </InfoTooltip>
-                    </span>
-                  }
-                  value={internalProfile.churn_risk}
-                />
-                <KV
-                  label={
-                    <span className="inline-flex items-center gap-1.5">
-                      Next QBR
-                      <InfoTooltip>
-                        Default seeded to 90 days out. Update once a real QBR is on
-                        the calendar — Calendar integration (Phase 3) will populate
-                        this automatically.
-                      </InfoTooltip>
-                    </span>
-                  }
-                  value={internalProfile.next_qbr_date}
-                />
-              </div>
-              {internalProfile.last_updated_by ? (
-                <div className="text-[10px] text-[color:var(--brand-gray)] mt-3 uppercase tracking-wider">
-                  Last updated by {internalProfile.last_updated_by}
                 </div>
-              ) : null}
-            </section>
-          ) : null}
+                <div className="grid grid-cols-2 gap-4">
+                  <HealthScore
+                    label={
+                      <span className="inline-flex items-center gap-1.5">
+                        Health
+                        <InfoTooltip source="Computed live from category">
+                          <strong>Score 0–100.</strong>
+                          <span className="block mt-1 text-[11px]">
+                            {explainHealthScore(customer.custom_category)}
+                          </span>
+                          <span className="block mt-2 text-[11px]">
+                            Future iterations will fold in signal beyond category:
+                            ticket volume, login frequency, exception rate, NPS trend.
+                          </span>
+                        </InfoTooltip>
+                      </span>
+                    }
+                    value={liveHealth}
+                    tone={
+                      liveHealth >= 70 ? "good" : liveHealth >= 50 ? "warn" : "bad"
+                    }
+                  />
+                  <HealthScore
+                    label={
+                      <span className="inline-flex items-center gap-1.5">
+                        NPS
+                        <InfoTooltip source={`Live · avg of ${liveScores.length} response${liveScores.length === 1 ? "" : "s"}`}>
+                          Average NPS across this customer&apos;s linked responses
+                          (0–10 scale). 9–10 = Promoter, 7–8 = Passive, 0–6 =
+                          Detractor. Future passes will weight by recency.
+                        </InfoTooltip>
+                      </span>
+                    }
+                    value={liveNps ?? 0}
+                    tone={
+                      (liveNps ?? 0) >= 7
+                        ? "good"
+                        : (liveNps ?? 0) >= 5
+                        ? "warn"
+                        : "bad"
+                    }
+                  />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <KV
+                    label={
+                      <span className="inline-flex items-center gap-1.5">
+                        Churn risk
+                        <InfoTooltip>
+                          <strong>low / medium / high.</strong> Derived live from
+                          category: At Risk, To Drop, Churned → high. Upcoming
+                          Renewals → medium. Everything else → low.
+                        </InfoTooltip>
+                      </span>
+                    }
+                    value={liveChurnRisk}
+                  />
+                  <KV
+                    label={
+                      <span className="inline-flex items-center gap-1.5">
+                        Next QBR
+                        <InfoTooltip>
+                          Default seeded to 90 days out. Update once a real QBR
+                          is on the calendar — Calendar integration (Phase 3)
+                          will populate this automatically.
+                        </InfoTooltip>
+                      </span>
+                    }
+                    value={internalProfile?.next_qbr_date ?? null}
+                  />
+                </div>
+                {(npsDrift || healthDrift) && internalProfile ? (
+                  <div className="text-[10px] text-[color:var(--brand-gray)] mt-3 pt-3 border-t border-[color:var(--brand-metal-line)]">
+                    <span className="uppercase tracking-wider">Snapshot drift:</span>
+                    {healthDrift ? (
+                      <span className="ml-1.5">cached health {cachedHealth}</span>
+                    ) : null}
+                    {npsDrift ? (
+                      <span className="ml-1.5">cached NPS {cachedNps}</span>
+                    ) : null}
+                    <span className="ml-1.5 italic">(re-run backfill to refresh)</span>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })()}
 
           {/* Renewal callout — most actionable timeline signal on the page */}
           {nextRenewal ? (
@@ -540,35 +567,80 @@ export default async function CustomerOverview({ params }: Props) {
             </span>
           </div>
           {(() => {
-            // Group projects by Monday group_title (Active / Pipeline / On Hold / Backlog).
+            // Bucket projects into Delivered (have a past go-live date OR
+            // status says Delivered/Live) vs in-flight (everything else).
+            // The in-flight bucket then sub-groups by Monday board group
+            // (Active / Pipeline / On Hold / Backlog).
+            const today = new Date().toISOString().slice(0, 10);
+            const delivered = projects
+              .filter((p) => {
+                const live = (p.go_live_date ?? "") <= today && (p.go_live_date ?? "").length >= 8;
+                const statusDone = ["Delivered", "Live"].includes(p.project_status ?? "");
+                return live || statusDone;
+              })
+              .sort((a, b) => ((a.go_live_date ?? "") < (b.go_live_date ?? "") ? 1 : -1));
+            const inFlight = projects.filter((p) => !delivered.includes(p));
+
             const GROUP_ORDER = ["Active", "Pipeline", "On Hold", "Backlog"];
-            const grouped = new Map<string, typeof projects>();
-            for (const p of projects) {
+            const inFlightGrouped = new Map<string, typeof inFlight>();
+            for (const p of inFlight) {
               const key = p.group_title ?? "(other)";
-              const list = grouped.get(key) ?? [];
+              const list = inFlightGrouped.get(key) ?? [];
               list.push(p);
-              grouped.set(key, list);
+              inFlightGrouped.set(key, list);
             }
-            const ordered = [
-              ...GROUP_ORDER.filter((g) => grouped.has(g)).map((g) => [g, grouped.get(g)!] as const),
-              ...[...grouped.entries()].filter(([g]) => !GROUP_ORDER.includes(g)),
+            const inFlightOrdered = [
+              ...GROUP_ORDER.filter((g) => inFlightGrouped.has(g)).map(
+                (g) => [g, inFlightGrouped.get(g)!] as const
+              ),
+              ...[...inFlightGrouped.entries()].filter(([g]) => !GROUP_ORDER.includes(g)),
             ];
-            return ordered.map(([groupName, list]) => (
-              <div key={groupName} className="mb-6 last:mb-0">
-                <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-2">
-                  {groupName} · {list.length}
-                </div>
-                <ul className="space-y-2">
-                  {list.map((p) => (
-                    <ProjectRow
-                      key={p.monday_item_id}
-                      project={p}
-                      customerName={customer.display_name}
-                    />
-                  ))}
-                </ul>
-              </div>
-            ));
+            return (
+              <>
+                {inFlightOrdered.map(([groupName, list]) => (
+                  <div key={groupName} className="mb-6">
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-2">
+                      {groupName} · {list.length}
+                    </div>
+                    <ul className="space-y-2">
+                      {list.map((p) => (
+                        <ProjectRow
+                          key={p.monday_item_id}
+                          project={p}
+                          customerName={customer.display_name}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {delivered.length > 0 ? (
+                  <details className="mt-4 pt-4 border-t border-[color:var(--brand-metal-line)]" open>
+                    <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-3 group">
+                      <span className="group-open:rotate-90 inline-block transition-transform text-[color:var(--brand-gray)]">
+                        ▸
+                      </span>
+                      <span className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-night)] font-medium">
+                        Delivered · {delivered.length}
+                      </span>
+                      <InfoTooltip source="Monday — go-live date or status">
+                        Projects that have shipped: either Monday status is
+                        Delivered / Live, or the go-live date has already
+                        passed. Sorted newest first by go-live date.
+                      </InfoTooltip>
+                    </summary>
+                    <ul className="space-y-2">
+                      {delivered.map((p) => (
+                        <ProjectRow
+                          key={p.monday_item_id}
+                          project={p}
+                          customerName={customer.display_name}
+                        />
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </>
+            );
           })()}
         </section>
       ) : null}
