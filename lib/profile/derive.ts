@@ -77,6 +77,103 @@ export function deriveArr(opps: OppForArr[]): ArrDerivation {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// ARR trend — current vs prior contract
+//
+// "How is this year's ARR vs last year's?" The CSM wants to see expansion
+// vs contraction at a glance. Strategy: take the latest signed/expected
+// contract (deriveArr result), then find the next-most-recent Won
+// contract before it. Compare amounts. Returns delta + percent change.
+//
+// Reasoning: opps don't compound across years (each Renewal/Expansion
+// REPLACES the prior annual ARR). So the right "previous ARR" is the
+// most recent Won opp strictly older than the current one. If we can't
+// find one, we say "first contract" rather than fabricating a delta.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface ArrTrend {
+  current: number | null;
+  current_close_date: string | null;
+  previous: number | null;
+  previous_close_date: string | null;
+  delta: number | null; // absolute (current - previous)
+  delta_pct: number | null; // (delta / previous) * 100, rounded to 1dp
+  direction: "growth" | "contraction" | "flat" | "first-contract" | "no-data";
+}
+
+export function deriveArrTrend(opps: OppForArr[]): ArrTrend {
+  const current = deriveArr(opps);
+  if (current.arr == null) {
+    return {
+      current: null,
+      current_close_date: null,
+      previous: null,
+      previous_close_date: null,
+      delta: null,
+      delta_pct: null,
+      direction: "no-data",
+    };
+  }
+  const wonHistory = opps
+    .filter((o) => o.is_won && o.amount != null && o.close_date)
+    .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
+
+  // Find a prior Won contract strictly older than the current opp.
+  const priorWon = wonHistory.find(
+    (o) => (o.close_date ?? "") < (current.source_close_date ?? "")
+  );
+
+  if (!priorWon || priorWon.amount == null) {
+    return {
+      current: current.arr,
+      current_close_date: current.source_close_date,
+      previous: null,
+      previous_close_date: null,
+      delta: null,
+      delta_pct: null,
+      direction: "first-contract",
+    };
+  }
+
+  const delta = current.arr - priorWon.amount;
+  const deltaPct = priorWon.amount === 0 ? null : Math.round((delta / priorWon.amount) * 1000) / 10;
+  let direction: ArrTrend["direction"] = "flat";
+  if (delta > 0) direction = "growth";
+  else if (delta < 0) direction = "contraction";
+
+  return {
+    current: current.arr,
+    current_close_date: current.source_close_date,
+    previous: priorWon.amount,
+    previous_close_date: priorWon.close_date,
+    delta,
+    delta_pct: deltaPct,
+    direction,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Health-score derivation explainer — pairs with deriveHealthScore.
+// Used by the customer page to show CSMs how the number was computed.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const HEALTH_SCORE_TABLE: Record<string, { score: number; reasoning: string }> = {
+  "At Risk": { score: 30, reasoning: "renewal endangered; active churn signals" },
+  "To Drop": { score: 15, reasoning: "decision made to drop at renewal — still paying" },
+  "Upcoming Renewals": { score: 60, reasoning: "renewal due soon; outcome uncertain" },
+  "Strategic Growth": { score: 75, reasoning: "expansion opportunities; healthy adoption" },
+  Active: { score: 70, reasoning: "stable, no immediate concerns" },
+  "Partner Managed": { score: 65, reasoning: "delivery handled by partner; visibility limited" },
+  POV: { score: 50, reasoning: "proof-of-value engagement; not yet committed" },
+  Churned: { score: 0, reasoning: "no longer a paying customer" },
+};
+
+export function explainHealthScore(category: string | null): string {
+  const entry = HEALTH_SCORE_TABLE[(category ?? "").trim()];
+  if (!entry) return "Default baseline of 50 (no category mapping).";
+  return `Score ${entry.score} from category "${category}" — ${entry.reasoning}.`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Category-derived helpers
 //
 // DeliveryOps's seven customer categories map to a small enum-bounded set

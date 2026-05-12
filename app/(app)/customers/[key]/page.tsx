@@ -6,6 +6,7 @@ import { listEvents } from "@/lib/events/events";
 import { listTasks } from "@/lib/tasks/tasks";
 import { loadCustomerEnrichment } from "@/lib/cache/integrations";
 import { CUSTOMER_CATEGORIES } from "@/lib/supabase/types";
+import { deriveArrTrend, explainHealthScore, type OppForArr } from "@/lib/profile/derive";
 import {
   CategoryChip,
   PageHeader,
@@ -16,6 +17,7 @@ import {
   categoryFromCustomer,
 } from "@/app/_components/brand";
 import { InlineEdit } from "@/app/_components/inline-edit";
+import { InfoTooltip } from "@/app/_components/tooltip";
 
 export const dynamic = "force-dynamic";
 
@@ -97,11 +99,16 @@ export default async function CustomerOverview({ params }: Props) {
         }
       />
 
-      {/* Editable ownership + categorisation strip */}
+      {/* Editable ownership + categorisation strip, with field-definition tooltips */}
       <div className="rounded-lg border border-line bg-white p-5 grid gap-5 md:grid-cols-3 text-sm">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1 flex items-center gap-1.5">
             AE
+            <InfoTooltip source="DeliveryOps — synced from Monday">
+              <strong>Account Executive</strong> — the Kognitos AE who owns this customer.
+              Pulled from Monday&apos;s &quot;AE&quot; column on the Customers board on every sync.
+              Manually edit here to override; the override is locked from future sync overwrites.
+            </InfoTooltip>
           </div>
           <InlineEdit
             customerKey={customer.key}
@@ -113,22 +120,34 @@ export default async function CustomerOverview({ params }: Props) {
           />
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1 flex items-center gap-1.5">
             Category
+            <InfoTooltip source="DeliveryOps — derived from Monday group">
+              <strong>DeliveryOps category</strong> — operational bucket for the customer.
+              Seeded from Monday&apos;s lifecycle group via a mapping
+              (e.g. &quot;To be Dropped&quot; → &quot;To Drop&quot;). Drives dashboard filters and chart colors.
+              Eight buckets: At Risk, Upcoming Renewals, Strategic Growth, Active,
+              Partner Managed, POV, To Drop, Churned.
+            </InfoTooltip>
           </div>
           <InlineEdit
             customerKey={customer.key}
             field="custom_category"
             initialValue={customer.custom_category}
             label="Category"
-            placeholder="(unassigned)"
+            placeholder="(uncategorised)"
             options={knownCategories.map((c) => ({ value: c, label: c }))}
             allowNull={false}
           />
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] font-medium mb-1 flex items-center gap-1.5">
             Partner
+            <InfoTooltip source="DeliveryOps — synced from Monday">
+              <strong>Implementation partner</strong> — the agency or consultancy delivering
+              the work, if any. &quot;(direct)&quot; means Kognitos delivers without a partner.
+              Common values: My Paradigm, Wipro BPS, QBotica, Indium, Kai-Mation.
+            </InfoTooltip>
           </div>
           <InlineEdit
             customerKey={customer.key}
@@ -141,36 +160,116 @@ export default async function CustomerOverview({ params }: Props) {
         </div>
       </div>
 
-      {/* Stat row */}
-      <section className="grid gap-3 md:grid-cols-4">
-        <StatBlock
-          label="Kognitos ARR"
-          value={formatMoney(profile?.arr ?? null)}
-          hint={profile?.renewal_date ? `renews ${profile.renewal_date}` : "from latest SF contract"}
-          emphasis
-        />
-        <StatBlock
-          label="Company revenue"
-          value={formatMoney(account?.annual_revenue ?? null)}
-          hint={account?.industry ?? "Salesforce"}
-        />
-        <StatBlock
-          label="Open opportunities"
-          value={String(openOpps.length)}
-          hint={`${opps.length} total · ${wonOpps.length} won`}
-        />
-        <StatBlock
-          label="Active projects"
-          value={String(projects.length)}
-          hint={`${openCases.length} open SF cases`}
-        />
-      </section>
+      {/* Stat row — top-line numbers with YoY ARR + Monday/SF source tags */}
+      {(() => {
+        const oppsForTrend: OppForArr[] = opps.map((o) => ({
+          amount: o.amount,
+          close_date: o.close_date,
+          is_closed: o.is_closed,
+          is_won: o.is_won,
+          probability: o.probability,
+        }));
+        const trend = deriveArrTrend(oppsForTrend);
+        const inProgressProjects = projects.filter(
+          (p) => p.project_status === "In Progress"
+        ).length;
+        const npsAvg =
+          npsResponses.length > 0
+            ? npsResponses.reduce((s, n) => s + (n.score ?? 0), 0) / npsResponses.length
+            : null;
+        return (
+          <section className="grid gap-3 md:grid-cols-4">
+            <StatBlock
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  Kognitos ARR
+                  <InfoTooltip source="Computed from Salesforce opportunities">
+                    <strong>Annual deal value with Kognitos</strong> — the Amount on the
+                    customer&apos;s most-recently-signed-or-expected annual contract. Pulled
+                    from Salesforce Opportunity, picking the latest of: Closed Won OR Open
+                    with ≥50% probability.
+                    <br />
+                    <br />
+                    NOT the same as company revenue (that&apos;s the customer&apos;s total
+                    business, shown separately on the Salesforce card below).
+                  </InfoTooltip>
+                </span>
+              }
+              value={formatMoney(profile?.arr ?? null)}
+              hint={
+                trend.direction === "growth" || trend.direction === "contraction"
+                  ? `${trend.direction === "growth" ? "▲" : "▼"} ${
+                      trend.delta_pct != null ? `${Math.abs(trend.delta_pct).toFixed(1)}%` : "—"
+                    } vs prior contract (${formatMoney(trend.previous)})`
+                  : trend.direction === "flat"
+                  ? `flat vs prior contract (${formatMoney(trend.previous)})`
+                  : trend.direction === "first-contract"
+                  ? "first signed contract"
+                  : profile?.renewal_date
+                  ? `renews ${profile.renewal_date}`
+                  : "from latest SF opp"
+              }
+              emphasis
+            />
+            <StatBlock
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  Active projects
+                  <InfoTooltip source="Monday Projects board">
+                    Number of projects currently <strong>In Progress</strong> on Monday&apos;s
+                    Projects board (the PM tool). Salesforce is the CRM — the project view
+                    lives in Monday and includes status, phase, dev/TAM owners, kickoff
+                    and go-live dates.
+                  </InfoTooltip>
+                </span>
+              }
+              value={String(inProgressProjects)}
+              hint={`${projects.length} total · ${projects.filter((p) => p.go_live_date).length} delivered`}
+            />
+            <StatBlock
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  Average NPS
+                  <InfoTooltip source="Monday NPS Tracking board">
+                    Average NPS score across every response from this customer&apos;s contacts.
+                    Range 0–10. 9–10 = Promoter, 7–8 = Passive, 0–6 = Detractor.
+                  </InfoTooltip>
+                </span>
+              }
+              value={npsAvg != null ? npsAvg.toFixed(1) : "—"}
+              hint={`${npsResponses.length} response${npsResponses.length === 1 ? "" : "s"}`}
+            />
+            <StatBlock
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  Open opportunities
+                  <InfoTooltip source="Salesforce">
+                    Salesforce opportunities currently in any non-Closed stage. Each opp
+                    represents an annual contract event (New / Renewal / Expansion).
+                  </InfoTooltip>
+                </span>
+              }
+              value={String(openOpps.length)}
+              hint={`${opps.length} total · ${wonOpps.length} won · ${openCases.length} open cases`}
+            />
+          </section>
+        );
+      })()}
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Salesforce profile card */}
+        {/* Salesforce commercial card — first thing after the stats */}
         <section className="lg:col-span-2 rounded-lg border border-line bg-white p-6">
           <div className="flex items-baseline justify-between mb-4">
-            <SectionMark>Salesforce</SectionMark>
+            <SectionMark>
+              <span className="inline-flex items-center gap-1.5">
+                Salesforce — commercial
+                <InfoTooltip source="From Salesforce">
+                  Commercial relationship facts: the Account, every Opportunity (annual
+                  contract event), and any Cases. The data is pulled into a local cache
+                  on every sync — this card is fast even when SF is slow.
+                </InfoTooltip>
+              </span>
+            </SectionMark>
             <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
               {enrichment?.freshness.salesforce_synced_at
                 ? `synced ${formatTimeAgo(enrichment.freshness.salesforce_synced_at)}`
@@ -179,7 +278,7 @@ export default async function CustomerOverview({ params }: Props) {
           </div>
 
           {!customer.salesforce_account_id ? (
-            <Empty text="No Salesforce account mapped. Re-run the import to pick a match." />
+            <Empty text="No Salesforce account mapped. Use the import flow or operations chat to map one." />
           ) : !account ? (
             <Empty text="Account is mapped but not yet in cache. Run a sync." />
           ) : (
@@ -192,8 +291,20 @@ export default async function CustomerOverview({ params }: Props) {
                   label="Employees"
                   value={account.number_of_employees?.toLocaleString() ?? null}
                 />
-                <KV label="ARR" value={formatMoney(account.annual_revenue)} />
-                <KV label="Owner" value={account.owner_name} />
+                <KV
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      Company revenue
+                      <InfoTooltip source="Salesforce Account.AnnualRevenue">
+                        The customer&apos;s <em>total</em> company revenue (not what they
+                        pay Kognitos). Salesforce stores this as a banded value, so it
+                        may round to the nearest $10M or $1B.
+                      </InfoTooltip>
+                    </span>
+                  }
+                  value={formatMoney(account.annual_revenue)}
+                />
+                <KV label="SF account owner" value={account.owner_name} />
                 <KV
                   label="HQ"
                   value={
@@ -208,30 +319,32 @@ export default async function CustomerOverview({ params }: Props) {
 
           {opps.length > 0 ? (
             <div className="mt-6">
-              <SectionMark>Opportunities ({opps.length})</SectionMark>
+              <SectionMark>
+                <span className="inline-flex items-center gap-1.5">
+                  Opportunities ({opps.length})
+                  <InfoTooltip source="Salesforce Opportunity">
+                    Each opportunity = one annual contract event (New / Renewal /
+                    Expansion / Lost). Amount = the deal size. They don&apos;t add up
+                    across years — each Renewal replaces the prior year&apos;s contract.
+                  </InfoTooltip>
+                </span>
+              </SectionMark>
               <div className="space-y-1">
-                {opps.slice(0, 8).map((o) => (
-                  <div
-                    key={o.sf_id}
-                    className="flex items-baseline justify-between gap-3 py-2 border-b border-[color:var(--brand-metal-line)] last:border-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">{o.name}</div>
-                      <div className="text-xs text-[color:var(--brand-gray)]">
-                        {o.stage_name ?? "—"}
-                        {o.close_date ? ` · close ${o.close_date}` : ""}
-                        {o.is_won ? " · won" : o.is_closed ? " · closed" : ""}
-                      </div>
-                    </div>
-                    <div className="text-sm tabular-nums shrink-0">
-                      {o.amount != null ? formatMoney(o.amount) : "—"}
-                    </div>
-                  </div>
+                {opps.slice(0, 5).map((o) => (
+                  <OpportunityRow key={o.sf_id} opp={o} />
                 ))}
-                {opps.length > 8 ? (
-                  <div className="text-xs text-[color:var(--brand-gray)] pt-2">
-                    + {opps.length - 8} more
-                  </div>
+                {opps.length > 5 ? (
+                  <details className="group">
+                    <summary className="text-xs text-[color:var(--brand-night)] pt-3 pb-1 cursor-pointer hover:underline list-none flex items-center gap-1">
+                      <span className="group-open:rotate-90 inline-block transition-transform">▸</span>
+                      Show {opps.length - 5} more
+                    </summary>
+                    <div className="space-y-1 mt-2">
+                      {opps.slice(5).map((o) => (
+                        <OpportunityRow key={o.sf_id} opp={o} />
+                      ))}
+                    </div>
+                  </details>
                 ) : null}
               </div>
             </div>
@@ -241,56 +354,67 @@ export default async function CustomerOverview({ params }: Props) {
             <div className="mt-6">
               <SectionMark>Cases ({cases.length})</SectionMark>
               <div className="space-y-1">
-                {cases.slice(0, 6).map((c) => (
-                  <div
-                    key={c.sf_id}
-                    className="flex items-baseline justify-between gap-3 py-2 border-b border-[color:var(--brand-metal-line)] last:border-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm">
-                        <span className="text-[color:var(--brand-gray)]">{c.case_number}</span>{" "}
-                        <span className="font-medium">{c.subject ?? "(no subject)"}</span>
-                      </div>
-                      <div className="text-xs text-[color:var(--brand-gray)]">
-                        {c.status ?? "—"}
-                        {c.priority ? ` · ${c.priority}` : ""}
-                        {c.is_closed ? " · closed" : ""}
-                      </div>
-                    </div>
-                  </div>
+                {cases.slice(0, 5).map((c) => (
+                  <CaseRow key={c.sf_id} c={c} />
                 ))}
+                {cases.length > 5 ? (
+                  <details className="group">
+                    <summary className="text-xs text-[color:var(--brand-night)] pt-3 pb-1 cursor-pointer hover:underline list-none flex items-center gap-1">
+                      <span className="group-open:rotate-90 inline-block transition-transform">▸</span>
+                      Show {cases.length - 5} more
+                    </summary>
+                    <div className="space-y-1 mt-2">
+                      {cases.slice(5).map((c) => (
+                        <CaseRow key={c.sf_id} c={c} />
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
               </div>
             </div>
           ) : null}
         </section>
 
-        {/* Right rail */}
+        {/* Right rail — focused on CSM signals, not technical IDs */}
         <aside className="space-y-6">
-          {/* External IDs */}
-          <section className="rounded-lg border border-line bg-white p-5">
-            <SectionMark>External IDs</SectionMark>
-            <dl className="text-xs space-y-2 mt-2">
-              <ExternalId label="Salesforce" value={customer.salesforce_account_id} />
-              <ExternalId label="Monday item" value={customer.monday_item_id} />
-              <ExternalId label="Monday workspace" value={customer.monday_workspace_id} />
-              <ExternalId label="Slack" value={customer.slack_channel ? `#${customer.slack_channel}` : null} />
-              <ExternalId label="Kognitos v1 dept" value={customer.kognitos_v1_department_id} />
-              <ExternalId label="Kognitos v2 ws" value={customer.kognitos_v2_workspace_id} />
-            </dl>
-          </section>
-
-          {/* Internal health (CSM-only — agent has zero access to internal_profiles) */}
+          {/* Internal health — the CSM's at-a-glance read on the account.
+              Tooltips explain how each number is computed. */}
           {internalProfile ? (
             <section className="rounded-lg border border-line bg-white p-5">
               <div className="flex items-baseline justify-between mb-3">
-                <SectionMark>Internal health</SectionMark>
+                <SectionMark>
+                  <span className="inline-flex items-center gap-1.5">
+                    Internal health
+                    <InfoTooltip source="DeliveryOps — derived">
+                      The CSM&apos;s at-a-glance read. <strong>Agent has zero access
+                      to this panel</strong> — it lives in the
+                      <code className="px-1">internal_profiles</code> table which the
+                      agent&apos;s tools cannot read or write. Structural isolation,
+                      not a "please don&apos;t read this" comment.
+                    </InfoTooltip>
+                  </span>
+                </SectionMark>
                 <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
                   CSM only
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <HealthScore
-                  label="Health"
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      Health
+                      <InfoTooltip source="Computed">
+                        <strong>Score 0–100.</strong>
+                        <span className="block mt-1 text-[11px]">
+                          {explainHealthScore(customer.custom_category)}
+                        </span>
+                        <span className="block mt-2 text-[11px]">
+                          Future iterations will fold in signal beyond category:
+                          ticket volume, login frequency, exception rate, NPS trend.
+                        </span>
+                      </InfoTooltip>
+                    </span>
+                  }
                   value={internalProfile.health_score}
                   tone={
                     internalProfile.health_score >= 70
@@ -301,7 +425,16 @@ export default async function CustomerOverview({ params }: Props) {
                   }
                 />
                 <HealthScore
-                  label="NPS"
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      NPS
+                      <InfoTooltip source="Monday — averaged">
+                        Average NPS across this customer&apos;s responses (0–10 scale).
+                        9–10 = Promoter, 7–8 = Passive, 0–6 = Detractor. We currently
+                        average all responses; a future pass will weight by recency.
+                      </InfoTooltip>
+                    </span>
+                  }
                   value={internalProfile.nps_score}
                   tone={
                     internalProfile.nps_score >= 7
@@ -313,8 +446,32 @@ export default async function CustomerOverview({ params }: Props) {
                 />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                <KV label="Churn risk" value={internalProfile.churn_risk} />
-                <KV label="Next QBR" value={internalProfile.next_qbr_date} />
+                <KV
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      Churn risk
+                      <InfoTooltip>
+                        <strong>low / medium / high.</strong> Derived from category:
+                        At Risk, To Drop, Churned → high. Upcoming Renewals → medium.
+                        Everything else → low.
+                      </InfoTooltip>
+                    </span>
+                  }
+                  value={internalProfile.churn_risk}
+                />
+                <KV
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      Next QBR
+                      <InfoTooltip>
+                        Default seeded to 90 days out. Update once a real QBR is on
+                        the calendar — Calendar integration (Phase 3) will populate
+                        this automatically.
+                      </InfoTooltip>
+                    </span>
+                  }
+                  value={internalProfile.next_qbr_date}
+                />
               </div>
               {internalProfile.last_updated_by ? (
                 <div className="text-[10px] text-[color:var(--brand-gray)] mt-3 uppercase tracking-wider">
@@ -324,12 +481,30 @@ export default async function CustomerOverview({ params }: Props) {
             </section>
           ) : null}
 
-          {/* Source-of-truth protected fields */}
+          {/* Renewal callout — most actionable timeline signal on the page */}
+          {nextRenewal ? (
+            <section className="rounded-lg border border-[color:var(--brand-night)] bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] p-5">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-yellow)] font-medium flex items-center gap-1.5">
+                Next renewal
+                <InfoTooltip source="Salesforce — soonest open opp">
+                  Close date of the soonest open Salesforce opportunity with probability
+                  ≥50%. When the deal closes (won or lost), the next-most-recent open
+                  opp moves into this slot.
+                </InfoTooltip>
+              </div>
+              <div className="text-display text-2xl mt-2 tabular-nums">{nextRenewal}</div>
+              <div className="text-xs text-[color:var(--brand-metal)] mt-1">
+                from open Salesforce opportunity
+              </div>
+            </section>
+          ) : null}
+
+          {/* Source-of-truth protected fields — informational, sits in right rail */}
           {customer.deliveryops_protected_fields?.length > 0 ? (
             <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5">
               <SectionMark>DeliveryOps-owned</SectionMark>
               <p className="text-xs text-[color:var(--brand-night)] mb-2">
-                These fields were edited in DeliveryOps and are locked from sync overwrites:
+                These fields were edited here and are locked from sync overwrites:
               </p>
               <ul className="flex flex-wrap gap-1.5">
                 {customer.deliveryops_protected_fields.map((f) => (
@@ -348,64 +523,8 @@ export default async function CustomerOverview({ params }: Props) {
               ) : null}
             </section>
           ) : null}
-
-          {/* Renewal callout */}
-          {nextRenewal ? (
-            <section className="rounded-lg border border-[color:var(--brand-night)] bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] p-5">
-              <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-yellow)] font-medium">
-                Next renewal
-              </div>
-              <div className="text-display text-2xl mt-2 tabular-nums">{nextRenewal}</div>
-              <div className="text-xs text-[color:var(--brand-metal)] mt-1">
-                from open Salesforce opportunity
-              </div>
-            </section>
-          ) : null}
         </aside>
       </div>
-
-      {/* Contacts (from SF Account → Contact relationship, populated on backfill) */}
-      {profile && profile.contacts.length > 0 ? (
-        <section className="rounded-lg border border-line bg-white p-6">
-          <div className="flex items-baseline justify-between mb-4">
-            <SectionMark>Contacts ({profile.contacts.length})</SectionMark>
-            <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
-              from Salesforce
-            </span>
-          </div>
-          <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {profile.contacts.slice(0, 12).map((c, i) => (
-              <li
-                key={`${c.email || c.name}-${i}`}
-                className="rounded-md border border-line bg-[color:var(--brand-seasalt)] p-3"
-              >
-                <div className="font-medium text-sm">{c.name || "(unnamed)"}</div>
-                {c.role ? (
-                  <div className="text-xs text-[color:var(--brand-gray)] mt-0.5">{c.role}</div>
-                ) : null}
-                <div className="mt-2 space-y-1 text-xs">
-                  {c.email ? (
-                    <a
-                      href={`mailto:${c.email}`}
-                      className="block truncate underline decoration-[color:var(--brand-yellow)] decoration-2 underline-offset-4"
-                    >
-                      {c.email}
-                    </a>
-                  ) : null}
-                  {c.phone ? (
-                    <a
-                      href={`tel:${c.phone.replace(/\s+/g, "")}`}
-                      className="block text-[color:var(--brand-gray)]"
-                    >
-                      {c.phone}
-                    </a>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       {/* Projects — Monday Projects board, lifted columns: health, phase,
           dev platform, kickoff + go-live dates, complexity. Grouped by the
@@ -454,24 +573,103 @@ export default async function CustomerOverview({ params }: Props) {
         </section>
       ) : null}
 
-      {/* Activity Log — action items / blockers / change requests pulled from
-          Monday's Activity Log board, matched per customer via the
-          "Customer:" header that Fireflies-generated items carry. */}
+      {/* NPS responses — arranged quarter-by-quarter, full comments. */}
       <section className="rounded-lg border border-line bg-white p-6">
         <div className="flex items-baseline justify-between mb-4">
           <SectionMark>
-            {openActivities.length > 0
-              ? `Open action items · ${openActivities.length}`
-              : "Activity log"}
+            <span className="inline-flex items-center gap-1.5">
+              NPS responses
+              <InfoTooltip source="Monday NPS Tracking board">
+                Each row is one NPS response linked to this customer. Grouped by
+                quarter, newest first. Comments are shown in full. As the NPS
+                board fills in, this section grows automatically.
+              </InfoTooltip>
+            </span>
+          </SectionMark>
+          <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
+            {npsResponses.length} response{npsResponses.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {npsResponses.length === 0 ? (
+          <Empty text='No NPS data linked to this customer yet. Items on the NPS Tracking board are matched via the Customer board-relation column. Once populated, responses appear on the next sync.' />
+        ) : (
+          <NpsByQuarter responses={npsResponses} />
+        )}
+      </section>
+
+      {/* Contacts (from SF Account → Contact relationship) */}
+      {profile && profile.contacts.length > 0 ? (
+        <section className="rounded-lg border border-line bg-white p-6">
+          <div className="flex items-baseline justify-between mb-4">
+            <SectionMark>
+              <span className="inline-flex items-center gap-1.5">
+                Contacts ({profile.contacts.length})
+                <InfoTooltip source="Salesforce Contact records">
+                  Every Contact linked to this Salesforce Account. Tap an email
+                  to draft; tap a phone to dial.
+                </InfoTooltip>
+              </span>
+            </SectionMark>
+            <span className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
+              from Salesforce
+            </span>
+          </div>
+          <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {profile.contacts.slice(0, 12).map((c, i) => (
+              <li
+                key={`${c.email || c.name}-${i}`}
+                className="rounded-md border border-line bg-[color:var(--brand-seasalt)] p-3"
+              >
+                <div className="font-medium text-sm">{c.name || "(unnamed)"}</div>
+                {c.role ? (
+                  <div className="text-xs text-[color:var(--brand-gray)] mt-0.5">{c.role}</div>
+                ) : null}
+                <div className="mt-2 space-y-1 text-xs">
+                  {c.email ? (
+                    <a
+                      href={`mailto:${c.email}`}
+                      className="block truncate underline decoration-[color:var(--brand-yellow)] decoration-2 underline-offset-4"
+                    >
+                      {c.email}
+                    </a>
+                  ) : null}
+                  {c.phone ? (
+                    <a
+                      href={`tel:${c.phone.replace(/\s+/g, "")}`}
+                      className="block text-[color:var(--brand-gray)]"
+                    >
+                      {c.phone}
+                    </a>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* Activity Log */}
+      <section className="rounded-lg border border-line bg-white p-6">
+        <div className="flex items-baseline justify-between mb-4">
+          <SectionMark>
+            <span className="inline-flex items-center gap-1.5">
+              {openActivities.length > 0
+                ? `Open action items · ${openActivities.length}`
+                : "Activity log"}
+              <InfoTooltip source="Monday Activity Log board">
+                Action items, blockers, and change requests typically generated
+                from meeting transcripts (Fireflies). Linked per customer via
+                Monday&apos;s Customer relation or the &quot;Customer:&quot;
+                header parsed out of the meeting summary.
+              </InfoTooltip>
+            </span>
           </SectionMark>
           <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
             {activities.length} total
           </span>
         </div>
         {activities.length === 0 ? (
-          <Empty
-            text={`No Activity Log entries match this customer yet. Items get linked when their Monday "Customer:" header (or board-relation column) names "${customer.display_name}".`}
-          />
+          <Empty text={`No Activity Log entries match this customer yet. Items get linked when their Monday "Customer:" header (or board-relation column) names "${customer.display_name}".`} />
         ) : (
           <ul className="space-y-3">
             {activities.slice(0, 12).map((a) => (
@@ -486,31 +684,18 @@ export default async function CustomerOverview({ params }: Props) {
         )}
       </section>
 
-      {/* NPS Tracking */}
-      <section className="rounded-lg border border-line bg-white p-6">
-        <div className="flex items-baseline justify-between mb-4">
-          <SectionMark>NPS responses</SectionMark>
-          <span className="text-[10px] text-[color:var(--brand-gray)] uppercase tracking-wider">
-            {npsResponses.length} cached
-          </span>
-        </div>
-        {npsResponses.length === 0 ? (
-          <Empty
-            text='No NPS data linked to this customer yet. Items on the Monday "NPS Tracking" board are named after the respondent (e.g. "Tia Bell"), so we match them via the board-relation "Customer" column. Populate that column on the NPS board and the responses will appear on the next sync.'
-          />
-        ) : (
-          <ul className="grid gap-2 md:grid-cols-2">
-            {npsResponses.slice(0, 10).map((n) => (
-              <NpsRow key={n.monday_item_id} response={n} />
-            ))}
-          </ul>
-        )}
-      </section>
-
       {/* Events + tasks */}
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>Recent events</SectionMark>
+          <SectionMark>
+            <span className="inline-flex items-center gap-1.5">
+              Recent events
+              <InfoTooltip source="DeliveryOps audit log">
+                Append-only system event log. Every profile/rules/owner change,
+                ingested document, exception, and agent action lands here.
+              </InfoTooltip>
+            </span>
+          </SectionMark>
           {events.length === 0 ? (
             <Empty text="No events yet." />
           ) : (
@@ -539,7 +724,15 @@ export default async function CustomerOverview({ params }: Props) {
         </section>
 
         <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>Active tasks</SectionMark>
+          <SectionMark>
+            <span className="inline-flex items-center gap-1.5">
+              Active tasks
+              <InfoTooltip source="DeliveryOps scheduled jobs">
+                Scheduled or recurring reminders the agent / a human created.
+                Fire times come from Inngest. One-shot, recurring, or cron.
+              </InfoTooltip>
+            </span>
+          </SectionMark>
           {tasks.filter((t) => t.status === "active").length === 0 ? (
             <Empty text="No active tasks." />
           ) : (
@@ -563,7 +756,17 @@ export default async function CustomerOverview({ params }: Props) {
 
       {profile ? (
         <section className="rounded-lg border border-line bg-white p-6">
-          <SectionMark>Profile</SectionMark>
+          <SectionMark>
+            <span className="inline-flex items-center gap-1.5">
+              Profile
+              <InfoTooltip source="DeliveryOps — derived from category">
+                A small set of normalized fields the agent and dashboard read.
+                Tier, renewal date, and deployment stage flow from the
+                customer&apos;s category + Salesforce data. Edits via the
+                operations chat lock against future sync overwrites.
+              </InfoTooltip>
+            </span>
+          </SectionMark>
           <div className="grid gap-x-6 gap-y-3 md:grid-cols-3 text-sm">
             <KV label="Tier" value={profile.tier} />
             <KV
@@ -574,6 +777,31 @@ export default async function CustomerOverview({ params }: Props) {
           </div>
         </section>
       ) : null}
+
+      {/* Technical IDs — moved to the bottom. Useful for plumbing but not
+          part of "what's going on with this customer". */}
+      <section className="rounded-lg border border-line bg-white p-5">
+        <SectionMark>
+          <span className="inline-flex items-center gap-1.5">
+            Technical IDs
+            <InfoTooltip source="DeliveryOps customers row">
+              External system identifiers for this customer — for debugging
+              syncs, mapping fixes, and integration plumbing. The CSM workflow
+              doesn&apos;t need these.
+            </InfoTooltip>
+          </span>
+        </SectionMark>
+        <dl className="text-xs space-y-2 mt-2 grid gap-y-2 md:grid-cols-2 md:gap-x-6">
+          <ExternalId label="Salesforce account" value={customer.salesforce_account_id} />
+          <ExternalId label="Monday item" value={customer.monday_item_id} />
+          <ExternalId label="Monday workspace" value={customer.monday_workspace_id} />
+          <ExternalId label="Slack" value={customer.slack_channel ? `#${customer.slack_channel}` : null} />
+          <ExternalId label="Kognitos v1 dept" value={customer.kognitos_v1_department_id} />
+          <ExternalId label="Kognitos v2 workspace" value={customer.kognitos_v2_workspace_id} />
+          <ExternalId label="Drive folder" value={customer.drive_folder_id} />
+          <ExternalId label="Email alias" value={customer.email_alias} />
+        </dl>
+      </section>
     </div>
   );
 }
@@ -671,7 +899,7 @@ function HealthScore({
   value,
   tone,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: number;
   tone: "good" | "warn" | "bad";
 }) {
@@ -691,7 +919,7 @@ function HealthScore({
   );
 }
 
-function KV({ label, value, link = false }: { label: string; value: string | null | undefined; link?: boolean }) {
+function KV({ label, value, link = false }: { label: React.ReactNode; value: string | null | undefined; link?: boolean }) {
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)] mb-0.5">{label}</div>
@@ -710,6 +938,222 @@ function KV({ label, value, link = false }: { label: string; value: string | nul
         ) : (
           value
         )}
+      </div>
+    </div>
+  );
+}
+
+// NpsByQuarter — groups NPS responses by quarter (e.g. "4Q25", "1Q26"),
+// renders newest quarter first, with average score, distribution chips,
+// and full comments. Long histories collapse into <details>.
+function NpsByQuarter({
+  responses,
+}: {
+  responses: Array<{
+    monday_item_id: string;
+    respondent: string;
+    quarter: string | null;
+    score: number | null;
+    category: string | null;
+    response_date: string | null;
+    feedback: string | null;
+    respondent_type: string | null;
+  }>;
+}) {
+  const grouped = new Map<string, typeof responses>();
+  for (const r of responses) {
+    const k = r.quarter ?? "(no quarter)";
+    const list = grouped.get(k) ?? [];
+    list.push(r);
+    grouped.set(k, list);
+  }
+  // Sort quarters newest-first. "4Q25" → year=2025, q=4.
+  const ordered = [...grouped.entries()].sort((a, b) => {
+    const parse = (s: string) => {
+      const m = /^(\d)Q(\d{2})$/.exec(s);
+      return m ? 2000 + Number(m[2]) * 10 + Number(m[1]) : 0;
+    };
+    return parse(b[0]) - parse(a[0]);
+  });
+
+  return (
+    <div className="space-y-6">
+      {ordered.map(([quarter, list], i) => {
+        const validScores = list
+          .map((r) => r.score)
+          .filter((s): s is number => typeof s === "number");
+        const avg = validScores.length
+          ? Math.round((validScores.reduce((s, n) => s + n, 0) / validScores.length) * 10) / 10
+          : null;
+        const promoters = list.filter((r) => r.category === "Promoter").length;
+        const passives = list.filter((r) => r.category === "Passive").length;
+        const detractors = list.filter((r) => r.category === "Detractor").length;
+        // First quarter is always open; older ones collapse.
+        const open = i === 0;
+        return (
+          <details key={quarter} open={open} className="group">
+            <summary className="cursor-pointer list-none flex items-baseline justify-between gap-3 pb-2 border-b border-[color:var(--brand-metal-line)] hover:bg-[color:var(--brand-seasalt)] rounded px-1 -mx-1">
+              <div className="flex items-baseline gap-3">
+                <span className="group-open:rotate-90 inline-block transition-transform text-[color:var(--brand-gray)]">
+                  ▸
+                </span>
+                <span className="text-display text-lg">{quarter}</span>
+                <span className="text-xs text-[color:var(--brand-gray)] tabular-nums">
+                  {list.length} response{list.length === 1 ? "" : "s"}
+                </span>
+                {avg != null ? (
+                  <span className="text-xs text-[color:var(--brand-gray)] tabular-nums">
+                    avg <strong className="text-[color:var(--brand-night)]">{avg.toFixed(1)}</strong>
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
+                {promoters > 0 ? (
+                  <span className="rounded border px-1.5 py-0.5 bg-emerald-50 text-emerald-800 border-emerald-200">
+                    {promoters} promoter{promoters === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+                {passives > 0 ? (
+                  <span className="rounded border px-1.5 py-0.5 bg-amber-50 text-amber-800 border-amber-200">
+                    {passives} passive
+                  </span>
+                ) : null}
+                {detractors > 0 ? (
+                  <span className="rounded border px-1.5 py-0.5 bg-red-50 text-red-800 border-red-200">
+                    {detractors} detractor{detractors === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
+            </summary>
+            <ul className="mt-3 space-y-2">
+              {list.map((n) => (
+                <NpsResponseLine key={n.monday_item_id} response={n} />
+              ))}
+            </ul>
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
+function NpsResponseLine({
+  response,
+}: {
+  response: {
+    respondent: string;
+    score: number | null;
+    category: string | null;
+    response_date: string | null;
+    feedback: string | null;
+    respondent_type: string | null;
+  };
+}) {
+  const cat = response.category;
+  const catClass = cat === "Promoter"
+    ? "text-emerald-700"
+    : cat === "Detractor"
+    ? "text-red-700"
+    : cat === "Passive"
+    ? "text-amber-700"
+    : "text-[color:var(--brand-gray)]";
+  return (
+    <li className="rounded-md border border-line bg-[color:var(--brand-seasalt)] p-3">
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <div>
+          <span className="font-medium text-sm">{response.respondent}</span>
+          {response.respondent_type ? (
+            <span className="text-xs text-[color:var(--brand-gray)] ml-2">
+              · {response.respondent_type}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-baseline gap-2 shrink-0">
+          <span className={`text-display text-2xl tabular-nums leading-none ${catClass}`}>
+            {response.score ?? "—"}
+          </span>
+          {response.category ? (
+            <span className={`text-[10px] uppercase tracking-wider ${catClass}`}>
+              {response.category}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {response.feedback ? (
+        <div className="text-xs text-[color:var(--brand-night)] mt-2 italic leading-relaxed whitespace-pre-line">
+          &ldquo;{response.feedback}&rdquo;
+        </div>
+      ) : null}
+      {response.response_date ? (
+        <div className="text-[10px] text-[color:var(--brand-gray)] tabular-nums mt-2">
+          {response.response_date}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+// OpportunityRow + CaseRow — Salesforce list-item rows, used both for the
+// first 5 items and the expanded list inside the <details> disclosure.
+function OpportunityRow({
+  opp,
+}: {
+  opp: {
+    sf_id: string;
+    name: string;
+    stage_name: string | null;
+    amount: number | null;
+    close_date: string | null;
+    is_won: boolean;
+    is_closed: boolean;
+  };
+}) {
+  const tone = opp.is_won
+    ? "text-emerald-700"
+    : opp.is_closed
+    ? "text-neutral-500"
+    : "text-[color:var(--brand-night)]";
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-2 border-b border-[color:var(--brand-metal-line)] last:border-0">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium truncate">{opp.name}</div>
+        <div className="text-xs text-[color:var(--brand-gray)]">
+          {opp.stage_name ?? "—"}
+          {opp.close_date ? ` · close ${opp.close_date}` : ""}
+          {opp.is_won ? " · won" : opp.is_closed ? " · closed" : ""}
+        </div>
+      </div>
+      <div className={`text-sm tabular-nums shrink-0 ${tone}`}>
+        {formatMoney(opp.amount)}
+      </div>
+    </div>
+  );
+}
+
+function CaseRow({
+  c,
+}: {
+  c: {
+    sf_id: string;
+    case_number: string | null;
+    subject: string | null;
+    status: string | null;
+    priority: string | null;
+    is_closed: boolean;
+  };
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-2 border-b border-[color:var(--brand-metal-line)] last:border-0">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm">
+          <span className="text-[color:var(--brand-gray)]">{c.case_number}</span>{" "}
+          <span className="font-medium">{c.subject ?? "(no subject)"}</span>
+        </div>
+        <div className="text-xs text-[color:var(--brand-gray)]">
+          {c.status ?? "—"}
+          {c.priority ? ` · ${c.priority}` : ""}
+          {c.is_closed ? " · closed" : ""}
+        </div>
       </div>
     </div>
   );

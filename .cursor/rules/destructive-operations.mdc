@@ -1,0 +1,71 @@
+---
+description: Rules to prevent data loss from destructive operations. Apply ALWAYS, no exceptions.
+alwaysApply: true
+---
+
+# Destructive operations — never wipe data without explicit human confirmation
+
+## Background
+
+On 2026-05-11, an attempt to apply a single new migration (`0006_nps_state_column.sql`) accidentally ran `supabase db reset` as a fallback, wiping the local database (41 customers, 41 profiles, 41 internal_profiles, all cache tables). Recovery took ~10 minutes of re-running the import + sync + backfill pipeline, but no data was permanently lost because the source-of-truth systems (Monday + Salesforce) still had it.
+
+The root cause was a shell command of the form `cmd-A || cmd-B-which-wipes-data`. We will never do that again.
+
+## Hard rules
+
+### NEVER run these commands without explicit human approval in this turn:
+
+- `supabase db reset` (with or without flags)
+- `supabase stop --no-backup`
+- `DROP TABLE`, `DROP SCHEMA`, `DROP DATABASE`, `TRUNCATE`
+- `rm -rf supabase/` or any subdirectory of `supabase/`
+- `git reset --hard`, `git clean -fdx` if untracked migration / seed files exist
+- `docker volume rm` for any supabase_* volume
+- Any `||` fallback whose second branch is destructive (the trigger that caused 2026-05-11)
+
+### When you NEED to apply a new migration to local Postgres:
+
+Use the dedicated helper script:
+
+```bash
+npx tsx scripts/safe-migrate.ts
+```
+
+It applies any un-applied SQL files in `supabase/migrations/` directly via psql, in order, idempotently. It NEVER runs `db reset`. It refuses to proceed if it detects the migration file would drop tables / truncate data without an explicit `--allow-destructive` flag.
+
+If `safe-migrate.ts` fails for a legitimate reason, the next steps are:
+1. Inspect the error and the migration SQL.
+2. Apply just the safe parts manually via `psql` (the Supabase CLI exposes the local connection string via `npm run db:status`).
+3. Never reach for `supabase db reset`.
+
+### Sanity check before every risky operation:
+
+```bash
+npx tsx scripts/db-sanity-check.ts
+```
+
+This counts rows in critical tables (`customers`, `profiles`, `internal_profiles`, etc.) and exits non-zero if any drop below the expected minimums. Run it BEFORE applying migrations, running scripts that mutate state, or any operation that could in principle clobber data. The audit script (`scripts/audit-data-health.ts`) also includes a sanity assertion at startup.
+
+### Recovery procedure if data is lost anyway:
+
+Documented in [`docs/RUNBOOK.md`](../../docs/RUNBOOK.md). Tested 2026-05-11; recovery in <15 minutes.
+
+## Patterns to use instead of destructive shortcuts
+
+| Goal | DON'T | DO |
+|---|---|---|
+| Apply new migration | `supabase db reset` | `npx tsx scripts/safe-migrate.ts` |
+| Re-fetch all data | `supabase db reset && resync` | call sync routes directly: `curl /api/dev/sync/run` |
+| Clean stale rows | `TRUNCATE table` | targeted `DELETE WHERE` with an audit query first |
+| Reset a specific customer | `DELETE FROM customers WHERE…` | soft-delete: `UPDATE … SET deleted_at = now()` |
+| "Try a fix" | edit the live DB | take a snapshot first: `npx tsx scripts/db-snapshot.ts` |
+
+## When you HAVE to do something destructive
+
+1. State clearly in the chat what you're about to do, why, and what could go wrong.
+2. Ask the user to explicitly confirm with a phrase like "yes, wipe X" — not just "go" or "ok".
+3. Take a snapshot first (`scripts/db-snapshot.ts`).
+4. Run the destructive command in the foreground (not backgrounded).
+5. Verify the post-state matches expectations.
+
+If you're unsure whether a command is destructive, treat it as destructive.

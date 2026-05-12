@@ -6,10 +6,13 @@
 import { describe, it, expect } from "vitest";
 import {
   deriveArr,
+  deriveArrTrend,
   deriveTier,
   deriveDeploymentStage,
   deriveHealthScore,
   deriveChurnRisk,
+  explainHealthScore,
+  HEALTH_SCORE_TABLE,
   type OppForArr,
 } from "@/lib/profile/derive";
 
@@ -149,6 +152,80 @@ describe("deriveHealthScore", () => {
       const s = deriveHealthScore(cat);
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThanOrEqual(100);
+    }
+  });
+});
+
+describe("deriveArrTrend", () => {
+  it("reports growth when current contract is bigger than the prior Won", () => {
+    const opps: OppForArr[] = [
+      { amount: 100_000, close_date: "2026-06-22", is_closed: false, is_won: false, probability: 90 },
+      { amount: 50_000, close_date: "2025-06-22", is_closed: true, is_won: true, probability: 100 },
+    ];
+    const t = deriveArrTrend(opps);
+    expect(t.direction).toBe("growth");
+    expect(t.current).toBe(100_000);
+    expect(t.previous).toBe(50_000);
+    expect(t.delta).toBe(50_000);
+    expect(t.delta_pct).toBe(100);
+  });
+
+  it("reports contraction when current contract is smaller", () => {
+    const opps: OppForArr[] = [
+      { amount: 25_000, close_date: "2026-06-22", is_closed: false, is_won: false, probability: 90 },
+      { amount: 100_000, close_date: "2025-06-22", is_closed: true, is_won: true, probability: 100 },
+    ];
+    const t = deriveArrTrend(opps);
+    expect(t.direction).toBe("contraction");
+    expect(t.delta).toBe(-75_000);
+    expect(t.delta_pct).toBe(-75);
+  });
+
+  it("reports flat when amounts match", () => {
+    const opps: OppForArr[] = [
+      { amount: 100_000, close_date: "2026-06-22", is_closed: false, is_won: false, probability: 90 },
+      { amount: 100_000, close_date: "2025-06-22", is_closed: true, is_won: true, probability: 100 },
+    ];
+    expect(deriveArrTrend(opps).direction).toBe("flat");
+  });
+
+  it("reports first-contract when there is no prior Won opp", () => {
+    const opps: OppForArr[] = [
+      { amount: 100_000, close_date: "2026-06-22", is_closed: false, is_won: false, probability: 90 },
+    ];
+    const t = deriveArrTrend(opps);
+    expect(t.direction).toBe("first-contract");
+    expect(t.current).toBe(100_000);
+    expect(t.previous).toBeNull();
+  });
+
+  it("reports no-data when there is no current ARR", () => {
+    expect(deriveArrTrend([]).direction).toBe("no-data");
+  });
+
+  it("ignores prior Closed Lost opps when picking the previous contract", () => {
+    const opps: OppForArr[] = [
+      { amount: 100_000, close_date: "2026-06-22", is_closed: false, is_won: false, probability: 90 },
+      { amount: 0, close_date: "2025-12-01", is_closed: true, is_won: false, probability: 0 },
+      { amount: 50_000, close_date: "2025-06-22", is_closed: true, is_won: true, probability: 100 },
+    ];
+    expect(deriveArrTrend(opps).previous).toBe(50_000);
+  });
+});
+
+describe("explainHealthScore", () => {
+  it("returns a sentence including the score and the category name", () => {
+    const s = explainHealthScore("At Risk");
+    expect(s).toContain("30");
+    expect(s).toContain("At Risk");
+  });
+  it("falls back to default baseline for unknown categories", () => {
+    expect(explainHealthScore("Strategic Logos")).toContain("Default");
+    expect(explainHealthScore(null)).toContain("Default");
+  });
+  it("HEALTH_SCORE_TABLE matches deriveHealthScore for every entry", () => {
+    for (const [category, { score }] of Object.entries(HEALTH_SCORE_TABLE)) {
+      expect(deriveHealthScore(category)).toBe(score);
     }
   });
 });

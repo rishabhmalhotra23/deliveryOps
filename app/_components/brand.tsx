@@ -108,9 +108,11 @@ export function StatBlock({
   hint,
   emphasis = false,
 }: {
-  label: string;
+  // label / hint accept ReactNode so callers can embed tooltips, chips,
+  // or other inline elements — not just plain strings.
+  label: ReactNode;
   value: string;
-  hint?: string;
+  hint?: ReactNode;
   emphasis?: boolean;
 }) {
   return (

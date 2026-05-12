@@ -258,17 +258,27 @@ async function syncCustomerRegistry(
     const newLifecycle = item.group?.title ?? null;
     if (newLifecycle && newLifecycle !== cust.lifecycle_group) {
       updates.lifecycle_group = newLifecycle;
-      // Cascade to custom_category unless the CSM has pinned it manually.
-      // This is what propagates "I moved them to To be Dropped on Monday"
-      // into the DeliveryOps dashboard and chart filters.
-      if (!protectedFields.has("custom_category")) {
-        const newCategory = LIFECYCLE_TO_CATEGORY[newLifecycle];
-        if (newCategory && newCategory !== cust.custom_category) {
-          updates.custom_category = newCategory;
-        }
-      } else if (LIFECYCLE_TO_CATEGORY[newLifecycle] !== cust.custom_category) {
-        result.skipped_protected++;
+    }
+
+    // Cascade custom_category whenever either is true:
+    //   (a) custom_category is null on the row (initial seed)
+    //   (b) lifecycle_group changed AND custom_category isn't pinned in
+    //       protected_fields by a manual edit.
+    // This is what propagates "I moved them to To be Dropped on Monday"
+    // into the DeliveryOps dashboard, AND fixes the null-on-first-import
+    // gap discovered after the 2026-05-11 recovery.
+    const effectiveLifecycle = newLifecycle ?? cust.lifecycle_group;
+    if (effectiveLifecycle && !protectedFields.has("custom_category")) {
+      const expectedCategory = LIFECYCLE_TO_CATEGORY[effectiveLifecycle];
+      if (expectedCategory && expectedCategory !== cust.custom_category) {
+        updates.custom_category = expectedCategory;
       }
+    } else if (
+      newLifecycle &&
+      protectedFields.has("custom_category") &&
+      LIFECYCLE_TO_CATEGORY[newLifecycle] !== cust.custom_category
+    ) {
+      result.skipped_protected++;
     }
 
     // ae_owner / partner — respect protected fields.
