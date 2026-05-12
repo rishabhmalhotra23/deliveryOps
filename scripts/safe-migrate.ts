@@ -70,6 +70,11 @@ const psqlFile = dockerPsqlFile;
 function ensureMigrationsTable() {
   // Mirrors Supabase's own migrations tracking table. If supabase init
   // hasn't been run, we still want a way to remember applied files.
+  //
+  // The Supabase CLI sometimes creates this table with a minimal shape
+  // (version + statements + name only). When that's the case, we ADD the
+  // tracking columns this script writes to — idempotently — so we can use
+  // a single insert statement below regardless of how the table was born.
   psql(`
     create schema if not exists supabase_migrations;
     create table if not exists supabase_migrations.schema_migrations (
@@ -80,6 +85,12 @@ function ensureMigrationsTable() {
       idempotency_key text,
       applied_at timestamptz default now()
     );
+    alter table supabase_migrations.schema_migrations
+      add column if not exists created_by text default 'safe-migrate.ts';
+    alter table supabase_migrations.schema_migrations
+      add column if not exists idempotency_key text;
+    alter table supabase_migrations.schema_migrations
+      add column if not exists applied_at timestamptz default now();
   `);
 }
 

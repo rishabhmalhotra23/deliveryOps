@@ -1,12 +1,16 @@
 import { inngest } from "../client";
+import { runFullSync } from "@/lib/sync/runner";
 
-// TODO Phase 2: Monday.com GraphQL client — sync customer board into
-// monday_items with status / owner / due.
+// Monday-only sync. Triggered by event "delivery-ops/monday.sync.requested".
+// Pulls the Customers/Projects/Activity Log/NPS boards into the monday_*
+// cache tables and cascades lifecycle_group / custom_category changes back
+// to customers.
 export const syncMonday = inngest.createFunction(
-  { id: "sync-monday" },
+  { id: "sync-monday", retries: 1 },
   { event: "delivery-ops/monday.sync.requested" },
   async ({ step }) => {
-    await step.run("noop", async () => ({ synced: 0 }));
-    return { ok: true };
+    return await step.run("run-monday-sync", async () => {
+      return await runFullSync({ sources: ["monday"] });
+    });
   }
 );

@@ -1,28 +1,39 @@
-// Combined sync runner — orchestrates Salesforce + Monday syncs with audit
-// logging into the sync_runs table. Used by the manual /api/dev/sync/run
-// trigger today; in production this is wrapped by the weekly-sync Inngest
-// function.
+// Combined sync runner — orchestrates Salesforce + Monday + Kognitos v2
+// syncs with audit logging into the sync_runs table.
+//
+// Used by both /api/dev/sync/run (manual trigger) and /api/cron/daily-sync
+// (daily 08:00 IST Vercel Cron). Each source is wrapped in `runOne` which
+// inserts a "running" row in sync_runs, then updates it to "ok" or "error"
+// with rows_synced + details JSON. Failures in one source don't abort the
+// others — they're collected in `errors` and the response status flips
+// to 207 (multi-status) instead of 200.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { syncSalesforce, type SalesforceSyncResult } from "./salesforce";
 import { syncMonday, type MondaySyncResult } from "./monday";
+import { syncKognitosV2, type KognitosV2SyncResult } from "./kognitos-v2";
+
+export type SyncSource = "salesforce" | "monday" | "kognitos-v2";
 
 export interface CombinedSyncResult {
   ok: boolean;
   duration_ms: number;
   salesforce?: SalesforceSyncResult;
   monday?: MondaySyncResult;
+  kognitos_v2?: KognitosV2SyncResult;
   errors: string[];
 }
 
 interface SyncOptions {
-  sources?: Array<"salesforce" | "monday">;
+  sources?: SyncSource[];
   customerKey?: string;
 }
 
+const DEFAULT_SOURCES: SyncSource[] = ["salesforce", "monday", "kognitos-v2"];
+
 export async function runFullSync(opts: SyncOptions = {}): Promise<CombinedSyncResult> {
   const start = Date.now();
-  const sources = opts.sources ?? ["salesforce", "monday"];
+  const sources = opts.sources ?? DEFAULT_SOURCES;
   const result: CombinedSyncResult = { ok: true, duration_ms: 0, errors: [] };
 
   if (sources.includes("salesforce")) {
@@ -50,6 +61,20 @@ export async function runFullSync(opts: SyncOptions = {}): Promise<CombinedSyncR
       return { rows, details: r as unknown as Record<string, unknown> };
     }).catch((err) => {
       result.errors.push(`monday: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
+
+  if (sources.includes("kognitos-v2")) {
+    await runOne("kognitos-v2", "workspace", async () => {
+      const r = await syncKognitosV2();
+      result.kognitos_v2 = r;
+      const rows = r.processes.upserted + r.runs.upserted + (r.workspace_synced ? 1 : 0);
+      if (r.errors.length > 0) {
+        for (const e of r.errors) result.errors.push(`kognitos-v2/${e.stage}: ${e.error}`);
+      }
+      return { rows, details: r as unknown as Record<string, unknown> };
+    }).catch((err) => {
+      result.errors.push(`kognitos-v2: ${err instanceof Error ? err.message : String(err)}`);
     });
   }
 

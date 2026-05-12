@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { runFullSync } from "@/lib/sync/runner";
+import { runFullSync, type SyncSource } from "@/lib/sync/runner";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // sync of 41 customers can run a couple of minutes
 
 interface Body {
-  sources?: Array<"salesforce" | "monday">;
+  sources?: SyncSource[];
   customer_key?: string;
 }
 
