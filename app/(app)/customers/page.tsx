@@ -36,14 +36,41 @@ const CATEGORY_DOT: Record<string, string> = {
   Churned: "bg-[color:var(--muted-foreground)]",
 };
 
+// Generate a deterministic gradient background from a customer name.
+// Each customer gets a unique color pair — much more visual than all-yellow.
+const AVATAR_GRADIENTS = [
+  ["#818cf8", "#6366f1"], // indigo
+  ["#34d399", "#059669"], // emerald
+  ["#fb923c", "#ea580c"], // orange
+  ["#f472b6", "#db2777"], // pink
+  ["#38bdf8", "#0284c7"], // sky
+  ["#a78bfa", "#7c3aed"], // violet
+  ["#fbbf24", "#d97706"], // amber
+  ["#6ee7b7", "#0d9488"], // teal
+  ["#f87171", "#dc2626"], // red
+  ["#c084fc", "#9333ea"], // purple
+];
+
+function avatarGradient(name: string): string {
+  const idx = (name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_GRADIENTS.length;
+  const [from, to] = AVATAR_GRADIENTS[idx];
+  return `linear-gradient(135deg, ${from}, ${to})`;
+}
+
 function InitialsAvatar({ name, category }: { name: string; category: string }) {
   const dot = CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]";
+  const isPast = category === "Churned" || category === "To Drop";
   return (
     <div className="relative shrink-0">
-      <div className="w-9 h-9 rounded-lg bg-[color:var(--brand-yellow)] text-[color:var(--brand-night)] flex items-center justify-center text-xs font-bold font-mono">
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white"
+        style={{ background: isPast ? "#6b7280" : avatarGradient(name), opacity: isPast ? 0.7 : 1 }}
+      >
         {name.slice(0, 2).toUpperCase()}
       </div>
-      <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[color:var(--background)] ${dot}`} />
+      {!isPast && (
+        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[color:var(--background)] ${dot}`} />
+      )}
     </div>
   );
 }
@@ -138,8 +165,10 @@ export default async function CustomersPage() {
     <div className="px-6 lg:px-8 py-8 max-w-[1400px] mx-auto space-y-8">
       <PageHeader
         eyebrow="Customers"
-        title={`${summary?.total ?? customers.length} post-sales accounts`}
-        subtitle="DeliveryOps is the source of truth. Monday gives the lifecycle signal; Salesforce gives the commercial context."
+        title="Customers"
+        subtitle={`${summary?.total ?? customers.length} accounts — ${summary?.with_monday_workspace ?? 0} with active delivery workspaces · ${
+          summary?.last_sync.monday ? `Monday synced ${formatTimeAgo(summary.last_sync.monday)}` : "Monday not synced"
+        }`}
         actions={
           <Link
             href="/operations"
@@ -180,14 +209,29 @@ export default async function CustomersPage() {
       {/* Customer groups */}
       {orderedGroups.map(([category, list]) => {
         if (list.length === 0) return null;
+        // Softer framing for past/inactive accounts — show their contributions
+        // rather than emphasising a negative status.
+        const isPastEngagement = category === "Churned" || category === "To Drop";
+        const displayLabel = isPastEngagement
+          ? `${category === "Churned" ? "Past engagements" : "Winding down"} · ${list.length}`
+          : null;
         return (
-          <section key={category} className="space-y-2">
+          <section key={category} className={`space-y-2 ${isPastEngagement ? "opacity-70" : ""}`}>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]"}`} />
-                <span className="text-sm font-semibold tracking-tight text-[color:var(--foreground)]">{category}</span>
+                <span className={`text-sm font-semibold tracking-tight ${isPastEngagement ? "text-[color:var(--muted-foreground)]" : "text-[color:var(--foreground)]"}`}>
+                  {displayLabel ?? category}
+                </span>
+                {isPastEngagement ? (
+                  <span className="text-[10px] text-[color:var(--muted-foreground)] italic">
+                    (projects delivered; relationship closed)
+                  </span>
+                ) : null}
               </div>
-              <span className="data-label text-[color:var(--muted-foreground)] tabular-nums">{list.length}</span>
+              {!isPastEngagement && (
+                <span className="data-label text-[color:var(--muted-foreground)] tabular-nums">{list.length}</span>
+              )}
             </div>
             <div className="space-y-2">
               {list.map((c) => (

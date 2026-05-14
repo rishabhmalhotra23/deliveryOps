@@ -21,8 +21,13 @@ export interface AnalyticsBundle {
   by_category: Array<{ category: string; count: number; arr: number }>;
   by_ae: Array<{ ae: string; count: number; arr: number }>;
   by_partner: Array<{ partner: string; count: number; arr: number }>;
-  projects_by_group: Array<{ group: string; count: number }>; // Active / Pipeline / On Hold / Backlog
-  projects_by_status: Array<{ status: string; count: number }>; // In Progress / Delivered / etc.
+  by_tam: Array<{ person: string; count: number }>; // TAM / FDE workload
+  by_dev: Array<{ person: string; count: number }>; // SE / Dev workload
+  ttv_distribution: Array<{ bucket: string; count: number }>; // TTV in days buckets
+  ttv_avg_by_quarter: Array<{ quarter: string; avg_days: number; count: number }>;
+  projects_by_group: Array<{ group: string; count: number }>;
+  projects_by_lifecycle: Array<{ group: string; count: number }>; // active groups only
+  projects_by_status: Array<{ status: string; count: number }>;
   projects_by_phase: Array<{ phase: string; count: number }>;
   nps_distribution: Array<{ category: string; count: number }>; // Promoter / Passive / Detractor
   nps_by_quarter: Array<{ quarter: string; average: number; count: number; promoter: number; passive: number; detractor: number }>;
@@ -45,6 +50,9 @@ interface CustomerRow {
 interface ProjectRow {
   customer_id: string;
   group_title: string | null;
+  go_live_date: string | null;
+  kickoff_date: string | null;
+  ttv_days_text: string | null;
   raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
 }
 interface NpsRow {
@@ -58,6 +66,8 @@ interface AccountRow {
 const PROJECT_COL_STATUS = "color_mkzj8fw8";
 const PROJECT_COL_PHASE = "color_mm06sdrj";
 const PROJECT_COL_GOLIVE = "date_mm01dz3b";
+const PROJECT_COL_TAM = "multiple_person_mkzrppyd";
+const PROJECT_COL_DEV = "multiple_person_mkzrgk3b";
 const NPS_COL_SCORE = "numeric_mm0aqvk3";
 const NPS_COL_CATEGORY = "color_mm0af90g";
 const NPS_COL_QUARTER = "dropdown_mm0ahec7";
@@ -101,7 +111,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       .select("id, custom_category, lifecycle_group, ae_owner, partner")
       .is("deleted_at", null),
     sb.from("profiles").select("customer_id, arr"),
-    sb.from("monday_projects").select("customer_id, group_title, raw_columns"),
+    sb.from("monday_projects").select("customer_id, group_title, raw_columns, go_live_date, ttv_days_text, kickoff_date"),
     sb.from("monday_nps_responses").select("customer_id, raw_columns"),
     sb.from("sf_accounts").select("annual_revenue"),
     sb
@@ -129,7 +139,13 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
 
   const customerList = ((customers.data as CustomerRow[]) ?? []);
   const profileList = ((profiles.data as ProfileRow[]) ?? []);
-  const projectList = ((projects.data as ProjectRow[]) ?? []);
+  const projectList = ((projects.data as ProjectRow[]) ?? [])
+    // Filter out subitems and non-canonical group entries so they don't
+    // pollute the charts.
+    .filter((p) => {
+      const g = (p.group_title ?? "").toLowerCase();
+      return !g.startsWith("subitem") && g !== "unknown";
+    });
   const npsList = ((nps.data as NpsRow[]) ?? []);
   const accountList = ((accounts.data as AccountRow[]) ?? []);
 
@@ -200,6 +216,30 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const projGroupAgg = new Map<string, number>();
   const projStatusAgg = new Map<string, number>();
   const projPhaseAgg = new Map<string, number>();
+  const tamAgg = new Map<string, number>();
+  const devAgg = new Map<string, number>();
+  const ttvBuckets = new Map<string, number>();
+  const ttvByQtrAgg = new Map<string, { sum: number; count: number }>();
+
+  // Helper: extract people from a comma-separated text column.
+  // Monday returns "First Last, Other Person" or "first.last@kognitos.com".
+  function peopleName(raw: string | null): string[] {
+    if (!raw || !raw.trim()) return [];
+    return raw.split(",").flatMap((s) => {
+      const t = s.trim();
+      if (!t) return [];
+      if (t.includes("@")) {
+        const local = t.split("@")[0].replace(/[._]/g, " ");
+        const parts = local.split(" ").filter(Boolean);
+        if (parts.length >= 2) {
+          return [`${parts[0].charAt(0).toUpperCase()}${parts[0].slice(1)} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`];
+        }
+        return [parts[0] ?? t];
+      }
+      return [t];
+    });
+  }
+
   for (const p of projectList) {
     const g = p.group_title ?? "(other)";
     projGroupAgg.set(g, (projGroupAgg.get(g) ?? 0) + 1);
@@ -207,21 +247,104 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     projStatusAgg.set(s, (projStatusAgg.get(s) ?? 0) + 1);
     const ph = txt(p.raw_columns, PROJECT_COL_PHASE) ?? "(unset)";
     projPhaseAgg.set(ph, (projPhaseAgg.get(ph) ?? 0) + 1);
+
+    // TAM / FDE workload
+    for (const name of peopleName(txt(p.raw_columns, PROJECT_COL_TAM))) {
+      tamAgg.set(name, (tamAgg.get(name) ?? 0) + 1);
+    }
+    // Dev / SE workload
+    for (const name of peopleName(txt(p.raw_columns, PROJECT_COL_DEV))) {
+      devAgg.set(name, (devAgg.get(name) ?? 0) + 1);
+    }
+
+    // TTV distribution
+    const ttvDays = p.ttv_days_text ? Number(p.ttv_days_text) : null;
+    if (ttvDays != null && Number.isFinite(ttvDays) && ttvDays > 0) {
+      const bucket =
+        ttvDays <= 30 ? "0–30d" :
+        ttvDays <= 60 ? "31–60d" :
+        ttvDays <= 90 ? "61–90d" :
+        ttvDays <= 180 ? "91–180d" : "180d+";
+      ttvBuckets.set(bucket, (ttvBuckets.get(bucket) ?? 0) + 1);
+
+      // TTV avg by quarter (use go_live_date for quarter bucketing)
+      const qDate = p.go_live_date;
+      if (qDate && qDate.length >= 7) {
+        const d = new Date(qDate);
+        const qLabel = `${d.getUTCFullYear()} Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+        const prev = ttvByQtrAgg.get(qLabel) ?? { sum: 0, count: 0 };
+        prev.sum += ttvDays;
+        prev.count++;
+        ttvByQtrAgg.set(qLabel, prev);
+      }
+    }
   }
-  const PROJECT_GROUP_ORDER = ["Active", "Pipeline", "On Hold", "Backlog"];
+
+  // Projects by group — use a canonical sort:
+  // 1. Active lifecycle groups (Active, Pipeline, On Hold, Backlog)
+  // 2. Delivery status groups (Active Projects, Completed, Stalled, Cancelled)
+  // 3. FY quarter groups in reverse chronological order
+  // 4. Anything else
+  const LIFECYCLE_ORDER = ["Active", "Pipeline", "On Hold", "Backlog"];
+  const ACCOUNT_OVERVIEW_ORDER = ["Active Projects", "Upcoming Projects", "Completed Projects", "Stalled Projects", "Cancelled Projects"];
+  const TERMINAL_ORDER = ["Churned", "Cancelled", "Inactive"];
+  function groupSortKey(g: string): number {
+    const li = LIFECYCLE_ORDER.indexOf(g);
+    if (li >= 0) return li;
+    const ai = ACCOUNT_OVERVIEW_ORDER.indexOf(g);
+    if (ai >= 0) return 100 + ai;
+    const ti = TERMINAL_ORDER.indexOf(g);
+    if (ti >= 0) return 900 + ti;
+    // FY quarter groups: "Q1'26", "Q2'25" etc. — sort by encoded date desc
+    const m = /^Q(\d)'(\d{2})$/.exec(g);
+    if (m) {
+      const year = Number(m[2]);
+      const q = Number(m[1]);
+      // Higher = more recent = should appear first → negate
+      return 200 + (100 - year * 4 - q);
+    }
+    // "Projects" (portfolio), others
+    if (g === "Projects") return 500;
+    return 400;
+  }
   const projects_by_group = [...projGroupAgg.entries()]
     .map(([group, count]) => ({ group, count }))
-    .sort((a, b) => {
-      const ai = PROJECT_GROUP_ORDER.indexOf(a.group);
-      const bi = PROJECT_GROUP_ORDER.indexOf(b.group);
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-    });
-  const projects_by_status = [...projStatusAgg.entries()]
-    .map(([status, count]) => ({ status, count }))
-    .sort((a, b) => b.count - a.count);
+    .filter((x) => x.count > 0)
+    .sort((a, b) => groupSortKey(a.group) - groupSortKey(b.group));
+
+  // Split `projects_by_group` into:
+  //   (a) active lifecycle groups only (for the "stage" chart)
+  //   (b) all groups (for detailed breakdown if needed)
+  const ACTIVE_LIFECYCLE_GROUPS = new Set([
+    "Active", "Pipeline", "On Hold", "Backlog",
+    "Active Projects", "Upcoming Projects",
+  ]);
+  const projects_by_lifecycle = projects_by_group
+    .filter((p) => ACTIVE_LIFECYCLE_GROUPS.has(p.group))
+    .sort((a, b) => groupSortKey(a.group) - groupSortKey(b.group));
   const projects_by_phase = [...projPhaseAgg.entries()]
     .map(([phase, count]) => ({ phase, count }))
     .sort((a, b) => b.count - a.count);
+
+  const by_tam = [...tamAgg.entries()]
+    .map(([person, count]) => ({ person, count }))
+    .sort((a, b) => b.count - a.count);
+  const by_dev = [...devAgg.entries()]
+    .map(([person, count]) => ({ person, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const TTV_BUCKET_ORDER = ["0–30d", "31–60d", "61–90d", "91–180d", "180d+"];
+  const ttv_distribution = TTV_BUCKET_ORDER
+    .map((bucket) => ({ bucket, count: ttvBuckets.get(bucket) ?? 0 }))
+    .filter((d) => d.count > 0);
+
+  const ttv_avg_by_quarter = [...ttvByQtrAgg.entries()]
+    .map(([quarter, v]) => ({
+      quarter,
+      avg_days: Math.round(v.sum / v.count),
+      count: v.count,
+    }))
+    .sort((a, b) => a.quarter.localeCompare(b.quarter));
 
   // ─── NPS distribution + by quarter ──────────────────────────────────
   const NPS_CAT_ORDER = ["Promoter", "Passive", "Detractor"];
@@ -293,7 +416,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   // ─── Deliveries over time (by go-live month) ────────────────────────
   const deliveryAgg = new Map<string, number>();
   for (const p of projectList) {
-    const go = txt(p.raw_columns, PROJECT_COL_GOLIVE);
+    // Use the stored go_live_date column first; fall back to raw_columns.
+    const go = p.go_live_date ?? txt(p.raw_columns, PROJECT_COL_GOLIVE);
     if (go && go.length >= 7) {
       const month = go.slice(0, 7); // YYYY-MM
       deliveryAgg.set(month, (deliveryAgg.get(month) ?? 0) + 1);
@@ -320,8 +444,13 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     by_category: by_category.sort((a, b) => b.arr - a.arr),
     by_ae,
     by_partner,
+    by_tam,
+    by_dev,
+    ttv_distribution,
+    ttv_avg_by_quarter,
     projects_by_group,
-    projects_by_status,
+    projects_by_lifecycle,
+    projects_by_status: [],
     projects_by_phase,
     nps_distribution,
     nps_by_quarter,

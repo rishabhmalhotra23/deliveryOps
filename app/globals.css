@@ -149,6 +149,21 @@
   --glass-bg:             rgba(255, 255, 255, 0.03);
   --glass-border:         rgba(255, 255, 255, 0.09);
   --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  /* Ensure all text is readable in dark mode */
+  color-scheme: dark;
+}
+
+/* Force text contrast in dark mode — prevents invisible text on dark bg */
+.dark p, .dark span, .dark div, .dark h1, .dark h2, .dark h3, .dark h4 {
+  color: inherit;
+}
+
+/* Recharts tooltips always need a solid background to be readable */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--card-foreground) !important;
 }
 
 /* Light mode glass + page background vars */

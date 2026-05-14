@@ -1,10 +1,23 @@
 // DeliveryOps agent system prompt builder.
 // Port of legacy/brain/prompts.py — same shape, voice rules upgraded.
+//
+// Anthropic prompt caching: we split the system prompt into three blocks so
+// the Anthropic API can cache the stable prefix and only the trailing
+// per-call bits cost full-rate tokens.
+//
+//   1. Skeleton (responsibilities + tool rules + operating rules)  → cached
+//   2. Brand voice (long, never changes)                            → cached
+//   3. Customer context + rules (per-customer, occasionally edits) → not cached
+//
+// `cache_control: { type: "ephemeral" }` keeps the cache hot for ~5 minutes
+// of inactivity. A CSM working a single customer for a few minutes hits the
+// cache on every turn. See https://docs.anthropic.com/.../prompt-caching.
 
+import type Anthropic from "@anthropic-ai/sdk";
 import type { Customer } from "@/lib/supabase/types";
 import { BRAND_VOICE_BLOCK } from "@/lib/voice/brand-voice";
 
-const BASE_PROMPT = `You are **DeliveryOps** — Kognitos's post-sales operations brain. You manage a customer relationship after the deal closes: contract details, onboarding, credits, automation health, support history, and everything that lands in their Slack channel, inbox, or Drive.
+const SKELETON_PROMPT = `You are **DeliveryOps** — Kognitos's post-sales operations brain. You manage a customer relationship after the deal closes: contract details, onboarding, credits, automation health, support history, and everything that lands in their Slack channel, inbox, or Drive.
 
 ## Responsibilities
 - Answer questions about a customer's contract, onboarding, credit usage, automation health, and support history.
@@ -25,23 +38,20 @@ You have tools to search the customer's documents, log events, read and update t
 - When creating tasks, be specific about timing and what should happen.
 - If a message references prior conversation you don't have, call \`get_slack_history\` before responding.
 - If something looks risky, escalate.
-- You have **zero access** to the internal profile (health score, churn risk, internal notes). Don't reference these even if asked.
+- You have **zero access** to the internal profile (health score, churn risk, internal notes). Don't reference these even if asked.`;
 
-## Current customer
-{customer_context}
-
-## Customer-specific rules
-{customer_rules}
-
-${BRAND_VOICE_BLOCK}
-`;
-
+/**
+ * Build the system prompt as an array of cacheable blocks. The first two
+ * blocks (skeleton + brand voice) are marked `cache_control: ephemeral`
+ * so Anthropic caches them across requests in the same session.
+ */
 export function buildSystemPrompt(input: {
   customer: Customer;
   rules: string;
-}): string {
+}): Anthropic.TextBlockParam[] {
   const c = input.customer;
   const customerContext = [
+    "## Current customer",
     `**Customer:** ${c.display_name} (\`${c.key}\`)`,
     c.slack_channel ? `**Slack channel:** #${c.slack_channel}` : null,
     c.email_alias ? `**Email alias:** ${c.email_alias}` : null,
@@ -53,11 +63,24 @@ export function buildSystemPrompt(input: {
 
   const rules = input.rules.trim() || "No customer-specific rules defined.";
   const rulesBlock =
+    "## Customer-specific rules\n" +
     "The following rules are **mandatory** and override general guidelines. Follow them in every interaction with this customer.\n\n" +
     rules;
 
-  return BASE_PROMPT.replace("{customer_context}", customerContext).replace(
-    "{customer_rules}",
-    rulesBlock
-  );
+  return [
+    {
+      type: "text",
+      text: SKELETON_PROMPT,
+      cache_control: { type: "ephemeral" },
+    },
+    {
+      type: "text",
+      text: BRAND_VOICE_BLOCK,
+      cache_control: { type: "ephemeral" },
+    },
+    {
+      type: "text",
+      text: `${customerContext}\n\n${rulesBlock}`,
+    },
+  ];
 }

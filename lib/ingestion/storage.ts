@@ -41,3 +41,10 @@ export async function signedUrl(path: string, expiresInSec = 3600): Promise<stri
   if (error) throw error;
   return data.signedUrl;
 }
+
+export async function downloadText(path: string): Promise<string> {
+  const sb = requireAdmin();
+  const { data, error } = await sb.storage.from(DOCS_BUCKET).download(path);
+  if (error || !data) throw error ?? new Error("Storage download returned empty.");
+  return await data.text();
+}

@@ -235,4 +235,42 @@ export const TABLES = {
   customerUsers: "customer_users",
   chatSessions: "chat_sessions",
   chatMessages: "chat_messages",
+  pendingApprovals: "pending_approvals",
 } as const;
+
+// ── pending_approvals ──────────────────────────────────────────────────────
+
+export type ApprovalKind = "email_draft" | "gated_action";
+export type ApprovalState = "pending" | "approved" | "rejected" | "revised" | "expired";
+
+export interface PendingApprovalRevision {
+  at: string;
+  by: string;
+  kind: "user_edit" | "agent_revise";
+  patch: Record<string, unknown>;
+}
+
+export interface PendingApproval {
+  id: string;
+  customer_id: string;
+  kind: ApprovalKind;
+  state: ApprovalState;
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  email_to: string[] | null;
+  email_subject: string | null;
+  email_body: string | null;
+  email_in_reply_to: string | null;
+  email_references: string | null;
+  email_gmail_thread_id: string | null;
+  slack_channel: string | null;
+  slack_message_ts: string | null;
+  slack_thread_ts: string | null;
+  created_by: string;
+  created_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  revisions: PendingApprovalRevision[];
+  updated_at: string;
+}

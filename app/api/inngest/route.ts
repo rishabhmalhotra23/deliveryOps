@@ -8,6 +8,7 @@ import { syncCalendar } from "@/inngest/functions/sync-calendar";
 import { syncMonday } from "@/inngest/functions/sync-monday";
 import { runTask } from "@/inngest/functions/run-task";
 import { syncAllWeekly } from "@/inngest/functions/sync-all-weekly";
+import { processInboundEmail } from "@/inngest/functions/process-inbound-email";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -20,5 +21,6 @@ export const { GET, POST, PUT } = serve({
     syncMonday,
     runTask,
     syncAllWeekly,
+    processInboundEmail,
   ],
 });

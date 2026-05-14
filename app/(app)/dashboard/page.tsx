@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { listCustomers } from "@/lib/customers";
 import { loadPortfolioSummary } from "@/lib/cache/integrations";
+import { loadOvernightChanges, loadPendingApprovals } from "@/lib/dashboard/overnight";
 import {
   CategoryChip,
   PageHeader,
@@ -17,19 +18,24 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [customers, summary] = await Promise.all([
+  const [customers, summary, overnight, approvals] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
+    loadOvernightChanges(6).catch(() => []),
+    loadPendingApprovals(8).catch(() => []),
   ]);
 
   const totalArr = summary?.total_arr ?? 0;
   const needAttention =
     (summary?.by_category["At Risk"] ?? 0) + (summary?.by_category["Upcoming Renewals"] ?? 0);
 
+  // Fall back to "most recently updated" if we have no overnight activity
+  // — keeps the section useful on quiet days.
   const recentlyActive = customers
     .slice()
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
     .slice(0, 6);
+  const overnightFilled = overnight.length > 0;
 
   const atRisk = customers.filter((c) => categoryFromCustomer(c) === "At Risk");
   const renewals = customers.filter((c) => categoryFromCustomer(c) === "Upcoming Renewals");
@@ -122,25 +128,93 @@ export default async function Dashboard() {
         />
       </div>
 
+      {/* Pending approvals — surfaces the email drafts + gated actions that
+          are waiting on a CSM click in Slack. Lives on the dashboard so the
+          CSM doesn't have to context-switch to Slack to see what's queued. */}
+      {approvals.length > 0 ? (
+        <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <SectionMark>Pending approvals</SectionMark>
+            <span className="text-xs text-[color:var(--brand-gray)] tabular-nums">
+              {approvals.length} waiting on you
+            </span>
+          </div>
+          <ul className="divide-y divide-[color:var(--brand-metal-line)]">
+            {approvals.map((a) => (
+              <li key={a.id} className="py-2.5 flex items-start justify-between gap-3">
+                <Link
+                  href={`/customers/${a.customer_key}`}
+                  className="flex-1 min-w-0 hover:opacity-80"
+                >
+                  <div className="text-sm">
+                    <span className="font-medium">{a.customer_display_name}</span>
+                    <span className="text-[color:var(--brand-gray)]">
+                      {" "}
+                      · {a.kind === "email_draft" ? "Email draft" : "Action"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-[color:var(--brand-gray)] truncate">{a.preview}</div>
+                </Link>
+                <span className="text-[10px] text-[color:var(--brand-gray)] shrink-0 tabular-nums">
+                  {formatTimeAgo(a.created_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="text-[11px] text-[color:var(--brand-gray)] mt-3">
+            Each one has a Block Kit card in the customer&apos;s Slack channel —
+            click through there to approve, reject, or discuss in thread.
+          </div>
+        </section>
+      ) : null}
+
       <section>
-        <SectionMark>Recently updated</SectionMark>
+        <SectionMark>
+          {overnightFilled ? "What changed overnight" : "Recently updated"}
+        </SectionMark>
+        <p className="text-xs text-[color:var(--brand-gray)] mb-4">
+          {overnightFilled
+            ? "Customers sorted by event count in the last 18 hours."
+            : "No new events in the last 18 hours — falling back to the most recently updated rows."}
+        </p>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {recentlyActive.map((c) => (
-            <Link
-              key={c.id}
-              href={`/customers/${c.key}`}
-              className="rounded-lg border border-line bg-white p-4 hover:border-[color:var(--brand-night)] transition-colors group"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="text-display text-base">{c.display_name}</div>
-                <CategoryChip category={categoryFromCustomer(c)} size="sm" />
-              </div>
-              <div className="mt-2 text-xs text-[color:var(--brand-gray)] space-y-0.5">
-                {c.ae_owner ? <div>AE · {c.ae_owner}</div> : null}
-                {c.partner ? <div>Partner · {c.partner}</div> : null}
-              </div>
-            </Link>
-          ))}
+          {overnightFilled
+            ? overnight.map((o) => (
+                <Link
+                  key={o.customer_key}
+                  href={`/customers/${o.customer_key}`}
+                  className="rounded-lg border border-line bg-white p-4 hover:border-[color:var(--brand-night)] transition-colors group"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-display text-base">{o.customer_display_name}</div>
+                    <span className="rounded-full bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] text-[10px] font-mono px-2 py-0.5 tabular-nums">
+                      +{o.event_count}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-[color:var(--brand-gray)] line-clamp-2">
+                    {o.latest_summary ?? "—"}
+                  </div>
+                  <div className="text-[10px] text-[color:var(--brand-gray)] mt-1">
+                    {o.latest_ts ? formatTimeAgo(o.latest_ts) : "—"}
+                  </div>
+                </Link>
+              ))
+            : recentlyActive.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/customers/${c.key}`}
+                  className="rounded-lg border border-line bg-white p-4 hover:border-[color:var(--brand-night)] transition-colors group"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-display text-base">{c.display_name}</div>
+                    <CategoryChip category={categoryFromCustomer(c)} size="sm" />
+                  </div>
+                  <div className="mt-2 text-xs text-[color:var(--brand-gray)] space-y-0.5">
+                    {c.ae_owner ? <div>AE · {c.ae_owner}</div> : null}
+                    {c.partner ? <div>Partner · {c.partner}</div> : null}
+                  </div>
+                </Link>
+              ))}
         </div>
       </section>
 

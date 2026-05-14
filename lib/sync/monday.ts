@@ -1,11 +1,19 @@
-// Monday sync — pulls every relevant board (Projects, Activity Log, NPS
-// Tracking) once, then maps each row to a customer by name-prefix and
-// upserts into the cache tables.
+// Monday sync — pulls every relevant board (Projects, all FY Deliverables,
+// Inactive/Cancelled, Activity Log, NPS Tracking) once, maps rows to
+// customers, and upserts into the cache tables.
 //
 // One-pass model: we don't iterate per-customer because Monday's GraphQL
 // rate limits are aggressive. Instead, we fetch each board once, then
 // distribute the rows to customers using the same name-matcher as the
 // import flow.
+//
+// Project boards synced (captured 2026-05-14):
+//   18395281570  Projects (active / in-flight)
+//   18398797267  FY-2026 Deliverables
+//   18398797224  FY-2025 Deliverables
+//   18398797248  FY-2024 Deliverables
+//   18398797257  FY-2023 Deliverables
+//   18398797301  Inactive / Cancelled projects
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
@@ -13,18 +21,79 @@ import { gql } from "@/lib/integrations/monday";
 import { normalizeName } from "@/lib/import/monday-customers";
 import type { Customer } from "@/lib/supabase/types";
 
-// Boards we care about, captured from the live workspace on 2026-04-30.
-//
-// Three matching strategies in order of preference:
-// 1. `customerRelationColumn` — Monday board-relation column. Exact + fast,
-//    but only works when items have the relation populated. The Customer
-//    column on Activity Log + NPS is currently sparse.
-// 2. `customerNameInLongText` — long-text column whose body contains
-//    "Customer: <name>". Used by Activity Log items auto-generated from
-//    Fireflies meeting transcripts.
-// 3. Item-name prefix matching — last resort.
+// ─── Column ID constants (stable across Monday renames) ─────────────────────
+
+const PROJECT_COLS = {
+  tam:         "multiple_person_mkzrppyd",
+  dev:         "multiple_person_mkzrgk3b",
+  customer_relation: "board_relation_mkzjzk6c",
+  partner:     "dropdown_mm06hne3",
+  health:      "color_mm01ft4",
+  status:      "color_mkzj8fw8",
+  phase:       "color_mm06sdrj",
+  platform:    "color_mm0698sb",
+  kickoff:     "date_mm011n1f",
+  go_live:     "date_mm01dz3b",
+  ttv:         "formula_mm01p18k",
+  total_effort:"numeric_mm0664sx",
+  timeline:    "timerange_mm014ng0",
+  complexity:  "dropdown_mm06r92k",
+  delivered_value: "text_mm09rsbe",
+  // Customer dropdown IDs differ across boards:
+  customer_dropdown_active: "dropdown_mm19sp0c",   // Projects board
+  customer_dropdown_fy26:   "dropdown_mm19b4x3",   // FY-2026
+} as const;
+
+interface ProjectBoard {
+  id: string;
+  name: string;
+  fiscalYear: string;
+  customerDropdownColumn?: string;
+  limit: number;
+}
+
+const PROJECT_BOARDS: ProjectBoard[] = [
+  {
+    id: "18395281570",
+    name: "Projects",
+    fiscalYear: "active",
+    customerDropdownColumn: PROJECT_COLS.customer_dropdown_active,
+    limit: 500,
+  },
+  {
+    id: "18398797267",
+    name: "FY-2026 Deliverables",
+    fiscalYear: "FY-2026",
+    customerDropdownColumn: PROJECT_COLS.customer_dropdown_fy26,
+    limit: 500,
+  },
+  {
+    id: "18398797224",
+    name: "FY-2025 Deliverables",
+    fiscalYear: "FY-2025",
+    limit: 500,
+  },
+  {
+    id: "18398797248",
+    name: "FY-2024 Deliverables",
+    fiscalYear: "FY-2024",
+    limit: 500,
+  },
+  {
+    id: "18398797257",
+    name: "FY-2023 Deliverables",
+    fiscalYear: "FY-2023",
+    limit: 500,
+  },
+  {
+    id: "18398797301",
+    name: "Inactive / Cancelled",
+    fiscalYear: "inactive",
+    limit: 500,
+  },
+];
+
 const BOARDS = {
-  projects: { id: "18395281570", name: "Projects" },
   activities: {
     id: "18397573465",
     name: "Activity Log",
@@ -35,10 +104,6 @@ const BOARDS = {
     id: "18398995134",
     name: "NPS Tracking",
     customerRelationColumn: "board_relation_mm0ayfjp",
-    // NPS items are named after the respondent (e.g. "Tia Bell"). Until the
-    // board-relation gets populated, group_title doesn't include customer
-    // info either. We ship the matcher and these stay unmatched until the
-    // relation column is filled in. Documented in the Pass F commit.
   },
 };
 
@@ -59,6 +124,9 @@ interface RawItem {
     value: string | null;
     linked_item_ids?: string[];
   }>;
+  // Most-recent item update (comment/note). Fetched via the updates
+  // sub-query; HTML tags stripped before storing.
+  updates?: Array<{ body: string; created_at: string }>;
 }
 
 async function fetchBoardItems(boardId: string, limit: number = 500): Promise<RawItem[]> {
@@ -76,6 +144,10 @@ async function fetchBoardItems(boardId: string, limit: number = 500): Promise<Ra
               id type text value
               ... on BoardRelationValue { linked_item_ids }
             }
+            updates(limit: 1) {
+              body
+              created_at
+            }
           }
         }
       }
@@ -83,6 +155,26 @@ async function fetchBoardItems(boardId: string, limit: number = 500): Promise<Ra
     { ids: [boardId], limit }
   );
   return data.boards?.[0]?.items_page?.items ?? [];
+}
+
+// Strip HTML tags from Monday update bodies (Monday returns rich-text HTML).
+function stripHtml(html: string | null | undefined): string | null {
+  if (!html) return null;
+  const stripped = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return stripped.length > 0 ? stripped.slice(0, 1000) : null;
+}
+
+// Parse the Monday timeline column value. Returns { start, end } as ISO
+// date strings or null. The timeline column stores JSON like:
+//   { "from": "2024-08-01", "to": "2024-11-08" }
+function parseTimeline(value: string | null): { start: string | null; end: string | null } {
+  if (!value) return { start: null, end: null };
+  try {
+    const parsed = JSON.parse(value) as { from?: string; to?: string };
+    return { start: parsed.from ?? null, end: parsed.to ?? null };
+  } catch {
+    return { start: null, end: null };
+  }
 }
 
 function indexCols(item: RawItem): Record<string, { type: string; text: string | null; value: string | null }> {
@@ -173,17 +265,38 @@ function matchItemToCustomerByLongTextHeader(
   if (!text) return null;
   const match = CUSTOMER_LINE.exec(text);
   if (!match) return null;
-  const name = match[1].trim();
+  return matchCustomerByName(match[1].trim(), customers);
+}
+
+// Match by the value of a column whose `text` IS the customer name —
+// typically the "Customer" dropdown on the Projects board. No parsing
+// required; we just read the cell's text and resolve it to a customer
+// via the shared exact / normalised / prefix matcher.
+function matchItemToCustomerByDropdownName(
+  item: RawItem,
+  dropdownColumnId: string,
+  customers: Customer[]
+): Customer | null {
+  const cell = item.column_values.find((c) => c.id === dropdownColumnId);
+  const name = cell?.text?.trim();
   if (!name) return null;
-  // Exact match first, then normalised match, then prefix.
+  return matchCustomerByName(name, customers);
+}
+
+// Resolve a raw customer-name string to a Customer via:
+//   1. exact case-insensitive display_name match
+//   2. normalised name match (strip punctuation, collapse whitespace)
+//   3. bidirectional prefix match (handles "Dish" ↔ "Dish - Ecostar")
+function matchCustomerByName(name: string, customers: Customer[]): Customer | null {
+  if (!name) return null;
   const exact = customers.find((c) => c.display_name.toLowerCase() === name.toLowerCase());
   if (exact) return exact;
   const norm = normalizeName(name);
   const normMatch = customers.find((c) => normalizeName(c.display_name) === norm);
   if (normMatch) return normMatch;
-  // Fall back to prefix-of-customer-name match (e.g. "Dish" → "Dish - Ecostar")
   const prefix = customers.find(
-    (c) => normalizeName(c.display_name).startsWith(norm) || norm.startsWith(normalizeName(c.display_name))
+    (c) =>
+      normalizeName(c.display_name).startsWith(norm) || norm.startsWith(normalizeName(c.display_name))
   );
   return prefix ?? null;
 }
@@ -197,7 +310,10 @@ interface BoardSyncResult {
 export interface MondaySyncResult {
   customers_indexed: number;
   registry_updates: { checked: number; updated: number; skipped_protected: number };
+  // Aggregated totals across all 6 project boards.
   projects: BoardSyncResult;
+  // Per-board breakdown for the /dev/sync diagnostic.
+  projects_by_board: Array<{ board_id: string; board_name: string; fiscal_year: string } & BoardSyncResult>;
   activities: BoardSyncResult;
   nps: BoardSyncResult;
   errors: Array<{ board: string; error: string }>;
@@ -317,29 +433,80 @@ export async function syncMonday(): Promise<MondaySyncResult> {
     customers_indexed: customers.length,
     registry_updates: { checked: 0, updated: 0, skipped_protected: 0 },
     projects: { fetched: 0, matched: 0, inserted: 0 },
+    projects_by_board: [],
     activities: { fetched: 0, matched: 0, inserted: 0 },
     nps: { fetched: 0, matched: 0, inserted: 0 },
     errors: [],
   };
 
-  // First: pull customer registry changes (groups / AE / partner). This
-  // closes the gap where Monday status changes never reached Postgres.
+  // First: pull customer registry changes (groups / AE / partner).
   try {
     result.registry_updates = await syncCustomerRegistry(customers, sb);
   } catch (err) {
     result.errors.push({ board: "customers_registry", error: err instanceof Error ? err.message : String(err) });
   }
 
-  await syncBoard(
-    "projects",
-    BOARDS.projects.id,
-    "monday_projects",
-    customers,
-    customersByMondayId,
-    {},
-    result,
-    sb
-  );
+  // Sync all 6 Delivery Planning project boards (active + FY + inactive).
+  for (const board of PROJECT_BOARDS) {
+    const boardResult: BoardSyncResult = { fetched: 0, matched: 0, inserted: 0 };
+    try {
+      await syncProjectBoard(board, customers, customersByMondayId, boardResult, sb);
+    } catch (err) {
+      result.errors.push({ board: board.name, error: err instanceof Error ? err.message : String(err) });
+    }
+    result.projects.fetched += boardResult.fetched;
+    result.projects.matched += boardResult.matched;
+    result.projects.inserted += boardResult.inserted;
+    result.projects_by_board.push({
+      board_id: board.id,
+      board_name: board.name,
+      fiscal_year: board.fiscalYear,
+      ...boardResult,
+    });
+  }
+
+  // Sync Account Overview boards from per-customer workspaces.
+  // These add per-customer operational status (Active/Stalled/Cancelled/Upcoming)
+  // that isn't captured in the FY delivery boards.
+  const aoResult: BoardSyncResult = { fetched: 0, matched: 0, inserted: 0 };
+  try {
+    await syncAccountOverviewBoards(customers, aoResult, sb);
+  } catch (err) {
+    result.errors.push({ board: "account_overview", error: err instanceof Error ? err.message : String(err) });
+  }
+  result.projects.fetched += aoResult.fetched;
+  result.projects.matched += aoResult.matched;
+  result.projects.inserted += aoResult.inserted;
+  result.projects_by_board.push({
+    board_id: "per-customer",
+    board_name: "Account Overview (all customers)",
+    fiscal_year: "account_overview",
+    ...aoResult,
+  });
+
+  // Sync Projects Portfolio → Projects Overview (legacy portfolio board).
+  const ppResult: BoardSyncResult = { fetched: 0, matched: 0, inserted: 0 };
+  try {
+    await syncProjectBoard(
+      { id: "6073051226", name: "Projects Portfolio", fiscalYear: "portfolio", customerDropdownColumn: "dropdown7__1", limit: 200 },
+      customers,
+      customersByMondayId,
+      ppResult,
+      sb
+    );
+  } catch (err) {
+    result.errors.push({ board: "projects_portfolio", error: err instanceof Error ? err.message : String(err) });
+  }
+  result.projects.fetched += ppResult.fetched;
+  result.projects.matched += ppResult.matched;
+  result.projects.inserted += ppResult.inserted;
+  result.projects_by_board.push({
+    board_id: "6073051226",
+    board_name: "Projects Portfolio",
+    fiscal_year: "portfolio",
+    ...ppResult,
+  });
+
   await syncBoard(
     "activities",
     BOARDS.activities.id,
@@ -379,8 +546,82 @@ export async function syncMonday(): Promise<MondaySyncResult> {
   return result;
 }
 
+// Sync one project board into monday_projects with all extended columns.
+async function syncProjectBoard(
+  board: ProjectBoard,
+  customers: Customer[],
+  customersByMondayId: Map<string, Customer>,
+  result: BoardSyncResult,
+  sb: ReturnType<typeof requireAdmin>
+): Promise<void> {
+  const items = await fetchBoardItems(board.id, board.limit);
+  result.fetched = items.length;
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (const it of items) {
+    let customer: Customer | null = null;
+
+    // 1. Board-relation column (most reliable when populated).
+    customer = matchItemToCustomerByRelation(it, PROJECT_COLS.customer_relation, customersByMondayId);
+
+    // 2. Customer dropdown (id varies by board: active vs FY-2026 vs older).
+    if (!customer && board.customerDropdownColumn) {
+      customer = matchItemToCustomerByDropdownName(it, board.customerDropdownColumn, customers);
+    }
+
+    // 3. Item-name prefix (last resort — works well for "JBI - Time Cards").
+    if (!customer) {
+      customer = matchItemToCustomerByName(it.name, customers);
+    }
+    if (!customer) continue;
+
+    result.matched++;
+    const cols = indexCols(it);
+    const timelineVal = cols[PROJECT_COLS.timeline]?.value ?? null;
+    const { start: tStart, end: tEnd } = parseTimeline(timelineVal);
+    const latestUpdateBody = it.updates?.[0]?.body ?? null;
+
+    rows.push({
+      customer_id: customer.id,
+      monday_item_id: it.id,
+      board_id: board.id,
+      name: it.name,
+      group_title: it.group?.title ?? null,
+      state: it.state,
+      monday_updated_at: it.updated_at,
+      raw_columns: indexCols(it),
+      synced_at: new Date().toISOString(),
+      // Stored columns (migrations 0010 + 0012).
+      fiscal_year:        board.fiscalYear,
+      board_name:         board.name,
+      go_live_date:       cols[PROJECT_COLS.go_live]?.text?.trim() || null,
+      kickoff_date:       cols[PROJECT_COLS.kickoff]?.text?.trim() || null,
+      total_effort_days:  cols[PROJECT_COLS.total_effort]?.text ? Number(cols[PROJECT_COLS.total_effort].text) || null : null,
+      delivered_value:    cols[PROJECT_COLS.delivered_value]?.text?.trim() || null,
+      ttv_days_text:      cols[PROJECT_COLS.ttv]?.text?.trim() || null,
+      timeline_start:     tStart,
+      timeline_end:       tEnd,
+      latest_update:      stripHtml(latestUpdateBody),
+    });
+  }
+
+  if (rows.length === 0) return;
+
+  // Wipe-and-replace per board (only for matched customers, so other
+  // boards' rows survive for unmatched customers).
+  const customerIds = Array.from(new Set(rows.map((r) => r.customer_id as string)));
+  await sb.from("monday_projects").delete().in("customer_id", customerIds).eq("board_id", board.id);
+
+  const { error } = await sb.from("monday_projects").insert(rows);
+  if (error) throw new Error(error.message);
+  result.inserted = rows.length;
+}
+
 interface MatcherConfig {
   relationColumnId?: string;
+  // Dropdown column whose `text` is the customer's display name (e.g. the
+  // Projects board's "Customer" dropdown — `dropdown_mm19sp0c`).
+  dropdownNameColumnId?: string;
   longTextHeaderColumnId?: string;
   // SF Contact-based matching: item.name is matched against
   // profile.contacts[].name across all customers. Used for the NPS board,
@@ -433,7 +674,7 @@ function matchItemByContactName(
 }
 
 async function syncBoard(
-  kind: "projects" | "activities" | "nps",
+  kind: "activities" | "nps",
   boardId: string,
   table: string,
   customers: Customer[],
@@ -458,7 +699,13 @@ async function syncBoard(
     if (matcher.relationColumnId) {
       customer = matchItemToCustomerByRelation(it, matcher.relationColumnId, customersByMondayId);
     }
-    // 2. Long-text header parsing ("Customer: <name>") — Fireflies-style.
+    // 2. Dropdown column whose text IS the customer name — primary fallback
+    //    for the Projects board where the relation column is sparse but the
+    //    "Customer" dropdown is consistently set.
+    if (!customer && matcher.dropdownNameColumnId) {
+      customer = matchItemToCustomerByDropdownName(it, matcher.dropdownNameColumnId, customers);
+    }
+    // 3. Long-text header parsing ("Customer: <name>") — Fireflies-style.
     if (!customer && matcher.longTextHeaderColumnId) {
       customer = matchItemToCustomerByLongTextHeader(
         it,
@@ -466,13 +713,13 @@ async function syncBoard(
         customers
       );
     }
-    // 3. SF Contact-name match — used for the NPS board where item.name is
+    // 4. SF Contact-name match — used for the NPS board where item.name is
     //    a respondent (e.g. "Paul Plunkett") and the customer is whoever
     //    that respondent works for (from the SF Account→Contact link).
     if (!customer && matcher.matchByContactName) {
       customer = matchItemByContactName(it, matcher.matchByContactName);
     }
-    // 4. Item name prefix (legacy fallback).
+    // 5. Item name prefix (legacy fallback).
     if (!customer) {
       customer = matchItemToCustomerByName(it.name, customers);
     }
@@ -505,4 +752,107 @@ async function syncBoard(
     return;
   }
   result[kind].inserted = rows.length;
+}
+
+// ── Account Overview boards (per-customer workspaces) ─────────────────────
+//
+// Each customer workspace has an "[Customer] - Account Overview" board. It
+// groups projects as: Active / Upcoming / Completed / Stalled / Cancelled.
+// Mirror columns return null (they read from sub-boards), so we capture:
+//   • project name (item name)
+//   • operational status (group title: "Active Projects", "Completed Projects", …)
+//   • complexity (direct status column `label_Mjj3tFzF`)
+//
+// We discover the Account Overview board dynamically by fetching boards in
+// the customer's Monday workspace (customers.monday_workspace_id) and
+// looking for a board whose name contains "Account Overview".
+
+const AO_COMPLEXITY_COL = "label_Mjj3tFzF";
+
+async function syncAccountOverviewBoards(
+  customers: Customer[],
+  result: BoardSyncResult,
+  sb: ReturnType<typeof requireAdmin>
+): Promise<void> {
+  // Only process customers that have a Monday workspace ID.
+  const withWorkspace = customers.filter((c) => c.monday_workspace_id);
+  if (withWorkspace.length === 0) return;
+
+  for (const customer of withWorkspace) {
+    try {
+      await syncOneAccountOverviewBoard(customer, result, sb);
+    } catch (err) {
+      // Don't abort the whole sync for one customer's board failure.
+      console.warn(
+        "[sync/ao] %s: %s",
+        customer.display_name,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+}
+
+async function syncOneAccountOverviewBoard(
+  customer: Customer,
+  result: BoardSyncResult,
+  sb: ReturnType<typeof requireAdmin>
+): Promise<void> {
+  // Discover the Account Overview board in the customer's workspace.
+  const boardsData = await gql<{
+    boards: Array<{ id: string; name: string; state: string }>;
+  }>(
+    `query($wsIds: [ID!]) {
+       boards(workspace_ids: $wsIds, limit: 50) {
+         id name state
+       }
+     }`,
+    { wsIds: [customer.monday_workspace_id] }
+  );
+
+  const aoBoard = (boardsData.boards ?? []).find(
+    (b) => b.name.toLowerCase().includes("account overview") && b.state === "active"
+  );
+  if (!aoBoard) return;
+
+  const items = await fetchBoardItems(aoBoard.id, 200);
+  result.fetched += items.length;
+  if (items.length === 0) return;
+
+  const rows = items
+    .filter((it) => it.name && it.group?.title)
+    .map((it) => {
+      const cols = indexCols(it);
+      return {
+        customer_id: customer.id,
+        monday_item_id: it.id,
+        board_id: aoBoard.id,
+        name: it.name,
+        group_title: it.group.title,
+        state: it.state,
+        monday_updated_at: it.updated_at,
+        raw_columns: cols,
+        synced_at: new Date().toISOString(),
+        fiscal_year: "account_overview",
+        board_name: aoBoard.name,
+        // Complexity is the only direct (non-mirror) column with useful text.
+        // We store it in raw_columns so the caller can lift it if needed.
+        // Also store a parsed status from the group title.
+        latest_update: stripHtml(it.updates?.[0]?.body ?? null),
+      };
+    });
+
+  if (rows.length === 0) return;
+
+  // Wipe-and-replace for this customer's Account Overview board.
+  await sb
+    .from("monday_projects")
+    .delete()
+    .eq("customer_id", customer.id)
+    .eq("board_id", aoBoard.id);
+
+  const { error } = await sb.from("monday_projects").insert(rows);
+  if (error) throw new Error(error.message);
+
+  result.matched += rows.length;
+  result.inserted += rows.length;
 }

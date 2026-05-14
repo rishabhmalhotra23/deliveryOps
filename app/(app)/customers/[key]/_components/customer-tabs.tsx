@@ -7,6 +7,10 @@ import { OpportunitiesCard } from "../_cards/opportunities-card";
 import { ProjectsCard } from "../_cards/projects-card";
 import { NpsResponsesCard } from "../_cards/nps-responses-card";
 import { ActivityLogCard } from "../_cards/activity-log-card";
+import { TasksTab } from "../_cards/tasks-tab";
+import { DocumentsTab } from "../_cards/documents-tab";
+import { ProfileTab } from "../_cards/profile-tab";
+import { RulesTab } from "../_cards/rules-tab";
 import type {
   ArrPoint,
   NpsTrendPoint,
@@ -20,10 +24,20 @@ import type { ContactRow } from "@/lib/supabase/types";
 
 type NpsResponse = NpsResponsesCardProps["responses"][number];
 
-const TABS = ["Overview", "Projects", "NPS", "Activity"] as const;
+const TABS = [
+  "Overview",
+  "Projects",
+  "NPS",
+  "Documents",
+  "Tasks",
+  "Profile",
+  "Rules",
+  "Activity",
+] as const;
 type Tab = (typeof TABS)[number];
 
 interface CustomerTabsProps {
+  customerKey: string;
   arrPoints: ArrPoint[];
   npsTrendPoints: NpsTrendPoint[];
   opportunitiesCardProps: OpportunitiesCardProps;
@@ -50,20 +64,20 @@ function TabButton({ label, active, onClick }: { label: string; active: boolean;
 }
 
 export function CustomerTabs({
+  customerKey,
   arrPoints,
   npsTrendPoints,
   opportunitiesCardProps,
   projectsCardProps,
   npsResponses,
   activityLogProps,
-  eventsTasksProps,
 }: CustomerTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
 
   return (
     <div className="space-y-4">
       {/* Tab bar */}
-      <div className="flex items-center gap-1 p-1 rounded-lg glass-card w-fit">
+      <div className="flex items-center gap-1 p-1 rounded-lg glass-card w-fit flex-wrap">
         {TABS.map((tab) => (
           <TabButton
             key={tab}
@@ -95,6 +109,11 @@ export function CustomerTabs({
         {activeTab === "NPS" && (
           <NpsResponsesCard responses={npsResponses} className="glass-card-hover" />
         )}
+
+        {activeTab === "Documents" && <DocumentsTab customerKey={customerKey} />}
+        {activeTab === "Tasks" && <TasksTab customerKey={customerKey} />}
+        {activeTab === "Profile" && <ProfileTab customerKey={customerKey} />}
+        {activeTab === "Rules" && <RulesTab customerKey={customerKey} />}
 
         {activeTab === "Activity" && (
           <ActivityLogCard {...activityLogProps} className="glass-card-hover" />

@@ -22,8 +22,9 @@ interface CustomerEntry {
 
 const STATIC_COMMANDS = [
   { id: "dashboard", label: "Dashboard", href: "/dashboard", group: "Navigate" },
-  { id: "analytics", label: "Analytics", href: "/analytics", group: "Navigate" },
   { id: "customers", label: "All Customers", href: "/customers", group: "Navigate" },
+  { id: "delivery", label: "Delivery Analytics", href: "/delivery", group: "Navigate" },
+  { id: "analytics", label: "Portfolio Analytics", href: "/analytics", group: "Navigate" },
   { id: "operations", label: "Operations Agent", href: "/operations", group: "Navigate" },
   { id: "agent", label: "Agent Chat", href: "/chat", group: "Navigate" },
   { id: "sync", label: "Sync Status", href: "/dev/sync", group: "Tools" },

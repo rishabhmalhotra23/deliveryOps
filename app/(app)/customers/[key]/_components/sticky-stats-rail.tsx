@@ -9,7 +9,6 @@ interface StickyStatsRailProps {
   arrStat: ArrStatProps;
   npsStat: NpsStatProps;
   projectsStat: ProjectsStatProps;
-  healthScore: number;
   renewalDate: string | null;
 }
 
@@ -36,7 +35,6 @@ export function StickyStatsRail({
   arrStat,
   npsStat,
   projectsStat,
-  healthScore,
   renewalDate,
 }: StickyStatsRailProps) {
   const [visible, setVisible] = useState(false);
@@ -52,13 +50,6 @@ export function StickyStatsRail({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
-  const healthColor =
-    healthScore >= 70
-      ? "text-emerald-500"
-      : healthScore >= 50
-      ? "text-amber-500"
-      : "text-red-500";
 
   return (
     <>
@@ -94,13 +85,6 @@ export function StickyStatsRail({
               value={npsStat.average != null ? npsStat.average.toFixed(1) : "—"}
               sub={`${npsStat.count} resp.`}
             />
-            <Divider />
-            <div>
-              <div className="eyebrow text-[color:var(--muted-foreground)]">Health</div>
-              <span className={`data-label text-[13px] font-semibold tabular-nums ${healthColor}`}>
-                {healthScore}
-              </span>
-            </div>
             <Divider />
             <Pip label="Projects" value={String(projectsStat.inProgress)} sub="active" />
             {renewalDate ? (

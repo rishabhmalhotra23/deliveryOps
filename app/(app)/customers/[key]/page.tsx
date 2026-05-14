@@ -5,10 +5,11 @@ import { getProfile, getInternalProfile } from "@/lib/profile/profile";
 import { listEvents } from "@/lib/events/events";
 import { listTasks } from "@/lib/tasks/tasks";
 import { loadCustomerEnrichment } from "@/lib/cache/integrations";
+import { loadK2Metrics } from "@/lib/customers/k2-metrics";
 
 import {
   buildHeroProps,
-  buildHealthSpotlightProps,
+  buildAccountSnapshotProps,
   buildArrStatProps,
   buildNpsStatProps,
   buildProjectsStatProps,
@@ -24,10 +25,12 @@ import {
 import { CustomerHero } from "./_components/customer-hero";
 import { StickyStatsRail } from "./_components/sticky-stats-rail";
 import { CustomerTabs } from "./_components/customer-tabs";
-import { HealthSpotlight } from "./_cards/health-spotlight";
+import { AccountSnapshot } from "./_cards/account-snapshot";
 import { ContactsCard } from "./_cards/contacts-card";
 import { EventsTasksCard } from "./_cards/events-tasks-card";
 import { MetadataCard } from "./_cards/metadata-card";
+import { K2MetricsCard } from "./_cards/k2-metrics-card";
+import { BackButton } from "@/app/_components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -41,13 +44,14 @@ export default async function CustomerPage({ params }: Props) {
   const customer = await getCustomerByKey(key);
   if (!customer) notFound();
 
-  const [enrichment, profile, internalProfile, events, tasks, allCustomers] = await Promise.all([
+  const [enrichment, profile, internalProfile, events, tasks, allCustomers, k2Metrics] = await Promise.all([
     loadCustomerEnrichment(customer.id).catch(() => null),
     getProfile(key).catch(() => null),
     getInternalProfile(key).catch(() => null),
     listEvents(key, { limit: 30 }).catch(() => []),
     listTasks(key).catch(() => []),
     listCustomers().catch(() => []),
+    loadK2Metrics(customer.id, customer.kognitos_v2_workspace_id).catch(() => null),
   ]);
 
   const opps = enrichment?.opportunities ?? [];
@@ -59,8 +63,7 @@ export default async function CustomerPage({ params }: Props) {
     allCustomers,
     enrichment?.account?.website ?? null
   );
-  const healthProps = buildHealthSpotlightProps(
-    customer,
+  const snapshotProps = buildAccountSnapshotProps(
     internalProfile,
     npsResponses,
     enrichment?.account?.owner_name ?? null
@@ -78,6 +81,10 @@ export default async function CustomerPage({ params }: Props) {
 
   return (
     <div className="min-h-screen">
+      {/* Back nav */}
+      <div className="px-6 pt-4">
+        <BackButton href="/customers" label="All customers" />
+      </div>
       {/* Brand Chameleon hero strip */}
       <CustomerHero {...heroProps} />
 
@@ -87,7 +94,6 @@ export default async function CustomerPage({ params }: Props) {
         arrStat={arrStatProps}
         npsStat={npsStatProps}
         projectsStat={projectsStatProps}
-        healthScore={healthProps.healthScore}
         renewalDate={heroProps.renewalDate}
       />
 
@@ -97,6 +103,7 @@ export default async function CustomerPage({ params }: Props) {
           {/* Left: tabs (8 cols) */}
           <div className="lg:col-span-8">
             <CustomerTabs
+              customerKey={key}
               arrPoints={arrPoints}
               npsTrendPoints={npsTrendPoints}
               opportunitiesCardProps={opportunitiesCardProps}
@@ -110,7 +117,8 @@ export default async function CustomerPage({ params }: Props) {
 
           {/* Right rail: sticky (4 cols) */}
           <div className="lg:col-span-4 space-y-4 lg:sticky lg:top-[72px] self-start">
-            <HealthSpotlight {...healthProps} />
+            <AccountSnapshot {...snapshotProps} />
+            {k2Metrics ? <K2MetricsCard metrics={k2Metrics} /> : null}
             <ContactsCard contacts={profile?.contacts ?? []} />
             <EventsTasksCard {...eventsTasksProps} />
             <MetadataCard {...metadataProps} />

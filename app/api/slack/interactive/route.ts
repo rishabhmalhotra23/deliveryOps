@@ -3,13 +3,20 @@ import { NextResponse } from "next/server";
 import { verifySlackSignature } from "@/lib/slack/signature";
 import { appendEvent } from "@/lib/events/events";
 import { resolveCustomerFromChannel } from "@/lib/customers";
+import { approve, reject, postDiscussPrompt, getApproval } from "@/lib/approvals/flow";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 // Slack POSTs `application/x-www-form-urlencoded` with a `payload` field
-// containing the JSON. Block actions arrive here when a user clicks a button
-// in an approval card.
+// containing the JSON. Block actions arrive here when a user clicks one of
+// the buttons on an approval card (built by lib/approvals/slack-cards.ts).
+//
+// Handled action_ids:
+//   approve_email   reject_email   discuss_email
+//   approve_action  reject_action  discuss_action
+//
+// Each button carries the approval_id in its `value` field.
 export async function POST(request: Request) {
   const rawBody = await request.text();
   const signingSecret = process.env.SLACK_SIGNING_SECRET ?? "";
@@ -42,37 +49,70 @@ export async function POST(request: Request) {
   const action = payload.actions?.[0];
   if (!action) return NextResponse.json({ ok: true });
 
-  const channelName = payload.channel?.name ?? payload.channel?.id ?? "";
-  let customerKey: string | null = null;
-  try {
-    const customer = await resolveCustomerFromChannel(channelName);
-    customerKey = customer?.key ?? null;
-  } catch {
-    /* ignore */
+  const decidedBy = payload.user?.real_name ?? payload.user?.name ?? payload.user?.id ?? "unknown";
+  const approvalId = action.value ?? "";
+
+  // Slack requires a 200 within 3 seconds. Run the actual work without
+  // awaiting in the happy path; failures get logged but don't block ack.
+  handleAction(action.action_id, approvalId, decidedBy, payload.channel?.name ?? "").catch(
+    (err) => console.error("[slack-interactive] handler failed:", err)
+  );
+
+  return NextResponse.json({ ok: true });
+}
+
+async function handleAction(
+  actionId: string,
+  approvalId: string,
+  decidedBy: string,
+  channelName: string
+): Promise<void> {
+  if (!approvalId) {
+    console.warn("[slack-interactive] action without approval_id:", actionId);
+    return;
+  }
+  const approval = await getApproval(approvalId);
+  if (!approval) {
+    console.warn("[slack-interactive] approval not found: %s", approvalId);
+    return;
   }
 
-  const user = payload.user?.real_name ?? payload.user?.name ?? payload.user?.id ?? "unknown";
-
-  if (customerKey) {
-    await appendEvent(
-      customerKey,
-      "APPROVAL_ACTION",
-      {
-        action_id: action.action_id,
-        approval_id: action.value ?? "",
-        actor: user,
-      },
-      {
-        summary: `Approval action: ${action.action_id} by ${user}`,
-        tags: ["approval", action.action_id],
+  switch (actionId) {
+    case "approve_email":
+    case "approve_action": {
+      const result = await approve(approval, decidedBy);
+      console.log("[slack-interactive] approve %s by %s → %s", approvalId, decidedBy, result.note);
+      return;
+    }
+    case "reject_email":
+    case "reject_action": {
+      const result = await reject(approval, decidedBy);
+      console.log("[slack-interactive] reject %s by %s → %s", approvalId, decidedBy, result.note);
+      return;
+    }
+    case "discuss_email":
+    case "discuss_action": {
+      const result = await postDiscussPrompt(approval);
+      console.log("[slack-interactive] discuss %s → %s", approvalId, result.note);
+      return;
+    }
+    default: {
+      // Unknown action — log against the customer's event log if we can
+      // resolve it, for visibility.
+      try {
+        const customer = await resolveCustomerFromChannel(channelName);
+        if (customer?.key) {
+          await appendEvent(
+            customer.key,
+            "APPROVAL_ACTION_UNKNOWN",
+            { action_id: actionId, approval_id: approvalId, actor: decidedBy },
+            { summary: `Unknown approval action ${actionId} by ${decidedBy}`, tags: ["approval"] }
+          );
+        }
+      } catch {
+        /* no-op */
       }
-    );
+      console.warn("[slack-interactive] unhandled action: %s", actionId);
+    }
   }
-
-  // Phase 1 stub — full approve/reject/discuss handlers land alongside the
-  // email-approval port. Slack expects a 200 within 3 seconds.
-  return NextResponse.json({
-    ok: true,
-    note: "DeliveryOps received the action. The full approval flow lands in the email-approval port.",
-  });
 }

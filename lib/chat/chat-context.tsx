@@ -14,6 +14,12 @@ interface ChatContextValue {
   streamingContent: string;
   toolStatus: string | null;
   error: string | null;
+  // Customer scoping: when set, every new chat message is routed to the
+  // per-customer agent (lib/agent/runner.ts) for this customer. Null falls
+  // through to the server's "first customer" fallback — kill that fallback
+  // by always selecting a customer in the UI.
+  activeCustomerKey: string | null;
+  setActiveCustomerKey: (key: string | null) => void;
   createSession: () => Promise<string | null>;
   sendMessage: (content: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
@@ -30,6 +36,7 @@ export function useChatContext() {
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeCustomerKey, setActiveCustomerKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -126,7 +133,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, message: content }),
+          body: JSON.stringify({
+            sessionId,
+            message: content,
+            customerKey: activeCustomerKey ?? undefined,
+          }),
         });
 
         if (!res.ok || !res.body) {
@@ -195,7 +206,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setToolStatus(null);
       }
     },
-    [activeSessionId, createSession]
+    [activeSessionId, createSession, activeCustomerKey]
   );
 
   const deleteSession = useCallback(
@@ -227,6 +238,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         streamingContent,
         toolStatus,
         error,
+        activeCustomerKey,
+        setActiveCustomerKey,
         createSession,
         sendMessage,
         deleteSession,

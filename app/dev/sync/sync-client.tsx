@@ -11,11 +11,59 @@ interface SyncRun {
   status: string;
   rows_synced: number;
   error: string | null;
+  details: Record<string, unknown> | null;
 }
 
 interface StatusResponse {
   runs: SyncRun[];
   counts: Record<string, number>;
+}
+
+interface BoardTier {
+  label: string;
+  key: "projects" | "activities" | "nps";
+}
+
+const MONDAY_BOARDS: BoardTier[] = [
+  { label: "All Projects (total)", key: "projects" },
+  { label: "Activity Log", key: "activities" },
+  { label: "NPS Tracking", key: "nps" },
+];
+
+interface BoardCounts {
+  fetched: number;
+  matched: number;
+  inserted: number;
+}
+
+interface PerBoardCounts extends BoardCounts {
+  board_id: string;
+  board_name: string;
+  fiscal_year: string;
+}
+
+function extractMondayBoardCounts(details: Record<string, unknown> | null, key: BoardTier["key"]): BoardCounts | null {
+  if (!details || typeof details !== "object") return null;
+  const board = (details as Record<string, unknown>)[key];
+  if (!board || typeof board !== "object") return null;
+  const b = board as Record<string, unknown>;
+  return {
+    fetched: typeof b.fetched === "number" ? b.fetched : 0,
+    matched: typeof b.matched === "number" ? b.matched : 0,
+    inserted: typeof b.inserted === "number" ? b.inserted : 0,
+  };
+}
+
+function extractProjectsByBoard(details: Record<string, unknown> | null): PerBoardCounts[] {
+  if (!details || !Array.isArray(details.projects_by_board)) return [];
+  return (details.projects_by_board as PerBoardCounts[]).map((b) => ({
+    board_id: b.board_id,
+    board_name: b.board_name,
+    fiscal_year: b.fiscal_year,
+    fetched: b.fetched ?? 0,
+    matched: b.matched ?? 0,
+    inserted: b.inserted ?? 0,
+  }));
 }
 
 export function SyncClient() {
@@ -55,6 +103,8 @@ export function SyncClient() {
     loadStatus();
   }, []);
 
+  const latestMondayRun = status?.runs.find((r) => r.source === "monday" && r.status === "ok") ?? null;
+
   return (
     <div className="space-y-4">
       {/* Counts */}
@@ -70,6 +120,69 @@ export function SyncClient() {
           </div>
         ))}
       </div>
+
+      {/* Monday board match rates — surface the per-board fetched/matched/inserted
+          counts from the most recent successful Monday sync. */}
+      {latestMondayRun ? (
+        <div className="rounded-md border border-[color:var(--brand-metal)] bg-white">
+          <div className="px-4 py-2 text-xs uppercase tracking-wider text-[color:var(--brand-gray)] border-b border-[color:var(--brand-metal-line)] flex items-center justify-between">
+            <span>Monday match rates (latest successful sync)</span>
+            <span className="text-[color:var(--brand-gray)] normal-case tracking-normal">
+              {new Date(latestMondayRun.started_at).toLocaleString()}
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="text-xs uppercase tracking-wider text-[color:var(--brand-gray)]">
+              <tr>
+                <th className="text-left px-4 py-2">Board</th>
+                <th className="text-right px-4 py-2">Fetched</th>
+                <th className="text-right px-4 py-2">Matched</th>
+                <th className="text-right px-4 py-2">Inserted</th>
+                <th className="text-right px-4 py-2">Match %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Per-project-board breakdown from projects_by_board */}
+              {extractProjectsByBoard(latestMondayRun.details).map((b) => {
+                const pct = b.fetched > 0 ? (b.matched / b.fetched) * 100 : 0;
+                const tone = pct >= 95 ? "text-emerald-700" : pct >= 70 ? "text-amber-700" : "text-red-700";
+                return (
+                  <tr key={b.board_id} className="border-t border-[color:var(--brand-metal-line)]">
+                    <td className="px-4 py-2">
+                      <span className="font-medium">{b.board_name}</span>
+                      <span className="ml-2 text-[10px] text-[color:var(--brand-gray)] uppercase">{b.fiscal_year}</span>
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">{b.fetched}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{b.matched}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{b.inserted}</td>
+                    <td className={`px-4 py-2 text-right tabular-nums font-medium ${tone}`}>
+                      {pct.toFixed(0)}%
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Activity Log + NPS totals */}
+              {MONDAY_BOARDS.filter((b) => b.key !== "projects").map((b) => {
+                const counts = extractMondayBoardCounts(latestMondayRun.details, b.key);
+                if (!counts) return null;
+                const pct = counts.fetched > 0 ? (counts.matched / counts.fetched) * 100 : 0;
+                const tone = pct >= 95 ? "text-emerald-700" : pct >= 70 ? "text-amber-700" : "text-red-700";
+                return (
+                  <tr key={b.key} className="border-t border-[color:var(--brand-metal-line)]">
+                    <td className="px-4 py-2 font-medium">{b.label}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{counts.fetched}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{counts.matched}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{counts.inserted}</td>
+                    <td className={`px-4 py-2 text-right tabular-nums font-medium ${tone}`}>
+                      {pct.toFixed(0)}%
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {/* Action bar */}
       <div className="flex items-center gap-3 rounded-md border border-[color:var(--brand-metal)] bg-white p-3 text-sm">

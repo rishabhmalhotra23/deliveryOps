@@ -12,6 +12,7 @@ import { supabaseEnabled } from "@/lib/dev/mode";
 
 export type OutboxKind =
   | "slack.message"
+  | "slack.message_update"
   | "slack.escalation"
   | "gmail.send"
   | "drive.upload"

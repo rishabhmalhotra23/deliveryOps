@@ -82,14 +82,21 @@ export function ActivityLogCard({ customerName, activities, openCount, className
   return (
     <div className={`glass-card overflow-hidden ${className ?? ""}`}>
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-[var(--glass-border)] flex items-center justify-between gap-2">
-        <div>
-          <div className="eyebrow text-[color:var(--muted-foreground)]">Activity log</div>
-          <h3 className="text-sm font-semibold tracking-tighter text-[color:var(--foreground)] mt-0.5">
-            {openCount > 0 ? `${openCount} open item${openCount === 1 ? "" : "s"}` : "All items resolved"}
-          </h3>
+      <div className="px-4 pt-4 pb-3 border-b border-[var(--glass-border)]">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="eyebrow text-[color:var(--muted-foreground)]">Activity log</div>
+            <h3 className="text-sm font-semibold tracking-tighter text-[color:var(--foreground)] mt-0.5">
+              {openCount > 0 ? `${openCount} open item${openCount === 1 ? "" : "s"}` : "All items resolved"}
+            </h3>
+          </div>
+          <span className="data-label text-[color:var(--muted-foreground)]">{activities.length} total</span>
         </div>
-        <span className="data-label text-[color:var(--muted-foreground)]">{activities.length} total</span>
+        <p className="text-[10px] text-[color:var(--muted-foreground)] mt-2 leading-relaxed">
+          Action items from Fireflies meeting transcripts synced through Monday&apos;s Activity Log board.
+          Items show as <span className="text-blue-500 font-medium">Open</span> or <span className="text-emerald-500 font-medium">Resolved</span> based on their Monday status.
+          To close an item, update its status in Monday — the next sync will reflect it here.
+        </p>
       </div>
 
       {/* Timeline */}

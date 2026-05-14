@@ -281,6 +281,11 @@ export const DELIVERY_OPS_TOOLS: Anthropic.Tool[] = [
       },
       required: ["rules"],
     },
+    // Anthropic prompt caching: marking the LAST tool with cache_control
+    // caches the entire tools block. Since tool definitions virtually never
+    // change between calls, this is effectively a one-time cost per ~5 min
+    // window. https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+    cache_control: { type: "ephemeral" },
   },
 ];
 

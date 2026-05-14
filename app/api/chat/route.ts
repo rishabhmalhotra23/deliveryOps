@@ -28,14 +28,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing sessionId or message." }, { status: 400 });
   }
 
-  // Resolve which customer this session is scoped to. Phase-1 strategy:
-  //   1. explicit `customerKey` in the body takes priority
-  //   2. fall back to the first known customer (single-pilot mode)
+  // Resolve which customer this chat is scoped to. The client MUST pass
+  // `customerKey` explicitly — either via the chat page's picker, or from
+  // a customer-page chat tab. We fall back to "first customer" only when
+  // the customers table has exactly one row (single-pilot mode), so the
+  // app still works out-of-the-box but never silently masks the wrong
+  // customer in a multi-customer environment.
   let customerKey = body.customerKey;
   if (!customerKey) {
     try {
       const customers = await listCustomers();
-      customerKey = customers[0]?.key;
+      if (customers.length === 1) {
+        customerKey = customers[0].key;
+      }
     } catch {
       /* fall through — we'll error below */
     }
@@ -45,7 +50,7 @@ export async function POST(request: Request) {
       `data: ${JSON.stringify({
         type: "error",
         content:
-          "No customer is wired up yet. Insert a row in the customers table (or pass customerKey in the request body) and try again.",
+          "Pick a customer first — chat is scoped per-customer. Use the picker at the top of the chat page, or open the chat tab inside a customer's page.",
       })}\n\ndata: ${JSON.stringify({ type: "done", full_text: "" })}\n\n`,
       { headers: streamHeaders() }
     );

@@ -101,6 +101,8 @@ const TOOLS: Anthropic.Tool[] = [
     name: "summarize_portfolio",
     description: "Aggregate stats across the whole book — counts by AE, category, partner, plus cached SF totals.",
     input_schema: { type: "object", properties: {}, required: [] },
+    // Prompt-caching marker on the last tool caches the entire tools block.
+    cache_control: { type: "ephemeral" },
   },
 ];
 
@@ -281,9 +283,13 @@ function stringArrayOrThrow(v: unknown, name: string): string[] {
 }
 
 // ─── system prompt ───────────────────────────────────────────────────────
+//
+// Returned as cacheable text blocks for Anthropic prompt caching:
+//   1. Skeleton (rules + flow)  → cached
+//   2. Brand voice              → cached
+// See `lib/agent/prompts.ts` for the per-customer equivalent.
 
-function buildSystemPrompt(): string {
-  return `You are the **DeliveryOps Operations Agent** — the portfolio-wide brain for Kognitos's post-sales team. You operate across all customers at once, not per-customer.
+const OPS_SKELETON = `You are the **DeliveryOps Operations Agent** — the portfolio-wide brain for Kognitos's post-sales team. You operate across all customers at once, not per-customer.
 
 ## What you do
 - Answer questions about the whole book ("how many customers does Owen own?", "which renewals are due this quarter?").
@@ -298,10 +304,21 @@ function buildSystemPrompt(): string {
 3. **Source-of-truth rule.** When you change a field via your tools, that field is locked from sync overwrites. Be deliberate.
 4. **Don't fabricate categories.** Use existing categories unless the user explicitly says to mint a new one. The standard set is: At Risk, Upcoming Renewals, Strategic Growth, Active, Partner Managed, POV, Churned.
 5. **Don't touch churned customers** unless explicitly asked. They're frozen for retro/win-loss analysis.
-6. **One question at a time.** If a request is ambiguous (e.g. "rename Owen's accounts to Binny" — which Owen's accounts? all? actives only?), ask once, then proceed.
+6. **One question at a time.** If a request is ambiguous (e.g. "rename Owen's accounts to Binny" — which Owen's accounts? all? actives only?), ask once, then proceed.`;
 
-${BRAND_VOICE_BLOCK}
-`;
+function buildSystemPrompt(): Anthropic.TextBlockParam[] {
+  return [
+    {
+      type: "text",
+      text: OPS_SKELETON,
+      cache_control: { type: "ephemeral" },
+    },
+    {
+      type: "text",
+      text: BRAND_VOICE_BLOCK,
+      cache_control: { type: "ephemeral" },
+    },
+  ];
 }
 
 // ─── streaming runner ────────────────────────────────────────────────────

@@ -5,9 +5,6 @@
 import {
   deriveArr,
   deriveArrTrend,
-  deriveHealthScore,
-  deriveChurnRisk,
-  explainHealthScore,
   type OppForArr,
 } from "@/lib/profile/derive";
 import { categoryFromCustomer } from "@/app/_components/brand";
@@ -110,23 +107,23 @@ export function buildHeroProps(
   };
 }
 
-export interface HealthSpotlightProps {
-  category: string | null;
-  healthScore: number;
-  healthExplanation: string;
-  churnRisk: "low" | "medium" | "high";
+// Account snapshot — what we know about the customer from real, defendable
+// signals only. Health-score derivation lived here until 2026-05-14; it was
+// derived from `custom_category` (essentially a category→number lookup),
+// which we couldn't defend. A data-driven health score will land later,
+// computed from NPS trend, support cases, credit burn and open-issue age.
+export interface AccountSnapshotProps {
   npsAverage: number | null;
   npsCount: number;
   nextQbrDate: string | null;
   sfAccountOwner: string | null;
 }
 
-export function buildHealthSpotlightProps(
-  customer: Customer,
+export function buildAccountSnapshotProps(
   internalProfile: InternalProfile | null,
   npsResponses: Array<{ score: number | null }>,
   sfAccountOwner: string | null
-): HealthSpotlightProps {
+): AccountSnapshotProps {
   const liveScores = npsResponses
     .map((r) => r.score)
     .filter((s): s is number => typeof s === "number");
@@ -134,10 +131,6 @@ export function buildHealthSpotlightProps(
     ? Math.round((liveScores.reduce((a, b) => a + b, 0) / liveScores.length) * 10) / 10
     : null;
   return {
-    category: customer.custom_category,
-    healthScore: deriveHealthScore(customer.custom_category),
-    healthExplanation: explainHealthScore(customer.custom_category),
-    churnRisk: deriveChurnRisk(customer.custom_category),
     npsAverage,
     npsCount: liveScores.length,
     nextQbrDate: internalProfile?.next_qbr_date ?? null,
@@ -413,6 +406,8 @@ export interface ProjectsCardProps {
     monday_item_id: string;
     name: string;
     group_title: string | null;
+    fiscal_year: string | null;
+    board_name: string | null;
     health: string | null;
     project_status: string | null;
     current_phase: string | null;
@@ -420,8 +415,15 @@ export interface ProjectsCardProps {
     complexity: string | null;
     kickoff_date: string | null;
     go_live_date: string | null;
+    timeline_start: string | null;
+    timeline_end: string | null;
     tam: string | null;
     dev: string | null;
+    partner: string | null;
+    total_effort_days: number | null;
+    delivered_value: string | null;
+    ttv_days_text: string | null;
+    latest_update: string | null;
   }>;
   mondaySyncedAt: string | null;
 }

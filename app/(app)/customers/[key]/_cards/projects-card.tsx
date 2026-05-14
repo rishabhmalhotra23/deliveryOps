@@ -1,195 +1,68 @@
 "use client";
 
+import { useState } from "react";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
   Badge,
   EmptyState,
-  Text,
 } from "@kognitos/lattice";
 import type { ProjectsCardProps } from "@/lib/customers/view-model";
+import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 
-const HEALTH_VARIANT: Record<string, "success" | "warning" | "destructive" | "outline"> = {
-  "On Track": "success",
-  Healthy: "success",
-  Watch: "warning",
-  "At Risk": "destructive",
-  Blocked: "destructive",
+// ── Status/health colour maps ────────────────────────────────────────────────
+
+const HEALTH_CLASS: Record<string, string> = {
+  "On Track":  "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  Healthy:     "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  Finished:    "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  Done:        "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "At Risk":   "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  Blocked:     "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25",
+  Inactive:    "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
 };
 
-const STATUS_VARIANT: Record<string, "success" | "warning" | "secondary" | "outline" | "default"> = {
-  Delivered: "success",
-  Live: "success",
-  "In Progress": "default",
-  "On Hold": "secondary",
-  Cancelled: "secondary",
-  Backlog: "outline",
-  Upcoming: "outline",
+const STATUS_CLASS: Record<string, string> = {
+  Live:          "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  Delivered:     "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  "In Progress": "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "On Hold":     "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  Inactive:      "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+  Cancelled:     "bg-red-500/8 text-red-700 dark:text-red-400 border-red-500/20",
 };
 
-const GROUP_ORDER = ["Active", "Pipeline", "On Hold", "Backlog"];
-const TODAY = new Date().toISOString().slice(0, 10);
+const FY_CLASS: Record<string, string> = {
+  active:           "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  inactive:         "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+  "FY-2026":        "bg-[rgba(242,255,112,0.15)] text-[color:var(--brand-night)] dark:text-yellow-300 border-[rgba(242,255,112,0.35)]",
+  "FY-2025":        "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/25",
+  "FY-2024":        "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/25",
+  "FY-2023":        "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/25",
+  account_overview: "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20",
+  portfolio:        "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+};
 
-export function ProjectsCard({ customerName, projects, mondaySyncedAt, className }: ProjectsCardProps & { className?: string }) {
-  if (projects.length === 0) {
-    return (
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle>Projects</CardTitle>
-          <Text level="xSmall" color="muted">from Monday Projects board</Text>
-        </CardHeader>
-        <CardContent>
-          <EmptyState
-            icon="FolderOpen"
-            title="No projects yet"
-            description="Projects from Monday's Projects board appear here once matched to this customer."
-          />
-        </CardContent>
-      </Card>
-    );
-  }
+const PLATFORM_CLASS: Record<string, string> = {
+  V1: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+  V2: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/25",
+};
 
-  // Bucket: delivered vs in-flight
-  const delivered = projects.filter(
-    (p) =>
-      ["Delivered", "Live"].includes(p.project_status ?? "") ||
-      ((p.go_live_date ?? "") <= TODAY && (p.go_live_date ?? "").length >= 8)
-  ).sort((a, b) => ((a.go_live_date ?? "") < (b.go_live_date ?? "") ? 1 : -1));
-  const inFlight = projects.filter((p) => !delivered.includes(p));
-
-  // Group in-flight by Monday board group
-  const grouped = new Map<string, typeof inFlight>();
-  for (const p of inFlight) {
-    const key = p.group_title ?? "(other)";
-    const list = grouped.get(key) ?? [];
-    list.push(p);
-    grouped.set(key, list);
-  }
-  const ordered = [
-    ...GROUP_ORDER.filter((g) => grouped.has(g)).map((g) => [g, grouped.get(g)!] as const),
-    ...[...grouped.entries()].filter(([g]) => !GROUP_ORDER.includes(g)),
-  ];
-
-  return (
-    <Card className={className}>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle>Projects ({projects.length})</CardTitle>
-          {mondaySyncedAt ? (
-            <Text level="xSmall" color="muted">synced {relTime(mondaySyncedAt)}</Text>
-          ) : null}
-        </div>
-        <Text level="xSmall" color="muted">from Monday · PM tool</Text>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {/* In-flight groups */}
-        {ordered.map(([groupName, list]) => (
-          <Accordion key={groupName} type="single" collapsible defaultValue="open">
-            <AccordionItem value="open">
-              <AccordionTrigger>
-                <div className="flex items-center gap-2">
-                  <span>{groupName}</span>
-                  <Badge variant="outline" className="text-xs">{list.length}</Badge>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-2 pt-1">
-                  {list.map((p) => (
-                    <ProjectRow key={p.monday_item_id} project={p} customerName={customerName} />
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        ))}
-
-        {/* Delivered bucket */}
-        {delivered.length > 0 ? (
-          <Accordion type="single" collapsible defaultValue="delivered">
-            <AccordionItem value="delivered">
-              <AccordionTrigger>
-                <div className="flex items-center gap-2">
-                  <span>Delivered</span>
-                  <Badge variant="success" className="text-xs">{delivered.length}</Badge>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-2 pt-1">
-                  {delivered.map((p) => (
-                    <ProjectRow key={p.monday_item_id} project={p} customerName={customerName} />
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        ) : (
-          <div className="pt-2 border-t border-border">
-            <Text level="xSmall" color="muted" className="italic">
-              No delivered projects yet — will appear once go-live dates are set on Monday.
-            </Text>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+function chipClass(map: Record<string, string>, key: string | null | undefined): string {
+  if (!key) return "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
+  return map[key] ?? "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
 }
 
-function ProjectRow({
-  project,
-  customerName,
-}: {
-  project: ProjectsCardProps["projects"][0];
-  customerName: string;
-}) {
-  const cleanName = project.name.replace(new RegExp(`^${customerName}\\s*[-—]\\s*`), "");
+function Chip({ label }: { label: string }) {
   return (
-    <div className="rounded-md border border-border bg-muted/30 p-3">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <Text level="small" weight="medium" className="truncate">{cleanName}</Text>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {project.dev_platform ? (
-            <Badge variant="outline" className="text-[10px]">{project.dev_platform}</Badge>
-          ) : null}
-          {project.health ? (
-            <Badge variant={HEALTH_VARIANT[project.health] ?? "outline"} className="text-[10px]">
-              {project.health}
-            </Badge>
-          ) : null}
-          {project.project_status ? (
-            <Badge variant={STATUS_VARIANT[project.project_status] ?? "outline"} className="text-[10px]">
-              {project.project_status}
-            </Badge>
-          ) : null}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {project.current_phase ? <Meta label="Phase">{project.current_phase}</Meta> : null}
-        {project.complexity ? <Meta label="Complexity">{project.complexity}</Meta> : null}
-        {project.kickoff_date ? <Meta label="Kickoff">{project.kickoff_date}</Meta> : null}
-        {project.go_live_date ? (
-          <Meta label="Go live">
-            <span className="font-medium text-foreground">{project.go_live_date}</span>
-          </Meta>
-        ) : null}
-        {project.tam ? <Meta label="TAM">{project.tam.split("@")[0]}</Meta> : null}
-        {project.dev ? <Meta label="Dev">{project.dev.split("@")[0]}</Meta> : null}
-      </div>
-    </div>
-  );
-}
-
-function Meta({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <span className="text-xs text-muted-foreground">
-      {label}: {children}
+    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]">
+      {label}
     </span>
   );
+}
+function ColorChip({ label, cls }: { label: string; cls: string }) {
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}>{label}</span>;
 }
 
 function relTime(iso: string): string {
@@ -199,3 +72,314 @@ function relTime(iso: string): string {
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
   return `${Math.round(ms / 86_400_000)}d ago`;
 }
+
+type Project = ProjectsCardProps["projects"][0];
+
+// Historical = has a fiscal_year that isn't "active"
+function isDelivered(p: Project): boolean {
+  const s = (p.project_status ?? "").toLowerCase();
+  const g = (p.group_title ?? "").toLowerCase();
+  return s === "live" || s === "delivered" || s === "finished" ||
+    g === "completed projects";
+}
+function isActive(p: Project): boolean {
+  // Active = the in-flight active board OR Account Overview "Active Projects" group
+  const g = (p.group_title ?? "").toLowerCase();
+  return p.fiscal_year === "active" ||
+    (p.fiscal_year === "account_overview" && (g.includes("active") || g.includes("upcoming")));
+}
+function isStalled(p: Project): boolean {
+  const g = (p.group_title ?? "").toLowerCase();
+  return g === "stalled projects";
+}
+function isCancelledOrInactive(p: Project): boolean {
+  const g = (p.group_title ?? "").toLowerCase();
+  const s = (p.project_status ?? "").toLowerCase();
+  return p.fiscal_year === "inactive" || g.includes("cancel") || s === "inactive" || s === "cancelled";
+}
+
+// ── Main card ───────────────────────────────────────────────────────────────
+
+export function ProjectsCard({
+  customerName,
+  projects,
+  mondaySyncedAt,
+  className,
+}: ProjectsCardProps & { className?: string }) {
+  const [selectedProject, setSelectedProject] = useState<ProjectPanelItem | null>(null);
+
+  function toPanel(p: ProjectsCardProps["projects"][0]): ProjectPanelItem {
+    return {
+      monday_item_id: p.monday_item_id,
+      name: p.name,
+      customer_display_name: customerName,
+      fiscal_year: p.fiscal_year,
+      health: p.health,
+      project_status: p.project_status,
+      current_phase: p.current_phase,
+      dev_platform: p.dev_platform,
+      complexity: p.complexity,
+      kickoff_date: p.kickoff_date,
+      go_live_date: p.go_live_date,
+      total_effort_days: p.total_effort_days,
+      ttv_days_text: p.ttv_days_text,
+      delivered_value: p.delivered_value,
+      latest_update: p.latest_update,
+      tam: p.tam,
+      dev: p.dev,
+      partner: p.partner,
+      group_title: p.group_title,
+    };
+  }
+  if (projects.length === 0) {
+    return (
+      <div className={`glass-card glass-card-hover p-5 ${className ?? ""}`}>
+        <div className="eyebrow text-[color:var(--muted-foreground)] mb-2">Projects</div>
+        <EmptyState
+          icon="FolderOpen"
+          title="No projects yet"
+          description="Projects from Monday appear here once matched to this customer."
+        />
+      </div>
+    );
+  }
+
+  const active  = projects.filter(isActive);
+  const historical = projects.filter((p) => !isActive(p) && isDelivered(p));
+  const stalled = projects.filter((p) => !isActive(p) && !isDelivered(p) && isStalled(p));
+  const inactive = projects.filter((p) => !isActive(p) && !isDelivered(p) && !isStalled(p) && isCancelledOrInactive(p));
+  // Account Overview "Upcoming" shows separately from "Active" in the board
+  // but we merge it into active for the customer page (it's planned work).
+
+  // Active: group by Monday board group
+  const GROUP_ORDER = ["Active", "Pipeline", "On Hold", "Backlog"];
+  const grouped = new Map<string, Project[]>();
+  for (const p of active) {
+    const k = p.group_title ?? "Other";
+    if (!grouped.has(k)) grouped.set(k, []);
+    grouped.get(k)!.push(p);
+  }
+  const orderedGroups = [
+    ...GROUP_ORDER.filter((g) => grouped.has(g)).map((g) => [g, grouped.get(g)!] as const),
+    ...[...grouped.entries()].filter(([g]) => !GROUP_ORDER.includes(g)),
+  ];
+
+  // Historical: sort by go_live_date descending
+  const sortedHistorical = [...historical].sort(
+    (a, b) => ((a.go_live_date ?? "") < (b.go_live_date ?? "") ? 1 : -1)
+  );
+
+  const totalCount = projects.length;
+  const headerSummary = [
+    `${totalCount} total`,
+    active.length > 0 ? `${active.length} in-flight` : null,
+    historical.length > 0 ? `${historical.length} delivered` : null,
+    stalled.length > 0 ? `${stalled.length} stalled` : null,
+    inactive.length > 0 ? `${inactive.length} inactive` : null,
+  ].filter(Boolean).join(" · ");
+
+  return (
+    <div className={`glass-card glass-card-hover overflow-hidden ${className ?? ""}`}>
+      <div className="px-5 py-4 border-b border-[var(--glass-border)] flex items-center justify-between">
+        <div>
+          <div className="eyebrow text-[color:var(--muted-foreground)]">Projects</div>
+          <div className="text-sm font-semibold tracking-tight text-[color:var(--foreground)]">
+            {headerSummary}
+          </div>
+        </div>
+        {mondaySyncedAt ? (
+          <span className="data-label text-[color:var(--muted-foreground)]">synced {relTime(mondaySyncedAt)}</span>
+        ) : null}
+      </div>
+
+      <div className="p-4 space-y-3">
+        {/* ── In-flight ── */}
+        {orderedGroups.length > 0 ? (
+          <Accordion type="multiple" defaultValue={orderedGroups.map(([g]) => g)}>
+            {orderedGroups.map(([groupName, list]) => (
+              <AccordionItem value={groupName} key={groupName}>
+                <AccordionTrigger>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{groupName}</span>
+                    <Badge variant="outline" className="text-xs">{list.length}</Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-2 pt-1">
+                  {list.map((p) => (
+                    <ProjectRow key={p.monday_item_id} project={p} customerName={customerName} onSelect={() => setSelectedProject(toPanel(p))} />
+                  ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        ) : null}
+
+        {/* ── Historical / delivered ── */}
+        {sortedHistorical.length > 0 ? (
+          <Accordion type="single" collapsible defaultValue="delivered">
+            <AccordionItem value="delivered">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Delivered / historical</span>
+                  <Badge variant="success" className="text-xs">{sortedHistorical.length}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2 pt-1">
+                  {sortedHistorical.map((p) => (
+                    <ProjectRow key={p.monday_item_id} project={p} customerName={customerName} onSelect={() => setSelectedProject(toPanel(p))} />
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        ) : null}
+
+        {/* ── Stalled ── */}
+        {stalled.length > 0 ? (
+          <Accordion type="single" collapsible>
+            <AccordionItem value="stalled">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-amber-600 dark:text-amber-400">Stalled</span>
+                  <Badge variant="warning" className="text-xs">{stalled.length}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2 pt-1">
+                  {stalled.map((p) => (
+                    <ProjectRow key={p.monday_item_id} project={p} customerName={customerName} onSelect={() => setSelectedProject(toPanel(p))} />
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        ) : null}
+
+        {/* ── Inactive / cancelled ── */}
+        {inactive.length > 0 ? (          <Accordion type="single" collapsible>
+            <AccordionItem value="inactive">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-[color:var(--muted-foreground)]">Inactive / cancelled</span>
+                  <Badge variant="secondary" className="text-xs">{inactive.length}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2 pt-1">
+                  {inactive.map((p) => (
+                    <ProjectRow key={p.monday_item_id} project={p} customerName={customerName} onSelect={() => setSelectedProject(toPanel(p))} />
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        ) : null}
+      </div>
+
+      {selectedProject ? (
+        <ProjectDetailPanel
+          project={selectedProject}
+          onClose={() => setSelectedProject(null)}
+          showCustomerLink={false}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// ── Individual project row ───────────────────────────────────────────────────
+
+function ProjectRow({
+  project: p,
+  customerName,
+  onSelect,
+}: {
+  project: Project;
+  customerName: string;
+  onSelect?: () => void;
+}) {
+  const cleanName = p.name.replace(new RegExp(`^${escapeRegex(customerName)}\\s*[-—]\\s*`), "");
+  return (
+    <button
+      onClick={onSelect}
+      className="w-full text-left rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] p-3 space-y-2 hover:border-[var(--brand-yellow)] transition-colors cursor-pointer"
+    >
+      {/* Row 1: name + status chips */}
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="text-sm font-medium text-[color:var(--foreground)] min-w-0 truncate flex-1">
+          {cleanName}
+        </div>
+        <div className="flex items-center gap-1 flex-wrap shrink-0">
+          {p.fiscal_year ? (
+            <ColorChip label={p.fiscal_year === "active" ? "Active" : p.fiscal_year} cls={chipClass(FY_CLASS, p.fiscal_year)} />
+          ) : null}
+          {p.dev_platform ? (
+            <ColorChip label={p.dev_platform} cls={chipClass(PLATFORM_CLASS, p.dev_platform)} />
+          ) : null}
+          {p.health ? (
+            <ColorChip label={p.health} cls={chipClass(HEALTH_CLASS, p.health)} />
+          ) : null}
+          {p.project_status ? (
+            <ColorChip label={p.project_status} cls={chipClass(STATUS_CLASS, p.project_status)} />
+          ) : null}
+        </div>
+      </div>
+
+      {/* Row 2: metadata grid */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {p.current_phase ? <Meta label="Phase">{p.current_phase}</Meta> : null}
+        {p.complexity ? <Meta label="Complexity">{p.complexity}</Meta> : null}
+        {p.kickoff_date ? <Meta label="Kickoff">{p.kickoff_date}</Meta> : null}
+        {p.go_live_date ? <Meta label="Go-live"><span className="font-medium text-[color:var(--foreground)]">{p.go_live_date}</span></Meta> : null}
+        {p.total_effort_days ? <Meta label="Effort">{p.total_effort_days}d</Meta> : null}
+        {p.ttv_days_text ? <Meta label="TTV">{p.ttv_days_text}d</Meta> : null}
+        {p.partner ? <Meta label="Partner">{p.partner}</Meta> : null}
+        {p.tam ? <Meta label="TAM">{firstName(p.tam)}</Meta> : null}
+        {p.dev ? <Meta label="Dev">{firstName(p.dev)}</Meta> : null}
+      </div>
+
+      {/* Row 3: delivered value */}
+      {p.delivered_value ? (
+        <div className="text-xs text-[color:var(--muted-foreground)] border-t border-[var(--glass-border)] pt-1.5">
+          <span className="font-medium text-[color:var(--foreground)]">Value: </span>
+          {p.delivered_value}
+        </div>
+      ) : null}
+
+      {/* Row 4: latest update (truncated — full updates in panel) */}
+      {p.latest_update ? (
+        <div className="text-xs text-[color:var(--muted-foreground)] italic line-clamp-2">
+          {p.latest_update}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+// Also render the slide-over at the card root.
+// The card exports both the list and the panel trigger via `onSelect`.
+// The panel render is in the parent (ProjectsCard) which holds the state.
+
+function Meta({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="text-xs text-[color:var(--muted-foreground)]">
+      {label}: <span className="text-[color:var(--foreground)]">{children}</span>
+    </span>
+  );
+}
+
+// Extract first name from "John Doe" or email "john.doe@company.com"
+function firstName(s: string | null | undefined): string {
+  if (!s) return "";
+  const raw = s.includes("@") ? s.split("@")[0].replace(/\./g, " ") : s;
+  return raw.split(" ")[0] ?? raw;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+void Chip;

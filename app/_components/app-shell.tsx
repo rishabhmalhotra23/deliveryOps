@@ -13,8 +13,9 @@ interface NavItem {
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" || p === "/" },
-  { href: "/analytics", label: "Analytics", match: (p) => p.startsWith("/analytics") },
   { href: "/customers", label: "Customers", match: (p) => p.startsWith("/customers") },
+  { href: "/delivery", label: "Delivery", match: (p) => p.startsWith("/delivery") },
+  { href: "/analytics", label: "Analytics", match: (p) => p.startsWith("/analytics") },
   { href: "/operations", label: "Operations", match: (p) => p.startsWith("/operations") },
   { href: "/chat", label: "Agent", match: (p) => p === "/chat" || p.startsWith("/chat/") },
 ];
@@ -25,6 +26,8 @@ const SECONDARY_NAV: NavItem[] = [
   { href: "/dev/import", label: "Import customers" },
   { href: "/dev/sync", label: "Sync status" },
 ];
+
+// ── Theme toggle ─────────────────────────────────────────────────────────────
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -40,7 +43,8 @@ function ThemeToggle() {
     >
       {isDark ? (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
         </svg>
       ) : (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -51,36 +55,67 @@ function ThemeToggle() {
   );
 }
 
-function SyncStatusDot({ label, status }: { label: string; status: "active" | "stale" | "error" }) {
-  const colors = {
-    active: "bg-emerald-500",
-    stale: "bg-amber-400",
-    error: "bg-red-500",
-  };
+// ── Dynamic sync status ───────────────────────────────────────────────────────
+
+interface SyncStatus {
+  sf: string | null;
+  monday: string | null;
+}
+
+function useSyncStatus() {
+  const [status, setStatus] = useState<SyncStatus>({ sf: null, monday: null });
+  useEffect(() => {
+    fetch("/api/dev/sync/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d?.runs) return;
+        const sfRun = (d.runs as Array<{ source: string; status: string; finished_at: string }>)
+          .find((r) => r.source === "salesforce" && r.status === "ok");
+        const monRun = (d.runs as Array<{ source: string; status: string; finished_at: string }>)
+          .find((r) => r.source === "monday" && r.status === "ok");
+        setStatus({ sf: sfRun?.finished_at ?? null, monday: monRun?.finished_at ?? null });
+      })
+      .catch(() => {});
+  }, []);
+  return status;
+}
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return "never";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return "just now";
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
+  return `${Math.round(ms / 86_400_000)}d ago`;
+}
+
+function SyncDot({ label, time }: { label: string; time: string | null }) {
+  const stale = !time || Date.now() - new Date(time).getTime() > 25 * 3_600_000;
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <span className={`shrink-0 w-1.5 h-1.5 rounded-full status-dot-pulse ${colors[status]}`} />
-      <span className="truncate text-[10px] text-[color:var(--brand-metal)]">{label}</span>
+      <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${stale ? "bg-amber-400" : "bg-emerald-500"}`} />
+      <span className="truncate text-[10px] text-[color:var(--brand-metal)]">
+        {label} · {timeAgo(time)}
+      </span>
     </div>
   );
 }
 
+// ── Main shell ────────────────────────────────────────────────────────────────
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const syncStatus = useSyncStatus();
 
   return (
     <div className="min-h-screen flex bg-[color:var(--background)]">
       {/* Sidebar */}
       <aside className="hidden lg:flex w-60 flex-col bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] sticky top-0 h-screen border-r border-[color:var(--glass-border)]">
-        {/* Logo */}
-        <Link href="/dashboard" className="px-5 py-5 block group">
+        <Link href="/dashboard" className="px-5 py-5 block">
           <div className="text-display text-xl tracking-tighter font-semibold">DeliveryOps</div>
-          <div className="eyebrow mt-1 text-[color:var(--brand-metal)]">
-            Kognitos · post-sales
-          </div>
+          <div className="eyebrow mt-1 text-[color:var(--brand-metal)]">Kognitos · delivery</div>
         </Link>
 
-        {/* Cmd+K hint */}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
           className="mx-3 mb-3 flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-[color:var(--brand-metal)] border border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.18)] hover:text-[color:var(--brand-seasalt)] transition-all cursor-pointer"
@@ -92,7 +127,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <kbd className="text-[9px] border border-[rgba(255,255,255,0.15)] rounded px-1 py-0.5 font-mono">⌘K</kbd>
         </button>
 
-        {/* Primary nav */}
         <nav className="px-3 space-y-0.5">
           {PRIMARY_NAV.map((item) => {
             const active = item.match ? item.match(pathname) : pathname === item.href;
@@ -112,7 +146,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Tools nav */}
         <div className="px-5 mt-6 mb-2 eyebrow text-[color:var(--brand-metal)]">Tools</div>
         <nav className="px-3 space-y-0.5">
           {SECONDARY_NAV.map((item) => {
@@ -133,35 +166,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Footer: sync status + theme toggle */}
         <div className="mt-auto px-5 py-4 space-y-3 border-t border-[rgba(255,255,255,0.06)]">
-          {/* Integration status dots */}
           <div className="space-y-1.5">
-            <SyncStatusDot label="Salesforce · synced" status="active" />
-            <SyncStatusDot label="Monday · synced" status="active" />
+            <SyncDot label="Salesforce" time={syncStatus.sf} />
+            <SyncDot label="Monday" time={syncStatus.monday} />
           </div>
-
-          {/* Theme toggle + version */}
           <div className="flex items-center justify-between">
-            <div className="text-[10px] text-[color:var(--brand-metal)] opacity-60">v0.1 · local dev</div>
+            <div className="text-[10px] text-[color:var(--brand-metal)] opacity-50">DeliveryOps</div>
             <ThemeToggle />
           </div>
         </div>
       </aside>
 
-      {/* Mobile top nav */}
+      {/* Mobile top bar */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)]">
         <Link href="/dashboard" className="text-display text-xl tracking-tighter">DeliveryOps</Link>
         <nav className="flex gap-3 text-sm">
           {PRIMARY_NAV.map((item) => (
-            <Link key={item.href} href={item.href} className="hover:underline">
-              {item.label}
-            </Link>
+            <Link key={item.href} href={item.href} className="hover:underline">{item.label}</Link>
           ))}
         </nav>
       </header>
 
-      {/* Main column */}
       <main className="flex-1 min-w-0">{children}</main>
     </div>
   );

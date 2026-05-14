@@ -51,17 +51,25 @@ export interface MondayProjectCache {
   group_title: string | null;
   state: string | null;
   monday_updated_at: string | null;
-  // Lifted from raw_columns for rendering in the UI.
-  health: string | null; // On Track / At Risk / etc.
-  project_status: string | null; // In Progress / Delivered / On Hold / etc.
-  current_phase: string | null; // M1 / M2 - Development / M3 - Testing/UAT / etc.
-  dev_platform: string | null; // V1 / V2
-  complexity: string | null; // Low / Medium / High
+  // Lifted from raw_columns or stored directly (migration 0010+)
+  fiscal_year: string | null;
+  board_name: string | null;
+  health: string | null;
+  project_status: string | null;
+  current_phase: string | null;
+  dev_platform: string | null;
+  complexity: string | null;
   kickoff_date: string | null;
   go_live_date: string | null;
+  timeline_start: string | null;
+  timeline_end: string | null;
   partner: string | null;
   tam: string | null;
   dev: string | null;
+  total_effort_days: number | null;
+  delivered_value: string | null;
+  ttv_days_text: string | null;
+  latest_update: string | null;
 }
 
 export interface MondayActivityCache {
@@ -170,12 +178,20 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
       .eq("customer_id", customerId)
       .order("sf_created_at", { ascending: false })
       .limit(50),
+    // Pull ALL projects (no fiscal_year filter) so historical + active
+    // all appear on the customer page. Order by go_live_date (stored col) desc.
     sb
       .from("monday_projects")
-      .select("*")
+      .select(
+        "monday_item_id, name, group_title, state, monday_updated_at, " +
+        "fiscal_year, board_name, raw_columns, " +
+        "go_live_date, kickoff_date, " +
+        "total_effort_days, delivered_value, ttv_days_text, " +
+        "timeline_start, timeline_end, latest_update"
+      )
       .eq("customer_id", customerId)
-      .order("monday_updated_at", { ascending: false })
-      .limit(100),
+      .order("go_live_date", { ascending: false, nullsFirst: false })
+      .limit(500),
     sb
       .from("monday_activities")
       .select("*")
@@ -189,6 +205,56 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
       .order("monday_updated_at", { ascending: false })
       .limit(50),
   ]);
+
+  type ProjectRow = {
+    monday_item_id: string;
+    name: string;
+    group_title: string | null;
+    state: string | null;
+    monday_updated_at: string | null;
+    fiscal_year: string | null;
+    board_name: string | null;
+    raw_columns: RawColumns;
+    go_live_date: string | null;
+    kickoff_date: string | null;
+    total_effort_days: number | null;
+    delivered_value: string | null;
+    ttv_days_text: string | null;
+    timeline_start: string | null;
+    timeline_end: string | null;
+    latest_update: string | null;
+  };
+  const projectCache: MondayProjectCache[] = (
+    (projects.data as ProjectRow[] | null) ?? []
+  ).map((p) => {
+    const cols = p.raw_columns ?? {};
+    return {
+      monday_item_id: p.monday_item_id,
+      name: p.name,
+      group_title: p.group_title,
+      state: p.state,
+      monday_updated_at: p.monday_updated_at,
+      fiscal_year: p.fiscal_year,
+      board_name: p.board_name,
+      health:          txt(cols, PROJECT_COLS.health),
+      project_status:  txt(cols, PROJECT_COLS.project_status),
+      current_phase:   txt(cols, PROJECT_COLS.current_phase),
+      dev_platform:    txt(cols, PROJECT_COLS.dev_platform),
+      complexity:      txt(cols, PROJECT_COLS.complexity),
+      // Use stored columns (migration 0012) for dates so they sort correctly.
+      go_live_date:    p.go_live_date ?? txt(cols, PROJECT_COLS.go_live_date),
+      kickoff_date:    p.kickoff_date ?? txt(cols, PROJECT_COLS.kickoff_date),
+      partner:         txt(cols, PROJECT_COLS.partner),
+      tam:             txt(cols, PROJECT_COLS.tam),
+      dev:             txt(cols, PROJECT_COLS.dev),
+      total_effort_days: p.total_effort_days,
+      delivered_value: p.delivered_value,
+      ttv_days_text:   p.ttv_days_text,
+      timeline_start:  p.timeline_start,
+      timeline_end:    p.timeline_end,
+      latest_update:   p.latest_update,
+    };
+  });
 
   type ActivityRow = {
     monday_item_id: string;
@@ -251,36 +317,7 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     };
   });
 
-  type ProjectRow = {
-    monday_item_id: string;
-    name: string;
-    group_title: string | null;
-    state: string | null;
-    monday_updated_at: string | null;
-    raw_columns: RawColumns;
-  };
-  const projectCache: MondayProjectCache[] = (
-    (projects.data as ProjectRow[] | null) ?? []
-  ).map((p) => {
-    const cols = p.raw_columns ?? {};
-    return {
-      monday_item_id: p.monday_item_id,
-      name: p.name,
-      group_title: p.group_title,
-      state: p.state,
-      monday_updated_at: p.monday_updated_at,
-      health: txt(cols, PROJECT_COLS.health),
-      project_status: txt(cols, PROJECT_COLS.project_status),
-      current_phase: txt(cols, PROJECT_COLS.current_phase),
-      dev_platform: txt(cols, PROJECT_COLS.dev_platform),
-      complexity: txt(cols, PROJECT_COLS.complexity),
-      kickoff_date: txt(cols, PROJECT_COLS.kickoff_date),
-      go_live_date: txt(cols, PROJECT_COLS.go_live_date),
-      partner: txt(cols, PROJECT_COLS.partner),
-      tam: txt(cols, PROJECT_COLS.tam),
-      dev: txt(cols, PROJECT_COLS.dev),
-    };
-  });
+  // (projectCache is built above in the projects section of Promise.all)
 
   return {
     account: (acc.data as SfAccountCache | null) ?? null,

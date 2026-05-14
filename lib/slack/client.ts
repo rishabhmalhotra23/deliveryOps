@@ -103,6 +103,33 @@ export async function postMessage(
   return { ts: data.ts, channel: data.channel };
 }
 
+// Replace the content of an existing message (e.g. updating an approval
+// card to its decided state). No-op in dev mode — the outbox already
+// captured the original.
+export async function updateMessage(
+  channel: string,
+  ts: string,
+  text: string,
+  opts: { blocks?: unknown[]; customerKey?: string } = {}
+): Promise<void> {
+  if (!slackEnabled()) {
+    await recordOutbox({
+      kind: "slack.message_update",
+      customerKey: opts.customerKey ?? "unknown",
+      summary: `Slack update ts=${ts} ch=${channel}: ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`,
+      payload: { channel, ts, text, blocks: opts.blocks ?? null },
+    });
+    return;
+  }
+  const channelId = await resolveChannelId(channel);
+  await call<SlackResponse>("chat.update", {
+    channel: channelId,
+    ts,
+    text,
+    blocks: opts.blocks,
+  });
+}
+
 export async function fetchHistory(channel: string, limit: number = 25) {
   if (!slackEnabled()) {
     return { ok: true as const, messages: [] };

@@ -94,7 +94,7 @@ function MondaySection({ live }: { live: boolean }) {
   return (
     <Section
       title="Monday — customer roster source"
-      subtitle="The canonical list of post-sales customers comes from here. Everything else is enrichment."
+      subtitle="The canonical list of customers comes from here. Everything else is enrichment."
       live={live}
     >
       {!live ? (

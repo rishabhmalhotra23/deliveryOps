@@ -125,20 +125,30 @@ async function handleMessage(event: SlackEvent): Promise<void> {
   if (!channelId) return;
   if (!text && files.length === 0) return;
 
-  // Files trigger the ingestion path — fan out one Inngest event per file.
+  // Thread-reply routing for approval cards: if this message is in a thread
+  // and the parent ts matches a pending approval, treat the reply as a
+  // revision request. The agent runs revise_email_draft / revise_pending_action,
+  // re-posts an updated card, and we don't fall through to the normal handler.
+  if (event.thread_ts && event.thread_ts !== event.ts && text) {
+    const handled = await maybeHandleApprovalThreadReply(event, text);
+    if (handled) return;
+  }
+
+  // Files trigger the ingestion path — download the bytes here (Slack's
+  // url_private requires the bot token, which the Inngest worker doesn't
+  // have), stash in Storage, then hand off via storagePath. Same pattern
+  // as handleFileShared(). The previous version sent slackFileId only,
+  // which the worker didn't accept — files dropped silently.
   if (files.length > 0) {
-    for (const f of files) {
-      await inngest.send({
-        name: "delivery-ops/document.uploaded",
-        data: {
-          customerKey: await customerKeyForChannel(channelId),
-          filename: f.name,
-          mimeType: f.mimetype,
-          source: "slack",
-          sourceDetail: `Slack channel ${channelId}`,
-          slackFileId: f.id,
-        },
-      }).catch((err) => console.warn("[slack] failed to enqueue ingestion:", err));
+    const customerKey = await customerKeyForChannel(channelId);
+    if (customerKey) {
+      for (const f of files) {
+        try {
+          await ingestSlackFile(f.id, channelId, customerKey);
+        } catch (err) {
+          console.warn("[slack] failed to enqueue ingestion for %s: %s", f.id, err);
+        }
+      }
     }
     if (!text) return; // file-only message — done.
   }
@@ -243,32 +253,31 @@ async function handleFileShared(event: SlackEvent): Promise<void> {
   const customerKey = await customerKeyForChannel(channelId);
   if (!customerKey) return;
 
-  let info;
   try {
-    info = await fetchFile(fileId);
+    await ingestSlackFile(fileId, channelId, customerKey);
   } catch (err) {
-    console.warn("[slack] fetchFile failed:", err);
-    return;
+    console.warn("[slack] file_shared ingestion failed for %s: %s", fileId, err);
   }
+}
+
+// Shared helper: download a Slack file by ID, upload to Storage, enqueue
+// the ingestion worker. Used by both `message` events that carry file
+// attachments and standalone `file_shared` events.
+async function ingestSlackFile(
+  fileId: string,
+  channelId: string,
+  customerKey: string
+): Promise<void> {
+  const info = await fetchFile(fileId);
   const file = info.file ?? {};
   const url = file.url_private_download ?? file.url_private;
-  if (!url) return;
+  if (!url) throw new Error("Slack file has no download URL.");
 
-  // We download the bytes here rather than passing the signed URL through,
-  // because Slack's url_private requires the bot token; Inngest workers
-  // wouldn't have the right auth context.
-  let buffer: Buffer;
-  try {
-    buffer = await downloadSlackFile(url);
-  } catch (err) {
-    console.warn("[slack] file download failed:", err);
-    return;
-  }
+  const buffer = await downloadSlackFile(url);
 
-  // Stash temporarily in Storage and hand off to Inngest.
   const { uploadFile, ensureBucket } = await import("@/lib/ingestion/storage");
   await ensureBucket();
-  const tmpPath = await uploadFile(
+  const storagePath = await uploadFile(
     {
       customerKey,
       packageId: `slack-incoming-${fileId}`,
@@ -287,9 +296,56 @@ async function handleFileShared(event: SlackEvent): Promise<void> {
       mimeType: file.mimetype ?? "application/octet-stream",
       source: "slack",
       sourceDetail: `Slack channel ${channelId}`,
-      storagePath: tmpPath,
+      storagePath,
     },
   });
+}
+
+// Route a thread reply back through the agent as a revision request on
+// the originating approval. Returns true when handled (so the caller can
+// short-circuit). Returns false when this isn't an approval thread.
+async function maybeHandleApprovalThreadReply(
+  event: SlackEvent,
+  text: string
+): Promise<boolean> {
+  const threadTs = event.thread_ts;
+  if (!threadTs) return false;
+
+  const { getApprovalBySlackThread } = await import("@/lib/approvals/store");
+  const approval = await getApprovalBySlackThread(threadTs);
+  if (!approval) return false;
+
+  // Resolve the customer for this approval.
+  const channelId = event.channel ?? "";
+  const customerKey = await customerKeyForChannel(channelId);
+  if (!customerKey) return true; // approval matched but no customer? swallow
+
+  const userName = await resolveUserName(event.user ?? "unknown");
+  const revisionTool = approval.kind === "email_draft" ? "revise_email_draft" : "revise_pending_action";
+
+  // Frame the message so the agent knows which approval to revise.
+  const agentPrompt =
+    `${userName} replied in the approval thread for \`${approval.id}\`. ` +
+    `Use the \`${revisionTool}\` tool to revise this ${approval.kind === "email_draft" ? "email draft" : "pending action"} based on their feedback, then summarise what changed.\n\n` +
+    `User feedback:\n${text}`;
+
+  try {
+    const result = await runAgent({
+      customerKey,
+      userMessage: agentPrompt,
+      source: "slack",
+    });
+
+    // Acknowledge in the thread so the user knows what happened.
+    const ack = result.text || "Revision noted.";
+    await postMessage(channelId, mdToMrkdwn(ack), {
+      blocks: mdToBlocks(ack),
+      thread_ts: threadTs,
+    });
+  } catch (err) {
+    console.error("[slack] approval-thread revision failed:", err);
+  }
+  return true;
 }
 
 const customerKeyCache = new Map<string, string | null>();
