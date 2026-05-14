@@ -16,6 +16,7 @@ function useChartTheme() {
   const dark = mounted && resolvedTheme === "dark";
   return {
     grid:   dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+    band:   dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
     axis:   dark ? "#71717a" : "#a1a1aa",
     bg:     dark ? "#18181b" : "#ffffff",
     border: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
@@ -278,7 +279,7 @@ export function DeliveriesOverTimeChart({ data }: { data: Array<{ month: string;
               key={q.start}
               x1={q.start}
               x2={q.end}
-              fill={t.grid}
+              fill={t.band}
               fillOpacity={1}
             />
           ) : null
