@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useTheme } from "next-themes";
+import { useEffect } from "react";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@kognitos/lattice";
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Legend } from "recharts";
+  BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, Legend, AreaChart, Area,
+} from "recharts";
 import type { DeliveryProject, DeliveryFilterFacets } from "@/lib/delivery/loader";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 
@@ -18,6 +18,36 @@ interface DeliveryClientProps {
 
 const TABS = ["Kanban", "Table", "Q-on-Q"] as const;
 type Tab = (typeof TABS)[number];
+
+// ── Chart theme ───────────────────────────────────────────────────────────────
+function useChartTheme() {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const dark = mounted && resolvedTheme === "dark";
+  return {
+    grid:   dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+    axis:   dark ? "#71717a" : "#9ca3af",
+    tooltipStyle: {
+      background: dark ? "#1c1c24" : "#ffffff",
+      border:     dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e5e7eb",
+      borderRadius: 10,
+      padding: "8px 12px",
+      fontSize: 12,
+      color: dark ? "#f0f0f0" : "#18181b",
+      boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.12)",
+    },
+  };
+}
+
+// Distinct, semantically-appropriate colours for the stacked Q-on-Q bars.
+const QOQ_COLORS = {
+  delivered: "#34d399", // emerald  — shipped, value delivered
+  in_flight: "#818cf8", // indigo   — active work in progress
+  at_risk:   "#fb923c", // amber    — needs attention
+  inactive:  "#6b7280", // slate    — cancelled / inactive
+  effort:    "#38bdf8", // sky      — effort/days metric
+};
 
 // ── Colour maps ───────────────────────────────────────────────────────────────
 
@@ -341,6 +371,8 @@ function isDelivered(p: DeliveryProject): boolean {
 }
 
 function QonQ({ projects }: { projects: DeliveryProject[] }) {
+  const t = useChartTheme();
+
   const data = useMemo(() => {
     const counts = new Map<string, { quarter: string; delivered: number; in_flight: number; at_risk: number; inactive: number }>();
     for (const p of projects) {
@@ -411,32 +443,36 @@ function QonQ({ projects }: { projects: DeliveryProject[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Projects by quarter */}
+      {/* Projects by quarter — stacked bar with distinct semantic colours */}
       <div className="glass-card p-5">
         <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Projects by calendar quarter</div>
         <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
           Delivered vs in-flight vs at risk (all FY boards)
         </div>
-        <ChartContainer
-          config={{
-            delivered: { label: "Delivered / Live", color: "var(--chart-1)" },
-            in_flight: { label: "In flight",        color: "var(--chart-2)" },
-            at_risk:   { label: "At risk",           color: "var(--chart-3)" },
-            inactive:  { label: "Inactive / Cancelled", color: "var(--chart-4)" },
-          }}
-        >
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="quarter" tickLine={false} axisLine={false} fontSize={11} />
-            <YAxis tickLine={false} axisLine={false} fontSize={11} />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <Legend wrapperStyle={{ fontSize: "11px" }} />
-            <Bar dataKey="delivered" stackId="a" fill="var(--color-delivered)" />
-            <Bar dataKey="in_flight" stackId="a" fill="var(--color-in_flight)" />
-            <Bar dataKey="at_risk"   stackId="a" fill="var(--color-at_risk)" />
-            <Bar dataKey="inactive"  stackId="a" fill="var(--color-inactive)" radius={[4, 4, 0, 0]} />
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+            <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
+            <Tooltip contentStyle={t.tooltipStyle} />
+            <Legend
+              wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+              formatter={(v: string) => {
+                const labels: Record<string, string> = {
+                  delivered: "Delivered / Live",
+                  in_flight: "In flight",
+                  at_risk:   "At risk",
+                  inactive:  "Inactive / Cancelled",
+                };
+                return labels[v] ?? v;
+              }}
+            />
+            <Bar dataKey="delivered" stackId="a" fill={QOQ_COLORS.delivered} name="delivered" />
+            <Bar dataKey="in_flight" stackId="a" fill={QOQ_COLORS.in_flight} name="in_flight" />
+            <Bar dataKey="at_risk"   stackId="a" fill={QOQ_COLORS.at_risk}   name="at_risk" />
+            <Bar dataKey="inactive"  stackId="a" fill={QOQ_COLORS.inactive}  name="inactive" radius={[4, 4, 0, 0]} />
           </BarChart>
-        </ChartContainer>
+        </ResponsiveContainer>
       </div>
 
       {/* Effort by quarter */}
@@ -446,15 +482,15 @@ function QonQ({ projects }: { projects: DeliveryProject[] }) {
           <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
             Only delivered/live projects with Total Effort set on Monday
           </div>
-          <ChartContainer config={{ effort: { label: "Person-days", color: "var(--chart-5)" } }}>
-            <BarChart data={effortData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="quarter" tickLine={false} axisLine={false} fontSize={11} />
-              <YAxis tickLine={false} axisLine={false} fontSize={11} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="effort" fill="var(--color-effort)" radius={[4, 4, 0, 0]} />
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={effortData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+              <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v}d`, "Effort"]} />
+              <Bar dataKey="effort" fill={QOQ_COLORS.effort} radius={[4, 4, 0, 0]} />
             </BarChart>
-          </ChartContainer>
+          </ResponsiveContainer>
         </div>
       ) : null}
 
