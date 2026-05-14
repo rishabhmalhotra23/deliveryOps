@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { InlineEdit } from "@/app/_components/inline-edit";
 import { Badge } from "@kognitos/lattice";
 import type { HeroCardProps } from "@/lib/customers/view-model";
@@ -64,18 +65,17 @@ function CustomerAvatar({
       style={{ background: src ? "white" : heroAvatarGradient(displayName) }}
     >
       {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={src}
           alt={`${displayName} logo`}
           width={56}
           height={56}
           className="w-full h-full object-contain p-1.5"
+          unoptimized={src.includes("duckduckgo")} // DDG ICO — skip Next optimizer
           onError={() => {
             if (srcIdx < sources.length - 1) {
               setSrcIdx(srcIdx + 1);
             } else {
-              // Exhausted all sources — clear src to show initials.
               setSrcIdx(sources.length);
             }
           }}

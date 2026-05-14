@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-
 import { cancelTask, createTask, listTasks } from "@/lib/tasks/tasks";
-import type { TaskAction, TaskSchedule } from "@/lib/supabase/types";
+import { parseBody, TaskCreateSchema } from "@/lib/api/schemas";
+import { logger, errorCtx } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-interface Ctx {
-  params: Promise<{ key: string }>;
-}
+interface Ctx { params: Promise<{ key: string }> }
+const log = logger("api/tasks");
 
 export async function GET(request: Request, ctx: Ctx) {
   const { key } = await ctx.params;
@@ -26,34 +25,14 @@ export async function GET(request: Request, ctx: Ctx) {
 
 export async function POST(request: Request, ctx: Ctx) {
   const { key } = await ctx.params;
-  let body: {
-    description?: string;
-    schedule?: TaskSchedule;
-    action?: TaskAction;
-    name?: string;
-    tags?: string[];
-  };
+  const parsed = await parseBody(request, TaskCreateSchema);
+  if (!parsed.ok) return parsed.response;
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  if (!body.description || !body.schedule || !body.action) {
-    return NextResponse.json(
-      { error: "description, schedule, and action are required." },
-      { status: 400 }
-    );
-  }
-  try {
-    const task = await createTask(key, {
-      description: body.description,
-      schedule: body.schedule,
-      action: body.action,
-      name: body.name,
-      tags: body.tags,
-    });
+    const task = await createTask(key, parsed.data);
+    log.info("Task created", { customer_key: key, task_id: task.id });
     return NextResponse.json({ task }, { status: 201 });
   } catch (err) {
+    log.error("Failed to create task", { customer_key: key, ...errorCtx(err) });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to create task." },
       { status: 500 }

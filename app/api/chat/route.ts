@@ -5,28 +5,18 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { TABLES } from "@/lib/supabase/types";
 import { listCustomers } from "@/lib/customers";
 import { streamAgent } from "@/lib/agent/runner";
+import { parseBody, ChatPostSchema } from "@/lib/api/schemas";
+import { logger, errorCtx } from "@/lib/logger";
+
+const log = logger("api/chat");
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-interface PostBody {
-  sessionId: string;
-  message: string;
-  customerKey?: string;
-}
-
 export async function POST(request: Request) {
-  let body: PostBody;
-  try {
-    body = (await request.json()) as PostBody;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-
-  const { sessionId, message } = body;
-  if (!sessionId || !message) {
-    return NextResponse.json({ error: "Missing sessionId or message." }, { status: 400 });
-  }
+  const parsed = await parseBody(request, ChatPostSchema);
+  if (!parsed.ok) return parsed.response;
+  const { sessionId, message, customerKey: bodyCustomerKey } = parsed.data;
 
   // Resolve which customer this chat is scoped to. The client MUST pass
   // `customerKey` explicitly — either via the chat page's picker, or from
@@ -34,7 +24,7 @@ export async function POST(request: Request) {
   // the customers table has exactly one row (single-pilot mode), so the
   // app still works out-of-the-box but never silently masks the wrong
   // customer in a multi-customer environment.
-  let customerKey = body.customerKey;
+  let customerKey = bodyCustomerKey;
   if (!customerKey) {
     try {
       const customers = await listCustomers();
@@ -103,6 +93,7 @@ export async function POST(request: Request) {
       };
 
       let fullText = "";
+      const toolTraces: Array<{ name: string; input: unknown; result: string; duration_ms: number }> = [];
       try {
         for await (const event of streamAgent({
           customerKey,
@@ -113,12 +104,26 @@ export async function POST(request: Request) {
           send(event as unknown as Record<string, unknown>);
           if (event.type === "text") fullText += event.content;
           if (event.type === "done") fullText = event.full_text;
+          // Capture tool traces for audit logging.
+          if (event.type === "tool_use") {
+            toolTraces.push({ name: event.tool_name, input: event.tool_input, result: "", duration_ms: 0 });
+          }
+          if (event.type === "tool_result" && toolTraces.length > 0) {
+            const last = toolTraces[toolTraces.length - 1];
+            last.result = event.content ?? "";
+          }
         }
 
         if (supabaseAdmin && fullText) {
           await supabaseAdmin
             .from(TABLES.chatMessages)
-            .insert({ session_id: sessionId, role: "assistant", content: fullText });
+            .insert({
+              session_id: sessionId,
+              role: "assistant",
+              content: fullText,
+              // Persist tool traces so we can audit what the agent did.
+              tool_calls: toolTraces.length > 0 ? toolTraces : null,
+            });
 
           const { count } = await supabaseAdmin
             .from(TABLES.chatMessages)
@@ -140,7 +145,7 @@ export async function POST(request: Request) {
 
         send({ type: "done" });
       } catch (err) {
-        console.error("[chat] stream error:", err);
+        log.error("Stream error", { session_id: sessionId, customer_key: customerKey, ...errorCtx(err) });
         send({ type: "error", content: err instanceof Error ? err.message : "Unknown error" });
       } finally {
         controller.close();

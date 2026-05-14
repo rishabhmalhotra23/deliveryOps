@@ -12,6 +12,9 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { syncSalesforce, type SalesforceSyncResult } from "./salesforce";
 import { syncMonday, type MondaySyncResult } from "./monday";
 import { syncKognitosV2, type KognitosV2SyncResult } from "./kognitos-v2";
+import { logger, errorCtx } from "@/lib/logger";
+
+const log = logger("sync/runner");
 
 export type SyncSource = "salesforce" | "monday" | "kognitos-v2";
 
@@ -95,7 +98,7 @@ async function runOne(
     .select("id")
     .single();
   if (insErr) {
-    console.warn(`[sync] could not record start of ${source} run:`, insErr.message);
+    log.warn("Could not record sync run start", { source, scope, error: insErr.message });
   }
   const runId = (run as { id: string } | null)?.id;
   const startTs = Date.now();
@@ -113,9 +116,10 @@ async function runOne(
         })
         .eq("id", runId);
     }
-    console.log(`[sync] ${source}/${scope} ok — ${out.rows} rows in ${Date.now() - startTs}ms`);
+    log.info(`${source}/${scope} ok`, { rows: out.rows, duration_ms: Date.now() - startTs });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    log.error(`${source}/${scope} failed`, { error: msg, duration_ms: Date.now() - startTs });
     if (runId) {
       await sb
         .from("sync_runs")
