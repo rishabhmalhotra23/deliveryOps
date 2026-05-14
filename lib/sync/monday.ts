@@ -607,13 +607,39 @@ async function syncProjectBoard(
 
   if (rows.length === 0) return;
 
-  // Wipe-and-replace per board (only for matched customers, so other
-  // boards' rows survive for unmatched customers).
-  const customerIds = Array.from(new Set(rows.map((r) => r.customer_id as string)));
-  await sb.from("monday_projects").delete().in("customer_id", customerIds).eq("board_id", board.id);
-
-  const { error } = await sb.from("monday_projects").insert(rows);
+  // UPSERT instead of wipe-and-replace: this preserves all DeliveryOps-native
+  // columns (delivery_notes, any future user-entered fields) across re-syncs.
+  // `monday_item_id` is UNIQUE — existing rows are updated in-place, new rows
+  // are inserted. Columns not present in `rows` (e.g. delivery_notes) are
+  // untouched on UPDATE.
+  //
+  // After upserting, mark any previously-synced items from this board that are
+  // no longer present on Monday as removed_from_monday = true so they stay in
+  // history but are flagged as stale.
+  const { error } = await sb
+    .from("monday_projects")
+    .upsert(rows, { onConflict: "monday_item_id" });
   if (error) throw new Error(error.message);
+
+  // Soft-retire items from this board that weren't in the latest fetch.
+  // We mark them removed rather than deleting so DeliveryOps history is
+  // preserved (per the source-of-truth principle).
+  const seenIds = new Set(rows.map((r) => r.monday_item_id as string));
+  const { data: existingRows } = await sb
+    .from("monday_projects")
+    .select("monday_item_id")
+    .eq("board_id", board.id)
+    .eq("removed_from_monday", false);
+  const removedIds = (existingRows ?? [])
+    .map((r) => (r as { monday_item_id: string }).monday_item_id)
+    .filter((id) => !seenIds.has(id));
+  if (removedIds.length > 0) {
+    await sb
+      .from("monday_projects")
+      .update({ removed_from_monday: true, synced_at: new Date().toISOString() })
+      .in("monday_item_id", removedIds);
+  }
+
   result.inserted = rows.length;
 }
 
@@ -741,8 +767,10 @@ async function syncBoard(
 
   if (rows.length === 0) return;
 
-  // Wipe-and-replace per board (only for the customers we've matched, so
-  // unmapped customers' rows aren't dropped if a different sync wrote them).
+  // Wipe-and-replace per board for Activity Log and NPS Tracking:
+  // these tables have no user-editable DeliveryOps columns, so overwriting
+  // is safe and correct. (monday_projects uses UPSERT instead — see
+  // syncProjectBoard — because it carries user-annotatable delivery_notes.)
   const customerIds = Array.from(new Set(rows.map((r) => r.customer_id as string)));
   await sb.from(table).delete().in("customer_id", customerIds).eq("board_id", boardId);
 
@@ -843,14 +871,12 @@ async function syncOneAccountOverviewBoard(
 
   if (rows.length === 0) return;
 
-  // Wipe-and-replace for this customer's Account Overview board.
-  await sb
+  // UPSERT — same source-of-truth principle as syncProjectBoard.
+  // delivery_notes and other DeliveryOps-native columns are never in `rows`
+  // so they are preserved across re-syncs.
+  const { error } = await sb
     .from("monday_projects")
-    .delete()
-    .eq("customer_id", customer.id)
-    .eq("board_id", aoBoard.id);
-
-  const { error } = await sb.from("monday_projects").insert(rows);
+    .upsert(rows, { onConflict: "monday_item_id" });
   if (error) throw new Error(error.message);
 
   result.matched += rows.length;

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/customers";
 import { loadPortfolioSummary } from "@/lib/cache/integrations";
 import { loadOvernightChanges, loadPendingApprovals } from "@/lib/dashboard/overnight";
+import { loadUpcomingPipeline } from "@/lib/dashboard/pipeline";
 import {
   CategoryChip,
   PageHeader,
@@ -18,11 +19,12 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [customers, summary, overnight, approvals] = await Promise.all([
+  const [customers, summary, overnight, approvals, pipeline] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadOvernightChanges(6).catch(() => []),
     loadPendingApprovals(8).catch(() => []),
+    loadUpcomingPipeline().catch(() => null),
   ]);
 
   const totalArr = summary?.total_arr ?? 0;
@@ -164,6 +166,73 @@ export default async function Dashboard() {
           <div className="text-[11px] text-[color:var(--brand-gray)] mt-3">
             Each one has a Block Kit card in the customer&apos;s Slack channel —
             click through there to approve, reject, or discuss in thread.
+          </div>
+        </section>
+      ) : null}
+
+      {/* ── Upcoming pipeline ── */}
+      {pipeline && pipeline.count > 0 ? (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <SectionMark>
+              {pipeline.quarter_label} pipeline · {pipeline.count} open{" "}
+              {pipeline.count === 1 ? "opportunity" : "opportunities"}
+            </SectionMark>
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+              {formatMoney(pipeline.total_amount)} expected
+            </span>
+          </div>
+          <div className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12">
+            <ul className="divide-y divide-[color:var(--brand-metal-line)]">
+              {pipeline.opportunities.slice(0, 8).map((opp) => (
+                <li key={opp.sf_id} className="px-5 py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[color:var(--foreground)] truncate">
+                      {opp.customer_display_name ? (
+                        <Link
+                          href={`/customers/${opp.customer_key}`}
+                          className="hover:underline"
+                        >
+                          {opp.customer_display_name}
+                        </Link>
+                      ) : opp.name}
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      {opp.stage_name ? (
+                        <span className="text-xs text-[color:var(--brand-gray)]">{opp.stage_name}</span>
+                      ) : null}
+                      {opp.close_date ? (
+                        <span className="text-xs text-[color:var(--brand-gray)]">closes {opp.close_date}</span>
+                      ) : null}
+                      {opp.owner_name ? (
+                        <span className="text-xs text-[color:var(--brand-gray)]">{opp.owner_name}</span>
+                      ) : null}
+                      {opp.probability != null ? (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                            opp.probability >= 75
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                              : opp.probability >= 50
+                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                              : "bg-slate-500/10 text-slate-600 dark:text-slate-400"
+                          }`}
+                        >
+                          {opp.probability}% likely
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-[color:var(--foreground)] shrink-0">
+                    {formatMoney(opp.amount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {pipeline.count > 8 ? (
+              <div className="px-5 py-2 text-xs text-[color:var(--brand-gray)] border-t border-[color:var(--brand-metal-line)]">
+                + {pipeline.count - 8} more — view all in Salesforce
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}

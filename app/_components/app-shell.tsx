@@ -16,6 +16,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/customers", label: "Customers", match: (p) => p.startsWith("/customers") },
   { href: "/delivery", label: "Delivery", match: (p) => p.startsWith("/delivery") },
   { href: "/analytics", label: "Analytics", match: (p) => p.startsWith("/analytics") },
+  { href: "/reports", label: "Reports", match: (p) => p.startsWith("/reports") },
   { href: "/operations", label: "Operations", match: (p) => p.startsWith("/operations") },
   { href: "/chat", label: "Agent", match: (p) => p === "/chat" || p.startsWith("/chat/") },
 ];
