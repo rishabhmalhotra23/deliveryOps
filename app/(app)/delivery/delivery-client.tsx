@@ -122,7 +122,7 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search projects…"
-          className="rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-3 py-1.5 text-sm w-56"
+          className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-3 py-1.5 text-sm w-56"
         />
         <SelectFilter value={customer} setValue={setCustomer} label="Customer" options={facets.customers} />
         <SelectFilter value={ae} setValue={setAe} label="AE" options={facets.aes} />
@@ -160,7 +160,7 @@ function SelectFilter({
     <select
       value={value}
       onChange={(e) => setValue(e.target.value)}
-      className="rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+      className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
     >
       <option value="">{label}: all</option>
       {options.map((o) => <option key={o} value={o}>{label}: {o}</option>)}

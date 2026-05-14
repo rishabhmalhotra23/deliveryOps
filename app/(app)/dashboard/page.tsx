@@ -97,7 +97,7 @@ export default async function Dashboard() {
 
       <section>
         <SectionMark>Category distribution</SectionMark>
-        <div className="rounded-lg border border-line bg-white p-6">
+        <div className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-6">
           <div className="grid gap-4 md:grid-cols-7">
             {allCategories.map((category) => {
               const count = summary?.by_category[category] ?? 0;
@@ -183,7 +183,7 @@ export default async function Dashboard() {
                 <Link
                   key={o.customer_key}
                   href={`/customers/${o.customer_key}`}
-                  className="rounded-lg border border-line bg-white p-4 hover:border-[color:var(--brand-night)] transition-colors group"
+                  className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-4 hover:border-[color:var(--brand-night)] dark:hover:border-white/30 transition-colors group"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-display text-base">{o.customer_display_name}</div>
@@ -203,7 +203,7 @@ export default async function Dashboard() {
                 <Link
                   key={c.id}
                   href={`/customers/${c.key}`}
-                  className="rounded-lg border border-line bg-white p-4 hover:border-[color:var(--brand-night)] transition-colors group"
+                  className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-4 hover:border-[color:var(--brand-night)] dark:hover:border-white/30 transition-colors group"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-display text-base">{c.display_name}</div>
@@ -245,7 +245,7 @@ function FocusList({
 }) {
   const sorted = customers.slice().sort((a, b) => a.display_name.localeCompare(b.display_name));
   return (
-    <section className="rounded-lg border border-line bg-white p-6">
+    <section className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-6">
       <SectionMark>{title}</SectionMark>
       <p className="text-xs text-[color:var(--brand-gray)] mb-4">{subtitle}</p>
       {sorted.length === 0 ? (

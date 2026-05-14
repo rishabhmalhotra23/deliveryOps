@@ -108,8 +108,6 @@ export function StatBlock({
   hint,
   emphasis = false,
 }: {
-  // label / hint accept ReactNode so callers can embed tooltips, chips,
-  // or other inline elements — not just plain strings.
   label: ReactNode;
   value: string;
   hint?: ReactNode;
@@ -119,13 +117,13 @@ export function StatBlock({
     <div
       className={`rounded-lg border p-5 ${
         emphasis
-          ? "bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] border-[color:var(--brand-night)]"
-          : "bg-white border-line"
+          ? "bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] border-[color:var(--brand-night)] dark:bg-white/8 dark:border-white/15"
+          : "bg-white border-line dark:bg-white/6 dark:border-white/12"
       }`}
     >
       <div
         className={`text-[10px] uppercase tracking-[0.22em] font-medium ${
-          emphasis ? "text-[color:var(--brand-yellow)]" : "text-[color:var(--brand-gray)]"
+          emphasis ? "text-[color:var(--brand-yellow)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
         }`}
       >
         {label}

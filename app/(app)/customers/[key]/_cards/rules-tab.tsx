@@ -111,7 +111,7 @@ export function RulesTab({ customerKey }: RulesTabProps) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={20}
-          className="w-full font-mono text-xs rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-3 py-2 leading-relaxed"
+          className="w-full font-mono text-xs rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-3 py-2 leading-relaxed"
         />
       ) : (
         <div className="chat-markdown text-sm text-[color:var(--foreground)]">

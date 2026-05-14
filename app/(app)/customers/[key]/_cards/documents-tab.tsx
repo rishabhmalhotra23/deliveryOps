@@ -133,12 +133,12 @@ export function DocumentsTab({ customerKey }: DocumentsTabProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search filename, summary, or content…"
-            className="rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-3 py-1.5 text-sm w-72"
+            className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-3 py-1.5 text-sm w-72"
           />
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+            className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
           >
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>

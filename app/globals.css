@@ -127,39 +127,55 @@
 .chat-markdown h4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
 
 /* ─── Dark mode token overrides ──────────────────────────────────────────── */
-/* RULE: NEVER change --brand-* primitives here. They are absolute brand
- * colors used directly by sidebar and brand components. Only override
- * Lattice's semantic tokens so the content area switches themes. */
 .dark {
-  --background:           #0B0B0F;
-  --foreground:           #F0F0F0;
-  --card:                 #111115;
-  --card-foreground:      #F0F0F0;
-  --muted:                #1a1a20;
-  --muted-foreground:     #6b6b7b;
-  --border:               rgba(255, 255, 255, 0.09);
-  --input:                rgba(255, 255, 255, 0.09);
+  --background:           #0d0d12;
+  --foreground:           #ECECF1;
+  --card:                 #16161e;
+  --card-foreground:      #ECECF1;
+  --muted:                #1e1e28;
+  --muted-foreground:     #8b8b9e;
+  --border:               rgba(255, 255, 255, 0.12);
+  --input:                rgba(255, 255, 255, 0.12);
   --primary:              #F2FF70;
-  --primary-foreground:   #0B0B0F;
+  --primary-foreground:   #0d0d12;
   --accent:               #F2FF70;
-  --accent-foreground:    #0B0B0F;
+  --accent-foreground:    #0d0d12;
   --ring:                 #F2FF70;
 
-  /* Glass system — dark variant */
-  --glass-bg:             rgba(255, 255, 255, 0.03);
-  --glass-border:         rgba(255, 255, 255, 0.09);
-  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  /* Glass system — dark variant: meaningfully visible against #0d0d12 */
+  --glass-bg:             rgba(255, 255, 255, 0.06);
+  --glass-border:         rgba(255, 255, 255, 0.11);
+  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.07);
 
-  /* Ensure all text is readable in dark mode */
   color-scheme: dark;
 }
 
-/* Force text contrast in dark mode — prevents invisible text on dark bg */
-.dark p, .dark span, .dark div, .dark h1, .dark h2, .dark h3, .dark h4 {
-  color: inherit;
+/* Dark mode glass cards get a solid-enough background so they stand out.
+   Without this they blend into the #0d0d12 page and vanish. */
+.dark .glass-card {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.11);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255,255,255,0.07);
 }
 
-/* Recharts tooltips always need a solid background to be readable */
+/* Select / input elements in dark mode: explicit background + foreground so
+   native controls don't render as invisible white-on-white or black-on-black. */
+.dark select,
+.dark input[type="text"],
+.dark input[type="datetime-local"],
+.dark input[type="number"],
+.dark input[type="date"],
+.dark textarea {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: #ECECF1 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+.dark select option {
+  background-color: #1e1e28;
+  color: #ECECF1;
+}
+
+/* Recharts tooltips always need a solid background */
 .recharts-tooltip-wrapper .recharts-default-tooltip {
   background: var(--card) !important;
   border-color: var(--border) !important;

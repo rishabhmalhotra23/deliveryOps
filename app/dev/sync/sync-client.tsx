@@ -110,7 +110,7 @@ export function SyncClient() {
       {/* Counts */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         {COUNTS.map((c) => (
-          <div key={c.key} className="rounded-md border border-[color:var(--brand-metal)] bg-white p-3 text-sm">
+          <div key={c.key} className="rounded-md border border-[color:var(--brand-metal)] bg-white dark:bg-white/6 dark:border-white/15 p-3 text-sm">
             <div className="text-[10px] uppercase tracking-wider text-[color:var(--brand-gray)]">
               {c.label}
             </div>
@@ -124,7 +124,7 @@ export function SyncClient() {
       {/* Monday board match rates — surface the per-board fetched/matched/inserted
           counts from the most recent successful Monday sync. */}
       {latestMondayRun ? (
-        <div className="rounded-md border border-[color:var(--brand-metal)] bg-white">
+        <div className="rounded-md border border-[color:var(--brand-metal)] bg-white dark:bg-white/6 dark:border-white/15">
           <div className="px-4 py-2 text-xs uppercase tracking-wider text-[color:var(--brand-gray)] border-b border-[color:var(--brand-metal-line)] flex items-center justify-between">
             <span>Monday match rates (latest successful sync)</span>
             <span className="text-[color:var(--brand-gray)] normal-case tracking-normal">
@@ -185,7 +185,7 @@ export function SyncClient() {
       ) : null}
 
       {/* Action bar */}
-      <div className="flex items-center gap-3 rounded-md border border-[color:var(--brand-metal)] bg-white p-3 text-sm">
+      <div className="flex items-center gap-3 rounded-md border border-[color:var(--brand-metal)] bg-white dark:bg-white/6 dark:border-white/15 p-3 text-sm">
         <button
           onClick={runSync}
           disabled={running}
@@ -204,7 +204,7 @@ export function SyncClient() {
 
       {/* Last run result */}
       {lastResult ? (
-        <details className="rounded-md border border-[color:var(--brand-metal)] bg-white p-3 text-xs">
+        <details className="rounded-md border border-[color:var(--brand-metal)] bg-white dark:bg-white/6 dark:border-white/15 p-3 text-xs">
           <summary className="cursor-pointer">Last sync run details</summary>
           <pre className="mt-2 overflow-auto whitespace-pre-wrap leading-relaxed">
             {JSON.stringify(lastResult, null, 2)}
@@ -213,7 +213,7 @@ export function SyncClient() {
       ) : null}
 
       {/* History */}
-      <div className="rounded-md border border-[color:var(--brand-metal)] bg-white">
+      <div className="rounded-md border border-[color:var(--brand-metal)] bg-white dark:bg-white/6 dark:border-white/15">
         <div className="px-4 py-2 text-xs uppercase tracking-wider text-[color:var(--brand-gray)] border-b border-[color:var(--brand-metal-line)]">
           Recent runs
         </div>

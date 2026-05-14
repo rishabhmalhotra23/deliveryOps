@@ -242,7 +242,7 @@ export function ProfileTab({ customerKey }: ProfileTabProps) {
                       <select
                         value={v}
                         onChange={(e) => setField(String(f.key), e.target.value, f.type)}
-                        className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1 text-sm"
+                        className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1 text-sm"
                       >
                         {(f.options ?? []).map((opt) => (
                           <option key={opt} value={opt}>
@@ -255,7 +255,7 @@ export function ProfileTab({ customerKey }: ProfileTabProps) {
                         type={f.type}
                         value={v}
                         onChange={(e) => setField(String(f.key), e.target.value, f.type)}
-                        className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1 text-sm"
+                        className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1 text-sm"
                       />
                     )}
                   </div>
@@ -329,14 +329,14 @@ export function ProfileTab({ customerKey }: ProfileTabProps) {
                     value={v}
                     onChange={(e) => setInternalField(String(f.key), e.target.value, f.type)}
                     rows={3}
-                    className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm leading-relaxed"
+                    className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm leading-relaxed"
                   />
                 ) : (
                   <input
                     type={f.type}
                     value={v}
                     onChange={(e) => setInternalField(String(f.key), e.target.value, f.type)}
-                    className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1 text-sm"
+                    className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1 text-sm"
                   />
                 )}
               </div>

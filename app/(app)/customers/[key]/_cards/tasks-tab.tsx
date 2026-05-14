@@ -165,7 +165,7 @@ export function TasksTab({ customerKey }: TasksTabProps) {
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               placeholder="e.g. Follow up on Q3 renewal terms"
-              className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-3 py-1.5 text-sm"
+              className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-3 py-1.5 text-sm"
             />
           </div>
 
@@ -177,7 +177,7 @@ export function TasksTab({ customerKey }: TasksTabProps) {
               <select
                 value={draft.scheduleType}
                 onChange={(e) => setDraft({ ...draft, scheduleType: e.target.value as ScheduleType })}
-                className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
               >
                 <option value="once">Once</option>
                 <option value="recurring">Recurring</option>
@@ -197,21 +197,21 @@ export function TasksTab({ customerKey }: TasksTabProps) {
                   type="datetime-local"
                   value={draft.scheduleAt}
                   onChange={(e) => setDraft({ ...draft, scheduleAt: e.target.value })}
-                  className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+                  className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
                 />
               ) : draft.scheduleType === "recurring" ? (
                 <input
                   type="text"
                   value={draft.scheduleEvery}
                   onChange={(e) => setDraft({ ...draft, scheduleEvery: e.target.value })}
-                  className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+                  className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
                 />
               ) : (
                 <input
                   type="text"
                   value={draft.scheduleCron}
                   onChange={(e) => setDraft({ ...draft, scheduleCron: e.target.value })}
-                  className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm font-mono"
+                  className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm font-mono"
                 />
               )}
             </div>
@@ -225,7 +225,7 @@ export function TasksTab({ customerKey }: TasksTabProps) {
               <select
                 value={draft.actionType}
                 onChange={(e) => setDraft({ ...draft, actionType: e.target.value as ActionType })}
-                className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
               >
                 <option value="remind">Remind</option>
                 <option value="check">Check (agent run)</option>
@@ -239,7 +239,7 @@ export function TasksTab({ customerKey }: TasksTabProps) {
               <select
                 value={draft.actionChannel}
                 onChange={(e) => setDraft({ ...draft, actionChannel: e.target.value as ChannelType })}
-                className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
               >
                 <option value="slack">Slack</option>
                 <option value="email">Email</option>
@@ -259,7 +259,7 @@ export function TasksTab({ customerKey }: TasksTabProps) {
                     : setDraft({ ...draft, actionPrompt: e.target.value })
                 }
                 placeholder={draft.actionType === "remind" ? "Reminder text" : "What should the agent do?"}
-                className="w-full rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
               />
             </div>
           </div>

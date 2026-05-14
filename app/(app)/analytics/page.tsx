@@ -225,8 +225,13 @@ function KpiCard({
     <div
       className={`rounded-2xl p-5 flex flex-col justify-between min-h-[110px] ${featured ? "lg:min-h-[130px]" : ""}`}
       style={{
-        background: featured ? `${color}15` : "var(--card)",
-        border: `1px solid ${color}${featured ? "35" : "20"}`,
+        // In dark mode the page bg is #0d0d12 so we need enough opacity
+        // for the card to read against it. Featured uses the accent colour
+        // tinted; regular uses a neutral elevated surface.
+        background: featured
+          ? `color-mix(in srgb, ${color} 14%, transparent)`
+          : "rgba(255, 255, 255, 0.07)",
+        border: `1px solid color-mix(in srgb, ${color} ${featured ? "30" : "18"}%, transparent)`,
       }}
     >
       <div className="text-xs font-medium text-[color:var(--muted-foreground)] uppercase tracking-wider">{label}</div>
