@@ -18,6 +18,8 @@ function useChartTheme() {
     tooltipBg: dark ? "#18181b" : "#ffffff",
     tooltipBorder: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
     text: dark ? "#f4f4f5" : "#18181b",
+    // Brand yellow (#F2FF70) is illegible on white — use amber in light mode.
+    openColor: dark ? "#F2FF70" : "#d97706",
   };
 }
 
@@ -124,16 +126,16 @@ export function ArrTrend({ data, className }: { data: ArrPoint[]; className?: st
               }}
               activeDot={{ r: 7, stroke: t.tooltipBg, strokeWidth: 2 }}
             />
-            {/* Open/expected: dashed line */}
+            {/* Open/expected: dashed line in amber (light) / brand yellow (dark) */}
             {open.length > 0 && (
               <Line
                 data={[...won.slice(-1), ...open]}
                 type="stepAfter"
                 dataKey="amount"
-                stroke="#F2FF70"
+                stroke={t.openColor}
                 strokeWidth={2}
                 strokeDasharray="6 3"
-                dot={{ r: 5, fill: "#F2FF70", stroke: t.tooltipBg, strokeWidth: 2 }}
+                dot={{ r: 5, fill: t.openColor, stroke: t.tooltipBg, strokeWidth: 2 }}
               />
             )}
           </LineChart>
@@ -148,10 +150,10 @@ export function ArrTrend({ data, className }: { data: ArrPoint[]; className?: st
               .map((d, i) => (
                 <div key={i} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${d.type === "Open" ? "bg-[#F2FF70]" : "bg-[#818cf8]"}`} />
+                    <div className={`w-2 h-2 rounded-full`} style={{ background: d.type === "Open" ? t.openColor : "#818cf8" }} />
                     <span className="text-[color:var(--muted-foreground)] truncate max-w-[180px]">{d.name}</span>
                     {d.type === "Open" && (
-                      <span className="text-[10px] text-amber-500 font-medium">expected</span>
+                      <span className="text-[10px] font-medium" style={{ color: t.openColor }}>expected</span>
                     )}
                   </div>
                   <span className="font-semibold tabular-nums text-[color:var(--foreground)]">{fmtMoney(d.amount)}</span>
