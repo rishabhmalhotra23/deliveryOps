@@ -376,9 +376,9 @@ function formatQuarterTick(q: unknown): string {
   return `Q${m[2]}'${m[1].slice(2)}`;
 }
 
+import { isDelivered as txIsDelivered } from "@/lib/delivery/taxonomy";
 function isDelivered(p: DeliveryProject): boolean {
-  const s = (p.status ?? "").toLowerCase();
-  return s === "live" || s === "delivered";
+  return txIsDelivered(p.status);
 }
 
 function QonQ({ projects }: { projects: DeliveryProject[] }) {

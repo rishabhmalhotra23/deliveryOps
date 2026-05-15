@@ -11,6 +11,11 @@ import {
 } from "@kognitos/lattice";
 import type { ProjectsCardProps } from "@/lib/customers/view-model";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
+import {
+  isDelivered as txIsDelivered,
+  isStalled as txIsStalled,
+  isCancelledOrInactive as txIsCancelled,
+} from "@/lib/delivery/taxonomy";
 
 // ── Status/health colour maps ────────────────────────────────────────────────
 
@@ -75,27 +80,28 @@ function relTime(iso: string): string {
 
 type Project = ProjectsCardProps["projects"][0];
 
-// Historical = has a fiscal_year that isn't "active"
+// Thin adapters around the taxonomy classifiers — they expect status/group/
+// fiscal_year directly, but ProjectsCardProps stores them as project_status
+// and group_title.
 function isDelivered(p: Project): boolean {
-  const s = (p.project_status ?? "").toLowerCase();
-  const g = (p.group_title ?? "").toLowerCase();
-  return s === "live" || s === "delivered" || s === "finished" ||
-    g === "completed projects";
+  return txIsDelivered(p.project_status, p.group_title);
 }
 function isActive(p: Project): boolean {
-  // Active = the in-flight active board OR Account Overview "Active Projects" group
-  const g = (p.group_title ?? "").toLowerCase();
-  return p.fiscal_year === "active" ||
-    (p.fiscal_year === "account_overview" && (g.includes("active") || g.includes("upcoming")));
+  // The customer-card "Active" view also surfaces account-overview "Active
+  // Projects" and "Upcoming Projects" rows — kept as a customer-page-only
+  // extension of the taxonomy's isActiveBoard.
+  if (p.fiscal_year === "active") return !isDelivered(p);
+  if (p.fiscal_year === "account_overview") {
+    const g = (p.group_title ?? "").toLowerCase();
+    if (g.includes("active") || g.includes("upcoming")) return true;
+  }
+  return false;
 }
 function isStalled(p: Project): boolean {
-  const g = (p.group_title ?? "").toLowerCase();
-  return g === "stalled projects";
+  return txIsStalled(p.project_status, p.group_title);
 }
 function isCancelledOrInactive(p: Project): boolean {
-  const g = (p.group_title ?? "").toLowerCase();
-  const s = (p.project_status ?? "").toLowerCase();
-  return p.fiscal_year === "inactive" || g.includes("cancel") || s === "inactive" || s === "cancelled";
+  return txIsCancelled(p.project_status, p.group_title, p.fiscal_year);
 }
 
 // ── Main card ───────────────────────────────────────────────────────────────

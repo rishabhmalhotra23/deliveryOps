@@ -139,18 +139,22 @@ const NPS_COLS = {
   product_satisfaction: "color_mm0amv8q",
 };
 
-// Monday Projects board column IDs. Captured live on 2026-05-11.
+// Monday Projects board column IDs come from lib/delivery/taxonomy.ts.
+// Aliases below match this module's pre-existing field names so call sites
+// keep working without churn.
+import { MONDAY_PROJECT_COLS } from "@/lib/delivery/taxonomy";
+
 const PROJECT_COLS = {
-  health: "color_mm01ft4",
-  project_status: "color_mkzj8fw8",
-  current_phase: "color_mm06sdrj",
-  dev_platform: "color_mm0698sb",
-  complexity: "dropdown_mm06r92k",
-  kickoff_date: "date_mm011n1f",
-  go_live_date: "date_mm01dz3b",
-  partner: "dropdown_mm06hne3",
-  tam: "multiple_person_mkzrppyd",
-  dev: "multiple_person_mkzrgk3b",
+  health:         MONDAY_PROJECT_COLS.health,
+  project_status: MONDAY_PROJECT_COLS.status,
+  current_phase:  MONDAY_PROJECT_COLS.phase,
+  dev_platform:   MONDAY_PROJECT_COLS.platform,
+  complexity:     MONDAY_PROJECT_COLS.complexity,
+  kickoff_date:   MONDAY_PROJECT_COLS.kickoff_date,
+  go_live_date:   MONDAY_PROJECT_COLS.go_live_date,
+  partner:        MONDAY_PROJECT_COLS.partner,
+  tam:            MONDAY_PROJECT_COLS.tam,
+  dev:            MONDAY_PROJECT_COLS.dev,
 };
 
 interface RawColumns {

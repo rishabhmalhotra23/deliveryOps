@@ -6,7 +6,12 @@ import {
   ResponsiveContainer, Cell, ReferenceLine,
 } from "recharts";
 import { useTheme } from "next-themes";
-import type { WeeklyBundle, WeeklyProject, PhaseGroup } from "@/lib/reports/weekly-loader";
+import type { WeeklyBundle, WeeklyProject } from "@/lib/reports/weekly-loader";
+import {
+  PHASE_GROUP_META, ACTIVE_WORK_PHASES,
+  HEALTH_PILL_CLS, FLIGHT_GROUP_META,
+  type PhaseGroup,
+} from "@/lib/delivery/taxonomy";
 
 // ── Chart theme ───────────────────────────────────────────────────────────────
 function useChartTheme() {
@@ -38,16 +43,9 @@ function timeAgo(iso: string | null): string {
   return `${Math.round(ms / 86_400_000)}d ago`;
 }
 
-const HEALTH_PILL: Record<string, string> = {
-  "On Track": "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  Healthy:    "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  "At Risk":  "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
-  "Off Track":"bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
-  Stuck:      "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
-};
 function HealthPill({ health }: { health: string | null }) {
   if (!health) return null;
-  const cls = HEALTH_PILL[health] ?? "bg-zinc-500/12 text-zinc-600 dark:text-zinc-400 border-zinc-500/25";
+  const cls = HEALTH_PILL_CLS[health] ?? "bg-zinc-500/12 text-zinc-600 dark:text-zinc-400 border-zinc-500/25";
   return <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${cls}`}>{health}</span>;
 }
 
@@ -127,28 +125,24 @@ function ExportButtons({ bundle, reportRef }: { bundle: WeeklyBundle; reportRef:
 }
 
 // ── Phase breakdown row ───────────────────────────────────────────────────────
-// Only show phases that actually have projects — hide zero-count ones.
-// Labels match real Kognitos Monday phase naming.
-const PHASE_META: Array<{ key: PhaseGroup; label: string; color: string }> = [
-  { key: "discovery",  label: "Pre-Kickoff / M1", color: "#818cf8" },
-  { key: "dev",        label: "M2 Development",   color: "#6366f1" },
-  { key: "uat",        label: "M3–M5 UAT",         color: "#f59e0b" },
-  { key: "waiting",    label: "Waiting",            color: "#f97316" },
-  { key: "support",    label: "Support",            color: "#71717a" },
-];
+// Phase labels + colors come from the canonical taxonomy
+// (lib/delivery/taxonomy.ts → PHASE_GROUP_META + ACTIVE_WORK_PHASES).
+// Hides zero-count phases.
 
 function PhaseBreakdown({ by_phase }: { by_phase: WeeklyBundle["by_phase"] }) {
-  const visible = PHASE_META.filter(({ key }) => by_phase[key] > 0);
-  const total = visible.reduce((s, { key }) => s + by_phase[key], 0);
+  const visible = ACTIVE_WORK_PHASES
+    .concat("support" as PhaseGroup)
+    .map((key) => ({ key, ...PHASE_GROUP_META[key], count: by_phase[key] }))
+    .filter((x) => x.count > 0);
+  const total = visible.reduce((s, x) => s + x.count, 0);
   if (total === 0) return null;
   return (
     <div className="glass-card p-4">
       <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-3">
-        Active projects by phase (Active group only)
+        Active projects by phase (In progress group only)
       </div>
       <div className="flex flex-wrap gap-4">
-        {visible.map(({ key, label, color }) => {
-          const count = by_phase[key];
+        {visible.map(({ key, label, color, count }) => {
           const pct = total > 0 ? Math.round((count / total) * 100) : 0;
           return (
             <div key={key} className="flex items-center gap-2.5">
@@ -164,8 +158,8 @@ function PhaseBreakdown({ by_phase }: { by_phase: WeeklyBundle["by_phase"] }) {
       </div>
       {/* Stacked bar */}
       <div className="flex rounded-full overflow-hidden h-1.5 mt-3 gap-px">
-        {visible.map(({ key, color }) => {
-          const w = total > 0 ? (by_phase[key] / total) * 100 : 0;
+        {visible.map(({ key, color, count }) => {
+          const w = total > 0 ? (count / total) * 100 : 0;
           return w > 0 ? <div key={key} style={{ width: `${w}%`, background: color }} /> : null;
         })}
       </div>
@@ -285,17 +279,16 @@ function WorkloadChart({ data, label }: { data: Array<{ person: string; active: 
 }
 
 // ── In-flight breakdown tags ──────────────────────────────────────────────────
+// Uses FLIGHT_GROUP_META from taxonomy so labels + pill colors stay aligned
+// with the in-flight column on the customer pages.
 function FlightTags({ fd }: { fd: WeeklyBundle["flight_breakdown"] }) {
-  const items = [
-    { label: "In progress", count: fd.in_progress, cls: "text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20" },
-    { label: "Pipeline",    count: fd.pipeline,    cls: "text-sky-700 dark:text-sky-400 bg-sky-500/10 border-sky-500/20" },
-    { label: "On Hold",     count: fd.on_hold,     cls: "text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/20" },
-    { label: "Backlog",     count: fd.backlog,     cls: "text-zinc-600 dark:text-zinc-400 bg-zinc-500/10 border-zinc-500/20" },
-  ].filter((x) => x.count > 0);
+  const items = (Object.keys(fd) as Array<keyof WeeklyBundle["flight_breakdown"]>)
+    .map((key) => ({ key, count: fd[key], ...FLIGHT_GROUP_META[key] }))
+    .filter((x) => x.count > 0);
   return (
     <div className="flex flex-wrap gap-1.5 mb-3">
       {items.map((x) => (
-        <span key={x.label} className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${x.cls}`}>
+        <span key={x.key} className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${x.pillCls}`}>
           {x.count} {x.label}
         </span>
       ))}

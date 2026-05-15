@@ -21,27 +21,26 @@ import { gql } from "@/lib/integrations/monday";
 import { normalizeName } from "@/lib/import/monday-customers";
 import type { Customer } from "@/lib/supabase/types";
 
-// ─── Column ID constants (stable across Monday renames) ─────────────────────
+// ─── Column ID constants ────────────────────────────────────────────────────
+// Cross-board columns come from lib/delivery/taxonomy.ts (single source of
+// truth used by every loader). Sync-only columns + per-board customer
+// dropdowns stay local because no other module reads them.
+
+import { MONDAY_PROJECT_COLS } from "@/lib/delivery/taxonomy";
 
 const PROJECT_COLS = {
-  tam:         "multiple_person_mkzrppyd",
-  dev:         "multiple_person_mkzrgk3b",
-  customer_relation: "board_relation_mkzjzk6c",
-  partner:     "dropdown_mm06hne3",
-  health:      "color_mm01ft4",
-  status:      "color_mkzj8fw8",
-  phase:       "color_mm06sdrj",
-  platform:    "color_mm0698sb",
-  kickoff:     "date_mm011n1f",
-  go_live:     "date_mm01dz3b",
-  ttv:         "formula_mm01p18k",
-  total_effort:"numeric_mm0664sx",
-  timeline:    "timerange_mm014ng0",
-  complexity:  "dropdown_mm06r92k",
-  delivered_value: "text_mm09rsbe",
+  ...MONDAY_PROJECT_COLS,
+  // Aliases for fields whose names differ from the taxonomy keys:
+  kickoff:     MONDAY_PROJECT_COLS.kickoff_date,
+  go_live:     MONDAY_PROJECT_COLS.go_live_date,
+  // Sync-only columns — written by this module, never read by loaders:
+  customer_relation:        "board_relation_mkzjzk6c",
+  total_effort:             "numeric_mm0664sx",
+  timeline:                 "timerange_mm014ng0",
+  delivered_value:          "text_mm09rsbe",
   // Customer dropdown IDs differ across boards:
-  customer_dropdown_active: "dropdown_mm19sp0c",   // Projects board
-  customer_dropdown_fy26:   "dropdown_mm19b4x3",   // FY-2026
+  customer_dropdown_active: "dropdown_mm19sp0c",
+  customer_dropdown_fy26:   "dropdown_mm19b4x3",
 } as const;
 
 interface ProjectBoard {

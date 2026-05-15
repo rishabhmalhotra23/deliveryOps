@@ -15,17 +15,20 @@ async function main() {
   const now = new Date();
   const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(now.getDate() - 7);
   let recentLive = 0;
+  // Use the canonical taxonomy so this script can't drift from the rest of
+  // the codebase if column IDs ever change.
+  const { MONDAY_PROJECT_COLS, colText, isDelivered } = await import("@/lib/delivery/taxonomy");
   for (const row of data ?? []) {
-    const cols = row.raw_columns ?? {};
-    const phase = cols["color_mm06sdrj"]?.text?.trim();
-    const status = cols["color_mkzj8fw8"]?.text?.trim();
+    const cols = row.raw_columns ?? null;
+    const phase = colText(cols, MONDAY_PROJECT_COLS.phase);
+    const status = colText(cols, MONDAY_PROJECT_COLS.status);
     if (phase) phases.set(phase, (phases.get(phase) ?? 0) + 1);
     if (row.fiscal_year === "active") {
       const g = row.group_title ?? "(null)";
       groups.set(g, (groups.get(g) ?? 0) + 1);
     }
-    const go = cols["date_mm01dz3b"]?.text?.trim();
-    if ((status === "Live" || status === "Delivered") && go) {
+    const go = colText(cols, MONDAY_PROJECT_COLS.go_live_date);
+    if (isDelivered(status) && go) {
       const d = new Date(go);
       if (d >= sevenDaysAgo && d <= now) recentLive++;
     }

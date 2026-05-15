@@ -63,17 +63,21 @@ interface AccountRow {
   annual_revenue: number | null;
 }
 
-const PROJECT_COL_STATUS = "color_mkzj8fw8";
-const PROJECT_COL_PHASE = "color_mm06sdrj";
-const PROJECT_COL_GOLIVE = "date_mm01dz3b";
-const PROJECT_COL_TAM = "multiple_person_mkzrppyd";
-const PROJECT_COL_DEV = "multiple_person_mkzrgk3b";
-const NPS_COL_SCORE = "numeric_mm0aqvk3";
-const NPS_COL_CATEGORY = "color_mm0af90g";
-const NPS_COL_QUARTER = "dropdown_mm0ahec7";
+// Column IDs + helpers come from the canonical taxonomy. See
+// lib/delivery/taxonomy.ts — adding a new column ID here is a smell.
+import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText } from "@/lib/delivery/taxonomy";
+
+const PROJECT_COL_STATUS = MONDAY_PROJECT_COLS.status;
+const PROJECT_COL_PHASE  = MONDAY_PROJECT_COLS.phase;
+const PROJECT_COL_GOLIVE = MONDAY_PROJECT_COLS.go_live_date;
+const PROJECT_COL_TAM    = MONDAY_PROJECT_COLS.tam;
+const PROJECT_COL_DEV    = MONDAY_PROJECT_COLS.dev;
+const NPS_COL_SCORE      = MONDAY_NPS_COLS.score;
+const NPS_COL_CATEGORY   = MONDAY_NPS_COLS.category;
+const NPS_COL_QUARTER    = MONDAY_NPS_COLS.quarter;
 
 function txt(cols: ProjectRow["raw_columns"], id: string): string | null {
-  return cols?.[id]?.text?.trim() || null;
+  return colText(cols, id);
 }
 
 function categoryFromCustomer(c: { custom_category: string | null; lifecycle_group: string | null }): string {

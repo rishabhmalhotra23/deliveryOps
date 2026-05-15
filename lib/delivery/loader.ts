@@ -7,28 +7,12 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer } from "@/app/_components/brand";
+import { MONDAY_PROJECT_COLS as COLS, colText, isDelivered as txIsDelivered } from "@/lib/delivery/taxonomy";
 
 type RawColumns = Record<string, { type: string; text: string | null; value: string | null }>;
 function txt(cols: RawColumns, id: string): string | null {
-  const cell = cols?.[id];
-  if (!cell) return null;
-  return (cell.text ?? "").trim() || null;
+  return colText(cols, id);
 }
-
-// Column IDs shared across all project boards (stable against Monday renames).
-const COLS = {
-  health:      "color_mm01ft4",
-  status:      "color_mkzj8fw8",
-  phase:       "color_mm06sdrj",
-  platform:    "color_mm0698sb",
-  kickoff_date:"date_mm011n1f",
-  go_live_date:"date_mm01dz3b",
-  ttv:         "formula_mm01p18k",
-  complexity:  "dropdown_mm06r92k",
-  tam:         "multiple_person_mkzrppyd",
-  dev:         "multiple_person_mkzrgk3b",
-  partner:     "dropdown_mm06hne3",
-};
 
 export interface DeliveryProject {
   monday_item_id: string;
@@ -128,8 +112,7 @@ function isCurrentQuarter(iso: string | null): boolean {
 }
 
 function isDelivered(p: DeliveryProject): boolean {
-  const s = (p.status ?? "").toLowerCase();
-  return s === "live" || s === "delivered";
+  return txIsDelivered(p.status);
 }
 
 export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
