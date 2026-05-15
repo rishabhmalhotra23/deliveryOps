@@ -46,7 +46,6 @@ const QOQ_COLORS = {
   in_flight: "#818cf8", // indigo   — active work in progress
   at_risk:   "#fb923c", // amber    — needs attention
   inactive:  "#6b7280", // slate    — cancelled / inactive
-  effort:    "#38bdf8", // sky      — effort/days metric
 };
 
 // ── Colour maps ───────────────────────────────────────────────────────────────
@@ -430,18 +429,57 @@ function QonQ({ projects }: { projects: DeliveryProject[] }) {
     return Array.from(s).sort();
   }, [projects]);
 
-  // Effort chart: total person-days delivered per quarter.
-  const effortData = useMemo(() => {
-    const efforts = new Map<string, number>();
+  // On-time delivery rate per quarter.
+  // "On-time" = go_live_date <= timeline_end (the planned end on Monday).
+  // Projects without a planned end-date are excluded — we can't measure
+  // on-timeness against a missing target.
+  const onTimeData = useMemo(() => {
+    const buckets = new Map<string, { onTime: number; late: number }>();
     for (const p of projects) {
-      if (!isDelivered(p) || !p.total_effort_days) continue;
+      if (!isDelivered(p) || !p.go_live_date || !p.timeline_end) continue;
       const q = quarterLabel(p.go_live_date);
       if (!q) continue;
-      efforts.set(q, (efforts.get(q) ?? 0) + p.total_effort_days);
+      const actual = new Date(p.go_live_date).getTime();
+      const planned = new Date(p.timeline_end).getTime();
+      if (Number.isNaN(actual) || Number.isNaN(planned)) continue;
+      const row = buckets.get(q) ?? { onTime: 0, late: 0 };
+      if (actual <= planned) row.onTime++;
+      else row.late++;
+      buckets.set(q, row);
     }
-    return Array.from(efforts.entries())
+    return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([quarter, effort]) => ({ quarter, effort }));
+      .map(([quarter, { onTime, late }]) => ({
+        quarter,
+        onTime,
+        late,
+        total: onTime + late,
+        onTimePct: Math.round((onTime / (onTime + late)) * 100),
+      }));
+  }, [projects]);
+
+  // Average TTV (kickoff → go-live, in days) per quarter.
+  const avgTtvData = useMemo(() => {
+    const buckets = new Map<string, number[]>();
+    for (const p of projects) {
+      if (!isDelivered(p) || !p.kickoff_date || !p.go_live_date) continue;
+      const q = quarterLabel(p.go_live_date);
+      if (!q) continue;
+      const start = new Date(p.kickoff_date).getTime();
+      const end = new Date(p.go_live_date).getTime();
+      if (Number.isNaN(start) || Number.isNaN(end) || end < start) continue;
+      const days = Math.round((end - start) / (1000 * 60 * 60 * 24));
+      const arr = buckets.get(q) ?? [];
+      arr.push(days);
+      buckets.set(q, arr);
+    }
+    return Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([quarter, days]) => ({
+        quarter,
+        avgTtv: Math.round(days.reduce((a, b) => a + b, 0) / days.length),
+        count: days.length,
+      }));
   }, [projects]);
 
   if (data.length === 0) {
@@ -487,22 +525,82 @@ function QonQ({ projects }: { projects: DeliveryProject[] }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Effort by quarter */}
-      {effortData.length > 0 ? (
-        <div className="glass-card p-5">
-          <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Total effort delivered (person-days)</div>
-          <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
-            Only delivered/live projects with Total Effort set on Monday
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={effortData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-              <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={formatQuarterTick} />
-              <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v}d`, "Effort"]} labelFormatter={formatQuarterTick} />
-              <Bar dataKey="effort" fill={QOQ_COLORS.effort} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      {/* Team performance — two charts side-by-side: predictability + speed */}
+      {(onTimeData.length > 0 || avgTtvData.length > 0) ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* On-time delivery rate */}
+          {onTimeData.length > 0 ? (
+            <div className="glass-card p-5">
+              <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">On-time delivery rate</div>
+              <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
+                % of delivered projects that hit their planned go-live
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={onTimeData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+                  <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={formatQuarterTick} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: t.axis }}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={[0, 100]}
+                    tickFormatter={(v: number) => `${v}%`}
+                  />
+                  <Tooltip
+                    contentStyle={t.tooltipStyle}
+                    labelFormatter={formatQuarterTick}
+                    formatter={(value, _name, item) => {
+                      const r = item?.payload as { onTime: number; late: number; total: number } | undefined;
+                      if (!r) return [`${value}%`, "On-time"];
+                      return [`${value}% — ${r.onTime} of ${r.total} on time (${r.late} late)`, "On-time"];
+                    }}
+                  />
+                  <Bar dataKey="onTimePct" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : null}
+
+          {/* Avg TTV */}
+          {avgTtvData.length > 0 ? (
+            <div className="glass-card p-5">
+              <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Average TTV</div>
+              <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
+                Days from kickoff to go-live · per quarter (lower is better)
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={avgTtvData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="ttvGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+                  <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={formatQuarterTick} />
+                  <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}d`} />
+                  <Tooltip
+                    contentStyle={t.tooltipStyle}
+                    labelFormatter={formatQuarterTick}
+                    formatter={(value, _name, item) => {
+                      const r = item?.payload as { avgTtv: number; count: number } | undefined;
+                      if (!r) return [`${value}d`, "Avg TTV"];
+                      return [`${r.avgTtv}d · across ${r.count} project${r.count === 1 ? "" : "s"}`, "Avg TTV"];
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="avgTtv"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    fill="url(#ttvGrad)"
+                    dot={{ r: 3, fill: "#6366f1" }}
+                    activeDot={{ r: 5 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
