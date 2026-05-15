@@ -1,7 +1,4 @@
 // Weekly Delivery Update — data loader.
-//
-// All data comes from monday_projects + monday_nps_responses + customers.
-// No new schema required.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer } from "@/app/_components/brand";
@@ -48,63 +45,95 @@ function peopleName(raw: string | null): string[] {
     return [t];
   });
 }
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+function cap(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 function isDelivered(status: string | null): boolean {
   const s = (status ?? "").toLowerCase();
   return s === "live" || s === "delivered";
 }
 
-// Classify phase from Monday phase column text.
-export type PhaseGroup = "discovery" | "dev" | "uat" | "live" | "other";
-function phaseGroup(phase: string | null, status: string | null): PhaseGroup {
-  const p = (phase ?? "").toLowerCase();
-  const s = (status ?? "").toLowerCase();
+// ── Kognitos phase classification ─────────────────────────────────────────────
+// Actual phase values from Monday (from live data inspection):
+//   "Pre-Kickoff", "M1 - Discovery", "M2 - Development",
+//   "M3 - Testing/UAT", "M5 - Exception Handling",
+//   "Customer Handling exceptions", "Waiting for Customer",
+//   "POV complete, Waiting for next steps", "Support", "Enhancement"
+export type PhaseGroup = "discovery" | "dev" | "uat" | "waiting" | "support" | "live" | "other";
+
+export function phaseGroup(phase: string | null, status: string | null): PhaseGroup {
   if (isDelivered(status)) return "live";
-  if (p.includes("uat") || p.includes("test") || p.includes("qa")) return "uat";
-  if (p.includes("dev") || p.includes("build") || p.includes("implement")) return "dev";
-  if (p.includes("discover") || p.includes("plan") || p.includes("design") || p.includes("scoping")) return "discovery";
-  // Fall back to status keywords
-  if (s.includes("discover") || s.includes("plan")) return "discovery";
-  if (s.includes("dev") || s.includes("build")) return "dev";
-  if (s.includes("uat") || s.includes("test")) return "uat";
+  const p = (phase ?? "").toLowerCase();
+  if (p.includes("m1") || p.includes("discovery") || p.includes("pre-kickoff") || p.includes("pre kickoff")) return "discovery";
+  if (p.includes("m2") || p.includes("development") || p.includes("develop")) return "dev";
+  if (p.includes("m3") || p.includes("m4") || p.includes("m5") || p.includes("uat") || p.includes("testing") || p.includes("exception")) return "uat";
+  if (p.includes("waiting") || p.includes("pov complete") || p.includes("customer handling")) return "waiting";
+  if (p.includes("support") || p.includes("enhancement")) return "support";
   return "other";
 }
 
-// ISO week label for WoW trend: "W20 (May 12)"
-function isoWeekLabel(date: Date): string {
-  // Simple week-of-year using the Monday-start convention
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  const monOfWeek = new Date(date);
-  monOfWeek.setUTCDate(date.getUTCDate() - (date.getUTCDay() || 7) + 1);
-  const label = monOfWeek.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  return `W${weekNo} (${label})`;
+// ── Kognitos FY quarters ──────────────────────────────────────────────────────
+// FY starts February 1: Q1=Feb-Apr, Q2=May-Jul, Q3=Aug-Oct, Q4=Nov-Jan
+function kognitosFYQuarters(now: Date): {
+  thisStart: Date; thisEnd: Date; thisLabel: string;
+  prevStart: Date; prevEnd: Date; prevLabel: string;
+} {
+  const m = now.getUTCMonth(); // 0-11
+  const y = now.getUTCFullYear();
+
+  let qNum: number, qStart: Date, qEnd: Date, fyYear: number;
+  if (m === 0) {                 // January → Q4
+    qNum = 4; fyYear = y - 1;
+    qStart = new Date(Date.UTC(y - 1, 10, 1));
+    qEnd   = new Date(Date.UTC(y, 0, 31, 23, 59, 59));
+  } else if (m <= 3) {           // Feb–Apr → Q1
+    qNum = 1; fyYear = y;
+    qStart = new Date(Date.UTC(y, 1, 1));
+    qEnd   = new Date(Date.UTC(y, 3, 30, 23, 59, 59));
+  } else if (m <= 6) {           // May–Jul → Q2
+    qNum = 2; fyYear = y;
+    qStart = new Date(Date.UTC(y, 4, 1));
+    qEnd   = new Date(Date.UTC(y, 6, 31, 23, 59, 59));
+  } else if (m <= 9) {           // Aug–Oct → Q3
+    qNum = 3; fyYear = y;
+    qStart = new Date(Date.UTC(y, 7, 1));
+    qEnd   = new Date(Date.UTC(y, 9, 31, 23, 59, 59));
+  } else {                       // Nov–Dec → Q4
+    qNum = 4; fyYear = y;
+    qStart = new Date(Date.UTC(y, 10, 1));
+    qEnd   = new Date(Date.UTC(y + 1, 0, 31, 23, 59, 59));
+  }
+  const thisLabel = `Q${qNum} FY${String(fyYear).slice(2)}`;
+
+  // Previous quarter
+  let prevStart: Date, prevEnd: Date, prevQNum: number, prevFyYear: number;
+  if (qNum === 1) {
+    prevQNum = 4; prevFyYear = fyYear - 1;
+    prevStart = new Date(Date.UTC(fyYear - 1, 10, 1));
+    prevEnd   = new Date(Date.UTC(fyYear, 0, 31, 23, 59, 59));
+  } else if (qNum === 2) {
+    prevQNum = 1; prevFyYear = fyYear;
+    prevStart = new Date(Date.UTC(fyYear, 1, 1));
+    prevEnd   = new Date(Date.UTC(fyYear, 3, 30, 23, 59, 59));
+  } else if (qNum === 3) {
+    prevQNum = 2; prevFyYear = fyYear;
+    prevStart = new Date(Date.UTC(fyYear, 4, 1));
+    prevEnd   = new Date(Date.UTC(fyYear, 6, 31, 23, 59, 59));
+  } else {
+    prevQNum = 3; prevFyYear = fyYear;
+    prevStart = new Date(Date.UTC(fyYear, 7, 1));
+    prevEnd   = new Date(Date.UTC(fyYear, 9, 31, 23, 59, 59));
+  }
+  const prevLabel = `Q${prevQNum} FY${String(prevFyYear).slice(2)}`;
+
+  return { thisStart: qStart, thisEnd: qEnd, thisLabel, prevStart, prevEnd, prevLabel };
 }
 
-// "Last week" = the calendar Mon–Sun block that just completed.
-function lastWeekWindow(): { start: Date; end: Date; label: string } {
-  const now = new Date();
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  // Sunday = 0; shift so Monday = 0
-  const dayOfWeek = (todayUTC.getUTCDay() + 6) % 7; // 0=Mon … 6=Sun
-  const thisMon = new Date(todayUTC);
-  thisMon.setUTCDate(todayUTC.getUTCDate() - dayOfWeek);
-  const lastMon = new Date(thisMon);
-  lastMon.setUTCDate(thisMon.getUTCDate() - 7);
-  const lastSun = new Date(thisMon);
-  lastSun.setUTCDate(thisMon.getUTCDate() - 1);
-  lastSun.setUTCHours(23, 59, 59, 999);
-
-  const fmt = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  const label = `${fmt(lastMon)} – ${fmt(lastSun)}, ${lastSun.getUTCFullYear()}`;
-  return { start: lastMon, end: lastSun, label };
+// ── Week label: "May 12" = Monday of the week containing `date` ───────────────
+function mondayLabel(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7; // 1=Mon…7=Sun
+  d.setUTCDate(d.getUTCDate() - day + 1);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 function currentQuarterLabel(): string {
@@ -112,6 +141,8 @@ function currentQuarterLabel(): string {
   const q = Math.floor(now.getUTCMonth() / 3) + 1;
   return `${q}Q${String(now.getUTCFullYear()).slice(2)}`;
 }
+
+// ── Public types ──────────────────────────────────────────────────────────────
 
 export interface WeeklyProject {
   monday_item_id: string;
@@ -129,35 +160,42 @@ export interface WeeklyProject {
   tam: string[];
   dev: string[];
   fiscal_year: string | null;
+  group_title: string | null;
+}
+
+export interface FlightBreakdown {
+  in_progress: number;   // "Active" group on the active board
+  pipeline: number;      // "Pipeline" group
+  on_hold: number;       // "On Hold" group
+  backlog: number;       // "Backlog" group
 }
 
 export interface WeeklyBundle {
   week_label: string;
   generated_at: string;
-  // Delivery
-  shipped_last_week: WeeklyProject[];
-  in_uat: WeeklyProject[];         // replaces "upcoming 14d"
-  in_flight: WeeklyProject[];      // all active (non-delivered) projects
+  shipped_last_week: WeeklyProject[];     // go-live in last 7 days
+  in_uat: WeeklyProject[];               // phase = uat on active board
+  active_projects: WeeklyProject[];      // "Active" group only (truly in-progress)
+  all_active_board: WeeklyProject[];     // all non-delivered active board rows
   at_risk: WeeklyProject[];
-  // Phase breakdown — counts of active (non-delivered) projects by phase
-  by_phase: { discovery: number; dev: number; uat: number; other: number };
-  // Week-on-week trend — last 10 weeks of go-lives
-  wow_trend: Array<{ week: string; count: number }>;
-  // In-production stats
+  flight_breakdown: FlightBreakdown;
+  by_phase: Record<PhaseGroup, number>;  // phase breakdown for active group only
+  wow_trend: Array<{ week: string; count: number }>;  // last 10 weeks
   in_prod: {
-    projects: number;             // all-time delivered
-    customers: number;            // unique customers with ≥1 delivered project
-    this_quarter: number;         // delivered in the current calendar quarter
-    last_quarter: number;         // delivered in the previous calendar quarter
+    projects: number;
+    customers: number;
+    this_quarter: number;
+    this_q_label: string;   // "Q2 FY26"
+    last_quarter: number;
+    last_q_label: string;   // "Q1 FY26"
   };
-  // Team workload (active)
   workload_tam: Array<{ person: string; active: number }>;
   workload_dev: Array<{ person: string; active: number }>;
-  // NPS
   nps_this_quarter: { quarter: string; average: number; count: number } | null;
   totals: {
     shipped_last_week: number;
-    in_flight: number;
+    in_flight_active: number;  // "Active" group only
+    in_flight_total: number;   // entire active board
     at_risk: number;
     in_uat: number;
     delivered_all_time: number;
@@ -167,32 +205,25 @@ export interface WeeklyBundle {
 
 export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
   const sb = requireAdmin();
+  const now = new Date();
 
-  const { start: weekStart, end: weekEnd, label: weekLabel } = lastWeekWindow();
+  // Rolling 7-day window (not calendar week) — captures work done in
+  // the last 7 days regardless of where the calendar-week boundary falls.
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(now.getDate() - 7);
+  const weekLabel = (() => {
+    const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    return `${fmt(sevenDaysAgo)} – ${fmt(now)}, ${now.getUTCFullYear()}`;
+  })();
 
   const [projectsRes, customersRes, npsRes, lastSyncRes] = await Promise.all([
-    sb
-      .from("monday_projects")
-      .select(
-        "monday_item_id, name, group_title, customer_id, fiscal_year, " +
-        "go_live_date, kickoff_date, latest_update, raw_columns"
-      )
+    sb.from("monday_projects")
+      .select("monday_item_id, name, group_title, customer_id, fiscal_year, go_live_date, kickoff_date, latest_update, raw_columns")
       .limit(2000),
-    sb
-      .from("customers")
-      .select("id, key, display_name, custom_category, lifecycle_group")
-      .is("deleted_at", null),
-    sb
-      .from("monday_nps_responses")
-      .select("raw_columns"),
-    sb
-      .from("sync_runs")
-      .select("finished_at")
-      .eq("source", "monday")
-      .eq("status", "ok")
-      .order("finished_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    sb.from("customers").select("id, key, display_name, custom_category, lifecycle_group").is("deleted_at", null),
+    sb.from("monday_nps_responses").select("raw_columns"),
+    sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok")
+      .order("finished_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   type CustomerRow = { id: string; key: string; display_name: string; custom_category: string | null; lifecycle_group: string | null };
@@ -218,10 +249,9 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
       name: p.name,
       customer_display_name: cust.display_name,
       customer_category: categoryFromCustomer({ custom_category: cust.custom_category, lifecycle_group: cust.lifecycle_group }),
-      status,
-      health: col(cols, PROJECT_COL_HEALTH),
-      phase,
+      status, phase,
       phase_group: phaseGroup(phase, status),
+      health: col(cols, PROJECT_COL_HEALTH),
       go_live_date: go,
       kickoff_date: p.kickoff_date,
       latest_update: p.latest_update,
@@ -229,96 +259,99 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
       tam: peopleName(col(cols, PROJECT_COL_TAM)),
       dev: peopleName(col(cols, PROJECT_COL_DEV)),
       fiscal_year: p.fiscal_year,
+      group_title: p.group_title,
     });
   }
 
-  // ── Active project set ────────────────────────────────────────────────────
-  const activeProjects = projects.filter((p) => {
-    if (isDelivered(p.status)) return false;
-    const fy = (p.fiscal_year ?? "").toLowerCase();
-    const s  = (p.status ?? "").toLowerCase();
-    return fy === "active" || s === "in progress" || s === "in-progress";
-  });
+  // ── Active board subset ────────────────────────────────────────────────────
+  // "active" fiscal_year = the live project tracking board (not historical FY boards)
+  const allActiveBoardProjects = projects.filter(
+    (p) => p.fiscal_year === "active" && !isDelivered(p.status)
+  );
+  // "Active" group within the active board = truly in-progress work
+  const activeGroupProjects = allActiveBoardProjects.filter(
+    (p) => (p.group_title ?? "").toLowerCase() === "active"
+  );
 
-  // ── Buckets ───────────────────────────────────────────────────────────────
-
+  // ── Shipped last 7 days ────────────────────────────────────────────────────
   const shippedLastWeek = projects
     .filter((p) => {
       if (!isDelivered(p.status)) return false;
       const d = parseDate(p.go_live_date);
-      return d !== null && d >= weekStart && d <= weekEnd;
+      return d !== null && d >= sevenDaysAgo && d <= now;
     })
     .sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1));
 
-  const inUat = activeProjects
+  // ── UAT (from active board Active group only) ─────────────────────────────
+  const inUat = activeGroupProjects
     .filter((p) => p.phase_group === "uat")
     .sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1));
 
-  const atRisk = activeProjects.filter((p) => {
+  // ── At risk (across all active board) ────────────────────────────────────
+  const atRisk = allActiveBoardProjects.filter((p) => {
     const h = (p.health ?? "").toLowerCase();
     return h.includes("risk") || h === "off track" || h === "stuck";
   });
 
-  // ── Phase breakdown ───────────────────────────────────────────────────────
-  const by_phase = { discovery: 0, dev: 0, uat: 0, other: 0 };
-  for (const p of activeProjects) {
-    const g = p.phase_group;
-    if (g === "discovery") by_phase.discovery++;
-    else if (g === "dev") by_phase.dev++;
-    else if (g === "uat") by_phase.uat++;
-    else by_phase.other++;
+  // ── Flight breakdown by group ─────────────────────────────────────────────
+  const flight_breakdown: FlightBreakdown = { in_progress: 0, pipeline: 0, on_hold: 0, backlog: 0 };
+  for (const p of allActiveBoardProjects) {
+    const g = (p.group_title ?? "").toLowerCase();
+    if (g === "active") flight_breakdown.in_progress++;
+    else if (g.includes("pipeline")) flight_breakdown.pipeline++;
+    else if (g.includes("on hold") || g === "hold") flight_breakdown.on_hold++;
+    else if (g.includes("backlog")) flight_breakdown.backlog++;
+    else flight_breakdown.in_progress++; // default
   }
 
-  // ── Week-on-week trend (last 10 full weeks of go-lives) ───────────────────
-  const now = new Date();
-  const tenWeeksAgo = new Date(now);
-  tenWeeksAgo.setDate(now.getDate() - 70);
+  // ── Phase breakdown (active group projects only) ──────────────────────────
+  const by_phase: Record<PhaseGroup, number> = { discovery: 0, dev: 0, uat: 0, waiting: 0, support: 0, live: 0, other: 0 };
+  for (const p of activeGroupProjects) {
+    by_phase[p.phase_group]++;
+  }
 
+  // ── WoW trend — last 10 weeks ─────────────────────────────────────────────
   const weekMap = new Map<string, number>();
-  // Pre-seed last 10 weeks so weeks with 0 deliveries still appear
   for (let i = 9; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(now.getDate() - i * 7);
-    weekMap.set(isoWeekLabel(d), 0);
+    weekMap.set(mondayLabel(d), 0);
   }
+  const tenWeeksAgo = new Date(now);
+  tenWeeksAgo.setDate(now.getDate() - 70);
   for (const p of projects) {
     if (!isDelivered(p.status)) continue;
     const d = parseDate(p.go_live_date);
     if (!d || d < tenWeeksAgo) continue;
-    const key = isoWeekLabel(d);
+    const key = mondayLabel(d);
     weekMap.set(key, (weekMap.get(key) ?? 0) + 1);
   }
   const wow_trend = Array.from(weekMap.entries()).map(([week, count]) => ({ week, count }));
 
-  // ── In-production stats ───────────────────────────────────────────────────
-  const deliveredProjects = projects.filter((p) => isDelivered(p.status));
-  const prodCustomers = new Set(deliveredProjects.map((p) => p.customer_display_name));
-
-  // Current calendar quarter window
-  const qStart = new Date(Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3, 1));
-  const prevQStart = new Date(qStart);
-  prevQStart.setUTCMonth(prevQStart.getUTCMonth() - 3);
-
-  const thisQCount = deliveredProjects.filter((p) => {
+  // ── In-production stats (Kognitos FY quarters) ────────────────────────────
+  const fy = kognitosFYQuarters(now);
+  const deliveredAll = projects.filter((p) => isDelivered(p.status));
+  const prodCustomers = new Set(deliveredAll.map((p) => p.customer_display_name));
+  const thisQCount = deliveredAll.filter((p) => {
     const d = parseDate(p.go_live_date);
-    return d !== null && d >= qStart;
+    return d !== null && d >= fy.thisStart && d <= fy.thisEnd;
   }).length;
-  const prevQCount = deliveredProjects.filter((p) => {
+  const lastQCount = deliveredAll.filter((p) => {
     const d = parseDate(p.go_live_date);
-    return d !== null && d >= prevQStart && d < qStart;
+    return d !== null && d >= fy.prevStart && d <= fy.prevEnd;
   }).length;
 
-  // ── Team workload ─────────────────────────────────────────────────────────
+  // ── Team workload (Active group only) ─────────────────────────────────────
   const tamAgg = new Map<string, number>();
   const devAgg = new Map<string, number>();
-  for (const p of activeProjects) {
+  for (const p of activeGroupProjects) {
     for (const name of p.tam) tamAgg.set(name, (tamAgg.get(name) ?? 0) + 1);
     for (const name of p.dev) devAgg.set(name, (devAgg.get(name) ?? 0) + 1);
   }
   const workload_tam = [...tamAgg.entries()].map(([person, active]) => ({ person, active })).sort((a, b) => b.active - a.active);
   const workload_dev = [...devAgg.entries()].map(([person, active]) => ({ person, active })).sort((a, b) => b.active - a.active);
 
-  // ── NPS this quarter ──────────────────────────────────────────────────────
+  // ── NPS ───────────────────────────────────────────────────────────────────
   type NpsRow = { raw_columns: RawCols | null };
   const currQ = currentQuarterLabel();
   const npsScores: number[] = [];
@@ -336,20 +369,23 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
     generated_at: now.toISOString(),
     shipped_last_week: shippedLastWeek,
     in_uat: inUat,
-    in_flight: activeProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
+    active_projects: activeGroupProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
+    all_active_board: allActiveBoardProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
     at_risk: atRisk,
+    flight_breakdown,
     by_phase,
     wow_trend,
-    in_prod: { projects: deliveredProjects.length, customers: prodCustomers.size, this_quarter: thisQCount, last_quarter: prevQCount },
+    in_prod: { projects: deliveredAll.length, customers: prodCustomers.size, this_quarter: thisQCount, this_q_label: fy.thisLabel, last_quarter: lastQCount, last_q_label: fy.prevLabel },
     workload_tam,
     workload_dev,
     nps_this_quarter,
     totals: {
       shipped_last_week: shippedLastWeek.length,
-      in_flight: activeProjects.length,
+      in_flight_active: activeGroupProjects.length,
+      in_flight_total: allActiveBoardProjects.length,
       at_risk: atRisk.length,
       in_uat: inUat.length,
-      delivered_all_time: deliveredProjects.length,
+      delivered_all_time: deliveredAll.length,
     },
     last_sync: (lastSyncRes.data as { finished_at: string } | null)?.finished_at ?? null,
   };
