@@ -21,6 +21,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@kognitos/lattice": "file:./kognitos-lattice-1.36.0.tgz",
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/typography": "^0.5.16",
     "apache-arrow": "^21.1.0",
@@ -37,6 +38,7 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
+    "ws": "^8.20.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -44,6 +46,7 @@
     "@types/node": "^25.3.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitest/ui": "^3.2.4",
     "husky": "^9.1.7",
     "tailwindcss": "^4.1.0",

@@ -49,7 +49,20 @@ enable_signup = true
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
+# Magic-link sign-in: no confirmation step in dev (the link itself is the
+# confirmation). Inbucket at localhost:54324 catches every outbound email.
 enable_confirmations = false
+
+# Google OAuth — enabled in dev only when GOOGLE_CLIENT_ID is set in your
+# shell or .env. Without it, sign-in falls back to the email magic-link flow.
+# In Supabase Cloud (production) this is configured via the dashboard, not
+# this file.
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+redirect_uri = "http://127.0.0.1:54321/auth/v1/callback"
+skip_nonce_check = false
 
 [edge_runtime]
 enabled = true

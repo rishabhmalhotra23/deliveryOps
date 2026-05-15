@@ -1,3 +1,4 @@
+import "./ws-polyfill";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -24,9 +25,11 @@ export const supabaseAdmin: SupabaseClient | null =
   url && serviceKey ? createClient(url, serviceKey, { auth: { persistSession: false } }) : null;
 
 // Anon client for server components that need RLS-scoped reads on behalf of
-// the signed-in user. Sessions are passed via cookies in Phase 3.
+// the signed-in user. For routes that must respect the user's session, use
+// `createServerSupabase()` from `./server-cookies` instead — it threads the
+// auth cookie through.
 export const supabaseServer: SupabaseClient | null =
-  url && anonKey ? createClient(url, anonKey, { auth: { persistSession: false } }) : null;
+  url && anonKey ? createClient(url, anonKey, { auth: { persistSession: false }, }) : null;
 
 export function requireAdmin(): SupabaseClient {
   if (!supabaseAdmin) {

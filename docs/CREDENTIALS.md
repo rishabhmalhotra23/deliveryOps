@@ -447,8 +447,19 @@ Skip these for now if you're staying on localhost. When you're ready to put Deli
 - [ ] **Client Secret**: paste your `GOOGLE_CLIENT_SECRET`
 - [ ] **Authorized Client IDs**: leave empty
 - [ ] Save
-- [ ] Scroll up to **URL Configuration** → set **Site URL** to your Vercel domain
+- [ ] Scroll up to **URL Configuration** → set **Site URL** to your Vercel domain (e.g. `https://delivery-ops.vercel.app`) and add `/auth/callback` to **Redirect URLs**
 - [ ] **Authentication → Settings → Email Auth** → optionally tighten the **Allowed Email Domains** to `kognitos.com` (Phase 3 multi-tenant work will widen this)
+
+The DeliveryOps app enforces `@kognitos.com` server-side regardless of this setting. The dashboard:
+
+- Refuses to render any page in the `(app)` route group without a valid Supabase session via root `middleware.ts`.
+- Sign-in lives at `/login` with both Google OAuth and email magic-link options.
+- The OAuth callback at `/auth/callback` validates the email domain after exchange — sign-ins from non-kognitos.com Google accounts are signed back out and bounced with `?error=domain`.
+- Webhook routes (`/api/slack/`, `/api/gmail/`, `/api/inngest`, `/api/cron/`, `/api/monday/`) bypass the gate — they're authenticated by signature/secret.
+
+After running migration `0015_auth_rls_kognitos_domain.sql` (via `npx tsx scripts/safe-migrate.ts`), every customer-data table requires either a service-role JWT or a JWT whose email ends in `@kognitos.com`. The `internal_profiles` table denies all authenticated reads — only the service-role bypasses RLS, so a misconfigured server component can never accidentally leak internal notes.
+
+**Verify:** `npx tsx scripts/verify-auth.ts` runs the full RLS check against the configured Supabase.
 
 ### 6d. Collect credentials for Vercel
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { UserPill } from "./user-pill";
 
 interface NavItem {
   href: string;
@@ -104,7 +105,13 @@ function SyncDot({ label, time }: { label: string; time: string | null }) {
 
 // ── Main shell ────────────────────────────────────────────────────────────────
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  userEmail,
+}: {
+  children: React.ReactNode;
+  userEmail?: string | null;
+}) {
   const pathname = usePathname();
   const syncStatus = useSyncStatus();
 
@@ -167,12 +174,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mt-auto px-5 py-4 space-y-3 border-t border-[rgba(255,255,255,0.06)]">
-          <div className="space-y-1.5">
+        <div className="mt-auto px-3 py-4 space-y-3 border-t border-[rgba(255,255,255,0.06)]">
+          <div className="px-2 space-y-1.5">
             <SyncDot label="Salesforce" time={syncStatus.sf} />
             <SyncDot label="Monday" time={syncStatus.monday} />
           </div>
-          <div className="flex items-center justify-between">
+          {userEmail ? <UserPill email={userEmail} /> : null}
+          <div className="flex items-center justify-between px-2">
             <div className="text-[10px] text-[color:var(--brand-metal)] opacity-50">DeliveryOps</div>
             <ThemeToggle />
           </div>

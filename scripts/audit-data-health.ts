@@ -13,6 +13,7 @@
 // Run with:  npx tsx scripts/audit-data-health.ts
 
 import "dotenv/config";
+import "@/lib/supabase/ws-polyfill"; // Node < 22 needs WebSocket polyfill for supabase-js >= 2.105.
 import * as fs from "node:fs";
 import * as path from "node:path";
 
