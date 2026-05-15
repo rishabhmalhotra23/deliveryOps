@@ -30,10 +30,11 @@ const REPORT_CARDS: ReportCard[] = [
     title: "Weekly Delivery Update",
     subtitle: "Team-wide delivery status report",
     description:
-      "Generate a weekly delivery snapshot across the entire portfolio: projects shipped, milestones hit, blockers, and upcoming go-lives. Distributed via Slack or email. Replaces the manual Monday digest.",
+      "Live snapshot of the portfolio: what shipped this week, what's in flight, who's carrying what, and what's due in the next 14 days. Powered by Monday.com — no manual copy-paste. Export to Notion with one click for your All Hands.",
     icon: "📋",
-    status: "coming-soon",
-    needs: ["Kognitos run consumption data", "Slack access (already wired)", "Weekly template sign-off"],
+    status: "available",
+    needs: [],
+    href: "/reports/weekly",
   },
   {
     id: "monthly-digest",
@@ -75,14 +76,6 @@ export default function ReportsPage() {
         </h1>
         <p className="text-sm text-[color:var(--muted-foreground)] mt-2 max-w-2xl">
           Automated reports powered by live data from Salesforce, Monday, and Kognitos. No manual copy-paste — every report generates from a single click and reflects the current state of the customer relationship.
-        </p>
-      </div>
-
-      {/* Progress note */}
-      <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-5 py-4 text-sm">
-        <div className="font-semibold text-amber-700 dark:text-amber-400 mb-1">Coming together</div>
-        <p className="text-[color:var(--muted-foreground)] leading-relaxed">
-          Report generation is being unlocked progressively. Kognitos v1/v2 live process data and Google Slides API access are the primary remaining dependencies. Once wired, the QBR generator and weekly digest will be fully operational. Sample PPTX templates and brand guidelines will be applied during generation.
         </p>
       </div>
 
