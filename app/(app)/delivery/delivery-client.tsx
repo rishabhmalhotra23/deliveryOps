@@ -360,9 +360,21 @@ function quarterLabel(iso: string | null): string | null {
   const fyQ = d.getUTCMonth() >= 1
     ? Math.floor((d.getUTCMonth() - 1) / 3) + 1
     : 4;
-  // Use calendar quarter notation for simplicity — matches Monday group names
+  // Underlying key is "YYYY QN" so it stays lex-sortable + matches Monday
+  // group names. Display labels are formatted with formatQuarterTick().
   return `${d.getUTCFullYear()} Q${calQ}`;
   void fy; void fyQ; // kept for future FY alignment
+}
+
+// Display formatter: "2023 Q2" → "Q2'23". Keeps chart axes compact and
+// consistent with the analytics page (Q2'23 / Q3'24 etc.). Accepts unknown
+// because Recharts' tickFormatter / labelFormatter pass ReactNode-typed
+// values; we coerce to string and pattern-match.
+function formatQuarterTick(q: unknown): string {
+  const s = typeof q === "string" ? q : String(q ?? "");
+  const m = s.match(/^(\d{4})\s+Q([1-4])$/);
+  if (!m) return s;
+  return `Q${m[2]}'${m[1].slice(2)}`;
 }
 
 function isDelivered(p: DeliveryProject): boolean {
@@ -452,9 +464,9 @@ function QonQ({ projects }: { projects: DeliveryProject[] }) {
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-            <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
+            <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={formatQuarterTick} />
             <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={t.tooltipStyle} />
+            <Tooltip contentStyle={t.tooltipStyle} labelFormatter={formatQuarterTick} />
             <Legend
               wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
               formatter={(v: string) => {
@@ -485,9 +497,9 @@ function QonQ({ projects }: { projects: DeliveryProject[] }) {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={effortData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-              <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
+              <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={formatQuarterTick} />
               <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v}d`, "Effort"]} />
+              <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v}d`, "Effort"]} labelFormatter={formatQuarterTick} />
               <Bar dataKey="effort" fill={QOQ_COLORS.effort} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

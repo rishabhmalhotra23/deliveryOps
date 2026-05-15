@@ -3,7 +3,7 @@
 import {
   BarChart, Bar, Cell, PieChart, Pie, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  RadialBarChart, RadialBar, LabelList, ReferenceLine, ComposedChart, ReferenceArea,
+  RadialBarChart, RadialBar, LabelList, ReferenceLine, ComposedChart,
 } from "recharts";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
@@ -16,7 +16,6 @@ function useChartTheme() {
   const dark = mounted && resolvedTheme === "dark";
   return {
     grid:   dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-    band:   dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
     axis:   dark ? "#71717a" : "#a1a1aa",
     bg:     dark ? "#18181b" : "#ffffff",
     border: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
@@ -227,29 +226,6 @@ export function ProjectsByGroupChart({ data }: { data: Array<{ group: string; co
 export function DeliveriesOverTimeChart({ data }: { data: Array<{ month: string; count: number }> }) {
   const t = useChartTheme();
 
-  // Build quarterly reference areas for alternating background bands.
-  // Group months into quarters; shade every other quarter.
-  const quarters: Array<{ start: string; end: string; shade: boolean }> = [];
-  if (data.length > 0) {
-    const sortedMonths = [...data].sort((a, b) => a.month.localeCompare(b.month));
-    const firstDate = new Date(sortedMonths[0].month + "-01");
-    const lastDate = new Date(sortedMonths[sortedMonths.length - 1].month + "-01");
-    // Iterate quarters from first to last
-    const d = new Date(
-      firstDate.getUTCFullYear(),
-      Math.floor(firstDate.getUTCMonth() / 3) * 3,
-      1
-    );
-    let idx = 0;
-    while (d <= lastDate) {
-      const qStart = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-      d.setUTCMonth(d.getUTCMonth() + 3);
-      const qEnd = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-      quarters.push({ start: qStart, end: qEnd, shade: idx % 2 === 0 });
-      idx++;
-    }
-  }
-
   // Determine which months to show as X-axis labels (first month of each quarter)
   const xTicks = data
     .map((d) => d.month)
@@ -272,18 +248,6 @@ export function DeliveriesOverTimeChart({ data }: { data: Array<{ month: string;
             <stop offset="100%" stopColor="#34d399" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        {/* Alternating quarter bands */}
-        {quarters.map((q) =>
-          q.shade ? (
-            <ReferenceArea
-              key={q.start}
-              x1={q.start}
-              x2={q.end}
-              fill={t.band}
-              fillOpacity={1}
-            />
-          ) : null
-        )}
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
         <XAxis
           dataKey="month"
