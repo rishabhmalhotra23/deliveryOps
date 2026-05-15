@@ -12,6 +12,7 @@ import {
   HEALTH_PILL_CLS, FLIGHT_GROUP_META,
   type PhaseGroup,
 } from "@/lib/delivery/taxonomy";
+import { RangeSelector } from "./range-selector";
 
 // ── Chart theme ───────────────────────────────────────────────────────────────
 function useChartTheme() {
@@ -49,13 +50,12 @@ function HealthPill({ health }: { health: string | null }) {
   return <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${cls}`}>{health}</span>;
 }
 
-// ── PNG export using html-to-image (handles Tailwind CSS vars + SVG charts) ───
+// ── Export buttons ────────────────────────────────────────────────────────────
 function ExportButtons({ bundle, reportRef }: { bundle: WeeklyBundle; reportRef: React.RefObject<HTMLDivElement | null> }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
 
   async function downloadPng() {
     setState("loading");
-    // Hide the export strip so it's not in the image
     const strip = document.getElementById("export-strip");
     if (strip) strip.style.display = "none";
     try {
@@ -64,24 +64,16 @@ function ExportButtons({ bundle, reportRef }: { bundle: WeeklyBundle; reportRef:
       const { toPng } = await import("html-to-image");
       const dataUrl = await toPng(el, {
         pixelRatio: 2,
-        backgroundColor: window.getComputedStyle(document.documentElement)
-          .getPropertyValue("--background")
-          .trim() || "#ffffff",
-        style: {
-          // Ensure the captured width matches the render width
-          maxWidth: "none",
-        },
+        backgroundColor: window.getComputedStyle(document.documentElement).getPropertyValue("--background").trim() || "#ffffff",
+        style: { maxWidth: "none" },
         filter: (node) => {
-          // Skip external images that might cause CORS errors (logos)
-          if (node instanceof HTMLImageElement && !node.src.startsWith(window.location.origin)) {
-            return false;
-          }
+          if (node instanceof HTMLImageElement && !node.src.startsWith(window.location.origin)) return false;
           return true;
         },
       });
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `deliveryops-weekly-${bundle.week_label.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.png`;
+      a.download = `deliveryops-${bundle.range.preset}-${bundle.range.label.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.png`;
       a.click();
       setState("done");
     } catch (err) {
@@ -93,45 +85,26 @@ function ExportButtons({ bundle, reportRef }: { bundle: WeeklyBundle; reportRef:
     }
   }
 
-  const label =
-    state === "loading" ? "Rendering…" :
-    state === "done"    ? "Saved ✓" :
-    state === "error"   ? "Failed — try print (Cmd+P)" :
-    "Download PNG";
-
+  const label = state === "loading" ? "Rendering…" : state === "done" ? "Saved ✓" : state === "error" ? "Failed — try Print" : "Download PNG";
   return (
     <div id="export-strip" className="flex items-center gap-2">
-      <button
-        onClick={downloadPng}
-        disabled={state === "loading"}
-        className="inline-flex items-center gap-2 rounded-xl border border-[var(--glass-border)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] hover:bg-[rgba(0,0,0,0.04)] dark:hover:bg-[rgba(255,255,255,0.04)] disabled:opacity-50 transition-colors"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
+      <button onClick={downloadPng} disabled={state === "loading"}
+        className="inline-flex items-center gap-2 rounded-xl border border-[var(--glass-border)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] hover:bg-[rgba(0,0,0,0.04)] dark:hover:bg-[rgba(255,255,255,0.04)] disabled:opacity-50 transition-colors">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         {label}
       </button>
-      <button
-        onClick={() => window.print()}
-        className="inline-flex items-center gap-2 rounded-xl border border-[var(--glass-border)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] hover:bg-[rgba(0,0,0,0.04)] dark:hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-        </svg>
+      <button onClick={() => window.print()}
+        className="inline-flex items-center gap-2 rounded-xl border border-[var(--glass-border)] px-4 py-2 text-sm font-medium text-[color:var(--foreground)] hover:bg-[rgba(0,0,0,0.04)] dark:hover:bg-[rgba(255,255,255,0.04)] transition-colors">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
         Print / PDF
       </button>
     </div>
   );
 }
 
-// ── Phase breakdown row ───────────────────────────────────────────────────────
-// Phase labels + colors come from the canonical taxonomy
-// (lib/delivery/taxonomy.ts → PHASE_GROUP_META + ACTIVE_WORK_PHASES).
-// Hides zero-count phases.
-
+// ── Phase breakdown ───────────────────────────────────────────────────────────
 function PhaseBreakdown({ by_phase }: { by_phase: WeeklyBundle["by_phase"] }) {
-  const visible = ACTIVE_WORK_PHASES
-    .concat("support" as PhaseGroup)
+  const visible = ACTIVE_WORK_PHASES.concat("support" as PhaseGroup)
     .map((key) => ({ key, ...PHASE_GROUP_META[key], count: by_phase[key] }))
     .filter((x) => x.count > 0);
   const total = visible.reduce((s, x) => s + x.count, 0);
@@ -156,7 +129,6 @@ function PhaseBreakdown({ by_phase }: { by_phase: WeeklyBundle["by_phase"] }) {
           );
         })}
       </div>
-      {/* Stacked bar */}
       <div className="flex rounded-full overflow-hidden h-1.5 mt-3 gap-px">
         {visible.map(({ key, color, count }) => {
           const w = total > 0 ? (count / total) * 100 : 0;
@@ -167,21 +139,21 @@ function PhaseBreakdown({ by_phase }: { by_phase: WeeklyBundle["by_phase"] }) {
   );
 }
 
-// ── WoW trend chart ───────────────────────────────────────────────────────────
-function WowChart({ data }: { data: WeeklyBundle["wow_trend"] }) {
+// ── Delivery trend chart ──────────────────────────────────────────────────────
+function DeliveryTrendChart({ trend }: { trend: WeeklyBundle["delivery_trend"] }) {
   const t = useChartTheme();
+  const data = trend.data;
   const avg = data.length > 0 ? data.reduce((s, d) => s + d.count, 0) / data.length : 0;
   return (
     <ResponsiveContainer width="100%" height={170}>
       <BarChart data={data} margin={{ top: 8, right: 40, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-        <XAxis dataKey="week" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} />
+        <XAxis dataKey="bucket_label" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} />
         <YAxis tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
         <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [v, "Go-lives"]} />
         {avg > 0 && (
           <ReferenceLine y={avg} stroke="#6366f1" strokeDasharray="4 3" strokeOpacity={0.6}
-            label={{ value: `avg ${avg.toFixed(1)}`, position: "insideTopRight", fontSize: 10, fill: "#6366f1" }}
-          />
+            label={{ value: `avg ${avg.toFixed(1)}`, position: "insideTopRight", fontSize: 10, fill: "#6366f1" }} />
         )}
         <Bar dataKey="count" radius={[3, 3, 0, 0]}>
           {data.map((d, i) => (
@@ -205,7 +177,11 @@ function StatCard({ label, value, sub, accent }: { label: string; value: number 
 }
 
 // ── Project row ───────────────────────────────────────────────────────────────
+// Shows BOTH TAM and FDE (Dev) names — was previously TAM only, which hid
+// FDE assignments on UAT and other rows.
 function ProjectRow({ p, showTtv, tag }: { p: WeeklyProject; showTtv?: boolean; tag?: React.ReactNode }) {
+  const tamLine = p.tam.length > 0 ? `TAM: ${p.tam[0]}${p.tam.length > 1 ? ` +${p.tam.length - 1}` : ""}` : null;
+  const fdeLine = p.dev.length > 0 ? `FDE: ${p.dev[0]}${p.dev.length > 1 ? ` +${p.dev.length - 1}` : ""}` : null;
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-[var(--glass-border)] last:border-0">
       <div className="min-w-0 flex-1">
@@ -213,7 +189,8 @@ function ProjectRow({ p, showTtv, tag }: { p: WeeklyProject; showTtv?: boolean; 
         <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 truncate">
           {p.customer_display_name}
           {p.phase && <span className="ml-2 opacity-55">[{p.phase}]</span>}
-          {p.tam.length > 0 && <span className="ml-2 opacity-50">· {p.tam[0]}</span>}
+          {tamLine && <span className="ml-2 opacity-60">· {tamLine}</span>}
+          {fdeLine && <span className="ml-2 opacity-60">· {fdeLine}</span>}
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
@@ -231,21 +208,17 @@ function ProjectRow({ p, showTtv, tag }: { p: WeeklyProject; showTtv?: boolean; 
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
-function Section({ title, count, children, countCls, sub }: {
-  title: string; count?: number; children: React.ReactNode; countCls?: string; sub?: string;
+function Section({ title, count, children, countCls }: {
+  title: string; count?: number; children: React.ReactNode; countCls?: string;
 }) {
   return (
     <section className="glass-card p-5">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">{title}</div>
         {count !== undefined && (
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${countCls ?? "bg-[var(--glass-border)] text-[color:var(--muted-foreground)]"}`}>
-            {count}
-          </span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${countCls ?? "bg-[var(--glass-border)] text-[color:var(--muted-foreground)]"}`}>{count}</span>
         )}
       </div>
-      {sub && <div className="text-xs text-[color:var(--muted-foreground)] mb-3">{sub}</div>}
-      {!sub && <div className="mb-3" />}
       {children}
     </section>
   );
@@ -257,20 +230,41 @@ function Empty({ text }: { text: string }) {
 
 // ── Workload chart ─────────────────────────────────────────────────────────────
 const WORKLOAD_COLORS = ["#818cf8","#6366f1","#a78bfa","#8b5cf6","#34d399","#10b981","#60a5fa","#3b82f6"];
+
+// Truncate names so the YAxis stays a sane width even with long names.
+// Tooltip still shows the full name.
+function shortName(s: string, max = 18): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + "…";
+}
+
 function WorkloadChart({ data, label }: { data: Array<{ person: string; active: number }>; label: string }) {
   const t = useChartTheme();
   if (data.length === 0) return <Empty text="No assignments found." />;
+  const display = data.map((d) => ({ ...d, displayName: shortName(d.person) }));
   return (
     <>
       <div className="text-[11px] text-[color:var(--muted-foreground)] mb-2">{label}</div>
       <ResponsiveContainer width="100%" height={Math.max(90, data.length * 32)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+        <BarChart data={display} layout="vertical" margin={{ top: 0, right: 24, left: 4, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
           <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
-          <YAxis type="category" dataKey="person" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} width={95} />
-          <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [v, "Active projects"]} />
+          <YAxis
+            type="category"
+            dataKey="displayName"
+            tick={{ fontSize: 11, fill: t.axis }}
+            tickLine={false}
+            axisLine={false}
+            width={130}
+            interval={0}
+          />
+          <Tooltip
+            contentStyle={t.tooltipStyle}
+            labelFormatter={(_, payload) => (payload?.[0]?.payload as { person?: string } | undefined)?.person ?? ""}
+            formatter={(v) => [v, "Active projects"]}
+          />
           <Bar dataKey="active" radius={[0, 3, 3, 0]}>
-            {data.map((_, i) => <Cell key={i} fill={WORKLOAD_COLORS[i % WORKLOAD_COLORS.length]} />)}
+            {display.map((_, i) => <Cell key={i} fill={WORKLOAD_COLORS[i % WORKLOAD_COLORS.length]} />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -278,9 +272,7 @@ function WorkloadChart({ data, label }: { data: Array<{ person: string; active: 
   );
 }
 
-// ── In-flight breakdown tags ──────────────────────────────────────────────────
-// Uses FLIGHT_GROUP_META from taxonomy so labels + pill colors stay aligned
-// with the in-flight column on the customer pages.
+// ── Flight tags ────────────────────────────────────────────────────────────────
 function FlightTags({ fd }: { fd: WeeklyBundle["flight_breakdown"] }) {
   const items = (Object.keys(fd) as Array<keyof WeeklyBundle["flight_breakdown"]>)
     .map((key) => ({ key, count: fd[key], ...FLIGHT_GROUP_META[key] }))
@@ -338,30 +330,42 @@ function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
-  const { totals } = bundle;
+  const { totals, range } = bundle;
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const isMonthly = bundle.delivery_trend.bucket_kind === "monthly";
+  const trendTitle = isMonthly ? "Deliveries — month on month" : "Deliveries — week on week";
+  const trendSub   = isMonthly
+    ? "Go-lives per month · last 12 months · green = at or above average"
+    : "Go-lives per week · last 12 weeks · green = at or above average";
+
+  const fromIso = range.start.toISOString().slice(0, 10);
+  const toIso   = range.end.toISOString().slice(0, 10);
 
   return (
     <div ref={reportRef} className="space-y-5 print:space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.15em] text-[color:var(--muted-foreground)] mb-1">Weekly Delivery Update</div>
-          <h1 className="text-3xl font-bold tracking-tight text-[color:var(--foreground)]">{bundle.week_label}</h1>
-          <p className="text-sm text-[color:var(--muted-foreground)] mt-1">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-[0.15em] text-[color:var(--muted-foreground)]">{range.cadenceLabel} Delivery Update</div>
+          <h1 className="text-3xl font-bold tracking-tight text-[color:var(--foreground)]">{range.label}</h1>
+          <RangeSelector activePreset={range.preset} from={fromIso} to={toIso} />
+        </div>
+        <div className="flex flex-col items-start lg:items-end gap-2">
+          <ExportButtons bundle={bundle} reportRef={reportRef} />
+          <p className="text-xs text-[color:var(--muted-foreground)]">
             Monday.com · synced {timeAgo(bundle.last_sync)}
           </p>
         </div>
-        <ExportButtons bundle={bundle} reportRef={reportRef} />
       </div>
 
       {/* Row 1 — hero stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          label="Shipped last 7 days"
-          value={totals.shipped_last_week}
+          label={`Shipped in this ${range.preset === "custom" ? "range" : range.preset}`}
+          value={totals.shipped_in_range}
           sub={`${totals.delivered_all_time} all time`}
-          accent={totals.shipped_last_week > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined}
+          accent={totals.shipped_in_range > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined}
         />
         <StatCard label="In progress" value={totals.in_flight_active}
           sub={`${totals.in_flight_total} total on board`} />
@@ -374,19 +378,19 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
       {/* Row 2 — phase breakdown */}
       <PhaseBreakdown by_phase={bundle.by_phase} />
 
-      {/* Row 3 — WoW trend */}
+      {/* Row 3 — Trend */}
       <div className="glass-card p-5">
-        <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">Deliveries — week on week</div>
-        <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-4">Go-lives per week · last 10 weeks · green = at or above average</div>
-        <WowChart data={bundle.wow_trend} />
+        <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">{trendTitle}</div>
+        <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-4">{trendSub}</div>
+        <DeliveryTrendChart trend={bundle.delivery_trend} />
       </div>
 
-      {/* Row 4 — Shipped (ONLY shown if there are results) + UAT side by side */}
-      {totals.shipped_last_week > 0 ? (
+      {/* Row 4 — Shipped (only if any) + UAT */}
+      {totals.shipped_in_range > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Section title="Shipped last 7 days" count={totals.shipped_last_week}
+          <Section title={`Shipped in this ${range.preset === "custom" ? "range" : range.preset}`} count={totals.shipped_in_range}
             countCls="bg-emerald-500/12 text-emerald-700 dark:text-emerald-400">
-            {bundle.shipped_last_week.map((p) => <ProjectRow key={p.monday_item_id} p={p} showTtv />)}
+            {bundle.shipped_in_range.map((p) => <ProjectRow key={p.monday_item_id} p={p} showTtv />)}
           </Section>
           <Section title="In UAT — ready for sign-off" count={totals.in_uat}
             countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
@@ -394,20 +398,17 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
               ? <Empty text="No projects currently in UAT." />
               : bundle.in_uat.map((p) => (
                   <ProjectRow key={p.monday_item_id} p={p}
-                    tag={<span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">UAT</span>}
-                  />
+                    tag={<span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">UAT</span>} />
                 ))}
           </Section>
         </div>
       ) : (
-        /* When nothing shipped: show UAT full-width */
         bundle.in_uat.length > 0 && (
           <Section title="In UAT — ready for sign-off" count={totals.in_uat}
             countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
             {bundle.in_uat.map((p) => (
               <ProjectRow key={p.monday_item_id} p={p}
-                tag={<span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">UAT</span>}
-              />
+                tag={<span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">UAT</span>} />
             ))}
           </Section>
         )
@@ -436,11 +437,7 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
         </Section>
 
         <div className="lg:col-span-2">
-          <Section
-            title="In flight"
-            count={totals.in_flight_total}
-            sub={undefined}
-          >
+          <Section title="In flight" count={totals.in_flight_total}>
             <FlightTags fd={bundle.flight_breakdown} />
             {bundle.all_active_board.length === 0
               ? <Empty text="No active projects." />
@@ -451,8 +448,7 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
                         p.group_title && p.group_title !== "Active"
                           ? <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--glass-border)] text-[color:var(--muted-foreground)] font-medium">{p.group_title}</span>
                           : undefined
-                      }
-                    />
+                      } />
                   ))}
                 </div>}
           </Section>
@@ -462,12 +458,14 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
       {/* Row 6 — In production */}
       <InProdSection in_prod={bundle.in_prod} nps={bundle.nps_this_quarter} />
 
-      {/* Row 7 — Team workload (bottom) */}
+      {/* Row 7 — Team workload (TAM + FDE) */}
       <div className="glass-card p-5">
-        <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-4">Team workload — active projects (In progress group)</div>
+        <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-4">
+          Team workload — active projects (In progress group)
+        </div>
         <div className="grid gap-6 lg:grid-cols-2">
           <WorkloadChart data={bundle.workload_tam} label="TAM / CSM" />
-          <WorkloadChart data={bundle.workload_dev} label="Engineering / SE" />
+          <WorkloadChart data={bundle.workload_dev} label="FDE / Engineering" />
         </div>
       </div>
 

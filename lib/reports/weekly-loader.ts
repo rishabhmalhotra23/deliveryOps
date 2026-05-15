@@ -1,6 +1,13 @@
-// Weekly Delivery Update — data loader.
-// All taxonomy (column IDs, phase classification, isDelivered/isAtRisk,
-// group buckets, FY quarter math, people parsing) lives in lib/delivery/taxonomy.
+// Delivery Report — data loader.
+//
+// Accepts an arbitrary date range. Sections are split into:
+//   - Range-bound: shipped_in_range, delivery_trend (uses the selected range)
+//   - Snapshot:    in_flight / in_uat / at_risk (always "right now" — these
+//                  represent the current state, not historical)
+//   - Quarter:     in_prod (Kognitos FY quarter math, range-independent)
+//
+// All taxonomy (column IDs, phase classification, classifiers, FY math,
+// people parsing) lives in lib/delivery/taxonomy.ts.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer } from "@/app/_components/brand";
@@ -19,17 +26,76 @@ function parseDate(iso: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function mondayLabel(date: Date): string {
+function fmtShort(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+// Monday at 00:00 UTC of the week containing the given date.
+function startOfIsoWeek(date: Date): Date {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const day = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() - day + 1);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return d;
+}
+
+// Calendar month start at 00:00 UTC.
+function startOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
 
 function currentNpsQuarterLabel(): string {
   const now = new Date();
   const q = Math.floor(now.getUTCMonth() / 3) + 1;
   return `${q}Q${String(now.getUTCFullYear()).slice(2)}`;
+}
+
+// ─── Range presets ────────────────────────────────────────────────────────────
+
+export type RangePreset = "week" | "month" | "quarter" | "custom";
+
+export interface DateRange {
+  start: Date;
+  end: Date;
+  preset: RangePreset;
+  label: string;       // "May 9 – May 15, 2026"
+  cadenceLabel: string; // "Weekly" | "Monthly" | "Quarterly" | "Custom"
+}
+
+export interface RangeRequest {
+  preset?: RangePreset;
+  from?: string; // ISO date
+  to?: string;
+}
+
+export function resolveRange(req: RangeRequest = {}, now: Date = new Date()): DateRange {
+  // Custom range: needs both from + to to be valid.
+  if (req.preset === "custom" && req.from && req.to) {
+    const start = new Date(req.from);
+    const end = new Date(req.to);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
+      end.setUTCHours(23, 59, 59, 999);
+      return { start, end, preset: "custom", label: `${fmtShort(start)} – ${fmtShort(end)}, ${end.getUTCFullYear()}`, cadenceLabel: "Custom" };
+    }
+  }
+
+  if (req.preset === "month") {
+    // Last 30 days, ending today.
+    const start = new Date(now);
+    start.setDate(now.getDate() - 30);
+    return { start, end: now, preset: "month", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Monthly" };
+  }
+
+  if (req.preset === "quarter") {
+    // Last 90 days, ending today.
+    const start = new Date(now);
+    start.setDate(now.getDate() - 90);
+    return { start, end: now, preset: "quarter", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Quarterly" };
+  }
+
+  // Default: rolling last 7 days.
+  const start = new Date(now);
+  start.setDate(now.getDate() - 7);
+  return { start, end: now, preset: "week", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Weekly" };
 }
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -48,7 +114,7 @@ export interface WeeklyProject {
   latest_update: string | null;
   ttv_days: number | null;
   tam: string[];
-  dev: string[];
+  dev: string[];   // FDE / engineering
   fiscal_year: string | null;
   group_title: string | null;
 }
@@ -60,17 +126,31 @@ export interface FlightBreakdown {
   backlog: number;
 }
 
+export interface DeliveryTrendBucket {
+  bucket_label: string;   // "May 4" or "May" depending on bucket
+  count: number;
+}
+
 export interface WeeklyBundle {
-  week_label: string;
+  range: DateRange;
   generated_at: string;
-  shipped_last_week: WeeklyProject[];
+
+  // Range-bound
+  shipped_in_range: WeeklyProject[];
+  delivery_trend: {
+    bucket_kind: "weekly" | "monthly";
+    data: DeliveryTrendBucket[];
+  };
+
+  // Snapshots ("now")
   in_uat: WeeklyProject[];
-  active_projects: WeeklyProject[];   // "in_progress" group only
-  all_active_board: WeeklyProject[];  // all non-delivered active board rows
+  active_projects: WeeklyProject[];
+  all_active_board: WeeklyProject[];
   at_risk: WeeklyProject[];
   flight_breakdown: FlightBreakdown;
   by_phase: Record<PhaseGroup, number>;
-  wow_trend: Array<{ week: string; count: number }>;
+
+  // Quarter
   in_prod: {
     projects: number;
     customers: number;
@@ -82,8 +162,9 @@ export interface WeeklyBundle {
   workload_tam: Array<{ person: string; active: number }>;
   workload_dev: Array<{ person: string; active: number }>;
   nps_this_quarter: { quarter: string; average: number; count: number } | null;
+
   totals: {
-    shipped_last_week: number;
+    shipped_in_range: number;
     in_flight_active: number;
     in_flight_total: number;
     at_risk: number;
@@ -93,17 +174,10 @@ export interface WeeklyBundle {
   last_sync: string | null;
 }
 
-export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
+export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBundle> {
   const sb = requireAdmin();
   const now = new Date();
-
-  // Rolling 7-day window (not calendar week).
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(now.getDate() - 7);
-  const weekLabel = (() => {
-    const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-    return `${fmt(sevenDaysAgo)} – ${fmt(now)}, ${now.getUTCFullYear()}`;
-  })();
+  const range = resolveRange(req, now);
 
   const [projectsRes, customersRes, npsRes, lastSyncRes] = await Promise.all([
     sb.from("monday_projects")
@@ -152,7 +226,7 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
     });
   }
 
-  // ── Active board subset ───────────────────────────────────────────────────
+  // ── Active board subsets ──────────────────────────────────────────────────
   const allActiveBoardProjects = projects.filter((p) =>
     isActiveBoard({ fiscal_year: p.fiscal_year, status: p.status, group_title: p.group_title })
   );
@@ -160,50 +234,79 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
     (p) => flightGroup(p.group_title) === "in_progress"
   );
 
-  // ── Shipped last 7 days ───────────────────────────────────────────────────
-  const shippedLastWeek = projects
+  // ── Shipped in range ──────────────────────────────────────────────────────
+  const shippedInRange = projects
     .filter((p) => {
       if (!isDelivered(p.status, p.group_title)) return false;
       const d = parseDate(p.go_live_date);
-      return d !== null && d >= sevenDaysAgo && d <= now;
+      return d !== null && d >= range.start && d <= range.end;
     })
     .sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1));
 
-  // ── UAT (active group, UAT phase) ─────────────────────────────────────────
+  // ── UAT (snapshot) ────────────────────────────────────────────────────────
   const inUat = activeGroupProjects
     .filter((p) => p.phase_group === "uat")
     .sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1));
 
-  // ── At risk (any active board project) ────────────────────────────────────
+  // ── At risk (snapshot) ────────────────────────────────────────────────────
   const atRisk = allActiveBoardProjects.filter((p) => isAtRisk(p.health));
 
-  // ── Flight group breakdown ────────────────────────────────────────────────
+  // ── Flight breakdown (snapshot) ───────────────────────────────────────────
   const flight_breakdown: FlightBreakdown = { in_progress: 0, pipeline: 0, on_hold: 0, backlog: 0 };
   for (const p of allActiveBoardProjects) flight_breakdown[flightGroup(p.group_title)]++;
 
-  // ── Phase breakdown (active group only) ───────────────────────────────────
+  // ── Phase breakdown (snapshot) ────────────────────────────────────────────
   const by_phase: Record<PhaseGroup, number> = { discovery: 0, dev: 0, uat: 0, waiting: 0, support: 0, live: 0, other: 0 };
   for (const p of activeGroupProjects) by_phase[p.phase_group]++;
 
-  // ── WoW trend — last 10 weeks ─────────────────────────────────────────────
-  const weekMap = new Map<string, number>();
-  for (let i = 9; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i * 7);
-    weekMap.set(mondayLabel(d), 0);
-  }
-  const tenWeeksAgo = new Date(now);
-  tenWeeksAgo.setDate(now.getDate() - 70);
-  for (const p of projects) {
-    if (!isDelivered(p.status, p.group_title)) continue;
-    const d = parseDate(p.go_live_date);
-    if (!d || d < tenWeeksAgo) continue;
-    const key = mondayLabel(d);
-    weekMap.set(key, (weekMap.get(key) ?? 0) + 1);
-  }
-  const wow_trend = Array.from(weekMap.entries()).map(([week, count]) => ({ week, count }));
+  // ── Delivery trend ────────────────────────────────────────────────────────
+  // Bucket size: weekly when range ≤ 90 days, monthly when > 90.
+  // Trend window: ~3× the range, capped at 12 buckets, anchored to range.end.
+  const rangeDays = Math.max(1, Math.round((range.end.getTime() - range.start.getTime()) / 86_400_000));
+  const useMonthly = rangeDays > 90;
+  const bucketCount = 12;
 
-  // ── In-production stats (Kognitos FY quarters) ────────────────────────────
+  const trend: DeliveryTrendBucket[] = [];
+  if (useMonthly) {
+    // Last 12 calendar months ending in range.end
+    const end = startOfMonth(range.end);
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    for (let i = bucketCount - 1; i >= 0; i--) {
+      const bStart = new Date(end);
+      bStart.setUTCMonth(end.getUTCMonth() - i - 1);
+      const bEnd = new Date(end);
+      bEnd.setUTCMonth(end.getUTCMonth() - i);
+      const count = projects.filter((p) => {
+        if (!isDelivered(p.status, p.group_title)) return false;
+        const d = parseDate(p.go_live_date);
+        return d !== null && d >= bStart && d < bEnd;
+      }).length;
+      trend.push({
+        bucket_label: bStart.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }),
+        count,
+      });
+    }
+  } else {
+    // Last 12 weeks (Monday-aligned) ending in the week of range.end
+    const lastMon = startOfIsoWeek(range.end);
+    for (let i = bucketCount - 1; i >= 0; i--) {
+      const bStart = new Date(lastMon);
+      bStart.setUTCDate(lastMon.getUTCDate() - i * 7);
+      const bEnd = new Date(bStart);
+      bEnd.setUTCDate(bStart.getUTCDate() + 7);
+      const count = projects.filter((p) => {
+        if (!isDelivered(p.status, p.group_title)) return false;
+        const d = parseDate(p.go_live_date);
+        return d !== null && d >= bStart && d < bEnd;
+      }).length;
+      trend.push({
+        bucket_label: fmtShort(bStart),
+        count,
+      });
+    }
+  }
+
+  // ── In-production stats (Kognitos FY quarters, range-independent) ────────
   const thisQ = kognitosFYQuarter(now);
   const lastQ = previousKognitosFYQuarter(thisQ);
   const deliveredAll = projects.filter((p) => isDelivered(p.status, p.group_title));
@@ -217,7 +320,7 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
     return d !== null && d >= lastQ.start && d <= lastQ.end;
   }).length;
 
-  // ── Team workload (Active group only) ─────────────────────────────────────
+  // ── Team workload (snapshot, in-progress group only) ─────────────────────
   const tamAgg = new Map<string, number>();
   const devAgg = new Map<string, number>();
   for (const p of activeGroupProjects) {
@@ -241,19 +344,18 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
     : null;
 
   return {
-    week_label: weekLabel,
+    range,
     generated_at: now.toISOString(),
-    shipped_last_week: shippedLastWeek,
+    shipped_in_range: shippedInRange,
+    delivery_trend: { bucket_kind: useMonthly ? "monthly" : "weekly", data: trend },
     in_uat: inUat,
     active_projects: activeGroupProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
     all_active_board: allActiveBoardProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
     at_risk: atRisk,
     flight_breakdown,
     by_phase,
-    wow_trend,
     in_prod: {
-      projects: deliveredAll.length,
-      customers: prodCustomers.size,
+      projects: deliveredAll.length, customers: prodCustomers.size,
       this_quarter: thisQCount, this_q_label: thisQ.label,
       last_quarter: lastQCount, last_q_label: lastQ.label,
     },
@@ -261,7 +363,7 @@ export async function loadWeeklyBundle(): Promise<WeeklyBundle> {
     workload_dev,
     nps_this_quarter,
     totals: {
-      shipped_last_week: shippedLastWeek.length,
+      shipped_in_range: shippedInRange.length,
       in_flight_active: activeGroupProjects.length,
       in_flight_total: allActiveBoardProjects.length,
       at_risk: atRisk.length,

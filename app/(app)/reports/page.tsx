@@ -27,10 +27,10 @@ const REPORT_CARDS: ReportCard[] = [
   },
   {
     id: "weekly",
-    title: "Weekly Delivery Update",
-    subtitle: "Team-wide delivery status report",
+    title: "Delivery Update",
+    subtitle: "Weekly · monthly · quarterly · custom range",
     description:
-      "Live snapshot of the portfolio: what shipped this week, what's in flight, who's carrying what, and what's due in the next 14 days. Powered by Monday.com — no manual copy-paste. Export to Notion with one click for your All Hands.",
+      "Live portfolio snapshot for any time window: what shipped, what's in UAT, what's at risk, team workload, and a delivery trend chart. Pick a preset or set custom dates. Export as PNG or print-to-PDF for your All Hands or QBR.",
     icon: "📋",
     status: "available",
     needs: [],
