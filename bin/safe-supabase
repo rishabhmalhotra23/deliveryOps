@@ -1,0 +1,78 @@
+#!/bin/bash
+# Wrapper around the `supabase` CLI that refuses to run data-loss commands
+# without explicit human confirmation. Used by npm scripts in package.json
+# and intended for direct human use too — symlink or alias if you want.
+#
+# Why this exists: the 2026-05-15 incident wiped 41 customers because
+# `supabase stop --no-backup` was invoked from inside Cursor. The Cursor
+# hook (.cursor/hooks/block-destructive.sh) blocks the agent. This script
+# is the same gate for humans typing in their own terminal.
+#
+# To bypass for a deliberate, reviewed action:
+#   I_REALLY_MEAN_IT=1 bin/safe-supabase stop --no-backup
+# That is the only way through. The phrase is intentionally ugly so it
+# can't be muscle-memoried.
+
+set -euo pipefail
+
+# Resolve the real supabase binary so we don't recursively call ourselves.
+REAL_SUPABASE=$(command -v -p supabase 2>/dev/null || true)
+if [ -z "$REAL_SUPABASE" ]; then
+  for candidate in /opt/homebrew/bin/supabase /usr/local/bin/supabase; do
+    if [ -x "$candidate" ]; then
+      REAL_SUPABASE=$candidate
+      break
+    fi
+  done
+fi
+if [ -z "$REAL_SUPABASE" ]; then
+  echo "[safe-supabase] FATAL: cannot find the real supabase CLI binary." >&2
+  exit 127
+fi
+
+ARGS_STR="$*"
+
+# ─── Block patterns ────────────────────────────────────────────────────────
+DANGEROUS=()
+if [[ "$ARGS_STR" =~ \bdb[[:space:]]+reset\b ]]; then
+  DANGEROUS+=("supabase db reset (wipes the local Postgres volume)")
+fi
+if [[ "$ARGS_STR" =~ stop[[:space:]]+([^[:space:]]+[[:space:]]+)*--no-backup\b ]] \
+   || [[ "$ARGS_STR" =~ stop[[:space:]]+--no-backup\b ]]; then
+  DANGEROUS+=("supabase stop --no-backup (drops the volume on stop)")
+fi
+
+if [ ${#DANGEROUS[@]} -gt 0 ]; then
+  if [ "${I_REALLY_MEAN_IT:-}" != "1" ]; then
+    cat >&2 <<EOF
+
+──────────────────────────────────────────────────────────────────
+  REFUSING to run a destructive supabase command:
+EOF
+    for d in "${DANGEROUS[@]}"; do
+      echo "    • $d" >&2
+    done
+    cat >&2 <<EOF
+
+  This wipes local data. The 2026-05-11 and 2026-05-15 incidents were
+  both caused by exactly this pattern. The runbook recovery is non-trivial
+  even when source-of-truth systems still have the data.
+
+  If you truly want to proceed:
+    1. Snapshot first:   npx tsx scripts/db-snapshot.ts
+    2. Re-run with the explicit override env var:
+         I_REALLY_MEAN_IT=1 bin/safe-supabase $ARGS_STR
+
+  See: .cursor/rules/destructive-operations.mdc and docs/RUNBOOK.md
+──────────────────────────────────────────────────────────────────
+
+EOF
+    exit 64
+  fi
+
+  # Override active — log loudly and proceed.
+  echo "[safe-supabase] ⚠ I_REALLY_MEAN_IT=1 — running destructive command anyway: supabase $ARGS_STR" >&2
+fi
+
+# Pass-through to the real supabase CLI.
+exec "$REAL_SUPABASE" "$@"

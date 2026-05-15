@@ -67,6 +67,36 @@ Or open <http://localhost:4001/dev/simulate>, pick "Slack message", type *"What'
 - If you see `Missing ANTHROPIC_API_KEY` after editing `.env.local`, restart `npm run dev` once. Next.js usually picks up env changes hot, but if you started before adding the file, it might not have any envs cached.
 - Sonnet 4.5 is the default. If you want to test cheaper, set `CLAUDE_MODEL=claude-haiku-4-5-20250929` — the agent loop works on any tool-use-capable Anthropic model.
 
+## Resend SMTP for sign-in emails (5 min — strongly recommended)
+
+The DeliveryOps sign-in page sends magic-link emails. By default in local dev they're caught by Mailpit (`http://127.0.0.1:54324`) instead of being delivered. That works, but it's friction — you have to remember to open Mailpit. Wiring Resend takes 5 minutes and lets the link arrive at your real inbox (works on your phone too).
+
+- [ ] Open <https://resend.com> → **Sign up** with GitHub (free, no credit card)
+- [ ] **Onboarding** → tick "I'll set up DNS later" — for now we'll send from Resend's shared `onboarding@resend.dev` address, which is allowed for low-volume sender testing
+- [ ] Dashboard → **API Keys** → **Create API Key** → name it `delivery-ops-dev` → permission **Sending access** → **Add**
+- [ ] Copy the key (starts with `re_…`)
+- [ ] Paste into `.env.local`:
+  ```
+  SUPABASE_SMTP_HOST=smtp.resend.com
+  SUPABASE_SMTP_USER=resend
+  SUPABASE_SMTP_PASS=re_…                        # the API key
+  SUPABASE_SMTP_FROM=onboarding@resend.dev       # sender address; replace with a verified custom domain later
+  ```
+- [ ] Reload Supabase Auth so the new SMTP config takes effect:
+  ```bash
+  npm run db:stop      # safe-supabase wrapper, dumps the volume on stop
+  npm run db:start
+  ```
+- [ ] Visit <http://localhost:4001/login>, request a magic link → it arrives at your real `@kognitos.com` inbox in ~5 seconds
+
+**When ready for production:** in Resend dashboard → **Domains** → **Add Domain** → `kognitos.com` (or a subdomain like `mail.kognitos.com`) → add the printed DNS records → swap `SUPABASE_SMTP_FROM` to e.g. `delivery-ops@kognitos.com`. The Pro plan is $20/mo for 50k emails — same upgrade tier as Vercel, makes sense to do them together.
+
+**Verify:**
+```bash
+curl -sS http://localhost:54324/api/v1/messages?limit=1 | jq '.messages[0].To[0].Address'
+# In dev mode, Mailpit catches everything. Once SMTP is wired, this returns null.
+```
+
 ---
 
 # Tier 1 — Phase 1.5 / 2 production integrations

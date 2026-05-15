@@ -50,15 +50,39 @@ enable_signup = true
 enable_signup = true
 double_confirm_changes = true
 # Magic-link sign-in: no confirmation step in dev (the link itself is the
-# confirmation). Inbucket at localhost:54324 catches every outbound email.
+# confirmation). When SMTP is unconfigured (block below), Mailpit at
+# http://127.0.0.1:54324 catches every outbound email.
 enable_confirmations = false
 
-# Google OAuth — enabled in dev only when GOOGLE_CLIENT_ID is set in your
-# shell or .env. Without it, sign-in falls back to the email magic-link flow.
-# In Supabase Cloud (production) this is configured via the dashboard, not
-# this file.
-[auth.external.google]
+# SMTP for outbound auth emails (magic links, recovery, etc.).
+# When SMTP_HOST is unset, Supabase falls back to Mailpit (the local catcher
+# at port 54324). Set the env vars below in .env.local to send to real
+# inboxes via your provider of choice — Resend is the default recommendation
+# (5-min signup at https://resend.com, 100 emails/day free).
+#
+# To activate after setting env vars: `supabase stop && supabase start`
+# (config.toml is read at startup).
+[auth.email.smtp]
 enabled = true
+host = "env(SUPABASE_SMTP_HOST)"
+port = 587
+user = "env(SUPABASE_SMTP_USER)"
+pass = "env(SUPABASE_SMTP_PASS)"
+admin_email = "env(SUPABASE_SMTP_FROM)"
+sender_name = "DeliveryOps"
+
+# Google OAuth — disabled by default for local dev. Email magic-link via
+# Mailpit (http://127.0.0.1:54324) is the default sign-in path locally and
+# needs no external setup.
+#
+# To turn Google on locally: set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in
+# your shell or .env.local, flip enabled = true here, then run
+# `supabase stop && supabase start` to reload the auth service.
+#
+# In Supabase Cloud (production) Google is configured via the dashboard
+# (Authentication → Providers → Google), not via this file.
+[auth.external.google]
+enabled = false
 client_id = "env(GOOGLE_CLIENT_ID)"
 secret = "env(GOOGLE_CLIENT_SECRET)"
 redirect_uri = "http://127.0.0.1:54321/auth/v1/callback"

@@ -104,7 +104,21 @@ supabase/
   migrations/       0001_init.sql onwards
 legacy/             READ-ONLY reference port-from material (do not deploy)
 .cursor/rules/      Cursor AI rules (workflow, lattice, brand-voice, product-naming, …)
+.cursor/hooks/      Cursor agent guardrails (block-destructive.sh)
+bin/                Repo-local CLI wrappers (safe-supabase)
 ```
+
+## Data safety
+
+DeliveryOps treats local + production data as gold. Three layers protect against the kind of accidents that wiped the local DB on 2026-05-11 and 2026-05-15:
+
+1. **Cursor hook** (`.cursor/hooks/block-destructive.sh`) intercepts every shell command the AI agent tries to run. Anything matching the data-loss blocklist (`supabase db reset`, `supabase stop --no-backup`, `DROP TABLE`, `docker volume rm`, `git reset --hard`, etc.) is **denied with `failClosed: true`** — the command physically cannot run from inside Cursor.
+2. **`bin/safe-supabase`** wrapper catches the same patterns when humans invoke `supabase` directly. The npm scripts (`db:start`, `db:stop`, `db:reset`, `db:status`) all route through it. Override only via `I_REALLY_MEAN_IT=1` env.
+3. **Pre-commit `check-migration-safety.ts`** scans staged migrations for destructive SQL. Refuses unless the migration has an opt-in `-- ALLOW_DESTRUCTIVE: <reason>` marker.
+
+In production, Supabase Cloud Pro provides automatic point-in-time recovery (7 days). Recovery procedure for any data-loss scenario lives in [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
+
+Full rationale + escape hatches: [`.cursor/rules/destructive-operations.mdc`](./.cursor/rules/destructive-operations.mdc).
 
 ## Brand
 

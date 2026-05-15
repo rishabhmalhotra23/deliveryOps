@@ -26,8 +26,20 @@ const PUBLIC_PREFIXES = [
   "/favicon.ico",
 ];
 
+// Local-dev-only bypass for the dev/import/sync APIs. The recovery runbook
+// (docs/RUNBOOK.md) uses these endpoints to re-import customers from Monday
+// after a wipe — they need to be reachable without a session in dev.
+//
+// In production these stay gated. The `/dev` UI pages and the `/api/dev/`
+// routes are meant for the local dev console, not the live dashboard.
+const DEV_ONLY_PUBLIC_PREFIXES = ["/api/dev/", "/dev/"];
+
 function isPublic(pathname: string): boolean {
-  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+  if (process.env.NODE_ENV !== "production") {
+    if (DEV_ONLY_PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+  }
+  return false;
 }
 
 export async function middleware(request: NextRequest) {

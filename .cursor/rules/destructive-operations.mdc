@@ -7,9 +7,29 @@ alwaysApply: true
 
 ## Background
 
-On 2026-05-11, an attempt to apply a single new migration (`0006_nps_state_column.sql`) accidentally ran `supabase db reset` as a fallback, wiping the local database (41 customers, 41 profiles, 41 internal_profiles, all cache tables). Recovery took ~10 minutes of re-running the import + sync + backfill pipeline, but no data was permanently lost because the source-of-truth systems (Monday + Salesforce) still had it.
+**2026-05-11.** An attempt to apply a single new migration (`0006_nps_state_column.sql`) accidentally ran `supabase db reset` as a fallback, wiping the local database (41 customers, 41 profiles, 41 internal_profiles, all cache tables). Recovery took ~10 minutes of re-running the import + sync + backfill pipeline, but no data was permanently lost because the source-of-truth systems (Monday + Salesforce) still had it.
 
 The root cause was a shell command of the form `cmd-A || cmd-B-which-wipes-data`. We will never do that again.
+
+**2026-05-15.** The agent ran `supabase stop --no-backup` to reload `config.toml` after a small auth change. The `--no-backup` flag detaches the Postgres volume; the next `supabase start` provisioned a fresh DB. Same data loss as 2026-05-11 (42 customers wiped). Recovery again took ~2 min via the runbook.
+
+After this second incident, we added structural guardrails so the agent literally cannot run these commands. See "Structural guardrails" below.
+
+## Structural guardrails (the actual prevention)
+
+These layers fire automatically — they don't depend on anyone "remembering the rule". Listed in order of how hard they are to bypass:
+
+1. **Cursor `beforeShellExecution` hook** (`.cursor/hooks/block-destructive.sh`, registered in `.cursor/hooks.json` with `failClosed: true`). Pattern-matches every shell command the agent tries to run against the data-loss blocklist and **blocks it with a deny response**. The hook is committed to the repo so every clone gets it. Even if the agent forgets the rule, the command physically cannot leave Cursor. Hard escape hatch: `DELIVERY_OPS_ALLOW_DESTRUCTIVE=I_REALLY_MEAN_IT` in the user's shell BEFORE launching Cursor (loud warning message; no silent pass-through).
+
+2. **Repo-local `bin/safe-supabase` wrapper.** Catches the same patterns when humans run `supabase` directly in their terminal. Refuses with a multi-line warning unless `I_REALLY_MEAN_IT=1` is set in the env. The npm scripts in `package.json` (`db:start`, `db:stop`, `db:reset`, `db:status`) all route through this wrapper.
+
+3. **Pre-commit `check-migration-safety.ts`.** Before any commit, scans staged migration files for `DROP TABLE`, `TRUNCATE`, `DELETE FROM` without `WHERE`, etc. Refuses to commit unless the migration includes a top-line `-- ALLOW_DESTRUCTIVE: <reason>` marker explaining what's being dropped and why it's safe.
+
+4. **`safe-migrate.ts` migration runner.** Same destructive-SQL detection as the pre-commit check, applied at apply-time as a second line of defence. Refuses to run destructive migrations without `--allow-destructive` AND, with a non-empty `customers` table, also requires `I_REALLY_MEAN_IT=1` in the env.
+
+5. **Production safety: Supabase Cloud Pro plan.** When DeliveryOps deploys to production, Supabase Cloud Pro provides automatic point-in-time recovery (7 days) plus daily logical backups (30 days). Even if every layer above fails, prod data is recoverable to the second. Hobby tier does not include PITR — Pro is non-negotiable for any environment with real customer data.
+
+If a future incident reveals a gap in these layers, the fix lives in the layer that should have caught it — never "we'll be more careful next time".
 
 ## Hard rules
 
