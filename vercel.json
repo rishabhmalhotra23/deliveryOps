@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/run-tasks",
-      "schedule": "* * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/daily-sync",
