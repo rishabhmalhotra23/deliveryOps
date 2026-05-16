@@ -471,7 +471,7 @@ function SlackHistoryPlaceholder() {
         <p>
           Real-time Slack already works (the agent answers messages in customer channels). The bulk
           historical scrape per channel — to seed the customer&rsquo;s knowledge base with everything
-          said before DeliveryOps was watching — lands as a separate Inngest function once
+          said before DeliveryOps was watching — lands as a separate background job once
           customer-import is in.
         </p>
         <p className="text-[color:var(--brand-gray)]">

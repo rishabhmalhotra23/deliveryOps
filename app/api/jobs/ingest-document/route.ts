@@ -2,7 +2,7 @@
 //
 // Background job: fetch a document (from a signed URL or Supabase Storage)
 // and run it through the Claude vision + classifier ingestion pipeline.
-// Replaces the previous Inngest function with the same logic.
+// Direct Vercel function — replaces the previous Inngest workflow.
 //
 // Triggered fire-and-forget by Slack file-shared / Gmail attachment /
 // customer dashboard upload handlers via dispatchJob("ingest-document", …).

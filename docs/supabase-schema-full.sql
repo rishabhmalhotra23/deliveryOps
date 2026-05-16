@@ -390,7 +390,7 @@ create index if not exists customers_lifecycle_group_idx on customers (lifecycle
 --
 -- Strategy: store the raw external data as JSONB plus a small set of
 -- frequently-queried columns lifted out for indexes. The dashboard reads
--- from these tables; sync-{salesforce,monday,kognitos-v2} Inngest functions
+-- from these tables; the daily-sync cron + per-source sync runners
 -- write into them on a cron schedule.
 --
 -- All cache rows carry the customer FK so we can wipe-and-replace per customer
@@ -887,7 +887,7 @@ comment on column chat_messages.tool_calls is
 -- ──────────────────────────────────────────────────────────
 
 -- Tighten Row-Level Security so that authenticated requests are only allowed
--- when the JWT belongs to a @kognitos.com user. Service-role calls (Inngest
+-- when the JWT belongs to a @kognitos.com user. Service-role calls (cron jobs
 -- workers, cron jobs, the agent runner, the sync pipelines) continue to
 -- bypass RLS as before — the service_role JWT is exempt by design.
 --

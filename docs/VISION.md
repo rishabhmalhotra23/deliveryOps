@@ -146,11 +146,11 @@ Four phases. Each is shippable on its own — meaning each one delivers visible 
 
 ### Phase 0 — Foundations *(done, commit `b9c350b`)*
 
-Scaffold the Next.js app from `kognitos-app-template`. Build the Lattice tarball. Wire the brand (palette + voice + naming). Draft the schema (customers, profiles, events, rules, tasks, conversations). Stub the Inngest functions. Copy the legacy Curator Python service into `legacy/` as a port-from reference. No features yet.
+Scaffold the Next.js app from `kognitos-app-template`. Build the Lattice tarball. Wire the brand (palette + voice + naming). Draft the schema (customers, profiles, events, rules, tasks, conversations). Stub the background job routes. Copy the legacy Curator Python service into `legacy/` as a port-from reference. No features yet.
 
 ### Phase 1 — Port the brain *(done, commit `3c93cfe`)*
 
-The agent runs. The customer dashboard works. The Slack and Gmail handlers exist. Documents flow through Claude vision (no marker-pdf, no pandoc, no tesseract). Tasks fire on schedule via Vercel Cron + Inngest (no APScheduler). Everything is TypeScript.
+The agent runs. The customer dashboard works. The Slack and Gmail handlers exist. Documents flow through Claude vision (no marker-pdf, no pandoc, no tesseract). Tasks fire on schedule via Vercel Cron + fire-and-forget background jobs (no APScheduler, no Inngest). Everything is TypeScript.
 
 What you can do: open `/customers`, click into Acme, talk to the agent, drop a PDF in Slack and watch it get classified, schedule a reminder.
 

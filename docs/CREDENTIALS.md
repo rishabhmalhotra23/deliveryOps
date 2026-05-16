@@ -317,10 +317,10 @@ The cleanest way for Phase 1: use Google's OAuth Playground to complete the flow
 **Verify:**
 - `/dev` page should show Gmail, Drive, Calendar all as **live**.
 - In `/dev/simulate` → "Email received" → submit. The agent runs in `source="email"` mode (gated mutations queue for approval).
-- For real inbound: send a test email to your customer's `email_alias` (e.g. `acme@deliveryops.example`). The Gmail watch is set up by the cron job (Phase 1.5b TODO) — for now, you can manually trigger the watch by hitting `/api/gmail/watch` (TODO route).
+- For real inbound: send a test email to your customer's `email_alias` (e.g. `acme@deliveryops.example`). The Gmail watch (`users.watch`) needs to be (re)initiated weekly — TODO: wire this into `/api/cron/daily-sync`.
 
 **Gotchas:**
-- The Gmail watch expires every 7 days. The cron job re-renews it weekly (Phase 1.5b — TODO). Until then, you'll need to manually re-call `users.watch` once a week.
+- The Gmail watch expires every 7 days. Re-issue manually via `users.watch` until the daily-sync cron handles it.
 - The `drive.file` scope only lets the app see files **it created or that were explicitly shared with it**. That's the right scope for the per-customer folder model. If you want to sync a customer's existing Drive folder, share that folder with the OAuth account first.
 - The OAuth Playground refresh token is tied to the Google account you signed in with. If you want a different account to send emails / own Drive folders, redo the flow signed in as that account.
 
@@ -367,7 +367,7 @@ The cleanest way for Phase 1: use Google's OAuth Playground to complete the flow
   SALESFORCE_INSTANCE_URL=https://kognitos.my.salesforce.com
   ```
 
-**Verify:** *(Phase 2 — sync function not yet built)*
+**Verify:**
 The `sync-salesforce` runner runs nightly via `/api/cron/daily-sync` and on demand via `/dev/sync` → "Run sync". You'll see Acme's Salesforce account / opportunities / cases populated in the dashboard after the first run.
 
 **Gotchas:**
@@ -406,7 +406,7 @@ The `sync-salesforce` runner runs nightly via `/api/cron/daily-sync` and on dema
   KOGNITOS_V2_WORKSPACE_ID=…uuid…
   ```
 
-**Verify:** *(Phase 2 — sync function not yet built)*
+**Verify:**
 The `sync-kognitos-v2` runner runs nightly via `/api/cron/daily-sync`. The dashboard's overview tab shows real credit usage, recent runs, and exception counts pulled from the v2 API after the first run.
 
 **Gotchas:**
@@ -431,7 +431,7 @@ The `sync-kognitos-v2` runner runs nightly via `/api/cron/daily-sync`. The dashb
   MONDAY_API_TOKEN=eyJhbGciOiJIUzI1NiJ9.…
   ```
 
-**Verify:** *(Phase 2 — sync function not yet built)*
+**Verify:**
 Once Phase 2 `sync-monday` ships, the customer overview gets a "Pending items" panel showing dev + CS items with status, owner, due date.
 
 **Gotchas:**

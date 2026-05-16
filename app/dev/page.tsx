@@ -117,8 +117,8 @@ export default async function DevStatusPage() {
         <ol className="list-decimal pl-5 space-y-1 text-[color:var(--brand-gray)]">
           <li>
             Make sure <code>npm run db:start</code> is running (Supabase CLI).
-            Background jobs run via Vercel cron + internal HTTP — no Inngest
-            dev server needed.
+            Background jobs run via Vercel cron + internal HTTP — no
+            separate worker process needed.
           </li>
           <li>
             Drop your <code>ANTHROPIC_API_KEY</code> into <code>.env.local</code>.

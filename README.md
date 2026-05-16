@@ -75,9 +75,12 @@ The agent has **no access** to the `internal_profiles` table — that's structur
 
 Anything not yet "Live" routes through a **mock layer** to `/dev/outbox` so you can run end-to-end without external accounts. Auto-detection of which credentials are present — no flag to flip.
 
-### Background workers (Inngest)
+### Background workers (Vercel Cron + `/api/jobs/*`)
 
-`ingest-document`, `sync-salesforce`, `sync-kognitos-v2`, `sync-monday`, `sync-calendar`, `digest-monthly`, `run-task`. The first four run nightly; `run-task` fires every minute via Vercel Cron.
+Two Vercel-native primitives, no external queue:
+
+- **Cron** (`vercel.json`): `daily-sync` (02:30 UTC) runs Salesforce + Monday + Kognitos v2 sync; `run-tasks` (08:00 UTC) fires user-scheduled reminders. On Vercel Pro, `run-tasks` can move to per-minute and `monthly-digest` (1st of month) can be added.
+- **Fire-and-forget jobs** (`/api/jobs/*`): webhooks call `dispatchJob("ingest-document" | "run-task" | "process-email", data)` — POST returns immediately while a fresh Vercel function execution does the work (Claude vision OCR, agent reply, etc.). Authed by `JOBS_SECRET` (falls back to `CRON_SECRET`).
 
 ### Auth & data safety
 
@@ -92,7 +95,7 @@ Anything not yet "Live" routes through a **mock layer** to `/dev/outbox` so you 
 
 Honest list, in rough priority order.
 
-1. **Vercel deploy.** Auth + RLS just shipped (`bf32630`). Next: Supabase Cloud + Vercel + Inngest Cloud env vars, then `main` → prod.
+1. **Vercel deploy.** ✅ Done — live at `delivery-ops-delta.vercel.app` with Supabase Cloud + 23 env vars + Hobby cron (2 of 2 slots used).
 2. **Reports go live.** Weekly Delivery Update is first (Slack + Monday + SF data is all live; just needs the generator). Then Monthly Digest, Customer Health Report, QBR Generator (gated on Google Slides API).
 3. **Calendar sync + QBR follow-ups.** Calendar sync is currently a stub — once Google OAuth lands, it'll be wired into the daily-sync cron and the QBR follow-up job.
 4. **Kognitos v1 adapter.** Legacy customers.
@@ -183,7 +186,7 @@ Step-by-step in [`docs/CREDENTIALS.md`](./docs/CREDENTIALS.md):
 
 1. **Tier 0** — Anthropic API key + Resend SMTP (5 min)
 2. **Tier 1** — Slack, Google Cloud (OAuth + Pub/Sub), Salesforce, Kognitos v2, Monday (~90 min total, each independent)
-3. **Tier 2** — Supabase Cloud, Inngest Cloud, Vercel
+3. **Tier 2** — Supabase Cloud + Vercel (no Inngest — Vercel Cron + `/api/jobs/*` handle background work)
 4. **Tier 3** — ngrok (local webhooks), Kognitos v1, Microsoft Teams (later)
 
 Production runs on **Supabase Pro** (PITR + daily logical backups — non-negotiable for real customer data) and **Vercel Pro** (10s function-timeout cap on Hobby kills the agent loop).

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   }
 
   // Walk the history starting at the supplied historyId. Each new message
-  // gets dispatched as an Inngest event so the queue handles retries.
+  // gets dispatched as a background job (/api/jobs/process-email) so the
   let history;
   try {
     history = await fetchHistory(String(parsed.historyId));

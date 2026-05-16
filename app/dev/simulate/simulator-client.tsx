@@ -187,9 +187,9 @@ export function SimulatorClient({ customers }: { customers: Customer[] }) {
               />
             </Field>
             <p className="text-xs text-[color:var(--brand-gray)]">
-              Drops the file in the customer&rsquo;s storage bucket and dispatches the ingestion Inngest
-              event. PDFs and images get OCR&rsquo;d via Claude vision; the result lands in the customer&rsquo;s
-              documents tab.
+              Drops the file in the customer&rsquo;s storage bucket and dispatches the ingestion
+              background job. PDFs and images get OCR&rsquo;d via Claude vision; the result lands
+              in the customer&rsquo;s documents tab.
             </p>
           </>
         ) : null}

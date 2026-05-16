@@ -135,7 +135,7 @@ async function handleMessage(event: SlackEvent): Promise<void> {
   }
 
   // Files trigger the ingestion path — download the bytes here (Slack's
-  // url_private requires the bot token, which the Inngest worker doesn't
+  // url_private requires the bot token, which the background job doesn't
   // have), stash in Storage, then hand off via storagePath. Same pattern
   // as handleFileShared(). The previous version sent slackFileId only,
   // which the worker didn't accept — files dropped silently.
