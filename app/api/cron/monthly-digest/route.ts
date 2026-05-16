@@ -1,12 +1,18 @@
 // GET /api/cron/monthly-digest
 //
-// Monthly customer digest entrypoint. Vercel cron fires this on the 1st of
-// each month at 13:00 UTC. Same auth pattern as the other cron routes.
+// Monthly customer digest entrypoint. NOT currently auto-scheduled by Vercel
+// because Hobby plan caps cron entries at 2 (daily-sync + run-tasks took
+// the slots). Trigger manually with CRON_SECRET when needed:
 //
-// Placeholder for now — the digest generator lands once Gmail send-as
-// aliases are wired (Google Workspace access pending). The route stays
-// active so the cron entry in vercel.json validates and metrics are
-// recorded.
+//   curl -H "Authorization: Bearer $CRON_SECRET" \
+//        https://<domain>/api/cron/monthly-digest
+//
+// To restore as a real monthly cron on the 1st at 13:00 UTC, upgrade Vercel
+// to Pro and add this entry back to vercel.json:
+//   { "path": "/api/cron/monthly-digest", "schedule": "0 13 1 * *" }
+//
+// Placeholder body — the digest generator lands once Gmail send-as
+// aliases are wired (Google Workspace access pending).
 
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
