@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { fetchHistory, fetchMessage } from "@/lib/integrations/google/gmail";
 import { listCustomers } from "@/lib/customers";
-import { inngest } from "@/inngest/client";
+import { dispatchJob } from "@/lib/jobs/dispatch";
 import { appendEvent } from "@/lib/events/events";
 
 export const dynamic = "force-dynamic";
@@ -91,16 +91,13 @@ export async function POST(request: Request) {
         );
 
         // Hand off the heavy lifting (parse body, ingest attachments, run
-        // the agent) to Inngest so the push handler stays under 3s.
-        await inngest.send({
-          name: "delivery-ops/email.received",
-          data: {
-            customerKey: customer.key,
-            messageId: m.id,
-            threadId: m.threadId,
-            subject,
-            from,
-          },
+        // the agent) to a background job so the push handler stays under 3s.
+        await dispatchJob("process-email", {
+          customerKey: customer.key,
+          messageId: m.id,
+          threadId: m.threadId,
+          subject,
+          from,
         });
       } catch (err) {
         console.warn("[gmail] message process failed:", err);

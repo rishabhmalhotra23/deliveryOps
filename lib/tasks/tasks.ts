@@ -1,7 +1,8 @@
 // Scheduled tasks — port of legacy/scheduler/{task_store,executor}.py.
 // Schedule kinds: once / recurring / cron. Schedules + actions are JSONB so
-// the legacy shapes survive verbatim, but the executor lives in
-// inngest/functions/run-task.ts (replaces APScheduler).
+// the legacy shapes survive verbatim. The executor lives in
+// app/api/jobs/run-task/route.ts (replaces APScheduler), dispatched by the
+// /api/cron/run-tasks Vercel cron.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import {

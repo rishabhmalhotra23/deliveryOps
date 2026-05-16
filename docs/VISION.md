@@ -122,7 +122,7 @@ The shape that emerges from these constraints is sharper than a "do everything" 
 - **A native mobile app.** The browser is the product surface. CSMs work at desks.
 - **A Salesforce replacement.** Salesforce remains the source of truth for contract data. DeliveryOps mirrors it; it does not try to replace it.
 - **An external customer-facing chatbot.** The agent serves the CSM. A customer-facing bot is a different product with different failure modes.
-- **A "low-code" workflow builder.** If you need a workflow we don't have, you write a TypeScript function in `inngest/functions/`. We optimise for engineering velocity, not citizen-developer reach.
+- **A "low-code" workflow builder.** If you need a workflow we don't have, you write a TypeScript function in `app/api/jobs/`. We optimise for engineering velocity, not citizen-developer reach.
 
 ## The voice
 

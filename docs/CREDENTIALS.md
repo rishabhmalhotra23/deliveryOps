@@ -15,7 +15,7 @@ Until you've completed Tier 0, the agent can't think. Until you've completed Tie
   - [5. Monday.com — API token](#5-mondaycom--api-token)
 - [Tier 2 — production deploy](#tier-2--production-deploy)
   - [6. Supabase Cloud](#6-supabase-cloud)
-  - [7. Inngest Cloud](#7-inngest-cloud)
+  - [7. Background jobs (no external service)](#7-background-jobs--no-external-service-needed)
   - [8. Vercel](#8-vercel)
 - [Tier 3 — optional / later](#tier-3--optional--later)
   - [9. ngrok — local webhook tunnel](#9-ngrok--local-webhook-tunnel)
@@ -368,7 +368,7 @@ The cleanest way for Phase 1: use Google's OAuth Playground to complete the flow
   ```
 
 **Verify:** *(Phase 2 — sync function not yet built)*
-Once the Phase 2 `sync-salesforce` Inngest function lands, you'll trigger it via `/dev/simulate` (or it runs on a schedule) and see Acme's Salesforce account / opportunities / cases populated in the dashboard.
+The `sync-salesforce` runner runs nightly via `/api/cron/daily-sync` and on demand via `/dev/sync` → "Run sync". You'll see Acme's Salesforce account / opportunities / cases populated in the dashboard after the first run.
 
 **Gotchas:**
 - The 10-minute propagation wait is real. The error if you skip it is `invalid_client_id`, which is misleading.
@@ -407,7 +407,7 @@ Once the Phase 2 `sync-salesforce` Inngest function lands, you'll trigger it via
   ```
 
 **Verify:** *(Phase 2 — sync function not yet built)*
-Once the Phase 2 `sync-kognitos-v2` Inngest function lands, the dashboard's overview tab will show real credit usage, recent runs, and exception counts pulled from the v2 API.
+The `sync-kognitos-v2` runner runs nightly via `/api/cron/daily-sync`. The dashboard's overview tab shows real credit usage, recent runs, and exception counts pulled from the v2 API after the first run.
 
 **Gotchas:**
 - The PAT inherits *your* permissions. If you're an admin of the workspace, the token is too — be careful where you store it. Treat it like a password.
@@ -485,7 +485,7 @@ The DeliveryOps app enforces `@kognitos.com` server-side regardless of this sett
 - Refuses to render any page in the `(app)` route group without a valid Supabase session via root `middleware.ts`.
 - Sign-in lives at `/login` with both Google OAuth and email magic-link options.
 - The OAuth callback at `/auth/callback` validates the email domain after exchange — sign-ins from non-kognitos.com Google accounts are signed back out and bounced with `?error=domain`.
-- Webhook routes (`/api/slack/`, `/api/gmail/`, `/api/inngest`, `/api/cron/`, `/api/monday/`) bypass the gate — they're authenticated by signature/secret.
+- Webhook + cron + internal job routes (`/api/slack/`, `/api/gmail/`, `/api/cron/`, `/api/jobs/`, `/api/monday/`) bypass the gate — they're authenticated by signature/secret.
 
 After running migration `0015_auth_rls_kognitos_domain.sql` (via `npx tsx scripts/safe-migrate.ts`), every customer-data table requires either a service-role JWT or a JWT whose email ends in `@kognitos.com`. The `internal_profiles` table denies all authenticated reads — only the service-role bypasses RLS, so a misconfigured server component can never accidentally leak internal notes.
 
@@ -504,32 +504,16 @@ You don't paste these into your local `.env.local`. They go into Vercel's enviro
 - The free tier pauses your project after 7 days of inactivity. It auto-resumes when traffic arrives but the first request takes ~10s. Worth upgrading to Pro ($25/mo) once you have real users.
 - `supabase db push` will refuse if the local + remote schemas have drifted. If that happens, run `supabase db diff` to see what's different.
 
-## 7. Inngest Cloud
+## 7. Background jobs — no external service needed
 
-~5 min. Free up to 50K function runs / month.
+DeliveryOps runs background work on Vercel itself, not on a third-party queue:
 
-### 7a. Create the environment
+- **Scheduled work** uses **Vercel Cron** (see `vercel.json` — `run-tasks`, `daily-sync`, `monthly-digest`).
+- **Event-driven work** (Slack file upload → Claude vision OCR, Gmail push → email processing) uses **fire-and-forget internal HTTP**: the webhook handler POSTs to `/api/jobs/<name>` without awaiting, so the webhook ACKs Slack/Gmail in <3s while the job runs in its own Vercel function execution.
 
-- [ ] Open <https://app.inngest.com>
-- [ ] Sign in with GitHub
-- [ ] **New environment** → name it `delivery-ops`
-- [ ] (Recommended: also create a `delivery-ops-staging` environment for preview deploys)
+Auth: all `/api/jobs/*` routes require `Authorization: Bearer <JOBS_SECRET>` (falls back to `CRON_SECRET` if unset — one secret to rotate). The middleware bypasses `/api/jobs/` (otherwise the dispatch would 307 to login).
 
-### 7b. Collect keys
-
-- [ ] In the environment → **Manage** tab:
-  - **Event key** → `INNGEST_EVENT_KEY`
-  - **Signing key** → `INNGEST_SIGNING_KEY`
-- [ ] These go into Vercel's env vars (Tier 2 step 8).
-
-### 7c. Sync your functions
-
-After your first Vercel deploy, in the Inngest dashboard:
-- [ ] **Apps → Sync new app** → paste your Vercel `/api/inngest` URL → **Sync**
-- [ ] You should see all 7 functions listed: `ingest-document`, `digest-monthly`, `sync-salesforce`, `sync-kognitos-v2`, `sync-calendar`, `sync-monday`, `run-task`.
-
-**Gotchas:**
-- The Inngest cloud key tells the SDK to register itself with the cloud rather than the local dev server. If both are set in `.env.local`, cloud wins — make sure your local `.env.local` leaves both empty.
+Nothing to configure here. Background jobs scale with your Vercel plan's function execution.
 
 ## 8. Vercel
 
@@ -545,15 +529,14 @@ After your first Vercel deploy, in the Inngest dashboard:
 
 ### 8b. Set environment variables
 
-- [ ] In the import flow → **Environment Variables**, add every var from your `.env.local` **except** the local-Supabase + local-Inngest defaults (use the cloud values from Tier 2 steps 6 + 7 instead). The full list:
+- [ ] In the import flow → **Environment Variables**, add every var from your `.env.local` **except** the local-Supabase defaults (use the cloud values from Tier 2 step 6 instead). The full list:
   ```
   ANTHROPIC_API_KEY
   CLAUDE_MODEL
   NEXT_PUBLIC_SUPABASE_URL          # cloud, not http://127.0.0.1
   NEXT_PUBLIC_SUPABASE_ANON_KEY     # cloud
   SUPABASE_SERVICE_ROLE_KEY         # cloud
-  INNGEST_EVENT_KEY                 # cloud
-  INNGEST_SIGNING_KEY               # cloud
+  JOBS_SECRET                       # protects /api/jobs/* (or reuse CRON_SECRET)
   SLACK_BOT_TOKEN
   SLACK_SIGNING_SECRET
   SLACK_APP_ID
@@ -713,9 +696,8 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_…
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_…
 
-# Inngest (leave empty for local dev — uses dev server at :8288)
-INNGEST_EVENT_KEY=
-INNGEST_SIGNING_KEY=
+# Background jobs (JOBS_SECRET protects /api/jobs/*; falls back to CRON_SECRET)
+JOBS_SECRET=
 
 # Slack
 SLACK_BOT_TOKEN=xoxb-…
@@ -773,7 +755,7 @@ When you're ready to ship, in this order:
   - [ ] Slack channel name
   - [ ] Drive folder ID
   - [ ] Email alias (set up the alias in Gmail "send mail as" first)
-- [ ] Tier 2 done — Supabase Cloud + Inngest Cloud + Vercel
+- [ ] Tier 2 done — Supabase Cloud + Vercel
 - [ ] Production env vars set in Vercel, including `DELIVERY_OPS_DEV_MODE=off`
 - [ ] Slack / Pub/Sub / Salesforce callback URLs updated to point at the Vercel domain (not ngrok / localhost)
 - [ ] Production Vercel deploy successful, smoke test:
@@ -781,7 +763,7 @@ When you're ready to ship, in this order:
   - [ ] Slack message in the pilot customer's channel triggers an agent reply
   - [ ] PDF dropped in the pilot customer's channel gets ingested + classified
   - [ ] Cron runs visible in Vercel dashboard
-  - [ ] Inngest dashboard shows function executions on every relevant event
+  - [ ] Vercel cron history shows `daily-sync` + `run-tasks` + `monthly-digest` ticks
 - [ ] (Optional) Tier 4 — drop in licensed Neue Machina + Neue Montreal fonts
 
 ---
@@ -800,5 +782,5 @@ When you're ready to ship, in this order:
   - Slack: <https://api.slack.com/start/building/bolt-js> (we don't use Bolt, but the event reference is useful)
   - Google: <https://developers.google.com/identity/protocols/oauth2>
   - Supabase: <https://supabase.com/docs>
-  - Inngest: <https://www.inngest.com/docs>
+  - Vercel Cron: <https://vercel.com/docs/cron-jobs>
   - Vercel: <https://vercel.com/docs>

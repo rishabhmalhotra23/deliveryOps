@@ -49,12 +49,6 @@ export function supabaseEnabled(): boolean {
   return has("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY");
 }
 
-export function inngestEnabled(): boolean {
-  if (overrideFlag() === "on") return false;
-  if (overrideFlag() === "off") return true;
-  return has("INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY");
-}
-
 export function salesforceEnabled(): boolean {
   if (overrideFlag() === "on") return false;
   if (overrideFlag() === "off") return true;
@@ -110,11 +104,6 @@ export function integrationStatus(): IntegrationStatus[] {
       name: "Google Calendar",
       live: calendarEnabled(),
       hint: "Same Google credentials as Gmail. listEvents returns mock data until set.",
-    },
-    {
-      name: "Inngest (cloud)",
-      live: inngestEnabled(),
-      hint: "Set INNGEST_EVENT_KEY + INNGEST_SIGNING_KEY. The dev server at localhost:8288 picks up /api/inngest automatically without these.",
     },
     {
       name: "Salesforce",

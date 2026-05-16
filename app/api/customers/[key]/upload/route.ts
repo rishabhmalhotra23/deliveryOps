@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { ensureBucket, uploadFile } from "@/lib/ingestion/storage";
 import { requireCustomerByKey } from "@/lib/customers";
-import { inngest } from "@/inngest/client";
+import { dispatchJob } from "@/lib/jobs/dispatch";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,8 +12,8 @@ interface Ctx {
 }
 
 // POST a multipart/form-data with a `file` field. We store it in Storage and
-// kick off Inngest ingestion. The route returns immediately with the storage
-// path; the ingestion itself runs async and lands in the events feed.
+// kick off background ingestion. The route returns immediately with the
+// storage path; the ingestion itself runs async and lands in the events feed.
 export async function POST(request: Request, ctx: Ctx) {
   const { key } = await ctx.params;
   try {
@@ -47,16 +47,13 @@ export async function POST(request: Request, ctx: Ctx) {
     "raw"
   );
 
-  await inngest.send({
-    name: "delivery-ops/document.uploaded",
-    data: {
-      customerKey: key,
-      filename: file.name,
-      mimeType: file.type || "application/octet-stream",
-      source: "upload",
-      sourceDetail: "Dashboard upload",
-      storagePath: path,
-    },
+  await dispatchJob("ingest-document", {
+    customerKey: key,
+    filename: file.name,
+    mimeType: file.type || "application/octet-stream",
+    source: "upload",
+    sourceDetail: "Dashboard upload",
+    storagePath: path,
   });
 
   return NextResponse.json(

@@ -1,8 +1,9 @@
 // Root middleware — gates the dashboard behind a Supabase Auth session.
 //
-// Webhooks (slack/events, gmail/push, inngest, cron/*) bypass the session
-// check entirely — they're authenticated by signature/secret instead and a
-// 302-to-login response would break the integration.
+// Webhooks (slack/events, gmail/push, cron/*) and internal job routes
+// (/api/jobs/*) bypass the session check entirely — they're authenticated
+// by signature/secret instead, and a 302-to-login response would break
+// the integration or kill the fire-and-forget dispatch.
 //
 // Local-dev safety: if Supabase isn't configured (anon key missing) we let
 // every request through. The server-side code falls back to the unauth path
@@ -19,8 +20,8 @@ const PUBLIC_PREFIXES = [
   "/auth/",            // /auth/callback, /auth/sign-out
   "/api/slack/",       // signed by SLACK_SIGNING_SECRET
   "/api/gmail/",       // signed by GMAIL_PUBSUB_VERIFICATION_TOKEN
-  "/api/inngest",      // signed by INNGEST_SIGNING_KEY
   "/api/cron/",        // gated by CRON_SECRET (Vercel-injected)
+  "/api/jobs/",        // gated by JOBS_SECRET (or CRON_SECRET fallback)
   "/api/monday/",      // signed by Monday webhook secret (legacy + new)
   "/_next/",
   "/favicon.ico",

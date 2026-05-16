@@ -13,7 +13,7 @@ If a scenario isn't here and you fix it, add it.
 - [Stale `.next` cache after running `npm run build` with dev still on](#stale-next-cache-after-running-npm-run-build-with-dev-still-on)
 - [Salesforce sync returning stale data](#salesforce-sync-returning-stale-data)
 - [Monday sync 0 matches for a board](#monday-sync-0-matches-for-a-board)
-- [Inngest dev server died but Next.js is fine](#inngest-dev-server-died-but-nextjs-is-fine)
+- [Background job didn't run](#background-job-didnt-run)
 - [Colima / Docker not running (Supabase containers down)](#colima--docker-not-running-supabase-containers-down)
 
 ---
@@ -172,18 +172,28 @@ If the typed fragment returns `linked_items` correctly, the sync should pick it 
 
 ---
 
-## Inngest dev server died but Next.js is fine
+## Background job didn't run
 
-**Symptom:** `curl http://localhost:8288/` returns 000 (not listening).
+**Symptom:** Slack file upload acknowledged but no `DOCUMENT_INGESTED` event ever appears for the customer.
+
+Cron + jobs both POST through Vercel functions. Debug from both ends:
 
 ```bash
-lsof -ti :8288 | xargs -r kill -9 2>/dev/null
-npm run inngest:dev > /tmp/inngestdev.log 2>&1 &
-sleep 10
-curl -s -o /dev/null -w "Inngest: %{http_code}\n" http://localhost:8288/
+# 1. Was the dispatch issued? Check the webhook handler logs in Vercel.
+#    Look for "jobs.dispatch" log entries with the job name.
+vercel logs --since 10m | grep "jobs.dispatch"
+
+# 2. Did /api/jobs/* receive the POST?
+vercel logs --since 10m | grep "/api/jobs/"
+
+# 3. Manually re-dispatch (replace the body):
+curl -X POST "https://<your-domain>/api/jobs/ingest-document" \
+  -H "Authorization: Bearer $JOBS_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"customerKey":"acme","filename":"x.pdf","mimeType":"application/pdf","source":"upload","storagePath":"acme/raw/.../x.pdf"}'
 ```
 
-Inngest is most often killed by macOS background-process throttling after a long idle period.
+If the dispatch is logged but the POST never lands, the JOBS_SECRET on Vercel differs from the dispatcher's. Make sure both `CRON_SECRET` and (optionally) `JOBS_SECRET` are set in the Vercel project — the dispatcher falls back from `JOBS_SECRET` to `CRON_SECRET`.
 
 ---
 

@@ -11,7 +11,7 @@ import { mdToBlocks, mdToMrkdwn } from "@/lib/slack/mrkdwn";
 import { resolveCustomerFromChannel } from "@/lib/customers";
 import { runAgent } from "@/lib/agent/runner";
 import { saveConversation } from "@/lib/conversations";
-import { inngest } from "@/inngest/client";
+import { dispatchJob } from "@/lib/jobs/dispatch";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -288,16 +288,13 @@ async function ingestSlackFile(
     "raw"
   );
 
-  await inngest.send({
-    name: "delivery-ops/document.uploaded",
-    data: {
-      customerKey,
-      filename: file.name ?? "slack-file",
-      mimeType: file.mimetype ?? "application/octet-stream",
-      source: "slack",
-      sourceDetail: `Slack channel ${channelId}`,
-      storagePath,
-    },
+  await dispatchJob("ingest-document", {
+    customerKey,
+    filename: file.name ?? "slack-file",
+    mimeType: file.mimetype ?? "application/octet-stream",
+    source: "slack",
+    sourceDetail: `Slack channel ${channelId}`,
+    storagePath,
   });
 }
 

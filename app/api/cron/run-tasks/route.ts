@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { listDueTasks, cronIsDue } from "@/lib/tasks/tasks";
-import { inngest } from "@/inngest/client";
+import { dispatchJob } from "@/lib/jobs/dispatch";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -51,7 +51,10 @@ export async function GET(request: Request) {
 
   for (const task of allDue) {
     try {
-      await inngest.send({ name: "delivery-ops/task.run", data: task });
+      // Fire-and-forget POST to /api/jobs/run-task. Each task runs in its
+      // own Vercel function execution so a slow task doesn't block the
+      // others or the cron window.
+      await dispatchJob("run-task", task);
       dispatched++;
     } catch (err) {
       console.warn("[cron] failed to dispatch task %s:", task.id, err);

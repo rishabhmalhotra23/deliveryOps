@@ -22,8 +22,7 @@ export const maxDuration = 300; // 5 min — covers ~40 customers across SF + Mo
 // errors per source, surfaces them in the JSON response, and flips the
 // HTTP status to 207 (multi-status). Vercel still considers the cron
 // "succeeded" because the function returns — that's intentional. Retry
-// semantics live in the runner and Inngest's per-function `retries` field,
-// not at the cron layer.
+// semantics live in the runner itself; cron just kicks the work off.
 export async function GET(request: Request) {
   const expectedSecret = process.env.CRON_SECRET;
   if (expectedSecret) {

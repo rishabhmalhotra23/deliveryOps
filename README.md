@@ -82,7 +82,7 @@ Anything not yet "Live" routes through a **mock layer** to `/dev/outbox` so you 
 ### Auth & data safety
 
 - **Sign-in.** Google OAuth restricted to `@kognitos.com` (production) + email magic-link (local dev via Mailpit, or via Resend SMTP for real inboxes).
-- **Middleware gate** on every dashboard route. Webhook routes (`/api/slack/`, `/api/gmail/`, `/api/inngest`, `/api/cron/`) bypass — they're authenticated by signature/secret.
+- **Middleware gate** on every dashboard route. Webhook + cron + job routes (`/api/slack/`, `/api/gmail/`, `/api/cron/`, `/api/jobs/`) bypass — they're authenticated by signature/secret.
 - **RLS** on every customer-data table requires a `@kognitos.com` JWT. `internal_profiles` denies all authenticated reads — only service-role can touch it.
 - **Three structural guardrails** against destructive operations (Cursor agent hook + repo wrapper + pre-commit migration scan). See "[Data safety](#data-safety)" below.
 
@@ -94,7 +94,7 @@ Honest list, in rough priority order.
 
 1. **Vercel deploy.** Auth + RLS just shipped (`bf32630`). Next: Supabase Cloud + Vercel + Inngest Cloud env vars, then `main` → prod.
 2. **Reports go live.** Weekly Delivery Update is first (Slack + Monday + SF data is all live; just needs the generator). Then Monthly Digest, Customer Health Report, QBR Generator (gated on Google Slides API).
-3. **Calendar sync + QBR follow-ups.** `inngest/functions/sync-calendar.ts` — currently a stub.
+3. **Calendar sync + QBR follow-ups.** Calendar sync is currently a stub — once Google OAuth lands, it'll be wired into the daily-sync cron and the QBR follow-up job.
 4. **Kognitos v1 adapter.** Legacy customers.
 5. **Microsoft Teams listener.** Mirror of the Slack listener for customers on Teams.
 6. **Multi-tenant + per-CSM scoping.** RLS through `customer_users`, per-CSM OAuth so every CSM sends from their own Gmail / Salesforce credentials. Read-only customer portal.
@@ -118,14 +118,16 @@ The end-state target — what "done" looks like — is in [`docs/VISION.md`](./d
               │  Middleware gate + @kognitos.com RLS           │
               │  Agent runner (Claude Sonnet 4.5 + 16 tools)   │
               └────────────────────────────────────────────────┘
-                ▲           ▲             │            │
-                │           │             │            ▼
-        Slack/Gmail   Monday/SF/K2     Inngest    Supabase Postgres
-        webhooks      webhooks +       (durable   (single source of
-                      daily syncs      jobs)       truth, RLS-gated)
+                ▲           ▲                 │
+                │           │                 ▼
+        Slack/Gmail   Monday/SF/K2      Supabase Postgres
+        webhooks      Vercel Cron       (single source of
+        → /api/jobs/  (run-tasks,        truth, RLS-gated)
+                      daily-sync,
+                      monthly-digest)
 ```
 
-**Stack:** Next.js 15 (App Router) · TypeScript · Tailwind v4 · [Lattice UI](https://github.com/kognitos/lattice) · Supabase (Postgres + Storage + Auth) · Inngest · Vercel · Anthropic Claude (Sonnet 4.5).
+**Stack:** Next.js 15 (App Router) · TypeScript · Tailwind v4 · [Lattice UI](https://github.com/kognitos/lattice) · Supabase (Postgres + Storage + Auth) · Vercel (hosting + cron + fire-and-forget jobs) · Anthropic Claude (Sonnet 4.5).
 
 **Brand:** Primary `#F2FF70` (Yellow). Foreground `#171717` (Night). Display `Neue Machina`. Body `Neue Montreal`. Voice rules in [`.cursor/rules/brand-voice.mdc`](./.cursor/rules/brand-voice.mdc).
 
@@ -155,10 +157,7 @@ cp .env.example .env.local                        # then fill in:
 #   SUPABASE_SERVICE_ROLE_KEY=<service_role key>
 #   ANTHROPIC_API_KEY=<your key>
 
-# 5. Background jobs (separate terminal)
-npm run inngest:dev        # http://localhost:8288
-
-# 6. The app
+# 5. The app
 npm run dev                # http://localhost:4001
 ```
 
@@ -211,8 +210,14 @@ Full rationale + escape hatches: [`.cursor/rules/destructive-operations.mdc`](./
 app/                Next.js App Router
   (app)/            Authenticated dashboard (dashboard, customers, delivery,
                     analytics, reports, operations, chat) — gated by middleware
-  api/              Server routes: chat, slack/events, gmail/push, cron, inngest,
-                    dev/simulate, customers, monday webhooks
+  api/              Server routes
+    chat/           Streaming Claude SSE
+    cron/           Vercel-cron entries: run-tasks, daily-sync, monthly-digest
+    jobs/           Fire-and-forget background jobs: ingest-document,
+                    run-task, process-email (JOBS_SECRET-authed)
+    slack/, gmail/  Webhook handlers (signature-authed)
+    customers/      CRUD + Zod-validated mutations
+    dev/, monday/   Dev-only + Monday webhooks
   auth/             Sign-in callback + sign-out
   dev/              Local dev console (status / simulate / outbox)
   login/            Sign-in page (Google OAuth + magic-link)
@@ -223,18 +228,17 @@ lib/
   agent/            16 tools, prompts, dispatcher, runner (port of curator/brain)
   api/              Zod request schemas + parseBody helper
   auth/             getCurrentUser + isAllowedEmail (server-side)
+  jobs/             dispatch.ts — fire-and-forget HTTP helper for /api/jobs/*
   ingestion/        Claude vision extractor + classifier + pipeline
   integrations/     salesforce, kognitos/{v1,v2}, monday, google/{drive,gmail,
                     calendar,slides}, slack
   supabase/         server.ts (service-role) + server-cookies.ts (RLS-scoped) +
                     middleware.ts + client.ts + ws-polyfill.ts
+  sync/             Per-source sync runners called by /api/cron/daily-sync
   brand/            Theme overrides, brand voice helpers
   dev/              Mock layer + outbox (drives /dev pages)
   voice/            brand-voice block injected into every system prompt
   logger.ts         Structured logger (pretty in dev, JSON in prod)
-inngest/
-  client.ts         Inngest client (auto-detects local dev server)
-  functions/        ingest-document, sync-*, digest-monthly, run-task
 supabase/
   config.toml       Supabase CLI config (local dev) — env-driven SMTP block
   seed.sql          Demo customer + profile + rules
