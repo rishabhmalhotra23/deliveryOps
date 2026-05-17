@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "icons.duckduckgo.com" },
       { protocol: "https", hostname: "www.google.com" },
       { protocol: "https", hostname: "logo.clearbit.com" },
+      // Auth0 profile pictures (Google accounts served via lh3.googleusercontent.com)
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "s.gravatar.com" },
+      { protocol: "https", hostname: "*.auth0.com" },
     ],
   },
 };

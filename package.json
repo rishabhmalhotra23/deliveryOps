@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@auth0/nextjs-auth0": "^4.20.0",
     "@kognitos/lattice": "file:./kognitos-lattice-1.36.0.tgz",
-    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/typography": "^0.5.16",
     "apache-arrow": "^21.1.0",

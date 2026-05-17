@@ -1,4 +1,7 @@
-import "./ws-polyfill";
+// Server-side Supabase clients.
+// Authentication is handled by Auth0. These clients are used for data
+// operations only — never for auth flows.
+
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,32 +13,28 @@ function warnOnce() {
   if (warnedMissing) return;
   warnedMissing = true;
   console.warn(
-    "Supabase credentials missing — the app will run with all data calls disabled. " +
-      "Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY in .env.local."
+    "Supabase credentials missing — data calls disabled. " +
+      "Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY."
   );
 }
 
-if (!url || !anonKey) {
-  warnOnce();
-}
+if (!url || !anonKey) warnOnce();
 
-// Service-role client. Bypasses RLS — use only in server-side code (route
-// handlers, Inngest functions, server components). Never ship to the browser.
+// Service-role client. Bypasses RLS — server-only, never send to the browser.
 export const supabaseAdmin: SupabaseClient | null =
-  url && serviceKey ? createClient(url, serviceKey, { auth: { persistSession: false } }) : null;
+  url && serviceKey
+    ? createClient(url, serviceKey, { auth: { persistSession: false } })
+    : null;
 
-// Anon client for server components that need RLS-scoped reads on behalf of
-// the signed-in user. For routes that must respect the user's session, use
-// `createServerSupabase()` from `./server-cookies` instead — it threads the
-// auth cookie through.
+// Anon client — kept for any public reads; Auth0 sessions are separate.
 export const supabaseServer: SupabaseClient | null =
-  url && anonKey ? createClient(url, anonKey, { auth: { persistSession: false }, }) : null;
+  url && anonKey
+    ? createClient(url, anonKey, { auth: { persistSession: false } })
+    : null;
 
 export function requireAdmin(): SupabaseClient {
   if (!supabaseAdmin) {
-    throw new Error(
-      "Supabase admin client unavailable — set SUPABASE_SERVICE_ROLE_KEY in the environment."
-    );
+    throw new Error("Supabase admin client unavailable — set SUPABASE_SERVICE_ROLE_KEY.");
   }
   return supabaseAdmin;
 }

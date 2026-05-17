@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 
 interface Props {
   email: string;
+  picture?: string | null;
 }
 
-export function UserPill({ email }: Props) {
+export function UserPill({ email, picture }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const initials = email
@@ -17,7 +19,6 @@ export function UserPill({ email }: Props) {
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("") || email[0]?.toUpperCase() || "?";
 
-  // Click-outside to close.
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
@@ -35,9 +36,21 @@ export function UserPill({ email }: Props) {
         aria-haspopup="true"
         aria-expanded={open}
       >
-        <div className="w-6 h-6 rounded-full bg-[color:var(--brand-yellow)] text-[color:var(--brand-night)] text-[10px] font-bold flex items-center justify-center shrink-0">
-          {initials}
-        </div>
+        {/* Avatar: use Google profile picture if available, else initials */}
+        {picture ? (
+          <Image
+            src={picture}
+            alt={email}
+            width={24}
+            height={24}
+            className="w-6 h-6 rounded-full object-cover shrink-0"
+            unoptimized
+          />
+        ) : (
+          <div className="w-6 h-6 rounded-full bg-[color:var(--brand-yellow)] text-[color:var(--brand-night)] text-[10px] font-bold flex items-center justify-center shrink-0">
+            {initials}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="text-[11px] text-[color:var(--brand-seasalt)] truncate">{email}</div>
         </div>
@@ -52,8 +65,9 @@ export function UserPill({ email }: Props) {
 
       {open ? (
         <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[color:var(--brand-night)] shadow-xl overflow-hidden">
+          {/* Sign out goes through Auth0's logout endpoint */}
           <a
-            href="/auth/sign-out"
+            href="/api/auth/logout"
             className="block px-3 py-2 text-xs text-[color:var(--brand-seasalt)] hover:bg-[rgba(255,255,255,0.06)] transition-colors"
           >
             Sign out

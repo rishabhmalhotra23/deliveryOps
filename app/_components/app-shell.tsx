@@ -108,9 +108,11 @@ function SyncDot({ label, time }: { label: string; time: string | null }) {
 export function AppShell({
   children,
   userEmail,
+  userPicture,
 }: {
   children: React.ReactNode;
   userEmail?: string | null;
+  userPicture?: string | null;
 }) {
   const pathname = usePathname();
   const syncStatus = useSyncStatus();
@@ -179,7 +181,7 @@ export function AppShell({
             <SyncDot label="Salesforce" time={syncStatus.sf} />
             <SyncDot label="Monday" time={syncStatus.monday} />
           </div>
-          {userEmail ? <UserPill email={userEmail} /> : null}
+          {userEmail ? <UserPill email={userEmail} picture={userPicture} /> : null}
           <div className="flex items-center justify-between px-2">
             <div className="text-[10px] text-[color:var(--brand-metal)] opacity-50">DeliveryOps</div>
             <ThemeToggle />
