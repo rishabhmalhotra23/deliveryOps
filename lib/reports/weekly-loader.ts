@@ -131,6 +131,15 @@ export interface DeliveryTrendBucket {
   count: number;
 }
 
+// QoQ history — one entry per Kognitos FY quarter from the earliest
+// go-live on record through the current quarter.
+export interface QoQBucket {
+  label: string;       // "Q4 FY25", "Q1 FY26" etc.
+  delivered: number;
+  avg_ttv_days: number | null;   // null when < 3 data points (too noisy)
+  cumulative: number;  // running total of all go-lives
+}
+
 export interface WeeklyBundle {
   range: DateRange;
   generated_at: string;
@@ -140,6 +149,17 @@ export interface WeeklyBundle {
   delivery_trend: {
     bucket_kind: "weekly" | "monthly";
     data: DeliveryTrendBucket[];
+  };
+
+  // All-time QoQ chart + pipeline funnel
+  qoq_history: QoQBucket[];
+  pipeline_funnel: {
+    discovery: number;
+    dev: number;
+    uat: number;
+    waiting: number;
+    delivered_all_time: number;   // running total for context
+    unique_customers_served: number;
   };
 
   // Snapshots ("now")
@@ -311,6 +331,68 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   const lastQ = previousKognitosFYQuarter(thisQ);
   const deliveredAll = projects.filter((p) => isDelivered(p.status, p.group_title));
   const prodCustomers = new Set(deliveredAll.map((p) => p.customer_display_name));
+
+  // ── QoQ history ───────────────────────────────────────────────────────────
+  // Build one entry per Kognitos FY quarter from the earliest go-live date
+  // through the current quarter. Includes delivered count, avg TTV, and
+  // a running cumulative total — tells the story of velocity over time.
+  const qoq_history: QoQBucket[] = (() => {
+    // Helper: Kognitos FY quarter label for a date
+    function qLabel(d: Date): string {
+      const m = d.getUTCMonth();
+      const y = d.getUTCFullYear();
+      if (m === 0)         return `Q4 FY${String(y - 1).slice(2)}`;
+      if (m <= 3)          return `Q1 FY${String(y).slice(2)}`;
+      if (m <= 6)          return `Q2 FY${String(y).slice(2)}`;
+      if (m <= 9)          return `Q3 FY${String(y).slice(2)}`;
+                           return `Q4 FY${String(y).slice(2)}`;
+    }
+    // Sort key for a label like "Q2 FY26" → numeric for ordering
+    function qSortKey(label: string): number {
+      const m = label.match(/Q(\d) FY(\d{2})/);
+      if (!m) return 0;
+      return Number(m[2]) * 4 + Number(m[1]);
+    }
+
+    // Aggregate delivered projects by quarter
+    const byQ = new Map<string, { delivered: number; ttvDays: number[] }>();
+    for (const p of deliveredAll) {
+      const d = parseDate(p.go_live_date);
+      if (!d) continue;
+      const key = qLabel(d);
+      const prev = byQ.get(key) ?? { delivered: 0, ttvDays: [] };
+      prev.delivered++;
+      if (p.ttv_days !== null && p.ttv_days > 0) prev.ttvDays.push(p.ttv_days);
+      byQ.set(key, prev);
+    }
+
+    // Also include the current quarter even if 0 deliveries so it shows on chart
+    const currentQLabel = qLabel(now);
+    if (!byQ.has(currentQLabel)) byQ.set(currentQLabel, { delivered: 0, ttvDays: [] });
+
+    const sorted = [...byQ.entries()].sort((a, b) => qSortKey(a[0]) - qSortKey(b[0]));
+
+    let cumulative = 0;
+    return sorted.map(([label, { delivered, ttvDays: ttvArr }]) => {
+      cumulative += delivered;
+      const avg_ttv_days = ttvArr.length >= 3
+        ? Math.round(ttvArr.reduce((s, v) => s + v, 0) / ttvArr.length)
+        : null;
+      return { label, delivered, avg_ttv_days, cumulative };
+    });
+  })();
+
+  // ── Pipeline funnel ───────────────────────────────────────────────────────
+  // All active-board projects (snapshot), broken out by phase group, plus
+  // the all-time delivered count and unique customers served for context.
+  const pipeline_funnel = {
+    discovery:  allActiveBoardProjects.filter((p) => p.phase_group === "discovery").length,
+    dev:        allActiveBoardProjects.filter((p) => p.phase_group === "dev").length,
+    uat:        allActiveBoardProjects.filter((p) => p.phase_group === "uat").length,
+    waiting:    allActiveBoardProjects.filter((p) => p.phase_group === "waiting").length,
+    delivered_all_time: deliveredAll.length,
+    unique_customers_served: prodCustomers.size,
+  };
   const thisQCount = deliveredAll.filter((p) => {
     const d = parseDate(p.go_live_date);
     return d !== null && d >= thisQ.start && d <= thisQ.end;
@@ -348,6 +430,8 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     generated_at: now.toISOString(),
     shipped_in_range: shippedInRange,
     delivery_trend: { bucket_kind: useMonthly ? "monthly" : "weekly", data: trend },
+    qoq_history,
+    pipeline_funnel,
     in_uat: inUat,
     active_projects: activeGroupProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
     all_active_board: allActiveBoardProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),

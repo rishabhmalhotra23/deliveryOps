@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell, ReferenceLine,
+  ComposedChart, Line, Area,
 } from "recharts";
 import { useTheme } from "next-themes";
 import type { WeeklyBundle, WeeklyProject } from "@/lib/reports/weekly-loader";
@@ -288,6 +289,156 @@ function FlightTags({ fd }: { fd: WeeklyBundle["flight_breakdown"] }) {
   );
 }
 
+// ── QoQ history chart ────────────────────────────────────────────────────────
+// Bars = deliveries per Kognitos FY quarter; line = avg TTV (right axis).
+// Tells the "how much have we shipped and are we getting faster" story.
+function QoQChart({ data }: { data: WeeklyBundle["qoq_history"] }) {
+  const t = useChartTheme();
+  if (data.length < 2) return null;
+
+  // Highlight the current (last) quarter differently
+  const currentLabel = data[data.length - 1]?.label ?? "";
+
+  return (
+    <div className="glass-card p-5">
+      <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">
+        Quarterly delivery — all time
+      </div>
+      <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-4">
+        Projects delivered per Kognitos FY quarter · bars = deliveries · line = avg days to ship
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <ComposedChart data={data} margin={{ top: 8, right: 48, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} />
+          <YAxis
+            yAxisId="left"
+            tick={{ fontSize: 10, fill: t.axis }}
+            tickLine={false}
+            axisLine={false}
+            allowDecimals={false}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fontSize: 10, fill: "#6366f1" }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v: number) => `${v}d`}
+          />
+          <Tooltip
+            contentStyle={t.tooltipStyle}
+            formatter={(value, name) => {
+              if (name === "avg_ttv_days") return [`${value}d avg TTV`, "Avg days to ship"];
+              return [value, "Delivered"];
+            }}
+          />
+          <Bar yAxisId="left" dataKey="delivered" radius={[3, 3, 0, 0]} name="delivered">
+            {data.map((entry, i) => (
+              <Cell
+                key={i}
+                fill={entry.label === currentLabel ? "#f59e0b" : "#34d399"}
+                fillOpacity={entry.label === currentLabel ? 0.85 : 0.9}
+              />
+            ))}
+          </Bar>
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="avg_ttv_days"
+            stroke="#6366f1"
+            strokeWidth={2}
+            dot={{ r: 3, fill: "#6366f1" }}
+            activeDot={{ r: 5 }}
+            connectNulls={false}
+            name="avg_ttv_days"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div className="flex items-center gap-4 mt-2 text-[10px] text-[color:var(--muted-foreground)]">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-400 inline-block" /> Delivered</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-indigo-500 inline-block rounded" /> Avg TTV (right axis)</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-400 inline-block" /> Current quarter</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Pipeline funnel ───────────────────────────────────────────────────────────
+// Shows the shape of work in the system: how many at each stage right now,
+// plus the cumulative delivered total for scale context.
+function PipelineFunnel({ funnel }: { funnel: WeeklyBundle["pipeline_funnel"] }) {
+  const stages = [
+    { label: "Discovery",   count: funnel.discovery, color: "#818cf8", desc: "Pre-Kickoff / M1" },
+    { label: "Development", count: funnel.dev,        color: "#6366f1", desc: "M2" },
+    { label: "UAT",         count: funnel.uat,        color: "#f59e0b", desc: "M3–M5 testing" },
+    { label: "Waiting",     count: funnel.waiting,    color: "#f97316", desc: "Customer sign-off pending" },
+  ].filter((s) => s.count > 0);
+
+  const activeTotal = stages.reduce((s, x) => s + x.count, 0);
+  const grandTotal  = funnel.delivered_all_time + activeTotal;
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-end justify-between mb-4">
+        <div>
+          <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">Work in the system — right now</div>
+          <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">Active pipeline by phase · all-time delivered for scale</div>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{funnel.delivered_all_time}</div>
+          <div className="text-[10px] text-[color:var(--muted-foreground)]">delivered all time</div>
+        </div>
+      </div>
+
+      {/* Visual funnel bars */}
+      <div className="space-y-2.5">
+        {stages.map(({ label, count, color, desc }) => {
+          const pct = grandTotal > 0 ? (count / grandTotal) * 100 : 0;
+          return (
+            <div key={label}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color }} />
+                  <span className="text-xs font-medium text-[color:var(--foreground)]">{label}</span>
+                  <span className="text-[10px] text-[color:var(--muted-foreground)]">{desc}</span>
+                </div>
+                <span className="text-sm font-bold tabular-nums" style={{ color }}>{count}</span>
+              </div>
+              <div className="h-2 rounded-full bg-[var(--glass-border)] overflow-hidden">
+                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color, opacity: 0.85 }} />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Delivered bar at bottom — the "done" layer */}
+        <div className="mt-1 pt-2 border-t border-[var(--glass-border)]">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-sm shrink-0 bg-emerald-500" />
+              <span className="text-xs font-medium text-[color:var(--foreground)]">Live in production</span>
+              <span className="text-[10px] text-[color:var(--muted-foreground)]">{funnel.unique_customers_served} customers</span>
+            </div>
+            <span className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{funnel.delivered_all_time}</span>
+          </div>
+          <div className="h-2 rounded-full bg-[var(--glass-border)] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500"
+              style={{ width: `${grandTotal > 0 ? (funnel.delivered_all_time / grandTotal) * 100 : 0}%`, opacity: 0.85 }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 pt-2.5 border-t border-[var(--glass-border)] flex items-center justify-between text-[11px] text-[color:var(--muted-foreground)]">
+        <span>{activeTotal} projects in flight</span>
+        <span>{grandTotal} total projects tracked</span>
+      </div>
+    </div>
+  );
+}
+
 // ── In-production stats ────────────────────────────────────────────────────────
 function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps: WeeklyBundle["nps_this_quarter"] }) {
   return (
@@ -455,10 +606,16 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
         </div>
       </div>
 
-      {/* Row 6 — In production */}
+      {/* Row 6 — Historical narrative: QoQ chart + pipeline funnel */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <QoQChart data={bundle.qoq_history} />
+        <PipelineFunnel funnel={bundle.pipeline_funnel} />
+      </div>
+
+      {/* Row 7 — In production */}
       <InProdSection in_prod={bundle.in_prod} nps={bundle.nps_this_quarter} />
 
-      {/* Row 7 — Team workload (TAM + FDE) */}
+      {/* Row 8 — Team workload (TAM + FDE) */}
       <div className="glass-card p-5">
         <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-4">
           Team workload — active projects (In progress group)
