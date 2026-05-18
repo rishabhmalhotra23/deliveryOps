@@ -67,10 +67,18 @@ export interface RangeRequest {
   to?: string;
 }
 
+// Snap a date to midnight UTC so go-live dates (which Monday stores as
+// date-only and parse to 00:00 UTC) are always >= the range start.
+function startOfDayUTC(d: Date): Date {
+  const out = new Date(d);
+  out.setUTCHours(0, 0, 0, 0);
+  return out;
+}
+
 export function resolveRange(req: RangeRequest = {}, now: Date = new Date()): DateRange {
   // Custom range: needs both from + to to be valid.
   if (req.preset === "custom" && req.from && req.to) {
-    const start = new Date(req.from);
+    const start = startOfDayUTC(new Date(req.from));
     const end = new Date(req.to);
     if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
       end.setUTCHours(23, 59, 59, 999);
@@ -79,22 +87,23 @@ export function resolveRange(req: RangeRequest = {}, now: Date = new Date()): Da
   }
 
   if (req.preset === "month") {
-    // Last 30 days, ending today.
-    const start = new Date(now);
-    start.setDate(now.getDate() - 30);
+    const start = startOfDayUTC(new Date(now));
+    start.setUTCDate(start.getUTCDate() - 30);
     return { start, end: now, preset: "month", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Monthly" };
   }
 
   if (req.preset === "quarter") {
-    // Last 90 days, ending today.
-    const start = new Date(now);
-    start.setDate(now.getDate() - 90);
+    const start = startOfDayUTC(new Date(now));
+    start.setUTCDate(start.getUTCDate() - 90);
     return { start, end: now, preset: "quarter", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Quarterly" };
   }
 
-  // Default: rolling last 7 days.
-  const start = new Date(now);
-  start.setDate(now.getDate() - 7);
+  // Default: rolling last 7 days, start snapped to midnight so a go-live
+  // on the start day isn't excluded due to time-of-day mismatch.
+  // Example: now = May 18 14:30 → start = May 11 00:00, so a project
+  // with go_live_date "2026-05-11" (parses to May 11 00:00) is included.
+  const start = startOfDayUTC(new Date(now));
+  start.setUTCDate(start.getUTCDate() - 7);
   return { start, end: now, preset: "week", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Weekly" };
 }
 
