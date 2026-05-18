@@ -61,28 +61,43 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (isPublic(pathname)) {
-    return await auth0.middleware(request);
+  try {
+    if (isPublic(pathname)) {
+      return await auth0.middleware(request);
+    }
+
+    // Check for a valid Auth0 session.
+    const response = await auth0.middleware(request);
+    const session = await auth0.getSession(request);
+
+    if (!session?.user) {
+      const loginUrl = new URL("/api/auth/login", request.url);
+      loginUrl.searchParams.set("returnTo", request.nextUrl.pathname + request.nextUrl.search);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Extra domain check in case the Auth0 Action isn't set up yet.
+    if (!isAllowedEmail(session.user.email)) {
+      const logoutUrl = new URL("/api/auth/logout", request.url);
+      logoutUrl.searchParams.set("returnTo", "/login?error=domain");
+      return NextResponse.redirect(logoutUrl);
+    }
+
+    return response;
+  } catch (err) {
+    // Log to Vercel runtime logs so we can see the actual auth0 error.
+    console.error("[middleware] error on", pathname, "—",
+      err instanceof Error ? `${err.name}: ${err.message}\n${err.stack}` : String(err));
+    // For auth callbacks, redirect to /login with the error so the user
+    // sees something useful rather than a generic 500.
+    if (pathname.startsWith("/api/auth/")) {
+      const url = new URL("/login", request.url);
+      url.searchParams.set("error", "auth_flow");
+      url.searchParams.set("detail", err instanceof Error ? err.message : "unknown");
+      return NextResponse.redirect(url);
+    }
+    throw err;
   }
-
-  // Check for a valid Auth0 session.
-  const response = await auth0.middleware(request);
-  const session = await auth0.getSession(request);
-
-  if (!session?.user) {
-    const loginUrl = new URL("/api/auth/login", request.url);
-    loginUrl.searchParams.set("returnTo", request.nextUrl.pathname + request.nextUrl.search);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // Extra domain check in case the Auth0 Action isn't set up yet.
-  if (!isAllowedEmail(session.user.email)) {
-    const logoutUrl = new URL("/api/auth/logout", request.url);
-    logoutUrl.searchParams.set("returnTo", "/login?error=domain");
-    return NextResponse.redirect(logoutUrl);
-  }
-
-  return response;
 }
 
 export const config = {
