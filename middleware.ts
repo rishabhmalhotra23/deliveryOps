@@ -41,11 +41,11 @@ function isPublic(pathname: string): boolean {
   return false;
 }
 
-// Auth0 is not configured until AUTH0_SECRET + AUTH0_ISSUER_BASE_URL are set.
+// Auth0 is not configured until AUTH0_SECRET + AUTH0_DOMAIN are set.
 // Without them the SDK throws — let the request through so local dev works
 // without Auth0 credentials (same pattern as the old Supabase bypass).
 const auth0Configured = Boolean(
-  process.env.AUTH0_SECRET && process.env.AUTH0_ISSUER_BASE_URL && process.env.AUTH0_CLIENT_ID
+  process.env.AUTH0_SECRET && process.env.AUTH0_DOMAIN && process.env.AUTH0_CLIENT_ID
 );
 
 export async function middleware(request: NextRequest) {
@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
   // will throw at build time if it's absent.
   if (!auth0Configured) {
     if (process.env.NODE_ENV === "production") {
-      return new NextResponse("Auth0 not configured. Set AUTH0_SECRET, AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET.", { status: 500 });
+      return new NextResponse("Auth0 not configured. Set AUTH0_SECRET, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET.", { status: 500 });
     }
     return NextResponse.next();
   }

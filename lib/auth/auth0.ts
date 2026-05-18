@@ -1,11 +1,11 @@
 // Auth0 singleton. Every server-side auth call goes through this.
 //
 // Required env vars (add to .env.local for dev, Vercel dashboard for prod):
-//   AUTH0_SECRET          — random 32+ char string (openssl rand -hex 32)
-//   AUTH0_BASE_URL        — http://localhost:4001 (dev) or https://<domain> (prod)
-//   AUTH0_ISSUER_BASE_URL — https://<tenant>.auth0.com
-//   AUTH0_CLIENT_ID       — from Auth0 Application settings
-//   AUTH0_CLIENT_SECRET   — from Auth0 Application settings
+//   AUTH0_SECRET        — random 32+ char string (openssl rand -hex 32)
+//   APP_BASE_URL        — http://localhost:4001 (dev) or https://<domain> (prod)
+//   AUTH0_DOMAIN        — <tenant>.us.auth0.com  (no https://)
+//   AUTH0_CLIENT_ID     — from Auth0 Application settings
+//   AUTH0_CLIENT_SECRET — from Auth0 Application settings
 //
 // Auth0 Application settings (configure in Auth0 dashboard):
 //   Type:             Regular Web Application
@@ -14,12 +14,11 @@
 //   Allowed logouts:  http://localhost:4001,
 //                     https://delivery-ops-delta.vercel.app
 //   Allowed web origins: (same as above)
-//   Social connections: Google (enable, lock to kognitos.com via Action)
+//   Social connections: Google (enable)
 //
-// To enforce @kognitos.com only, add this Auth0 Action to the Login flow:
+// Auth0 Action (Login flow) — enforce @kognitos.com only:
 //   exports.onExecutePostLogin = async (event, api) => {
-//     const email = event.user.email ?? "";
-//     if (!email.endsWith("@kognitos.com")) {
+//     if (!(event.user.email ?? "").toLowerCase().endsWith("@kognitos.com")) {
 //       api.access.deny("Only @kognitos.com accounts are allowed.");
 //     }
 //   };
@@ -27,18 +26,17 @@
 import { Auth0Client } from "@auth0/nextjs-auth0/server";
 
 export const auth0 = new Auth0Client({
-  // These are read from env vars automatically by the SDK.
-  // Listed here for visibility; do NOT hardcode values.
-  // AUTH0_SECRET, AUTH0_BASE_URL, AUTH0_ISSUER_BASE_URL,
-  // AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET
-  //
-  // Session config — 7-day absolute session, rolling.
-  // See Auth0ClientOptions for full session configuration options.
+  // Override the default /auth/* paths to /api/auth/* so auth routes live
+  // alongside API routes. Must match the Allowed Callback URLs in Auth0.
+  routes: {
+    login:    "/api/auth/login",
+    logout:   "/api/auth/logout",
+    callback: "/api/auth/callback",
+  },
   authorizationParameters: {
-    // Request offline_access so we get a refresh token.
     scope: "openid profile email offline_access",
-    // Hint to Google's account chooser to show kognitos.com accounts.
-    // The real restriction is enforced by the Auth0 Action above.
+    // Hint Google's chooser to kognitos.com accounts first.
+    // The Auth0 Action enforces this server-side.
     hd: process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN ?? "kognitos.com",
   },
 });
