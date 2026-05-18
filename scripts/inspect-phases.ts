@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "@/lib/supabase/ws-polyfill";
 import { createClient } from "@supabase/supabase-js";
 import * as fs from "node:fs";
 import * as path from "node:path";

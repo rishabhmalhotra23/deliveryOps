@@ -13,6 +13,7 @@
 // Run with:  npx tsx scripts/audit-data-health.ts
 
 import "dotenv/config";
+import "@/lib/supabase/ws-polyfill";
 
 import * as fs from "node:fs";
 import * as path from "node:path";

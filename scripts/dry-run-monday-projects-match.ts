@@ -7,6 +7,7 @@
 // Run: npx tsx scripts/dry-run-monday-projects-match.ts
 
 import "dotenv/config";
+import "@/lib/supabase/ws-polyfill";
 
 import * as fs from "node:fs";
 import * as path from "node:path";

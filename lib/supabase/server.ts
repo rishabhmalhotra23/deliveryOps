@@ -2,6 +2,7 @@
 // Authentication is handled by Auth0. These clients are used for data
 // operations only — never for auth flows.
 
+import "./ws-polyfill"; // supabase-js 2.105 needs WebSocket on Node < 22
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

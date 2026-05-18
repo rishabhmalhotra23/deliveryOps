@@ -13,17 +13,27 @@ export interface CurrentUser {
   picture: string | null;
 }
 
+const auth0Configured = Boolean(
+  process.env.AUTH0_SECRET && process.env.AUTH0_ISSUER_BASE_URL && process.env.AUTH0_CLIENT_ID
+);
+
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const session = await auth0.getSession();
-  if (!session?.user) return null;
-  const email = session.user.email ?? null;
-  if (!isAllowedEmail(email)) return null;
-  return {
-    id: session.user.sub,
-    email: email!,
-    name: session.user.name ?? null,
-    picture: session.user.picture ?? null,
-  };
+  // Return null gracefully when Auth0 isn't configured (local dev without credentials).
+  if (!auth0Configured) return null;
+  try {
+    const session = await auth0.getSession();
+    if (!session?.user) return null;
+    const email = session.user.email ?? null;
+    if (!isAllowedEmail(email)) return null;
+    return {
+      id: session.user.sub,
+      email: email!,
+      name: session.user.name ?? null,
+      picture: session.user.picture ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Use in server components / route handlers that require auth. Redirects

@@ -41,11 +41,27 @@ function isPublic(pathname: string): boolean {
   return false;
 }
 
+// Auth0 is not configured until AUTH0_SECRET + AUTH0_ISSUER_BASE_URL are set.
+// Without them the SDK throws — let the request through so local dev works
+// without Auth0 credentials (same pattern as the old Supabase bypass).
+const auth0Configured = Boolean(
+  process.env.AUTH0_SECRET && process.env.AUTH0_ISSUER_BASE_URL && process.env.AUTH0_CLIENT_ID
+);
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Local-dev escape hatch: if Auth0 isn't configured, let everything through.
+  // In production AUTH0_SECRET is mandatory — the missing-var check below
+  // will throw at build time if it's absent.
+  if (!auth0Configured) {
+    if (process.env.NODE_ENV === "production") {
+      return new NextResponse("Auth0 not configured. Set AUTH0_SECRET, AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET.", { status: 500 });
+    }
+    return NextResponse.next();
+  }
+
   if (isPublic(pathname)) {
-    // Let Auth0 handle session cookie refresh on public paths too.
     return await auth0.middleware(request);
   }
 
@@ -54,7 +70,6 @@ export async function middleware(request: NextRequest) {
   const session = await auth0.getSession(request);
 
   if (!session?.user) {
-    // No session → send to Auth0 Universal Login.
     const loginUrl = new URL("/api/auth/login", request.url);
     loginUrl.searchParams.set("returnTo", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
