@@ -378,7 +378,9 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   // Strategic Growth).  Without these the dashboard chip counts would
   // diverge from what /customers shows.
   const [arr, accountsForCat, opps, cases, lastSf, lastMon, profilesForCat] = await Promise.all([
-    sb.from("profiles").select("arr"),
+    // Pull customer_id alongside ARR so we can filter past-state customers
+    // out of total_arr.
+    sb.from("profiles").select("customer_id, arr"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
     sb.from("sf_opportunities").select("id", { count: "exact", head: true }).eq("is_closed", false),
     sb.from("sf_cases").select("id", { count: "exact", head: true }).eq("is_closed", false),
@@ -396,32 +398,43 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     revenueByC.set(a.customer_id, a.annual_revenue);
   }
 
+  // Past-state customers (Churned / Dropped / Past) are excluded from the
+  // active-book aggregates (total_arr, total_company_revenue, by_ae,
+  // by_partner, total customer count).  The `by_category` chip strip keeps
+  // them so the user can still see the breakdown of the entire portfolio
+  // composition.
+  const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
   const byCategory: Record<string, number> = {};
   const byAe: Record<string, number> = {};
   const byPartner: Record<string, number> = {};
+  const activeIds = new Set<string>();
   for (const c of list) {
     const cat = brandCategoryFromCustomer(c, {
       renewal_date: renewalByC.get(c.id) ?? null,
       annual_revenue: revenueByC.get(c.id) ?? null,
     });
     byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+    if (PAST_STATE_CATEGORIES.has(cat)) continue;
+    activeIds.add(c.id);
     const ae = c.ae_owner ?? "(unassigned)";
     byAe[ae] = (byAe[ae] ?? 0) + 1;
     const p = c.partner ?? "Direct";
     byPartner[p] = (byPartner[p] ?? 0) + 1;
   }
-
-  const totalArr = ((arr.data as Array<{ arr: number | null }> | null) ?? []).reduce(
-    (sum, a) => sum + (a.arr ?? 0),
-    0
-  );
+  const activeCount = activeIds.size;
+  // Sum ARR only over active customers — past-state rows contribute zero.
+  const arrRows = (arr.data as Array<{ customer_id: string; arr: number | null }> | null) ?? [];
+  let totalArr = 0;
+  for (const row of arrRows) {
+    if (activeIds.has(row.customer_id)) totalArr += row.arr ?? 0;
+  }
   let totalCompanyRevenue = 0;
-  for (const v of revenueByC.values()) {
-    totalCompanyRevenue += v ?? 0;
+  for (const [id, v] of revenueByC) {
+    if (activeIds.has(id)) totalCompanyRevenue += v ?? 0;
   }
 
   return {
-    total: list.length,
+    total: activeCount,
     by_category: byCategory,
     by_ae: byAe,
     by_partner: byPartner,

@@ -226,8 +226,21 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   }
 
   // ─── Totals ─────────────────────────────────────────────────────────
-  const totalArr = profileList.reduce((s, p) => s + (p.arr ?? 0), 0);
-  const totalCompanyRevenue = accountList.reduce((s, a) => s + (a.annual_revenue ?? 0), 0);
+  // Active-book totals: exclude past-state customers (Churned / Dropped /
+  // Past). Their ARR is zero and their headcount inflates the "active
+  // customers" number on the dashboard.
+  const PAST_FOR_TOTALS = new Set(["Churned", "Dropped", "Past"]);
+  const activeCustomerIds = new Set(
+    customerList
+      .filter((c) => !PAST_FOR_TOTALS.has(categoryByC.get(c.id) ?? ""))
+      .map((c) => c.id)
+  );
+  const totalArr = profileList
+    .filter((p) => activeCustomerIds.has(p.customer_id))
+    .reduce((s, p) => s + (p.arr ?? 0), 0);
+  const totalCompanyRevenue = accountList
+    .filter((a) => a.customer_id && activeCustomerIds.has(a.customer_id))
+    .reduce((s, a) => s + (a.annual_revenue ?? 0), 0);
   const projectsTotal = projectList.length;
 
   const projectsInProgress = projectList.filter(
@@ -251,7 +264,20 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   // no profile row exists, matching the legacy behaviour.
   const arrFor = (id: string) => profileByC.get(id)?.arr ?? 0;
 
+  // Past-state customers are excluded from "active book" aggregates (AE
+  // workload, partner workload, ARR-by-category, totals).  They're still
+  // counted in historical trends below (deliveries-over-time, NPS by
+  // quarter, TTV) because those visualise events that *happened* and
+  // shouldn't be revised when a customer churns later.
+  const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
+  const isActiveBook = (customerId: string) =>
+    !PAST_STATE_CATEGORIES.has(categoryByC.get(customerId) ?? "");
+  const activeCustomerList = customerList.filter((c) => isActiveBook(c.id));
+
   // ─── By category ────────────────────────────────────────────────────
+  // Past customers are kept in this aggregate because the chart's job is
+  // to show the *whole* portfolio composition (including the past-state
+  // tail).  The other active-book aggregates below drop them.
   const byCategoryAgg = new Map<string, { count: number; arr: number }>();
   for (const c of customerList) {
     const cat = categoryByC.get(c.id) ?? "Active";
@@ -265,10 +291,11 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   // ─── By AE ──────────────────────────────────────────────────────────
   // Build the aggregate + the drill-down list in one pass.  Drill-down rows
   // are slim DrillDownCustomer objects keyed by AE name; the panel renders
-  // an inline-edit dropdown to reassign the AE.
+  // an inline-edit dropdown to reassign the AE.  Past-state customers are
+  // excluded — a churned customer doesn't add to anyone's workload.
   const byAeAgg = new Map<string, { count: number; arr: number }>();
   const by_ae_items: Record<string, DrillDownCustomer[]> = {};
-  for (const c of customerList) {
+  for (const c of activeCustomerList) {
     const ae = c.ae_owner ?? "(unassigned)";
     const prev = byAeAgg.get(ae) ?? { count: 0, arr: 0 };
     prev.count++;
@@ -295,8 +322,9 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     .sort((a, b) => b.count - a.count);
 
   // ─── By partner ─────────────────────────────────────────────────────
+  // Same filter — partner workload is an active-book metric.
   const byPartnerAgg = new Map<string, { count: number; arr: number }>();
-  for (const c of customerList) {
+  for (const c of activeCustomerList) {
     const p = c.partner ?? "Direct";
     const prev = byPartnerAgg.get(p) ?? { count: 0, arr: 0 };
     prev.count++;
@@ -613,7 +641,9 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   return {
     generated_at: new Date().toISOString(),
     totals: {
-      customers: customerList.length,
+      // Active-book count — excludes Churned / Dropped / Past so the
+      // dashboard headline isn't inflated by historical accounts.
+      customers: activeCustomerIds.size,
       total_arr: totalArr,
       total_company_revenue: totalCompanyRevenue,
       projects_total: projectsTotal,
