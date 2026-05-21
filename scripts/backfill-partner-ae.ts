@@ -35,14 +35,33 @@ async function main() {
   const apply = process.argv.includes("--apply");
   const customers = await listCustomers();
 
+  // "Chittu" is the *default* for partner-managed customers — set when no
+  // human AE has been assigned yet.  If a CSM has explicitly set the AE
+  // to a real person (Rajesh / Binny / etc.), this backfill leaves them
+  // alone.  Without this guard, a re-run silently undoes manual
+  // corrections like the 2026-05-21 fix-customer-assignments.ts updates.
   const partnerManaged = customers.filter((c) => c.partner && c.partner.trim() !== "");
-  const toUpdate = partnerManaged.filter((c) => c.ae_owner !== CHITTU);
+  const toUpdate = partnerManaged.filter(
+    (c) => !c.ae_owner || c.ae_owner.trim() === ""
+  );
+
+  const explicitlyAssigned = partnerManaged.filter(
+    (c) => c.ae_owner && c.ae_owner.trim() !== "" && c.ae_owner !== CHITTU
+  );
 
   console.log(
     `Found ${partnerManaged.length} partner-managed customers; ${toUpdate.length} need AE → ${CHITTU}.`
   );
+  if (explicitlyAssigned.length > 0) {
+    console.log(
+      `Leaving ${explicitlyAssigned.length} alone (already have an explicit AE):`
+    );
+    for (const c of explicitlyAssigned) {
+      console.log(`  • ${c.display_name} — AE: ${c.ae_owner}`);
+    }
+  }
   if (toUpdate.length === 0) {
-    console.log("Nothing to do — all partner-managed customers already assigned to Chittu.");
+    console.log("Nothing to do.");
     process.exit(0);
   }
 
