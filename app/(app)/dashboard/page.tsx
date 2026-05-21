@@ -4,7 +4,9 @@ import { listCustomers } from "@/lib/customers";
 import { loadCustomerDomainMap, loadPortfolioSummary } from "@/lib/cache/integrations";
 import { loadOvernightChanges, loadPendingApprovals } from "@/lib/dashboard/overnight";
 import { loadUpcomingPipeline } from "@/lib/dashboard/pipeline";
-import { CustomerAvatar, deriveCustomerDomain } from "@/app/_components/customer-avatar";
+import { CustomerAvatar } from "@/app/_components/customer-avatar";
+import { deriveCustomerDomain } from "@/app/_components/customer-domain";
+import { PipelineList } from "./_components/pipeline-list";
 import {
   CategoryChip,
   PageHeader,
@@ -175,60 +177,16 @@ export default async function Dashboard() {
             </span>
           </div>
           <p className="text-xs text-[color:var(--brand-gray)] mb-3">
-            Open Salesforce opportunities closing in the next 90 days — renewals + expansions you should be preparing for now.
+            Open Salesforce opportunities closing in the next 90 days — click a row to expand.
+            {" "}
+            <span className="text-[color:var(--foreground)]">
+              {pipeline.by_kind.Renewal} renewal{pipeline.by_kind.Renewal === 1 ? "" : "s"} ·{" "}
+              {pipeline.by_kind.Expansion} expansion{pipeline.by_kind.Expansion === 1 ? "" : "s"} ·{" "}
+              {pipeline.by_kind.New} new
+              {pipeline.by_kind.Other > 0 ? ` · ${pipeline.by_kind.Other} unclassified` : ""}
+            </span>
           </p>
-          <div className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12">
-            <ul className="divide-y divide-[color:var(--brand-metal-line)]">
-              {pipeline.opportunities.slice(0, 8).map((opp) => (
-                <li key={opp.sf_id} className="px-5 py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-[color:var(--foreground)] truncate">
-                      {opp.customer_display_name ? (
-                        <Link
-                          href={`/customers/${opp.customer_key}`}
-                          className="hover:underline"
-                        >
-                          {opp.customer_display_name}
-                        </Link>
-                      ) : opp.name}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      {opp.stage_name ? (
-                        <span className="text-xs text-[color:var(--brand-gray)]">{opp.stage_name}</span>
-                      ) : null}
-                      {opp.close_date ? (
-                        <span className="text-xs text-[color:var(--brand-gray)]">closes {opp.close_date}</span>
-                      ) : null}
-                      {opp.owner_name ? (
-                        <span className="text-xs text-[color:var(--brand-gray)]">{opp.owner_name}</span>
-                      ) : null}
-                      {opp.probability != null ? (
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                            opp.probability >= 75
-                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                              : opp.probability >= 50
-                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                              : "bg-slate-500/10 text-slate-600 dark:text-slate-400"
-                          }`}
-                        >
-                          {opp.probability}% likely
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums text-[color:var(--foreground)] shrink-0">
-                    {formatMoney(opp.amount)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {pipeline.count > 8 ? (
-              <div className="px-5 py-2 text-xs text-[color:var(--brand-gray)] border-t border-[color:var(--brand-metal-line)]">
-                + {pipeline.count - 8} more — view all in Salesforce
-              </div>
-            ) : null}
-          </div>
+          <PipelineList opportunities={pipeline.opportunities} />
         </section>
       ) : null}
 

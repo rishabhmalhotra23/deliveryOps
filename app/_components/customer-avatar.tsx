@@ -142,41 +142,9 @@ export function CustomerAvatar({
   );
 }
 
-/**
- * Best-effort domain extraction for customer logo lookup.
- * Tries (in order):
- *   - explicit `website` URL/string
- *   - the second half of an `email_alias` (skipping internal kognitos.com aliases)
- *   - "<key>.com" as a final guess — favicon services degrade gracefully if it
- *     doesn't exist, so a bad guess is no worse than no guess.
- */
-export function deriveCustomerDomain(input: {
-  website?: string | null;
-  emailAlias?: string | null;
-  key?: string | null;
-}): string | null {
-  const { website, emailAlias, key } = input;
-
-  if (website) {
-    try {
-      const u = new URL(website.startsWith("http") ? website : `https://${website}`);
-      const host = u.hostname.replace(/^www\./, "");
-      if (host && host.includes(".")) return host;
-    } catch {
-      // fall through
-    }
-  }
-
-  if (emailAlias && emailAlias.includes("@")) {
-    const host = emailAlias.split("@")[1]?.toLowerCase().trim();
-    // Customer aliases at deliveryops live under kognitos.com — those are
-    // routing addresses, not the customer's real domain. Skip them.
-    if (host && host !== "kognitos.com" && host.includes(".")) return host;
-  }
-
-  if (key && /^[a-z0-9-]+$/i.test(key)) {
-    return `${key.toLowerCase()}.com`;
-  }
-
-  return null;
-}
+// The pure `deriveCustomerDomain` helper lives in ./customer-domain so server
+// components (e.g. /customers, /dashboard pages) can import it directly. Do
+// NOT re-export from this file — re-exporting through a "use client" module
+// silently re-marks the function as client-only and breaks SSR callers with
+// "Attempted to call deriveCustomerDomain() from the server but it's on the
+// client".

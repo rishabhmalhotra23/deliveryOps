@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { listCustomers } from "@/lib/customers";
 import { loadCustomerDomainMap, loadPortfolioSummary } from "@/lib/cache/integrations";
-import { CustomerAvatar, deriveCustomerDomain } from "@/app/_components/customer-avatar";
+import { CustomerAvatar } from "@/app/_components/customer-avatar";
+import { deriveCustomerDomain } from "@/app/_components/customer-domain";
 import {
   PageHeader,
   formatTimeAgo,

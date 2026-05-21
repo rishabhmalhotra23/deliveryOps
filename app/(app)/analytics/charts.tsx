@@ -203,18 +203,26 @@ const GROUP_COLORS: Record<string, string> = {
 export function ProjectsByGroupChart({ data }: { data: Array<{ group: string; count: number }> }) {
   const t = useChartTheme();
   const sorted = [...data].filter(d => d.count > 0).sort((a, b) => b.count - a.count).slice(0, 12);
+  // Min height keeps the chart looking like a chart even when there are
+  // only 2-3 entries; row spacing of 48px gives bars enough vertical room
+  // to look like solid bars rather than thin lines.
   return (
-    <ResponsiveContainer width="100%" height={Math.max(220, sorted.length * 36)}>
-      <BarChart data={sorted} layout="vertical" margin={{ top: 0, right: 40, left: 140, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={Math.max(280, sorted.length * 48)}>
+      <BarChart data={sorted} layout="vertical" margin={{ top: 8, right: 56, left: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
-        <YAxis type="category" dataKey="group" tick={{ fontSize: 11, fill: t.text }} width={135} tickLine={false} axisLine={false} />
-        <Tooltip contentStyle={t.tooltipStyle} />
-        <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={26}>
+        <YAxis type="category" dataKey="group" tick={{ fontSize: 12, fill: t.text }} width={150} tickLine={false} axisLine={false} />
+        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v} projects`, "Projects"]} />
+        <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={32}>
           {sorted.map((entry, i) => (
             <Cell key={i} fill={GROUP_COLORS[entry.group] ?? CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}
-          <LabelList dataKey="count" position="right" style={{ fill: t.axis, fontSize: 11 }} />
+          <LabelList
+            dataKey="count"
+            position="right"
+            style={{ fill: t.text, fontSize: 12, fontWeight: 600 }}
+            offset={8}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -415,20 +423,26 @@ export function AeWorkloadChart({ data }: { data: Array<{ ae: string; count: num
   const t = useChartTheme();
   const top = [...data].sort((a, b) => b.arr - a.arr).slice(0, 8);
   return (
-    <ResponsiveContainer width="100%" height={Math.max(240, top.length * 38)}>
-      <BarChart data={top} layout="vertical" margin={{ top: 0, right: 120, left: 90, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={Math.max(280, top.length * 48)}>
+      <BarChart data={top} layout="vertical" margin={{ top: 8, right: 80, left: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={fmtMoney} />
-        <YAxis type="category" dataKey="ae" tick={{ fontSize: 12, fill: t.text }} width={85} tickLine={false} axisLine={false} />
+        <YAxis type="category" dataKey="ae" tick={{ fontSize: 12, fill: t.text }} width={110} tickLine={false} axisLine={false} />
         <Tooltip
           contentStyle={t.tooltipStyle}
           formatter={(value, name) => [name === "arr" ? fmtMoney(Number(value)) : value, name === "arr" ? "ARR" : "Customers"]}
         />
-        <Bar dataKey="arr" name="arr" radius={[0, 6, 6, 0]} maxBarSize={26} fill="#818cf8">
+        <Bar dataKey="arr" name="arr" radius={[0, 6, 6, 0]} maxBarSize={32} fill="#818cf8">
           {top.map((_, i) => (
             <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}
-          <LabelList dataKey="arr" position="right" style={{ fill: t.axis, fontSize: 11 }} formatter={(v: unknown) => fmtMoney(Number(v))} />
+          <LabelList
+            dataKey="arr"
+            position="right"
+            style={{ fill: t.text, fontSize: 12, fontWeight: 600 }}
+            offset={8}
+            formatter={(v: unknown) => fmtMoney(Number(v))}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -438,29 +452,46 @@ export function AeWorkloadChart({ data }: { data: Array<{ ae: string; count: num
 // ── Team Workload (TAM / FDE or Dev / SE) ────────────────────────────────────
 
 function shortName(s: string): string {
+  // Email → "First L." (first name + last initial). Compact + unambiguous.
   if (s.includes("@")) {
     const local = s.split("@")[0].replace(/[._]/g, " ");
     const parts = local.split(" ").filter(Boolean);
-    return parts.length >= 2 ? `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.` : parts[0];
+    return parts.length >= 2
+      ? `${capitalise(parts[0])} ${parts[parts.length - 1][0].toUpperCase()}.`
+      : capitalise(parts[0]);
   }
+  // "Karthik Nagabhushana" → "Karthik N." so the y-axis doesn't wrap.
+  const parts = s.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
   return s;
+}
+function capitalise(w: string): string {
+  return w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
 }
 
 export function TeamWorkloadChart({ data }: { data: Array<{ person: string; count: number }> }) {
   const t = useChartTheme();
   const top = data.slice(0, 10).map((d) => ({ ...d, person: shortName(d.person) }));
+  // Generous row height (48px) + min chart height (280px) so the chart looks
+  // substantial when there are only 3-4 entries. Right-margin reserved for
+  // the count label so it never collides with the axis.
   return (
-    <ResponsiveContainer width="100%" height={Math.max(220, top.length * 38)}>
-      <BarChart data={top} layout="vertical" margin={{ top: 0, right: 45, left: 100, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={Math.max(280, top.length * 48)}>
+      <BarChart data={top} layout="vertical" margin={{ top: 8, right: 56, left: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
-        <YAxis type="category" dataKey="person" tick={{ fontSize: 12, fill: t.text }} width={95} tickLine={false} axisLine={false} />
-        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v} projects`, "Projects"]} />
-        <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={28}>
+        <YAxis type="category" dataKey="person" tick={{ fontSize: 12, fill: t.text }} width={120} tickLine={false} axisLine={false} />
+        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v} active project${v === 1 ? "" : "s"}`, "Workload"]} />
+        <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={32}>
           {top.map((_, i) => (
             <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}
-          <LabelList dataKey="count" position="right" style={{ fill: t.axis, fontSize: 11 }} />
+          <LabelList
+            dataKey="count"
+            position="right"
+            style={{ fill: t.text, fontSize: 12, fontWeight: 600 }}
+            offset={8}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

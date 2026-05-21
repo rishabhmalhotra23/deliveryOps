@@ -270,23 +270,250 @@ function Kanban({ projects, onSelect }: { projects: DeliveryProject[]; onSelect:
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 
+// Column descriptors — the single source of truth for headers, the per-row
+// renderer, and how each column compares for sorting. Adding a new column
+// means adding one entry here and Sortable + renderer come for free.
+type SortDir = "asc" | "desc";
+type SortKey =
+  | "default"
+  | "name"
+  | "customer"
+  | "fiscal_year"
+  | "stage"
+  | "health"
+  | "status"
+  | "phase"
+  | "platform"
+  | "tam"
+  | "dev"
+  | "partner"
+  | "complexity"
+  | "effort"
+  | "ttv"
+  | "kickoff"
+  | "golive"
+  | "update";
+
+// Default stage ordering: Active → Pipeline → Backlog → Finished → Cancelled.
+// Monday's `group_title` is fuzzy across boards (Active Projects vs Active,
+// Cancelled Projects vs Cancelled, etc.), so we coalesce variants. Anything
+// unknown lands in the middle "Other" bucket so it doesn't crowd the top
+// or the bottom.
+const STAGE_BUCKET_ORDER: Record<string, number> = {
+  Active: 0,
+  "Active Projects": 0,
+  "In Progress": 0,
+  Pipeline: 1,
+  "Upcoming Projects": 1,
+  Backlog: 2,
+  "On Hold": 3,
+  Finished: 4,
+  Completed: 4,
+  "Completed Projects": 4,
+  Delivered: 4,
+  Live: 4,
+  Done: 4,
+  "Stalled Projects": 5,
+  Stalled: 5,
+  Cancelled: 6,
+  "Cancelled Projects": 6,
+  Churned: 6,
+  Inactive: 6,
+};
+
+function stageBucket(p: DeliveryProject): number {
+  // Group title is the primary signal; if Monday hasn't set one, fall back
+  // to status (Live → Finished bucket, In Progress → Active bucket, …).
+  const g = p.group_title ?? "";
+  if (g in STAGE_BUCKET_ORDER) return STAGE_BUCKET_ORDER[g];
+  // FY quarter labels like "Q2'26" — historical/upcoming buckets. Sort them
+  // after every named bucket but before Cancelled.
+  if (/^Q[1-4]'\d{2}$/.test(g) || /^FY['-]?\d{2,4}$/.test(g)) return 5;
+  const s = p.status ?? "";
+  if (s in STAGE_BUCKET_ORDER) return STAGE_BUCKET_ORDER[s];
+  return 99;
+}
+
+function compareString(a: string | null | undefined, b: string | null | undefined): number {
+  const av = (a ?? "").toLowerCase();
+  const bv = (b ?? "").toLowerCase();
+  if (av === bv) return 0;
+  // Empties go last regardless of direction.
+  if (!av) return 1;
+  if (!bv) return -1;
+  return av < bv ? -1 : 1;
+}
+function compareNumber(a: number | null | undefined, b: number | null | undefined): number {
+  const av = a ?? null;
+  const bv = b ?? null;
+  if (av === bv) return 0;
+  if (av == null) return 1;
+  if (bv == null) return -1;
+  return av < bv ? -1 : 1;
+}
+function compareNumericText(a: string | null | undefined, b: string | null | undefined): number {
+  const av = a != null ? Number(a) : null;
+  const bv = b != null ? Number(b) : null;
+  return compareNumber(
+    av != null && Number.isFinite(av) ? av : null,
+    bv != null && Number.isFinite(bv) ? bv : null,
+  );
+}
+function compareDate(a: string | null | undefined, b: string | null | undefined): number {
+  // ISO-style YYYY-MM-DD sorts lex-correctly, so we can lean on that and
+  // get null-last for free.
+  return compareString(a, b);
+}
+
+function sortProjects(
+  projects: DeliveryProject[],
+  key: SortKey,
+  dir: SortDir
+): DeliveryProject[] {
+  const sign = dir === "asc" ? 1 : -1;
+  const sorted = projects.slice();
+  if (key === "default") {
+    // Stage bucket asc, then go-live date desc inside each bucket so the most
+    // recent / soonest project rises to the top of its group.
+    sorted.sort((a, b) => {
+      const sb = stageBucket(a) - stageBucket(b);
+      if (sb !== 0) return sb;
+      return compareDate(b.go_live_date, a.go_live_date);
+    });
+    return sorted;
+  }
+  const cmp: Record<Exclude<SortKey, "default">, (a: DeliveryProject, b: DeliveryProject) => number> = {
+    name:        (a, b) => compareString(a.name, b.name),
+    customer:    (a, b) => compareString(a.customer_display_name, b.customer_display_name),
+    fiscal_year: (a, b) => compareString(a.fiscal_year, b.fiscal_year),
+    stage:       (a, b) => stageBucket(a) - stageBucket(b) || compareString(a.group_title, b.group_title),
+    health:      (a, b) => compareString(a.health, b.health),
+    status:      (a, b) => compareString(a.status, b.status),
+    phase:       (a, b) => compareString(a.phase, b.phase),
+    platform:    (a, b) => compareString(a.platform, b.platform),
+    tam:         (a, b) => compareString(a.tam, b.tam),
+    dev:         (a, b) => compareString(a.dev, b.dev),
+    partner:     (a, b) => compareString(a.partner, b.partner),
+    complexity:  (a, b) => compareString(a.complexity, b.complexity),
+    effort:      (a, b) => compareNumber(a.total_effort_days, b.total_effort_days),
+    ttv:         (a, b) => compareNumericText(a.ttv_days_text, b.ttv_days_text),
+    kickoff:     (a, b) => compareDate(a.kickoff_date, b.kickoff_date),
+    golive:      (a, b) => compareDate(a.go_live_date, b.go_live_date),
+    update:      (a, b) => compareString(a.latest_update, b.latest_update),
+  };
+  sorted.sort((a, b) => sign * cmp[key](a, b));
+  return sorted;
+}
+
+interface ColDef {
+  key: SortKey;
+  label: string;
+  align?: "left" | "right";
+}
+const TABLE_COLS: ColDef[] = [
+  { key: "name", label: "Project" },
+  { key: "customer", label: "Customer" },
+  { key: "fiscal_year", label: "FY" },
+  { key: "stage", label: "Stage" },
+  { key: "health", label: "Health" },
+  { key: "status", label: "Status" },
+  { key: "phase", label: "Phase" },
+  { key: "platform", label: "Platform" },
+  { key: "tam", label: "TAM" },
+  { key: "dev", label: "Dev" },
+  { key: "partner", label: "Partner" },
+  { key: "complexity", label: "Complexity" },
+  { key: "effort", label: "Effort", align: "right" },
+  { key: "ttv", label: "TTV", align: "right" },
+  { key: "kickoff", label: "Kickoff" },
+  { key: "golive", label: "Go-live" },
+  { key: "update", label: "Latest update" },
+];
+
 function Table({ projects, onSelect }: { projects: DeliveryProject[]; onSelect: (p: DeliveryProject) => void }) {
+  const [sortKey, setSortKey] = useState<SortKey>("default");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const sorted = useMemo(
+    () => sortProjects(projects, sortKey, sortDir),
+    [projects, sortKey, sortDir]
+  );
+
+  function clickHeader(k: SortKey) {
+    if (sortKey === k) {
+      // Toggle direction; a third click returns to the default ordering so
+      // the user can always get "back to neutral" without a Reset button.
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey("default"); setSortDir("asc"); }
+    } else {
+      setSortKey(k);
+      // String + date columns are nicer asc-first; numeric columns lead desc.
+      const descFirst: SortKey[] = ["effort", "ttv", "golive", "kickoff"];
+      setSortDir(descFirst.includes(k) ? "desc" : "asc");
+    }
+  }
+
   if (projects.length === 0) {
     return <div className="glass-card p-6 text-sm text-[color:var(--muted-foreground)]">No projects match the current filters.</div>;
   }
+
   return (
     <div className="glass-card overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-[color:var(--muted-foreground)] border-b border-[var(--glass-border)] bg-[var(--glass-bg)]/30">
+        <span>
+          Sorted by{" "}
+          <span className="text-[color:var(--foreground)] font-medium">
+            {sortKey === "default"
+              ? "stage (Active → Pipeline → Backlog → Finished → Cancelled), then go-live desc"
+              : `${TABLE_COLS.find((c) => c.key === sortKey)?.label} ${sortDir === "asc" ? "↑" : "↓"}`}
+          </span>
+        </span>
+        {sortKey !== "default" ? (
+          <button
+            type="button"
+            onClick={() => { setSortKey("default"); setSortDir("asc"); }}
+            className="ml-auto underline hover:text-[color:var(--foreground)]"
+          >
+            Reset to default
+          </button>
+        ) : null}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[var(--glass-bg)] text-[color:var(--muted-foreground)]">
             <tr>
-              {["Project", "Customer", "FY", "Stage", "Health", "Status", "Phase", "Platform", "TAM", "Dev", "Partner", "Complexity", "Effort", "TTV", "Kickoff", "Go-live", "Latest update"].map((h) => (
-                <th key={h} className="text-left px-3 py-2 text-[10px] uppercase tracking-wider whitespace-nowrap">{h}</th>
-              ))}
+              {TABLE_COLS.map((c) => {
+                const active = sortKey === c.key;
+                const indicator = active ? (sortDir === "asc" ? "↑" : "↓") : "";
+                return (
+                  <th
+                    key={c.key}
+                    className={`px-3 py-2 text-[10px] uppercase tracking-wider whitespace-nowrap text-${
+                      c.align ?? "left"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => clickHeader(c.key)}
+                      className={`inline-flex items-center gap-1 hover:text-[color:var(--foreground)] ${
+                        active ? "text-[color:var(--foreground)]" : ""
+                      }`}
+                      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                    >
+                      {c.label}
+                      {indicator ? (
+                        <span className="text-[9px] opacity-80">{indicator}</span>
+                      ) : (
+                        <span className="text-[9px] opacity-30">↕</span>
+                      )}
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {projects.map((p) => (
+            {sorted.map((p) => (
               <tr
                 key={p.monday_item_id}
                 className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors cursor-pointer"
