@@ -42,11 +42,115 @@ describe("categoryFromCustomer", () => {
     expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "To be Dropped" })).toBe(
       "To Drop"
     );
+    // "Tier 2 - Secondary Priority" now maps to the renamed "Secondary
+    // Priority" canonical key (was "Active" pre-2026-05).
+    expect(
+      categoryFromCustomer({ custom_category: null, lifecycle_group: "Tier 2 - Secondary Priority" })
+    ).toBe("Secondary Priority");
   });
 
-  it("defaults to Active when both fields are missing or unrecognised", () => {
-    expect(categoryFromCustomer({ custom_category: null, lifecycle_group: null })).toBe("Active");
-    expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "Unknown" })).toBe("Active");
+  it("defaults to Secondary Priority when both fields are missing or unrecognised", () => {
+    expect(categoryFromCustomer({ custom_category: null, lifecycle_group: null })).toBe("Secondary Priority");
+    expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "Unknown" })).toBe("Secondary Priority");
+  });
+
+  describe("dynamic rules from signals", () => {
+    const today = new Date();
+    const isoDaysFromNow = (days: number): string => {
+      const d = new Date(today.getTime() + days * 86_400_000);
+      return d.toISOString().slice(0, 10);
+    };
+
+    it("flips to Upcoming Renewals when renewal_date is within 90 days", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: null, lifecycle_group: "Growth / Focus" }, // would normally be Strategic Growth
+          { renewal_date: isoDaysFromNow(45) }
+        )
+      ).toBe("Upcoming Renewals");
+    });
+
+    it("does NOT flip to Upcoming Renewals when renewal is >90 days away", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: null, lifecycle_group: "Growth / Focus" },
+          { renewal_date: isoDaysFromNow(120) }
+        )
+      ).toBe("Strategic Growth");
+    });
+
+    it("does NOT flip to Upcoming Renewals when renewal is in the past", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: null, lifecycle_group: null },
+          { renewal_date: isoDaysFromNow(-30) }
+        )
+      ).toBe("Secondary Priority");
+    });
+
+    it("flips to Strategic Growth when annual_revenue > $20M", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: null, lifecycle_group: null },
+          { annual_revenue: 25_000_000 }
+        )
+      ).toBe("Strategic Growth");
+    });
+
+    it("does NOT flip to Strategic Growth at exactly $20M (threshold is strict)", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: null, lifecycle_group: null },
+          { annual_revenue: 20_000_000 }
+        )
+      ).toBe("Secondary Priority");
+    });
+
+    it("small companies default to Secondary Priority", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: null, lifecycle_group: null },
+          { annual_revenue: 5_000_000 }
+        )
+      ).toBe("Secondary Priority");
+    });
+
+    it("renewal-in-90-days beats revenue>$20M (renewal is more actionable)", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: null, lifecycle_group: null },
+          { renewal_date: isoDaysFromNow(30), annual_revenue: 50_000_000 }
+        )
+      ).toBe("Upcoming Renewals");
+    });
+
+    it("POV / To Drop / Past / Partner Managed / At Risk survive the dynamic rules", () => {
+      const big = { annual_revenue: 100_000_000 };
+      expect(
+        categoryFromCustomer({ custom_category: null, lifecycle_group: "POV" }, big)
+      ).toBe("POV");
+      expect(
+        categoryFromCustomer({ custom_category: null, lifecycle_group: "To be Dropped" }, big)
+      ).toBe("To Drop");
+      expect(
+        categoryFromCustomer({ custom_category: null, lifecycle_group: "Churned/Dropped" }, big)
+      ).toBe("Past");
+      expect(
+        categoryFromCustomer({ custom_category: null, lifecycle_group: "Partner Managed" }, big)
+      ).toBe("Partner Managed");
+      expect(
+        categoryFromCustomer({ custom_category: null, lifecycle_group: "High Risk" }, big)
+      ).toBe("At Risk");
+    });
+
+    it("custom_category override beats every dynamic rule", () => {
+      expect(
+        categoryFromCustomer(
+          { custom_category: "Active", lifecycle_group: null },
+          { renewal_date: "2026-06-01", annual_revenue: 100_000_000 }
+        )
+      ).toBe("Active");
+    });
   });
 
   it("trims whitespace on custom_category", () => {

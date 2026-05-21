@@ -18,18 +18,32 @@ import {
   categoryFromCustomer,
   categorySortIndex,
 } from "@/app/_components/brand";
+import {
+  loadCustomerCommercialsMap,
+  type CustomerCommercials,
+} from "@/lib/cache/integrations";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [customers, summary, overnight, approvals, pipeline, sfDomains] = await Promise.all([
+  const [customers, summary, overnight, approvals, pipeline, sfDomains, commercialsMap] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadOvernightChanges(6).catch(() => []),
     loadPendingApprovals(8).catch(() => []),
     loadUpcomingPipeline().catch(() => null),
     loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
+    loadCustomerCommercialsMap().catch(() => new Map<string, CustomerCommercials>()),
   ]);
+
+  // Dynamic-category helper — same signals everywhere on the dashboard.
+  const categoryFor = (c: { id: string; custom_category: string | null; lifecycle_group: string | null }): string => {
+    const commercials = commercialsMap.get(c.id);
+    return categoryFromCustomer(c, {
+      renewal_date: commercials?.renewal_date,
+      annual_revenue: commercials?.annual_revenue,
+    });
+  };
 
   const totalArr = summary?.total_arr ?? 0;
   const needAttention =
@@ -42,9 +56,10 @@ export default async function Dashboard() {
   const quietCutoff = new Date(Date.now() - QUIET_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const quietCustomers = customers
     .filter((c) => {
-      const cat = categoryFromCustomer(c);
-      // Past customers (Churned / Dropped / To Drop) shouldn't appear here.
-      if (cat === "Churned" || cat === "Dropped" || cat === "To Drop") return false;
+      const cat = categoryFor(c);
+      // Past customers (Churned / Dropped / To Drop / Past) shouldn't
+      // appear here — they're not actively in our book.
+      if (cat === "Churned" || cat === "Dropped" || cat === "To Drop" || cat === "Past") return false;
       const last = c.updated_at ? new Date(c.updated_at) : null;
       return !last || last < quietCutoff;
     })
@@ -204,10 +219,17 @@ export default async function Dashboard() {
                   emailAlias: o.customer_email_alias,
                   key: o.customer_key,
                 });
-              const category = categoryFromCustomer({
-                custom_category: o.customer_category,
-                lifecycle_group: o.customer_lifecycle_group,
-              });
+              const commercials = commercialsMap.get(o.customer_id);
+              const category = categoryFromCustomer(
+                {
+                  custom_category: o.customer_category,
+                  lifecycle_group: o.customer_lifecycle_group,
+                },
+                {
+                  renewal_date: commercials?.renewal_date,
+                  annual_revenue: commercials?.annual_revenue,
+                }
+              );
               return (
                 <Link
                   key={o.customer_key}
@@ -263,7 +285,7 @@ export default async function Dashboard() {
               const domain =
                 sfDomains.get(c.id) ??
                 deriveCustomerDomain({ emailAlias: c.email_alias, key: c.key });
-              const category = categoryFromCustomer(c);
+              const category = categoryFor(c);
               return (
                 <Link
                   key={c.id}

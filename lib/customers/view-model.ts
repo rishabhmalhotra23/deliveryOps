@@ -63,7 +63,14 @@ export function buildHeroProps(
   customer: Customer,
   profile: Profile | null,
   allCustomers: Customer[],
-  sfWebsite: string | null = null
+  sfWebsite: string | null = null,
+  /**
+   * Customer's annual revenue from `sf_accounts.annual_revenue`. Used by
+   * the dynamic category derivation (companies >$20M → Strategic Growth).
+   * Pass `null` when SF data isn't available — the function falls back to
+   * the lifecycle-only category.
+   */
+  annualRevenue: number | null = null
 ): HeroCardProps {
   const knownAes = Array.from(
     new Set(allCustomers.map((c) => c.ae_owner).filter((v): v is string => !!v))
@@ -72,8 +79,8 @@ export function buildHeroProps(
     new Set(allCustomers.map((c) => c.partner).filter((v): v is string => !!v))
   ).sort();
   const knownCategories = [
-    "At Risk","Upcoming Renewals","Strategic Growth","Active",
-    "Partner Managed","POV","To Drop","Churned",
+    "At Risk","Upcoming Renewals","Strategic Growth","Secondary Priority",
+    "Partner Managed","POV","To Drop","Churned","Dropped",
     ...Array.from(new Set(allCustomers.map((c) => c.custom_category).filter((v): v is string => !!v))),
   ].filter((v, i, a) => a.indexOf(v) === i);
 
@@ -88,7 +95,10 @@ export function buildHeroProps(
   return {
     customerKey: customer.key,
     displayName: customer.display_name,
-    category: categoryFromCustomer(customer),
+    category: categoryFromCustomer(customer, {
+      renewal_date: profile?.renewal_date ?? null,
+      annual_revenue: annualRevenue,
+    }),
     lifecycleGroup: customer.lifecycle_group,
     aeOwner: customer.ae_owner,
     partner: customer.partner,

@@ -111,6 +111,7 @@ interface NpsRow {
   raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
 }
 interface AccountRow {
+  customer_id: string | null;
   annual_revenue: number | null;
 }
 
@@ -131,21 +132,10 @@ function txt(cols: ProjectRow["raw_columns"], id: string): string | null {
   return colText(cols, id);
 }
 
-function categoryFromCustomer(c: { custom_category: string | null; lifecycle_group: string | null }): string {
-  if (c.custom_category?.trim()) return c.custom_category.trim();
-  // Mirror brand.tsx LIFECYCLE_TO_CATEGORY for any straggler.
-  const map: Record<string, string> = {
-    "High Risk": "At Risk",
-    "Upcoming Renewal": "Upcoming Renewals",
-    "Growth / Focus": "Strategic Growth",
-    "Tier 2 - Secondary Priority": "Active",
-    "Partner Managed": "Partner Managed",
-    POV: "POV",
-    "To be Dropped": "To Drop",
-    "Churned/Dropped": "Churned",
-  };
-  return (c.lifecycle_group && map[c.lifecycle_group]) ?? "Active";
-}
+// Use the canonical helper from brand.tsx so the dynamic rules (90-day
+// renewal → Upcoming Renewals, revenue>$20M → Strategic Growth, etc.)
+// stay in one place. brand.tsx is server-component-safe.
+import { categoryFromCustomer as brandCategoryFromCustomer } from "@/app/_components/brand";
 
 export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const sb = requireAdmin();
@@ -173,7 +163,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
           "go_live_date, ttv_days_text, kickoff_date, fiscal_year"
       ),
     sb.from("monday_nps_responses").select("customer_id, raw_columns"),
-    sb.from("sf_accounts").select("annual_revenue"),
+    sb.from("sf_accounts").select("customer_id, annual_revenue"),
     sb
       .from("sf_opportunities")
       .select("id", { count: "exact", head: true })
@@ -216,9 +206,24 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const profileByC = new Map(
     profileList.map((p) => [p.customer_id, { arr: p.arr ?? 0, renewal_date: p.renewal_date }])
   );
+  const revenueByC = new Map<string, number | null>();
+  for (const a of accountList) {
+    if (a.customer_id) revenueByC.set(a.customer_id, a.annual_revenue);
+  }
   const customerById = new Map(customerList.map((c) => [c.id, c]));
+  // Dynamic category — feeds renewal_date + annual_revenue so the 90-day
+  // renewal rule and the $20M Strategic Growth rule both fire here.
   const categoryByC = new Map<string, string>();
-  for (const c of customerList) categoryByC.set(c.id, categoryFromCustomer(c));
+  for (const c of customerList) {
+    const profile = profileByC.get(c.id);
+    categoryByC.set(
+      c.id,
+      brandCategoryFromCustomer(c, {
+        renewal_date: profile?.renewal_date ?? null,
+        annual_revenue: revenueByC.get(c.id) ?? null,
+      })
+    );
+  }
 
   // ─── Totals ─────────────────────────────────────────────────────────
   const totalArr = profileList.reduce((s, p) => s + (p.arr ?? 0), 0);

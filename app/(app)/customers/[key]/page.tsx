@@ -61,7 +61,8 @@ export default async function CustomerPage({ params }: Props) {
     customer,
     profile,
     allCustomers,
-    enrichment?.account?.website ?? null
+    enrichment?.account?.website ?? null,
+    enrichment?.account?.annual_revenue ?? null
   );
   const snapshotProps = buildAccountSnapshotProps(
     internalProfile,

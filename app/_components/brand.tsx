@@ -6,17 +6,32 @@ import type { ReactNode } from "react";
 // tones. Custom categories minted by the team via the operations chat fall
 // through to a neutral tone.
 //
+// Dynamic derivation:
+//   - Renewal in next 90 days → "Upcoming Renewals" (beats almost everything)
+//   - Annual revenue > $20M    → "Strategic Growth"
+//   - POV / To Drop / Past / Partner Managed / At Risk are explicit Monday
+//     states and survive over the dynamic rules
+//   - Default                  → "Secondary Priority"
+//
+// Precedence is defined inside categoryFromCustomer() — read there for the
+// full set of rules and rationale.
+//
 // "Past" is the auto-classification for customers whose Monday lifecycle is
 // "Churned/Dropped" — that single Monday group conflates two distinct end-
 // states (Churned = left after using us, Dropped = we disengaged pre-go-
 // live). When a CSM knows which, they override via the inline edit on the
-// customer page, choosing "Churned" or "Dropped" explicitly. We don't
-// auto-pick because the wrong choice is worse than no choice.
+// customer page, choosing "Churned" or "Dropped" explicitly.
+//
+// "Active" is the legacy name for the default bucket — we still recognise
+// it (existing custom_category="Active" rows render correctly) but newly
+// derived categories use "Secondary Priority". Over time the legacy label
+// will fade out of the data set.
 export const CATEGORY_ORDER = [
   "At Risk",
   "Upcoming Renewals",
   "Strategic Growth",
-  "Active",
+  "Secondary Priority",
+  "Active", // legacy alias for "Secondary Priority"
   "Partner Managed",
   "POV",
   "To Drop",
@@ -29,7 +44,8 @@ const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: num
   "At Risk": { class: "tone-high-risk", weight: 0 },
   "Upcoming Renewals": { class: "tone-renewal", weight: 1 },
   "Strategic Growth": { class: "tone-growth", weight: 2 },
-  Active: { class: "tone-tier2", weight: 3 },
+  "Secondary Priority": { class: "tone-tier2", weight: 3 },
+  Active: { class: "tone-tier2", weight: 3 }, // same tone — legacy alias
   "Partner Managed": { class: "tone-partner", weight: 4 },
   POV: { class: "tone-pov", weight: 5 },
   // "To Drop" — customers we've decided to drop at renewal. Distinct from
@@ -53,22 +69,94 @@ const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
   "High Risk": "At Risk", // historical Monday label, no longer in use
   "Upcoming Renewal": "Upcoming Renewals",
   "Growth / Focus": "Strategic Growth",
-  "Tier 2 - Secondary Priority": "Active",
+  "Tier 2 - Secondary Priority": "Secondary Priority",
   "Partner Managed": "Partner Managed",
   POV: "POV",
   "To be Dropped": "To Drop",
   "Churned/Dropped": "Past",
 };
 
-export function categoryFromCustomer(customer: {
-  custom_category: string | null;
-  lifecycle_group: string | null;
-}): string {
+// Lifecycle states that are "explicit business decisions" — these never get
+// auto-flipped by the revenue / renewal rules.  At Risk is the CSM's
+// judgment call and should survive; Partner Managed is a relationship
+// structure independent of size; POV / To Drop / Past are end-state
+// declarations.
+const STABLE_LIFECYCLE_OUTPUTS = new Set([
+  "POV",
+  "To Drop",
+  "Past",
+  "Partner Managed",
+  "At Risk",
+]);
+
+const RENEWAL_WINDOW_DAYS = 90;
+const STRATEGIC_GROWTH_REVENUE_THRESHOLD = 20_000_000;
+
+export interface CategorySignals {
+  /** Renewal date as YYYY-MM-DD (from profiles.renewal_date). */
+  renewal_date?: string | null;
+  /** Customer's annual revenue in dollars (from sf_accounts.annual_revenue). */
+  annual_revenue?: number | null;
+}
+
+function renewalWithinWindow(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const days = Math.floor((d.getTime() - Date.now()) / 86_400_000);
+  return days >= 0 && days <= RENEWAL_WINDOW_DAYS;
+}
+
+/**
+ * Resolve a customer to a category. Precedence:
+ *
+ *   1. `custom_category` (manual override) — wins absolutely.
+ *   2. Renewal in next 90 days → "Upcoming Renewals". Even a strategic-
+ *      growth customer becomes a renewal when the renewal is imminent —
+ *      that's the operationally important signal.
+ *   3. Explicit Monday end-states (POV / To Drop / Past / Partner
+ *      Managed / At Risk) survive the dynamic rules.
+ *   4. Revenue > $20M → "Strategic Growth". Otherwise:
+ *   5. Lifecycle-mapped category (Growth / Focus → Strategic Growth, etc.)
+ *   6. Default → "Secondary Priority".
+ *
+ * `signals` is optional — when omitted the function falls back to legacy
+ * lifecycle-only behaviour. Callers that have profile + SF data should
+ * always pass it so the renewal / revenue rules can fire.
+ */
+export function categoryFromCustomer(
+  customer: {
+    custom_category: string | null;
+    lifecycle_group: string | null;
+  },
+  signals?: CategorySignals
+): string {
+  // (1) manual override
   if (customer.custom_category?.trim()) return customer.custom_category.trim();
-  if (customer.lifecycle_group && LIFECYCLE_TO_CATEGORY[customer.lifecycle_group]) {
-    return LIFECYCLE_TO_CATEGORY[customer.lifecycle_group];
+
+  // (2) renewal in 90 days — actionable now, beats everything else
+  if (signals && renewalWithinWindow(signals.renewal_date)) {
+    return "Upcoming Renewals";
   }
-  return "Active";
+
+  // (3) explicit Monday end-states survive
+  const mapped = customer.lifecycle_group ? LIFECYCLE_TO_CATEGORY[customer.lifecycle_group] : null;
+  if (mapped && STABLE_LIFECYCLE_OUTPUTS.has(mapped)) return mapped;
+
+  // (4) revenue-based: large enterprises → Strategic Growth
+  if (
+    signals &&
+    typeof signals.annual_revenue === "number" &&
+    signals.annual_revenue > STRATEGIC_GROWTH_REVENUE_THRESHOLD
+  ) {
+    return "Strategic Growth";
+  }
+
+  // (5) fall back to the legacy lifecycle mapping
+  if (mapped) return mapped;
+
+  // (6) default
+  return "Secondary Priority";
 }
 
 export function categorySortIndex(category: string): number {

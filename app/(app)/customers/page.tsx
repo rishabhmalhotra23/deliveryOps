@@ -80,7 +80,10 @@ function CustomerStrip({
   domain: string | null;
   commercials: CustomerCommercials | null;
 }) {
-  const category = categoryFromCustomer(customer);
+  const category = categoryFromCustomer(customer, {
+    renewal_date: commercials?.renewal_date,
+    annual_revenue: commercials?.annual_revenue,
+  });
   const catStyle = CATEGORY_VARIANT[category] ?? "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
   const isPast = PAST_CATEGORIES.has(category);
   const arr = commercials?.arr ?? null;
@@ -206,9 +209,19 @@ export default async function CustomersPage() {
     sfDomains.get(c.id) ??
     deriveCustomerDomain({ emailAlias: c.email_alias, key: c.key });
 
+  // Helper for the dynamic category — same signals every consumer in this
+  // page uses, in one place so the strip and the group header don't drift.
+  const categoryFor = (c: Customer): string => {
+    const commercials = commercialsMap.get(c.id);
+    return categoryFromCustomer(c, {
+      renewal_date: commercials?.renewal_date,
+      annual_revenue: commercials?.annual_revenue,
+    });
+  };
+
   const grouped = new Map<string, Customer[]>();
   for (const c of customers) {
-    const cat = categoryFromCustomer(c);
+    const cat = categoryFor(c);
     if (!grouped.has(cat)) grouped.set(cat, []);
     grouped.get(cat)!.push(c);
   }

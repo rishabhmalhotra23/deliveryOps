@@ -3,6 +3,7 @@
 // tables on a weekly cron (in production) or on demand via /api/dev/sync/run.
 
 import { requireAdmin } from "@/lib/supabase/server";
+import { categoryFromCustomer as brandCategoryFromCustomer } from "@/app/_components/brand";
 
 export interface SfAccountCache {
   sf_id: string;
@@ -372,11 +373,37 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     monday_workspace_id: string | null;
   }>;
 
+  // Pull profiles + accounts so the category distribution reflects the
+  // dynamic rules (renewal-in-90-days → Upcoming Renewals, revenue>$20M →
+  // Strategic Growth).  Without these the dashboard chip counts would
+  // diverge from what /customers shows.
+  const [arr, accountsForCat, opps, cases, lastSf, lastMon, profilesForCat] = await Promise.all([
+    sb.from("profiles").select("arr"),
+    sb.from("sf_accounts").select("customer_id, annual_revenue"),
+    sb.from("sf_opportunities").select("id", { count: "exact", head: true }).eq("is_closed", false),
+    sb.from("sf_cases").select("id", { count: "exact", head: true }).eq("is_closed", false),
+    sb.from("sync_runs").select("finished_at").eq("source", "salesforce").eq("status", "ok").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
+    sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
+    sb.from("profiles").select("customer_id, renewal_date"),
+  ]);
+
+  const renewalByC = new Map<string, string | null>();
+  for (const p of (profilesForCat.data as Array<{ customer_id: string; renewal_date: string | null }> | null) ?? []) {
+    renewalByC.set(p.customer_id, p.renewal_date);
+  }
+  const revenueByC = new Map<string, number | null>();
+  for (const a of (accountsForCat.data as Array<{ customer_id: string; annual_revenue: number | null }> | null) ?? []) {
+    revenueByC.set(a.customer_id, a.annual_revenue);
+  }
+
   const byCategory: Record<string, number> = {};
   const byAe: Record<string, number> = {};
   const byPartner: Record<string, number> = {};
   for (const c of list) {
-    const cat = c.custom_category ?? "Active";
+    const cat = brandCategoryFromCustomer(c, {
+      renewal_date: renewalByC.get(c.id) ?? null,
+      annual_revenue: revenueByC.get(c.id) ?? null,
+    });
     byCategory[cat] = (byCategory[cat] ?? 0) + 1;
     const ae = c.ae_owner ?? "(unassigned)";
     byAe[ae] = (byAe[ae] ?? 0) + 1;
@@ -384,24 +411,14 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     byPartner[p] = (byPartner[p] ?? 0) + 1;
   }
 
-  const [arr, companyRev, opps, cases, lastSf, lastMon] = await Promise.all([
-    sb.from("profiles").select("arr"),
-    sb.from("sf_accounts").select("annual_revenue"),
-    sb.from("sf_opportunities").select("id", { count: "exact", head: true }).eq("is_closed", false),
-    sb.from("sf_cases").select("id", { count: "exact", head: true }).eq("is_closed", false),
-    sb.from("sync_runs").select("finished_at").eq("source", "salesforce").eq("status", "ok").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
-    sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
-  ]);
-
   const totalArr = ((arr.data as Array<{ arr: number | null }> | null) ?? []).reduce(
     (sum, a) => sum + (a.arr ?? 0),
     0
   );
-  const totalCompanyRevenue =
-    ((companyRev.data as Array<{ annual_revenue: number | null }> | null) ?? []).reduce(
-      (sum, a) => sum + (a.annual_revenue ?? 0),
-      0
-    );
+  let totalCompanyRevenue = 0;
+  for (const v of revenueByC.values()) {
+    totalCompanyRevenue += v ?? 0;
+  }
 
   return {
     total: list.length,
@@ -421,33 +438,64 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   };
 }
 
-/** Per-customer commercial summary used by the customers list strips. */
+/** Per-customer commercial summary used by the customers list strips +
+ *  the dynamic category derivation (see `categoryFromCustomer`).
+ *
+ *  - `arr` and `renewal_date` come from `profiles` (the Kognitos deal facts).
+ *  - `annual_revenue` comes from `sf_accounts` (the customer's company-
+ *    wide revenue per Salesforce) — used to bucket large customers into
+ *    "Strategic Growth".
+ */
 export interface CustomerCommercials {
   arr: number | null;
   renewal_date: string | null;
+  annual_revenue: number | null;
 }
 
 /**
- * Bulk-load ARR + renewal date for every customer.  One round-trip; consumers
- * (e.g. /customers list strip) look up by customer_id.  Reads only the
- * Postgres `profiles` table — no SF roundtrip.
+ * Bulk-load ARR + renewal date + company revenue for every customer.
+ * Two parallel round-trips (profiles + sf_accounts); consumers look up
+ * by customer_id.
  */
 export async function loadCustomerCommercialsMap(): Promise<
   Map<string, CustomerCommercials>
 > {
   const sb = requireAdmin();
-  const { data } = await sb.from("profiles").select("customer_id, arr, renewal_date");
-  const rows = (data ?? []) as Array<{
+  const [profilesRes, accountsRes] = await Promise.all([
+    sb.from("profiles").select("customer_id, arr, renewal_date"),
+    sb.from("sf_accounts").select("customer_id, annual_revenue"),
+  ]);
+  const profiles = (profilesRes.data ?? []) as Array<{
     customer_id: string;
     arr: number | null;
     renewal_date: string | null;
   }>;
+  const accounts = (accountsRes.data ?? []) as Array<{
+    customer_id: string;
+    annual_revenue: number | null;
+  }>;
+
   const map = new Map<string, CustomerCommercials>();
-  for (const row of rows) {
+  for (const row of profiles) {
     map.set(row.customer_id, {
       arr: row.arr,
       renewal_date: row.renewal_date,
+      annual_revenue: null,
     });
+  }
+  for (const row of accounts) {
+    const prev = map.get(row.customer_id);
+    if (prev) {
+      prev.annual_revenue = row.annual_revenue;
+    } else {
+      // SF account exists but no profile row yet — keep the revenue so the
+      // category rule still fires.
+      map.set(row.customer_id, {
+        arr: null,
+        renewal_date: null,
+        annual_revenue: row.annual_revenue,
+      });
+    }
   }
   return map;
 }
