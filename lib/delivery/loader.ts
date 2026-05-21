@@ -149,12 +149,22 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
     custById.set(c.id, c);
   }
 
-  const rows: DeliveryProject[] = [];
+  // The Account Overview boards (per-customer workspaces) and the Projects
+  // Portfolio board are *aggregate* surfaces — every project they list is
+  // already on one of the FY delivery boards.  Including them here triples
+  // the row count and pollutes every chart with placeholder "Active
+  // Projects" rows that have empty status / phase / TAM / Dev fields.  We
+  // keep them in the per-customer cache (used by /customers/[key]) but
+  // exclude them from the portfolio-wide view.
+  const PORTFOLIO_DUPE_FYS = new Set(["account_overview", "portfolio"]);
+
+  const allRows: DeliveryProject[] = [];
   for (const p of (projects.data as ProjectRow[] | null) ?? []) {
+    if (p.fiscal_year && PORTFOLIO_DUPE_FYS.has(p.fiscal_year)) continue;
     const cust = custById.get(p.customer_id);
     if (!cust) continue;
     const cols = p.raw_columns ?? {};
-    rows.push({
+    allRows.push({
       monday_item_id: p.monday_item_id,
       name: p.name,
       customer_key: cust.key,
@@ -188,6 +198,13 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
     });
   }
 
+  // Even after dropping the AO + Portfolio boards a customer can have the
+  // same project name on two FY boards (e.g. kicked off in FY-2025, went
+  // live in FY-2026).  Dedupe by (customer_id, normalised name) so the
+  // delivery view shows each project once, picking the row that carries
+  // the most signal (richest data wins).
+  const rows = dedupeByCustomerAndName(allRows);
+
   // Build platform list from actual data, not just a hardcoded set.
   const FY_PRIORITY = ["active", "FY-2026", "FY-2025", "FY-2024", "FY-2023", "inactive"];
   const facets: DeliveryFilterFacets = {
@@ -220,4 +237,59 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
 
 function dedup(arr: string[]): string[] {
   return Array.from(new Set(arr)).sort();
+}
+
+// Normalise a project name for dedup: lowercase, strip the customer prefix
+// ("Acme — Project Foo" → "project foo"), collapse whitespace.  Keeps the
+// dedup key resilient to formatting differences between FY boards (Monday
+// users sometimes prefix on one board and not on another).
+function normaliseProjectName(name: string, customerName: string): string {
+  const stripped = name.replace(
+    new RegExp(`^${customerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[-—:|]+\\s*`, "i"),
+    ""
+  );
+  return stripped.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// "Information score" — higher is better.  Used when collapsing duplicates
+// so the row with the richest data wins (and we don't accidentally pick a
+// placeholder row over a real one).
+function infoScore(p: DeliveryProject): number {
+  let s = 0;
+  if (p.status) s += 4;
+  if (p.go_live_date) s += 3;
+  if (p.phase) s += 2;
+  if (p.kickoff_date) s += 2;
+  if (p.health) s += 1;
+  if (p.platform) s += 1;
+  if (p.tam) s += 1;
+  if (p.dev) s += 1;
+  if (p.total_effort_days != null) s += 1;
+  if (p.latest_update) s += 1;
+  // "active" board rows are the live source of truth, beat all FY history.
+  if (p.fiscal_year === "active") s += 5;
+  return s;
+}
+
+function dedupeByCustomerAndName(rows: DeliveryProject[]): DeliveryProject[] {
+  const byKey = new Map<string, DeliveryProject>();
+  for (const r of rows) {
+    const key = `${r.customer_key}::${normaliseProjectName(r.name, r.customer_display_name)}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, r);
+      continue;
+    }
+    // Same project across two boards — keep whichever carries more signal.
+    // On a tie, prefer the more recently updated Monday item.
+    const next = infoScore(r);
+    const prev = infoScore(existing);
+    if (next > prev) byKey.set(key, r);
+    else if (next === prev) {
+      const nu = r.monday_updated_at ?? "";
+      const pu = existing.monday_updated_at ?? "";
+      if (nu > pu) byKey.set(key, r);
+    }
+  }
+  return Array.from(byKey.values());
 }
