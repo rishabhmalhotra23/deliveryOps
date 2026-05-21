@@ -200,7 +200,13 @@ const GROUP_COLORS: Record<string, string> = {
   "Projects":           "#a78bfa",
 };
 
-export function ProjectsByGroupChart({ data }: { data: Array<{ group: string; count: number }> }) {
+export function ProjectsByGroupChart({
+  data,
+  onBarClick,
+}: {
+  data: Array<{ group: string; count: number }>;
+  onBarClick?: (group: string) => void;
+}) {
   const t = useChartTheme();
   const sorted = [...data].filter(d => d.count > 0).sort((a, b) => b.count - a.count).slice(0, 12);
   // Min height keeps the chart looking like a chart even when there are
@@ -212,8 +218,14 @@ export function ProjectsByGroupChart({ data }: { data: Array<{ group: string; co
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
         <YAxis type="category" dataKey="group" tick={{ fontSize: 12, fill: t.text }} width={150} tickLine={false} axisLine={false} />
-        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v} projects`, "Projects"]} />
-        <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={32}>
+        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v} projects · click to drill down`, "Projects"]} />
+        <Bar
+          dataKey="count"
+          radius={[0, 6, 6, 0]}
+          maxBarSize={32}
+          onClick={(d) => onBarClick?.((d as unknown as { group: string }).group)}
+          cursor={onBarClick ? "pointer" : undefined}
+        >
           {sorted.map((entry, i) => (
             <Cell key={i} fill={GROUP_COLORS[entry.group] ?? CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}
@@ -419,7 +431,13 @@ export function NpsDistributionChart({ data }: { data: Array<{ category: string;
 
 // ── AE Workload ──────────────────────────────────────────────────────────────
 
-export function AeWorkloadChart({ data }: { data: Array<{ ae: string; count: number; arr: number }> }) {
+export function AeWorkloadChart({
+  data,
+  onBarClick,
+}: {
+  data: Array<{ ae: string; count: number; arr: number }>;
+  onBarClick?: (ae: string) => void;
+}) {
   const t = useChartTheme();
   const top = [...data].sort((a, b) => b.arr - a.arr).slice(0, 8);
   return (
@@ -430,9 +448,17 @@ export function AeWorkloadChart({ data }: { data: Array<{ ae: string; count: num
         <YAxis type="category" dataKey="ae" tick={{ fontSize: 12, fill: t.text }} width={110} tickLine={false} axisLine={false} />
         <Tooltip
           contentStyle={t.tooltipStyle}
-          formatter={(value, name) => [name === "arr" ? fmtMoney(Number(value)) : value, name === "arr" ? "ARR" : "Customers"]}
+          formatter={(value, name) => [name === "arr" ? `${fmtMoney(Number(value))} · click to drill down` : value, name === "arr" ? "ARR" : "Customers"]}
         />
-        <Bar dataKey="arr" name="arr" radius={[0, 6, 6, 0]} maxBarSize={32} fill="#818cf8">
+        <Bar
+          dataKey="arr"
+          name="arr"
+          radius={[0, 6, 6, 0]}
+          maxBarSize={32}
+          fill="#818cf8"
+          onClick={(d) => onBarClick?.((d as unknown as { ae: string }).ae)}
+          cursor={onBarClick ? "pointer" : undefined}
+        >
           {top.map((_, i) => (
             <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}
@@ -469,20 +495,34 @@ function capitalise(w: string): string {
   return w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
 }
 
-export function TeamWorkloadChart({ data }: { data: Array<{ person: string; count: number }> }) {
+export function TeamWorkloadChart({
+  data,
+  onBarClick,
+}: {
+  data: Array<{ person: string; count: number }>;
+  /** Called with the *raw* person key from the data array — NOT the
+   *  display-shortened name — so the parent can look up drill-down items
+   *  in the same map the loader built. */
+  onBarClick?: (person: string) => void;
+}) {
   const t = useChartTheme();
-  const top = data.slice(0, 10).map((d) => ({ ...d, person: shortName(d.person) }));
-  // Generous row height (48px) + min chart height (280px) so the chart looks
-  // substantial when there are only 3-4 entries. Right-margin reserved for
-  // the count label so it never collides with the axis.
+  // Keep the raw key around as `personKey` so click handlers map back to
+  // the items dictionary built in the loader (which uses the raw name).
+  const top = data.slice(0, 10).map((d) => ({ ...d, personKey: d.person, person: shortName(d.person) }));
   return (
     <ResponsiveContainer width="100%" height={Math.max(280, top.length * 48)}>
       <BarChart data={top} layout="vertical" margin={{ top: 8, right: 56, left: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
         <YAxis type="category" dataKey="person" tick={{ fontSize: 12, fill: t.text }} width={120} tickLine={false} axisLine={false} />
-        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v} active project${v === 1 ? "" : "s"}`, "Workload"]} />
-        <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={32}>
+        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [`${v} active project${v === 1 ? "" : "s"} · click to drill down`, "Workload"]} />
+        <Bar
+          dataKey="count"
+          radius={[0, 6, 6, 0]}
+          maxBarSize={32}
+          onClick={(d) => onBarClick?.((d as unknown as { personKey: string }).personKey)}
+          cursor={onBarClick ? "pointer" : undefined}
+        >
           {top.map((_, i) => (
             <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}

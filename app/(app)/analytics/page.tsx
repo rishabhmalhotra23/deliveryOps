@@ -6,9 +6,6 @@ import { BackButton } from "@/app/_components/back-button";
 import {
   ArrByCategoryChart,
   CustomersByCategoryChart,
-  ProjectsByGroupChart,
-  AeWorkloadChart,
-  TeamWorkloadChart,
   TtvDistributionChart,
   TtvTrendChart,
   NpsGauge,
@@ -16,6 +13,7 @@ import {
   NpsByQuarterChart,
   DeliveriesOverTimeChart,
 } from "./charts";
+import { WorkloadDrilldownSection } from "./_components/workload-drilldown-section";
 
 export const dynamic = "force-dynamic";
 
@@ -157,37 +155,15 @@ export default async function AnalyticsPage() {
         </div>
       ) : null}
 
-      {/* Delivery team workload — counted on active projects only.
-          Delivered / cancelled projects don't pin a team member to a
-          workload they no longer carry. */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {bundle.by_tam.length > 0 ? (
-          <Chart
-            title="TAM / FDE workload"
-            subtitle="Active projects per Technical Account Manager / Field Delivery Engineer"
-          >
-            <TeamWorkloadChart data={bundle.by_tam} />
-          </Chart>
-        ) : null}
-        {bundle.by_dev.length > 0 ? (
-          <Chart
-            title="SE / Dev workload"
-            subtitle="Active projects per Solutions Engineer"
-          >
-            <TeamWorkloadChart data={bundle.by_dev} />
-          </Chart>
-        ) : null}
-      </div>
-
-      {/* Projects + AE */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Chart title="Projects by stage" subtitle="Active in-flight pipeline (Active / Pipeline / On Hold / Backlog)">
-          <ProjectsByGroupChart data={bundle.projects_by_lifecycle} />
-        </Chart>
-        <Chart title="AE workload" subtitle="ARR per Account Executive">
-          <AeWorkloadChart data={bundle.by_ae} />
-        </Chart>
-      </div>
+      {/* Delivery team workload + projects-by-stage + AE workload.
+          All four charts get click-through to a drill-down side panel —
+          see WorkloadDrilldownSection for the dispatch logic. */}
+      <WorkloadDrilldownSection
+        bundle={bundle}
+        knownAes={bundle.by_ae
+          .map((r) => r.ae)
+          .filter((ae) => ae && ae !== "(unassigned)")}
+      />
 
       {/* Project phase breakdown */}
       {bundle.projects_by_phase.length > 0 ? (

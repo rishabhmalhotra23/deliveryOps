@@ -4,6 +4,36 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 
+/** Slim project row used by the chart drill-down panels. */
+export interface DrillDownProject {
+  monday_item_id: string;
+  name: string;
+  customer_key: string | null;
+  customer_display_name: string | null;
+  fiscal_year: string | null;
+  group_title: string | null;
+  status: string | null;
+  health: string | null;
+  phase: string | null;
+  platform: string | null;
+  tam: string | null;
+  dev: string | null;
+  go_live_date: string | null;
+  kickoff_date: string | null;
+}
+
+/** Slim customer row used by the AE-workload drill-down panel. */
+export interface DrillDownCustomer {
+  id: string;
+  key: string;
+  display_name: string;
+  partner: string | null;
+  custom_category: string | null;
+  lifecycle_group: string | null;
+  arr: number;
+  renewal_date: string | null;
+}
+
 export interface AnalyticsBundle {
   generated_at: string;
   totals: {
@@ -34,25 +64,46 @@ export interface AnalyticsBundle {
   nps_by_customer_category: Array<{ category: string; average: number; responses: number }>;
   deliveries_over_time: Array<{ month: string; count: number }>; // YYYY-MM
   last_sync: { salesforce: string | null; monday: string | null };
+  /**
+   * Per-bar drill-down items.  Keys mirror the chart's series keys exactly
+   * so a click on a bar can look up the underlying rows in O(1).
+   *
+   *   by_tam_items[shortName]            → projects assigned to that TAM/FDE
+   *   by_dev_items[shortName]            → projects assigned to that SE/Dev
+   *   projects_by_lifecycle_items[group] → projects sitting in that stage
+   *   by_ae_items[ae]                    → customers owned by that AE
+   */
+  drilldowns: {
+    by_tam_items: Record<string, DrillDownProject[]>;
+    by_dev_items: Record<string, DrillDownProject[]>;
+    projects_by_lifecycle_items: Record<string, DrillDownProject[]>;
+    by_ae_items: Record<string, DrillDownCustomer[]>;
+  };
 }
 
 interface ProfileRow {
   customer_id: string;
   arr: number | null;
+  renewal_date: string | null;
 }
 interface CustomerRow {
   id: string;
+  key: string;
+  display_name: string;
   custom_category: string | null;
   lifecycle_group: string | null;
   ae_owner: string | null;
   partner: string | null;
 }
 interface ProjectRow {
+  monday_item_id: string;
+  name: string;
   customer_id: string;
   group_title: string | null;
   go_live_date: string | null;
   kickoff_date: string | null;
   ttv_days_text: string | null;
+  fiscal_year: string | null;
   raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
 }
 interface NpsRow {
@@ -112,10 +163,15 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   ] = await Promise.all([
     sb
       .from("customers")
-      .select("id, custom_category, lifecycle_group, ae_owner, partner")
+      .select("id, key, display_name, custom_category, lifecycle_group, ae_owner, partner")
       .is("deleted_at", null),
-    sb.from("profiles").select("customer_id, arr"),
-    sb.from("monday_projects").select("customer_id, group_title, raw_columns, go_live_date, ttv_days_text, kickoff_date"),
+    sb.from("profiles").select("customer_id, arr, renewal_date"),
+    sb
+      .from("monday_projects")
+      .select(
+        "monday_item_id, name, customer_id, group_title, raw_columns, " +
+          "go_live_date, ttv_days_text, kickoff_date, fiscal_year"
+      ),
     sb.from("monday_nps_responses").select("customer_id, raw_columns"),
     sb.from("sf_accounts").select("annual_revenue"),
     sb
@@ -143,17 +199,24 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
 
   const customerList = ((customers.data as CustomerRow[]) ?? []);
   const profileList = ((profiles.data as ProfileRow[]) ?? []);
-  const projectList = ((projects.data as ProjectRow[]) ?? [])
-    // Filter out subitems and non-canonical group entries so they don't
-    // pollute the charts.
+  // Exclude Account Overview + Projects Portfolio rows — they're aggregate
+  // duplicates of the FY-board rows.  Same rule as lib/delivery/loader.ts.
+  const PORTFOLIO_DUPE_FYS = new Set(["account_overview", "portfolio"]);
+  // Cast through unknown — Supabase's row-typing union (GenericStringError[]
+  // | null) doesn't unify cleanly with our wider ProjectRow shape.
+  const projectList = ((projects.data as unknown as ProjectRow[]) ?? [])
     .filter((p) => {
+      if (p.fiscal_year && PORTFOLIO_DUPE_FYS.has(p.fiscal_year)) return false;
       const g = (p.group_title ?? "").toLowerCase();
       return !g.startsWith("subitem") && g !== "unknown";
     });
   const npsList = ((nps.data as NpsRow[]) ?? []);
   const accountList = ((accounts.data as AccountRow[]) ?? []);
 
-  const profileByC = new Map(profileList.map((p) => [p.customer_id, p.arr ?? 0]));
+  const profileByC = new Map(
+    profileList.map((p) => [p.customer_id, { arr: p.arr ?? 0, renewal_date: p.renewal_date }])
+  );
+  const customerById = new Map(customerList.map((c) => [c.id, c]));
   const categoryByC = new Map<string, string>();
   for (const c of customerList) categoryByC.set(c.id, categoryFromCustomer(c));
 
@@ -179,25 +242,48 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     ? Math.round((npsScores.reduce((a, b) => a + b, 0) / npsScores.length) * 10) / 10
     : null;
 
+  // Helper — pull the ARR component for a given customer.  Returns 0 when
+  // no profile row exists, matching the legacy behaviour.
+  const arrFor = (id: string) => profileByC.get(id)?.arr ?? 0;
+
   // ─── By category ────────────────────────────────────────────────────
   const byCategoryAgg = new Map<string, { count: number; arr: number }>();
   for (const c of customerList) {
     const cat = categoryByC.get(c.id) ?? "Active";
     const prev = byCategoryAgg.get(cat) ?? { count: 0, arr: 0 };
     prev.count++;
-    prev.arr += profileByC.get(c.id) ?? 0;
+    prev.arr += arrFor(c.id);
     byCategoryAgg.set(cat, prev);
   }
   const by_category = [...byCategoryAgg.entries()].map(([category, v]) => ({ category, ...v }));
 
   // ─── By AE ──────────────────────────────────────────────────────────
+  // Build the aggregate + the drill-down list in one pass.  Drill-down rows
+  // are slim DrillDownCustomer objects keyed by AE name; the panel renders
+  // an inline-edit dropdown to reassign the AE.
   const byAeAgg = new Map<string, { count: number; arr: number }>();
+  const by_ae_items: Record<string, DrillDownCustomer[]> = {};
   for (const c of customerList) {
     const ae = c.ae_owner ?? "(unassigned)";
     const prev = byAeAgg.get(ae) ?? { count: 0, arr: 0 };
     prev.count++;
-    prev.arr += profileByC.get(c.id) ?? 0;
+    prev.arr += arrFor(c.id);
     byAeAgg.set(ae, prev);
+
+    const profile = profileByC.get(c.id);
+    (by_ae_items[ae] ??= []).push({
+      id: c.id,
+      key: c.key,
+      display_name: c.display_name,
+      partner: c.partner,
+      custom_category: c.custom_category,
+      lifecycle_group: c.lifecycle_group,
+      arr: profile?.arr ?? 0,
+      renewal_date: profile?.renewal_date ?? null,
+    });
+  }
+  for (const list of Object.values(by_ae_items)) {
+    list.sort((a, b) => b.arr - a.arr);
   }
   const by_ae = [...byAeAgg.entries()]
     .map(([ae, v]) => ({ ae, ...v }))
@@ -209,7 +295,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     const p = c.partner ?? "Direct";
     const prev = byPartnerAgg.get(p) ?? { count: 0, arr: 0 };
     prev.count++;
-    prev.arr += profileByC.get(c.id) ?? 0;
+    prev.arr += arrFor(c.id);
     byPartnerAgg.set(p, prev);
   }
   const by_partner = [...byPartnerAgg.entries()]
@@ -224,6 +310,33 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const devAgg = new Map<string, number>();
   const ttvBuckets = new Map<string, number>();
   const ttvByQtrAgg = new Map<string, { sum: number; count: number }>();
+
+  // Drill-down item maps populated in the same loop as the aggregates.
+  // Keys mirror the chart's bar labels exactly so a click can look up
+  // the underlying rows in O(1).
+  const by_tam_items: Record<string, DrillDownProject[]> = {};
+  const by_dev_items: Record<string, DrillDownProject[]> = {};
+  const projects_by_lifecycle_items: Record<string, DrillDownProject[]> = {};
+
+  function toDrillDownProject(p: ProjectRow): DrillDownProject {
+    const cust = customerById.get(p.customer_id);
+    return {
+      monday_item_id: p.monday_item_id,
+      name: p.name,
+      customer_key: cust?.key ?? null,
+      customer_display_name: cust?.display_name ?? null,
+      fiscal_year: p.fiscal_year,
+      group_title: p.group_title,
+      status: txt(p.raw_columns, PROJECT_COL_STATUS),
+      health: txt(p.raw_columns, MONDAY_PROJECT_COLS.health),
+      phase: txt(p.raw_columns, PROJECT_COL_PHASE),
+      platform: txt(p.raw_columns, MONDAY_PROJECT_COLS.platform),
+      tam: txt(p.raw_columns, PROJECT_COL_TAM),
+      dev: txt(p.raw_columns, PROJECT_COL_DEV),
+      go_live_date: p.go_live_date ?? txt(p.raw_columns, PROJECT_COL_GOLIVE),
+      kickoff_date: p.kickoff_date ?? txt(p.raw_columns, MONDAY_PROJECT_COLS.kickoff_date),
+    };
+  }
 
   // Helper: extract people from a comma-separated text column.
   // Monday returns "First Last, Other Person" or "first.last@kognitos.com".
@@ -305,13 +418,20 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     const ph = txt(p.raw_columns, PROJECT_COL_PHASE) ?? "(unset)";
     projPhaseAgg.set(ph, (projPhaseAgg.get(ph) ?? 0) + 1);
 
+    // Stage drill-down: every project gets a slot under its group_title so
+    // the "Projects by stage" chart click yields the matching project list.
+    (projects_by_lifecycle_items[g] ??= []).push(toDrillDownProject(p));
+
     // TAM / FDE + SE / Dev workload — counted on active projects only.
     if (isActiveProject(p)) {
+      const ddProject = toDrillDownProject(p);
       for (const name of cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_TAM))) {
         tamAgg.set(name, (tamAgg.get(name) ?? 0) + 1);
+        (by_tam_items[name] ??= []).push(ddProject);
       }
       for (const name of cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_DEV))) {
         devAgg.set(name, (devAgg.get(name) ?? 0) + 1);
+        (by_dev_items[name] ??= []).push(ddProject);
       }
     }
 
@@ -514,6 +634,12 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     nps_by_quarter,
     nps_by_customer_category,
     deliveries_over_time,
+    drilldowns: {
+      by_tam_items,
+      by_dev_items,
+      projects_by_lifecycle_items,
+      by_ae_items,
+    },
     last_sync: {
       salesforce: (lastSf.data as { finished_at: string } | null)?.finished_at ?? null,
       monday: (lastMon.data as { finished_at: string } | null)?.finished_at ?? null,
