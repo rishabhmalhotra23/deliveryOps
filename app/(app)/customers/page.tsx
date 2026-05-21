@@ -1,11 +1,17 @@
 import Link from "next/link";
 
 import { listCustomers } from "@/lib/customers";
-import { loadCustomerDomainMap, loadPortfolioSummary } from "@/lib/cache/integrations";
+import {
+  loadCustomerCommercialsMap,
+  loadCustomerDomainMap,
+  loadPortfolioSummary,
+  type CustomerCommercials,
+} from "@/lib/cache/integrations";
 import { CustomerAvatar } from "@/app/_components/customer-avatar";
 import { deriveCustomerDomain } from "@/app/_components/customer-domain";
 import {
   PageHeader,
+  formatMoney,
   formatTimeAgo,
   CATEGORY_ORDER,
   categoryFromCustomer,
@@ -43,10 +49,43 @@ const CATEGORY_DOT: Record<string, string> = {
 
 const PAST_CATEGORIES = new Set(["Churned", "Dropped", "Past", "To Drop"]);
 
-function CustomerStrip({ customer, domain }: { customer: Customer; domain: string | null }) {
+// Days until renewal — used to tint the renewal-date pill amber when it's
+// within 90 days, red when within 30, neutral otherwise. Past dates show in
+// red too because that's a sync-stale signal worth surfacing.
+function renewalUrgency(iso: string | null): "soon" | "due" | "ok" | "past" | "none" {
+  if (!iso) return "none";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "none";
+  const days = Math.floor((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return "past";
+  if (days <= 30) return "due";
+  if (days <= 90) return "soon";
+  return "ok";
+}
+
+const RENEWAL_TONE: Record<string, string> = {
+  due:  "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  soon: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  ok:   "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+  past: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  none: "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+};
+
+function CustomerStrip({
+  customer,
+  domain,
+  commercials,
+}: {
+  customer: Customer;
+  domain: string | null;
+  commercials: CustomerCommercials | null;
+}) {
   const category = categoryFromCustomer(customer);
   const catStyle = CATEGORY_VARIANT[category] ?? "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
   const isPast = PAST_CATEGORIES.has(category);
+  const arr = commercials?.arr ?? null;
+  const renewal = commercials?.renewal_date ?? null;
+  const urgency = renewalUrgency(renewal);
 
   return (
     <Link
@@ -86,6 +125,41 @@ function CustomerStrip({ customer, domain }: { customer: Customer; domain: strin
         </div>
       </div>
 
+      {/* Commercial summary — ARR + renewal date.  Skipped for past
+          customers since neither number is meaningful for them. */}
+      {!isPast ? (
+        <div className="hidden md:flex items-center gap-2 shrink-0 mr-3 text-right">
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-[color:var(--muted-foreground)]">ARR</div>
+            <div className="data-label tabular-nums text-[color:var(--foreground)] font-semibold">
+              {arr != null ? formatMoney(arr) : "—"}
+            </div>
+          </div>
+          <div className="w-px h-7 bg-[var(--glass-border)]" />
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-[color:var(--muted-foreground)]">Renews</div>
+            {renewal ? (
+              <span
+                title={
+                  urgency === "due"
+                    ? "Renewal within 30 days"
+                    : urgency === "soon"
+                      ? "Renewal within 90 days"
+                      : urgency === "past"
+                        ? "Renewal date is in the past — sync may be stale"
+                        : "Renewal date"
+                }
+                className={`data-label tabular-nums px-1.5 py-0.5 rounded border whitespace-nowrap ${RENEWAL_TONE[urgency]}`}
+              >
+                {renewal}
+              </span>
+            ) : (
+              <span className="data-label text-[color:var(--muted-foreground)]">—</span>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       {/* Integration badges */}
       <div className="flex items-center gap-1.5 shrink-0">
         {customer.salesforce_account_id ? (
@@ -119,10 +193,11 @@ function CustomerStrip({ customer, domain }: { customer: Customer; domain: strin
 }
 
 export default async function CustomersPage() {
-  const [customers, summary, sfDomains] = await Promise.all([
+  const [customers, summary, sfDomains, commercialsMap] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
+    loadCustomerCommercialsMap().catch(() => new Map<string, CustomerCommercials>()),
   ]);
 
   // Resolve a domain per customer with a graceful fallback chain so favicon
@@ -234,7 +309,12 @@ export default async function CustomersPage() {
             </div>
             <div className="space-y-2">
               {list.map((c) => (
-                <CustomerStrip key={c.id} customer={c} domain={domainFor(c)} />
+                <CustomerStrip
+                  key={c.id}
+                  customer={c}
+                  domain={domainFor(c)}
+                  commercials={commercialsMap.get(c.id) ?? null}
+                />
               ))}
             </div>
           </section>

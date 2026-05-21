@@ -421,6 +421,37 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   };
 }
 
+/** Per-customer commercial summary used by the customers list strips. */
+export interface CustomerCommercials {
+  arr: number | null;
+  renewal_date: string | null;
+}
+
+/**
+ * Bulk-load ARR + renewal date for every customer.  One round-trip; consumers
+ * (e.g. /customers list strip) look up by customer_id.  Reads only the
+ * Postgres `profiles` table — no SF roundtrip.
+ */
+export async function loadCustomerCommercialsMap(): Promise<
+  Map<string, CustomerCommercials>
+> {
+  const sb = requireAdmin();
+  const { data } = await sb.from("profiles").select("customer_id, arr, renewal_date");
+  const rows = (data ?? []) as Array<{
+    customer_id: string;
+    arr: number | null;
+    renewal_date: string | null;
+  }>;
+  const map = new Map<string, CustomerCommercials>();
+  for (const row of rows) {
+    map.set(row.customer_id, {
+      arr: row.arr,
+      renewal_date: row.renewal_date,
+    });
+  }
+  return map;
+}
+
 // Bulk lookup of Salesforce-derived domains keyed by customer_id. Used by the
 // customers list and dashboard to feed the logo fallback (Clearbit / favicon
 // services). One round-trip; the client component handles per-row rendering.
