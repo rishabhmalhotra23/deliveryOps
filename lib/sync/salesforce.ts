@@ -87,6 +87,19 @@ export async function syncSalesforce(opts: { customerKey?: string } = {}): Promi
         listCases({ accountId: sfId, limit: 100, openOnly: false }).catch(() => []),
       ]);
 
+      // Per-customer orphan scrub. Without this, remapping a customer
+      // from sf_id=A to sf_id=B leaves the old A-row in sf_accounts
+      // alongside the new B-row (both pointing at the same customer_id),
+      // and the cache reader's .maybeSingle() picks whichever it finds
+      // first — usually the stale one. Drop everything for this
+      // customer_id that doesn't match the current mapping before
+      // we upsert.
+      await sb
+        .from("sf_accounts")
+        .delete()
+        .eq("customer_id", customer.id)
+        .neq("sf_id", sfId);
+
       // 1. Upsert account
       if (account) {
         await sb
