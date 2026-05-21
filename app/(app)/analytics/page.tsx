@@ -40,8 +40,8 @@ export default async function AnalyticsPage() {
         <div className="text-[10px] uppercase tracking-[0.15em] text-[color:var(--muted-foreground)] mb-1">Analytics</div>
         <h1 className="text-4xl font-bold tracking-tight text-[color:var(--foreground)]">Portfolio at a glance.</h1>
         <p className="text-sm text-[color:var(--muted-foreground)] mt-2">
-          {totals.customers} customers · {totals.projects_total} projects · {totals.nps_responses} NPS responses
-          {lastSynced ? ` · Synced ${formatTimeAgo(lastSynced)}` : ""}
+          Aggregate metrics across the book — customers, projects, NPS, pipeline.
+          {lastSynced ? ` Last synced ${formatTimeAgo(lastSynced)}.` : ""}
         </p>
       </div>
 
@@ -157,15 +157,23 @@ export default async function AnalyticsPage() {
         </div>
       ) : null}
 
-      {/* Delivery team workload */}
+      {/* Delivery team workload — counted on active projects only.
+          Delivered / cancelled projects don't pin a team member to a
+          workload they no longer carry. */}
       <div className="grid gap-6 lg:grid-cols-2">
         {bundle.by_tam.length > 0 ? (
-          <Chart title="TAM / FDE workload" subtitle="Projects per Technical Account Manager / Field Delivery Engineer">
+          <Chart
+            title="TAM / FDE workload"
+            subtitle="Active projects per Technical Account Manager / Field Delivery Engineer"
+          >
             <TeamWorkloadChart data={bundle.by_tam} />
           </Chart>
         ) : null}
         {bundle.by_dev.length > 0 ? (
-          <Chart title="SE / Dev workload" subtitle="Projects per Solutions Engineer">
+          <Chart
+            title="SE / Dev workload"
+            subtitle="Active projects per Solutions Engineer"
+          >
             <TeamWorkloadChart data={bundle.by_dev} />
           </Chart>
         ) : null}

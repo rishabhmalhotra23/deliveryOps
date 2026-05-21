@@ -20,7 +20,7 @@ export default async function DeliveryPage() {
       <PageHeader
         eyebrow="Delivery"
         title="Every project, every customer, every quarter."
-        subtitle={`${bundle.totals.total} projects across ${bundle.facets.customers.length} customers · ${sub}`}
+        subtitle={`Portfolio-wide delivery across every active board. ${sub}`}
         actions={
           <Link
             href="/dev/sync"

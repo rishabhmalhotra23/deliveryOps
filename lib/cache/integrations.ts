@@ -420,3 +420,28 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     },
   };
 }
+
+// Bulk lookup of Salesforce-derived domains keyed by customer_id. Used by the
+// customers list and dashboard to feed the logo fallback (Clearbit / favicon
+// services). One round-trip; the client component handles per-row rendering.
+export async function loadCustomerDomainMap(): Promise<Map<string, string | null>> {
+  const sb = requireAdmin();
+  const { data } = await sb
+    .from("sf_accounts")
+    .select("customer_id, website")
+    .not("website", "is", null);
+  const rows = (data ?? []) as Array<{ customer_id: string; website: string | null }>;
+  const map = new Map<string, string | null>();
+  for (const row of rows) {
+    if (!row.website) continue;
+    try {
+      const u = new URL(row.website.startsWith("http") ? row.website : `https://${row.website}`);
+      const host = u.hostname.replace(/^www\./, "");
+      if (host && host.includes(".")) map.set(row.customer_id, host);
+    } catch {
+      // Ignore malformed websites — they fall through to the email/key
+      // heuristics in `deriveCustomerDomain`.
+    }
+  }
+  return map;
+}

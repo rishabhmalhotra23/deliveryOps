@@ -54,7 +54,7 @@ If a scenario isn't here and you fix it, add it.
    npx tsx scripts/safe-migrate.ts
    ```
 
-4. **Re-import the 41 customers from Monday:**
+4. **Re-import the customer portfolio from Monday:**
 
    ```bash
    curl -s http://localhost:4001/api/dev/import/preview | \

@@ -1,26 +1,26 @@
-// Upcoming pipeline — SF opportunities closing in the current quarter.
-// Gives the CS team a forward-looking view of what's incoming so they
-// can prepare renewals and expansions before they land.
+// Upcoming pipeline — SF opportunities closing in the next 90 days.
+// Gives the CS team a rolling forward-looking view of what's incoming so
+// they can prepare renewals and expansions before they land. A rolling
+// window (rather than calendar-quarter) means the section stays useful
+// late in a quarter when most upcoming closes are actually in Q+1.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
 
-function currentQuarterBounds(): { start: string; end: string; label: string } {
+const WINDOW_DAYS = 90;
+
+function windowBounds(): { start: string; end: string; label: string } {
   const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth(); // 0-based
-  const qStart = Math.floor(m / 3) * 3; // 0, 3, 6, or 9
-  const qEnd = qStart + 2;
-
-  const pad = (n: number) => String(n + 1).padStart(2, "0");
-  const lastDay = (year: number, month: number) =>
-    new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-
-  const start = `${y}-${pad(qStart)}-01`;
-  const end = `${y}-${pad(qEnd)}-${lastDay(y, qEnd)}`;
-  const q = Math.floor(m / 3) + 1;
-  const label = `Q${q} ${y}`;
-  return { start, end, label };
+  const end = new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const isoDate = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+      d.getUTCDate()
+    ).padStart(2, "0")}`;
+  return {
+    start: isoDate(now),
+    end: isoDate(end),
+    label: `Next ${WINDOW_DAYS} days`,
+  };
 }
 
 export interface PipelineOpportunity {
@@ -55,7 +55,7 @@ interface OppRow {
 
 export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
   const sb = requireAdmin();
-  const { start, end, label } = currentQuarterBounds();
+  const { start, end, label } = windowBounds();
 
   const [opps, customers] = await Promise.all([
     sb

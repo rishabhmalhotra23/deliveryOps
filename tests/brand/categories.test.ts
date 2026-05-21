@@ -24,9 +24,20 @@ describe("categoryFromCustomer", () => {
       "Strategic Growth"
     );
     expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "POV" })).toBe("POV");
+    // Monday lumps churned + dropped customers into one group — we default to
+    // the neutral "Past" so the UI never claims a customer churned when they
+    // were actually dropped pre-go-live (or vice versa). The CSM disambiguates
+    // per-customer via the inline-edit category dropdown.
     expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "Churned/Dropped" })).toBe(
-      "Churned"
+      "Past"
     );
+    // Per-customer override wins, as for every other category.
+    expect(
+      categoryFromCustomer({ custom_category: "Churned", lifecycle_group: "Churned/Dropped" })
+    ).toBe("Churned");
+    expect(
+      categoryFromCustomer({ custom_category: "Dropped", lifecycle_group: "Churned/Dropped" })
+    ).toBe("Dropped");
     // New in Phase 2 Pass I — Monday added "To be Dropped" as a group.
     expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "To be Dropped" })).toBe(
       "To Drop"
@@ -59,10 +70,13 @@ describe("categorySortIndex", () => {
     const sorted = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sorted);
   });
-  it("puts At Risk first, To Drop near the bottom, Churned last", () => {
+  it("puts At Risk first, To Drop near the bottom, past states last", () => {
     expect(categorySortIndex("At Risk")).toBe(0);
     expect(categorySortIndex("To Drop")).toBe(6);
-    expect(categorySortIndex("Churned")).toBe(7);
+    // Past states sit at the end: Past (auto-class) → Churned → Dropped.
+    expect(categorySortIndex("Past")).toBe(7);
+    expect(categorySortIndex("Churned")).toBe(8);
+    expect(categorySortIndex("Dropped")).toBe(9);
   });
   it("sends unknown categories to the bottom (99)", () => {
     expect(categorySortIndex("Strategic Logos")).toBe(99);

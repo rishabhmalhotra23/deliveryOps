@@ -40,7 +40,7 @@ Last updated: 2026-05-17
 
 1. Once GitHub app installed → link repo → push-to-deploy goes live.
 2. Once Supabase redirect URLs added → end-to-end magic-link test on prod.
-3. Seed cloud Supabase with the same 41-customer dataset from local (via `/api/dev/import` once auth lets you in).
+3. Seed cloud Supabase with the same customer dataset from local (via `/api/dev/import` once auth lets you in).
 4. Pick the first real customer Slack channel to invite the DeliveryOps bot to.
 5. Resume on the Customer Health Report card or the Calendar sync — whichever you want first.
 

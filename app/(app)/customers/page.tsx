@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import { listCustomers } from "@/lib/customers";
-import { loadPortfolioSummary } from "@/lib/cache/integrations";
+import { loadCustomerDomainMap, loadPortfolioSummary } from "@/lib/cache/integrations";
+import { CustomerAvatar, deriveCustomerDomain } from "@/app/_components/customer-avatar";
 import {
   PageHeader,
-  SectionMark,
   formatTimeAgo,
   CATEGORY_ORDER,
   categoryFromCustomer,
@@ -22,7 +22,9 @@ const CATEGORY_VARIANT: Record<string, string> = {
   Active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
   "Partner Managed": "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
   POV: "bg-[var(--brand-yellow-soft)] text-[color:var(--brand-night)] border-[var(--brand-yellow-line)]",
+  Past: "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
   Churned: "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+  Dropped: "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
 };
 
 const CATEGORY_DOT: Record<string, string> = {
@@ -33,58 +35,31 @@ const CATEGORY_DOT: Record<string, string> = {
   Active: "bg-emerald-500",
   "Partner Managed": "bg-purple-500",
   POV: "bg-[#F2FF70]",
+  Past: "bg-[color:var(--muted-foreground)]",
   Churned: "bg-[color:var(--muted-foreground)]",
+  Dropped: "bg-[color:var(--muted-foreground)]",
 };
 
-// Generate a deterministic gradient background from a customer name.
-// Each customer gets a unique color pair — much more visual than all-yellow.
-const AVATAR_GRADIENTS = [
-  ["#818cf8", "#6366f1"], // indigo
-  ["#34d399", "#059669"], // emerald
-  ["#fb923c", "#ea580c"], // orange
-  ["#f472b6", "#db2777"], // pink
-  ["#38bdf8", "#0284c7"], // sky
-  ["#a78bfa", "#7c3aed"], // violet
-  ["#fbbf24", "#d97706"], // amber
-  ["#6ee7b7", "#0d9488"], // teal
-  ["#f87171", "#dc2626"], // red
-  ["#c084fc", "#9333ea"], // purple
-];
+const PAST_CATEGORIES = new Set(["Churned", "Dropped", "Past", "To Drop"]);
 
-function avatarGradient(name: string): string {
-  const idx = (name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_GRADIENTS.length;
-  const [from, to] = AVATAR_GRADIENTS[idx];
-  return `linear-gradient(135deg, ${from}, ${to})`;
-}
-
-function InitialsAvatar({ name, category }: { name: string; category: string }) {
-  const dot = CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]";
-  const isPast = category === "Churned" || category === "To Drop";
-  return (
-    <div className="relative shrink-0">
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white"
-        style={{ background: isPast ? "#6b7280" : avatarGradient(name), opacity: isPast ? 0.7 : 1 }}
-      >
-        {name.slice(0, 2).toUpperCase()}
-      </div>
-      {!isPast && (
-        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[color:var(--background)] ${dot}`} />
-      )}
-    </div>
-  );
-}
-
-function CustomerStrip({ customer }: { customer: Customer }) {
+function CustomerStrip({ customer, domain }: { customer: Customer; domain: string | null }) {
   const category = categoryFromCustomer(customer);
   const catStyle = CATEGORY_VARIANT[category] ?? "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
+  const isPast = PAST_CATEGORIES.has(category);
 
   return (
     <Link
       href={`/customers/${customer.key}`}
       className="glass-card glass-card-hover flex items-center gap-4 px-4 py-3 transition-all"
     >
-      <InitialsAvatar name={customer.display_name} category={category} />
+      <CustomerAvatar
+        name={customer.display_name}
+        logoUrl={customer.logo_url}
+        domain={domain}
+        category={category}
+        size="sm"
+        dimmed={isPast}
+      />
 
       {/* Name + metadata */}
       <div className="flex-1 min-w-0">
@@ -143,10 +118,17 @@ function CustomerStrip({ customer }: { customer: Customer }) {
 }
 
 export default async function CustomersPage() {
-  const [customers, summary] = await Promise.all([
+  const [customers, summary, sfDomains] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
+    loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
   ]);
+
+  // Resolve a domain per customer with a graceful fallback chain so favicon
+  // services have something to lookup even when Salesforce data is missing.
+  const domainFor = (c: Customer): string | null =>
+    sfDomains.get(c.id) ??
+    deriveCustomerDomain({ emailAlias: c.email_alias, key: c.key });
 
   const grouped = new Map<string, Customer[]>();
   for (const c of customers) {
@@ -166,9 +148,11 @@ export default async function CustomersPage() {
       <PageHeader
         eyebrow="Customers"
         title="Customers"
-        subtitle={`${summary?.total ?? customers.length} accounts — ${summary?.with_monday_workspace ?? 0} with active delivery workspaces · ${
-          summary?.last_sync.monday ? `Monday synced ${formatTimeAgo(summary.last_sync.monday)}` : "Monday not synced"
-        }`}
+        subtitle={
+          summary?.last_sync.monday
+            ? `Your portfolio, grouped by lifecycle stage. Monday synced ${formatTimeAgo(summary.last_sync.monday)}.`
+            : "Your portfolio, grouped by lifecycle stage. Monday hasn't synced yet."
+        }
         actions={
           <Link
             href="/operations"
@@ -209,11 +193,19 @@ export default async function CustomersPage() {
       {/* Customer groups */}
       {orderedGroups.map(([category, list]) => {
         if (list.length === 0) return null;
-        // Softer framing for past/inactive accounts — show their contributions
-        // rather than emphasising a negative status.
-        const isPastEngagement = category === "Churned" || category === "To Drop";
+        // Softer framing for past/inactive accounts. "Past" is the auto-class
+        // for Monday's ambiguous "Churned/Dropped" group — the CSM can
+        // disambiguate per-customer into "Churned" or "Dropped" via inline
+        // edit on the customer page.
+        const isPastEngagement = PAST_CATEGORIES.has(category);
+        const PAST_HEADER: Record<string, string> = {
+          Churned: "Churned customers",
+          Dropped: "Dropped accounts",
+          Past: "Past customers · awaiting classification",
+          "To Drop": "Winding down",
+        };
         const displayLabel = isPastEngagement
-          ? `${category === "Churned" ? "Past engagements" : "Winding down"} · ${list.length}`
+          ? `${PAST_HEADER[category] ?? category} · ${list.length}`
           : null;
         return (
           <section key={category} className={`space-y-2 ${isPastEngagement ? "opacity-70" : ""}`}>
@@ -225,7 +217,13 @@ export default async function CustomersPage() {
                 </span>
                 {isPastEngagement ? (
                   <span className="text-[10px] text-[color:var(--muted-foreground)] italic">
-                    (projects delivered; relationship closed)
+                    {category === "Past"
+                      ? "(Monday says \u201cChurned/Dropped\u201d — open a customer to mark them Churned or Dropped)"
+                      : category === "Dropped"
+                        ? "(disengaged before go-live)"
+                        : category === "To Drop"
+                          ? "(decided to drop at renewal)"
+                          : "(no longer using DeliveryOps)"}
                   </span>
                 ) : null}
               </div>
@@ -235,7 +233,7 @@ export default async function CustomersPage() {
             </div>
             <div className="space-y-2">
               {list.map((c) => (
-                <CustomerStrip key={c.id} customer={c} />
+                <CustomerStrip key={c.id} customer={c} domain={domainFor(c)} />
               ))}
             </div>
           </section>

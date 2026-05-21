@@ -5,6 +5,13 @@ import type { ReactNode } from "react";
 // DeliveryOps category vocabulary — the operational truth. Source order +
 // tones. Custom categories minted by the team via the operations chat fall
 // through to a neutral tone.
+//
+// "Past" is the auto-classification for customers whose Monday lifecycle is
+// "Churned/Dropped" — that single Monday group conflates two distinct end-
+// states (Churned = left after using us, Dropped = we disengaged pre-go-
+// live). When a CSM knows which, they override via the inline edit on the
+// customer page, choosing "Churned" or "Dropped" explicitly. We don't
+// auto-pick because the wrong choice is worse than no choice.
 export const CATEGORY_ORDER = [
   "At Risk",
   "Upcoming Renewals",
@@ -13,7 +20,9 @@ export const CATEGORY_ORDER = [
   "Partner Managed",
   "POV",
   "To Drop",
+  "Past",
   "Churned",
+  "Dropped",
 ] as const;
 
 const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: number }> = {
@@ -27,11 +36,19 @@ const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: num
   // Churned (already gone) and At Risk (could still be saved). Visually
   // adjacent to Churned but with its own warmer-warning tone.
   "To Drop": { class: "tone-todrop", weight: 6 },
-  Churned: { class: "tone-churned", weight: 7 },
+  // "Past" — the safe default for customers Monday flagged as
+  // "Churned/Dropped". The CSM disambiguates per-customer.
+  Past: { class: "tone-churned", weight: 7 },
+  Churned: { class: "tone-churned", weight: 8 },
+  Dropped: { class: "tone-todrop", weight: 9 },
 };
 
 // Legacy lifecycle group → category mapping for any customer that still
 // hasn't been backfilled. Mirrors migration 0005 + the live Monday board.
+//
+// "Churned/Dropped" is intentionally mapped to the neutral "Past" — Monday
+// lumps the two states together and we don't want to make a false claim.
+// CSMs disambiguate via the inline-edit category dropdown.
 const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
   "High Risk": "At Risk", // historical Monday label, no longer in use
   "Upcoming Renewal": "Upcoming Renewals",
@@ -40,7 +57,7 @@ const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
   "Partner Managed": "Partner Managed",
   POV: "POV",
   "To be Dropped": "To Drop",
-  "Churned/Dropped": "Churned",
+  "Churned/Dropped": "Past",
 };
 
 export function categoryFromCustomer(customer: {

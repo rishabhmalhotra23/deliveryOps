@@ -40,10 +40,10 @@ export interface PreviewResponse {
 
 // GET /api/dev/import/preview
 //
-// Pulls all 41 customers from the Monday "Customers" board, matches each one
-// against the Projects board + the workspace list, and fetches the top
-// Salesforce candidates by name. Returns one object per customer ready for
-// the UI to render and the user to confirm.
+// Pulls every row from the Monday "Customers" board, matches each one against
+// the Projects board + the workspace list, and fetches the top Salesforce
+// candidates by name. Returns one object per customer ready for the UI to
+// render and the user to confirm.
 export async function GET() {
   try {
     // Step 1 — fetch the three Monday surfaces concurrently.
@@ -64,7 +64,8 @@ export async function GET() {
     // Step 2 — for each Monday customer, do the matching.
     // Salesforce search is sequential per customer to be polite to the rate
     // limiter (78k accounts, plus we only need top-5 prefix search per name).
-    // 41 * ~250ms = ~10s total, well under the 120s maxDuration budget.
+    // ~250ms per customer keeps the full preview well under the maxDuration
+    // budget for any realistic portfolio size.
     const candidates: ImportCandidate[] = [];
     for (const m of customers) {
       const matchedProjects = findMatchingProjects(m, projects);

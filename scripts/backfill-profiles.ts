@@ -1,4 +1,4 @@
-// Backfill profiles + internal_profiles for all 41 customers from the
+// Backfill profiles + internal_profiles for every customer from the
 // freshly-synced Salesforce + Monday + customers data. Idempotent: re-runs
 // only refresh derived fields, never overwrite human-edited ones (tracked
 // via last_updated_by != "backfill-*").

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
 import { InlineEdit } from "@/app/_components/inline-edit";
+import { CustomerAvatar } from "@/app/_components/customer-avatar";
 import { Badge } from "@kognitos/lattice";
 import type { HeroCardProps } from "@/lib/customers/view-model";
 
@@ -16,76 +15,6 @@ const CATEGORY_VARIANT: Record<string, "destructive" | "warning" | "success" | "
   POV: "outline",
   Churned: "secondary",
 };
-
-// Tries three logo sources in order:
-//   1. Manually set logo_url
-//   2. Clearbit via the Salesforce account's website domain
-//   3. Google's S2 favicon service (smaller but reliable)
-// Falls back to a gradient avatar with initials.
-const AVATAR_GRADIENTS = [
-  ["#818cf8", "#6366f1"], ["#34d399", "#059669"], ["#fb923c", "#ea580c"],
-  ["#f472b6", "#db2777"], ["#38bdf8", "#0284c7"], ["#a78bfa", "#7c3aed"],
-  ["#fbbf24", "#d97706"], ["#6ee7b7", "#0d9488"], ["#f87171", "#dc2626"],
-  ["#c084fc", "#9333ea"],
-];
-function heroAvatarGradient(name: string): string {
-  const idx = (name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_GRADIENTS.length;
-  const [from, to] = AVATAR_GRADIENTS[idx];
-  return `linear-gradient(135deg, ${from}, ${to})`;
-}
-
-function CustomerAvatar({
-  logoUrl,
-  clearbitDomain,
-  displayName,
-}: {
-  logoUrl: string | null;
-  clearbitDomain: string | null;
-  displayName: string;
-}) {
-  const [srcIdx, setSrcIdx] = useState(0);
-  const initials = displayName.slice(0, 2).toUpperCase();
-
-  const sources: string[] = [];
-  if (logoUrl) sources.push(logoUrl);
-  if (clearbitDomain) {
-    // DuckDuckGo: no API key, very fast (returns favicon-level quality)
-    sources.push(`https://icons.duckduckgo.com/ip3/${clearbitDomain}.ico`);
-    // Google S2: medium speed, good quality
-    sources.push(`https://www.google.com/s2/favicons?domain=${clearbitDomain}&sz=128`);
-    // Clearbit: highest quality but slowest — last resort
-    sources.push(`https://logo.clearbit.com/${clearbitDomain}`);
-  }
-
-  const src = sources[srcIdx] ?? null;
-
-  return (
-    <div
-      className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-lg border-2 border-white/20 flex items-center justify-center"
-      style={{ background: src ? "white" : heroAvatarGradient(displayName) }}
-    >
-      {src ? (
-        <Image
-          src={src}
-          alt={`${displayName} logo`}
-          width={56}
-          height={56}
-          className="w-full h-full object-contain p-1.5"
-          unoptimized={src.includes("duckduckgo")} // DDG ICO — skip Next optimizer
-          onError={() => {
-            if (srcIdx < sources.length - 1) {
-              setSrcIdx(srcIdx + 1);
-            } else {
-              setSrcIdx(sources.length);
-            }
-          }}
-        />
-      ) : (
-        <span className="text-xl font-bold text-white tracking-tight">{initials}</span>
-      )}
-    </div>
-  );
-}
 
 export function CustomerHero({
   customerKey,
@@ -132,9 +61,12 @@ export function CustomerHero({
         <div className="flex items-start gap-5">
           {/* Logo / initials */}
           <CustomerAvatar
+            name={displayName}
             logoUrl={logoUrl}
-            clearbitDomain={sfWebsiteDomain}
-            displayName={displayName}
+            domain={sfWebsiteDomain}
+            size="lg"
+            showStatusDot={false}
+            className="shadow-lg"
           />
 
           {/* Name + badges */}

@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { listCustomers } from "@/lib/customers";
-import { loadPortfolioSummary } from "@/lib/cache/integrations";
+import { loadCustomerDomainMap, loadPortfolioSummary } from "@/lib/cache/integrations";
 import { loadOvernightChanges, loadPendingApprovals } from "@/lib/dashboard/overnight";
 import { loadUpcomingPipeline } from "@/lib/dashboard/pipeline";
+import { CustomerAvatar, deriveCustomerDomain } from "@/app/_components/customer-avatar";
 import {
   CategoryChip,
   PageHeader,
@@ -19,28 +20,35 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [customers, summary, overnight, approvals, pipeline] = await Promise.all([
+  const [customers, summary, overnight, approvals, pipeline, sfDomains] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadOvernightChanges(6).catch(() => []),
     loadPendingApprovals(8).catch(() => []),
     loadUpcomingPipeline().catch(() => null),
+    loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
   ]);
 
   const totalArr = summary?.total_arr ?? 0;
   const needAttention =
     (summary?.by_category["At Risk"] ?? 0) + (summary?.by_category["Upcoming Renewals"] ?? 0);
 
-  // Fall back to "most recently updated" if we have no overnight activity
-  // — keeps the section useful on quiet days.
-  const recentlyActive = customers
-    .slice()
-    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
-    .slice(0, 6);
+  // "Quiet customers" — those without any recorded event in the last 30 days.
+  // Replaces the old "Recently updated" tile grid: the loud customers always
+  // grab attention, the silent ones churn. This is the early-warning surface.
+  const QUIET_WINDOW_DAYS = 30;
+  const quietCutoff = new Date(Date.now() - QUIET_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const quietCustomers = customers
+    .filter((c) => {
+      const cat = categoryFromCustomer(c);
+      // Past customers (Churned / Dropped / To Drop) shouldn't appear here.
+      if (cat === "Churned" || cat === "Dropped" || cat === "To Drop") return false;
+      const last = c.updated_at ? new Date(c.updated_at) : null;
+      return !last || last < quietCutoff;
+    })
+    .sort((a, b) => (a.updated_at ?? "").localeCompare(b.updated_at ?? ""))
+    .slice(0, 9);
   const overnightFilled = overnight.length > 0;
-
-  const atRisk = customers.filter((c) => categoryFromCustomer(c) === "At Risk");
-  const renewals = customers.filter((c) => categoryFromCustomer(c) === "Upcoming Renewals");
 
   // Discover any custom categories the team has minted via the operations chat.
   const knownCategories = new Set<string>(CATEGORY_ORDER);
@@ -54,15 +62,15 @@ export default async function Dashboard() {
       <PageHeader
         eyebrow="Dashboard"
         title="Every customer, every system, one view."
-        subtitle={`${summary?.total ?? customers.length} active customers across Salesforce, Monday, and Kognitos. Synced cache · ${
+        subtitle={`Salesforce ${
           summary?.last_sync.salesforce
-            ? `Salesforce ${formatTimeAgo(summary.last_sync.salesforce)}`
-            : "Salesforce never"
-        } · ${
+            ? formatTimeAgo(summary.last_sync.salesforce)
+            : "never"
+        } · Monday ${
           summary?.last_sync.monday
-            ? `Monday ${formatTimeAgo(summary.last_sync.monday)}`
-            : "Monday never"
-        }.`}
+            ? formatTimeAgo(summary.last_sync.monday)
+            : "never"
+        } · Kognitos live.`}
         actions={
           <Link
             href="/operations"
@@ -117,19 +125,6 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <FocusList
-          title="At risk"
-          subtitle="Conversations to start now, not later"
-          customers={atRisk}
-        />
-        <FocusList
-          title="Upcoming renewals"
-          subtitle="Renewal cycles entering the danger zone"
-          customers={renewals}
-        />
-      </div>
-
       {/* Pending approvals — surfaces the email drafts + gated actions that
           are waiting on a CSM click in Slack. Lives on the dashboard so the
           CSM doesn't have to context-switch to Slack to see what's queued. */}
@@ -174,14 +169,14 @@ export default async function Dashboard() {
       {pipeline && pipeline.count > 0 ? (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <SectionMark>
-              {pipeline.quarter_label} pipeline · {pipeline.count} open{" "}
-              {pipeline.count === 1 ? "opportunity" : "opportunities"}
-            </SectionMark>
+            <SectionMark>Pipeline · {pipeline.quarter_label.toLowerCase()}</SectionMark>
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
               {formatMoney(pipeline.total_amount)} expected
             </span>
           </div>
+          <p className="text-xs text-[color:var(--brand-gray)] mb-3">
+            Open Salesforce opportunities closing in the next 90 days — renewals + expansions you should be preparing for now.
+          </p>
           <div className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12">
             <ul className="divide-y divide-[color:var(--brand-metal-line)]">
               {pipeline.opportunities.slice(0, 8).map((opp) => (
@@ -237,55 +232,115 @@ export default async function Dashboard() {
         </section>
       ) : null}
 
-      <section>
-        <SectionMark>
-          {overnightFilled ? "What changed overnight" : "Recently updated"}
-        </SectionMark>
-        <p className="text-xs text-[color:var(--brand-gray)] mb-4">
-          {overnightFilled
-            ? "Customers sorted by event count in the last 18 hours."
-            : "No new events in the last 18 hours — falling back to the most recently updated rows."}
-        </p>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {overnightFilled
-            ? overnight.map((o) => (
+      {overnightFilled ? (
+        <section>
+          <SectionMark>What changed overnight</SectionMark>
+          <p className="text-xs text-[color:var(--brand-gray)] mb-4">
+            Customers sorted by event count in the last 18 hours.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {overnight.map((o) => {
+              const domain =
+                sfDomains.get(o.customer_id) ??
+                deriveCustomerDomain({
+                  emailAlias: o.customer_email_alias,
+                  key: o.customer_key,
+                });
+              const category = categoryFromCustomer({
+                custom_category: o.customer_category,
+                lifecycle_group: o.customer_lifecycle_group,
+              });
+              return (
                 <Link
                   key={o.customer_key}
                   href={`/customers/${o.customer_key}`}
                   className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-4 hover:border-[color:var(--brand-night)] dark:hover:border-white/30 transition-colors group"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-display text-base">{o.customer_display_name}</div>
-                    <span className="rounded-full bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] text-[10px] font-mono px-2 py-0.5 tabular-nums">
-                      +{o.event_count}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs text-[color:var(--brand-gray)] line-clamp-2">
-                    {o.latest_summary ?? "—"}
-                  </div>
-                  <div className="text-[10px] text-[color:var(--brand-gray)] mt-1">
-                    {o.latest_ts ? formatTimeAgo(o.latest_ts) : "—"}
+                  <div className="flex items-start gap-3">
+                    <CustomerAvatar
+                      name={o.customer_display_name}
+                      logoUrl={o.customer_logo_url}
+                      domain={domain}
+                      category={category}
+                      size="sm"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-display text-base truncate">{o.customer_display_name}</div>
+                        <span className="rounded-full bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] text-[10px] font-mono px-2 py-0.5 tabular-nums shrink-0">
+                          +{o.event_count}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-[color:var(--brand-gray)] line-clamp-2">
+                        {o.latest_summary ?? "—"}
+                      </div>
+                      <div className="text-[10px] text-[color:var(--brand-gray)] mt-1">
+                        {o.latest_ts ? formatTimeAgo(o.latest_ts) : "—"}
+                      </div>
+                    </div>
                   </div>
                 </Link>
-              ))
-            : recentlyActive.map((c) => (
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Quiet customers — early-warning surface. The CSM hears from the
+          loud customers; this surfaces the silent ones, who are the actual
+          renewal risk. Replaces the old "Recently updated" tile. */}
+      {quietCustomers.length > 0 ? (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <SectionMark>Quiet customers · 30+ days</SectionMark>
+            <span className="text-xs text-[color:var(--brand-gray)] tabular-nums">
+              {quietCustomers.length} no signal in 30+ days
+            </span>
+          </div>
+          <p className="text-xs text-[color:var(--brand-gray)] mb-4">
+            Active accounts we haven&rsquo;t heard from. Quiet customers churn silently — reach out before they renew.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {quietCustomers.map((c) => {
+              const domain =
+                sfDomains.get(c.id) ??
+                deriveCustomerDomain({ emailAlias: c.email_alias, key: c.key });
+              const category = categoryFromCustomer(c);
+              return (
                 <Link
                   key={c.id}
                   href={`/customers/${c.key}`}
                   className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-4 hover:border-[color:var(--brand-night)] dark:hover:border-white/30 transition-colors group"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-display text-base">{c.display_name}</div>
-                    <CategoryChip category={categoryFromCustomer(c)} size="sm" />
-                  </div>
-                  <div className="mt-2 text-xs text-[color:var(--brand-gray)] space-y-0.5">
-                    {c.ae_owner ? <div>AE · {c.ae_owner}</div> : null}
-                    {c.partner ? <div>Partner · {c.partner}</div> : null}
+                  <div className="flex items-start gap-3">
+                    <CustomerAvatar
+                      name={c.display_name}
+                      logoUrl={c.logo_url}
+                      domain={domain}
+                      category={category}
+                      size="sm"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-display text-base truncate">{c.display_name}</div>
+                        <CategoryChip category={category} size="sm" />
+                      </div>
+                      <div className="mt-1 text-xs text-[color:var(--brand-gray)] space-y-0.5">
+                        {c.ae_owner ? <div>AE · {c.ae_owner}</div> : null}
+                        <div>
+                          {c.updated_at
+                            ? `Last touched ${formatTimeAgo(c.updated_at)}`
+                            : "Never touched"}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </Link>
-              ))}
-        </div>
-      </section>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {!summary?.last_sync.salesforce ? (
         <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5 text-sm">
@@ -300,48 +355,6 @@ export default async function Dashboard() {
         </section>
       ) : null}
     </div>
-  );
-}
-
-function FocusList({
-  title,
-  subtitle,
-  customers,
-}: {
-  title: string;
-  subtitle: string;
-  customers: Awaited<ReturnType<typeof listCustomers>>;
-}) {
-  const sorted = customers.slice().sort((a, b) => a.display_name.localeCompare(b.display_name));
-  return (
-    <section className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-6">
-      <SectionMark>{title}</SectionMark>
-      <p className="text-xs text-[color:var(--brand-gray)] mb-4">{subtitle}</p>
-      {sorted.length === 0 ? (
-        <div className="text-sm text-[color:var(--brand-gray)]">Nothing in this bucket.</div>
-      ) : (
-        <ul className="divide-y divide-[color:var(--brand-metal-line)]">
-          {sorted.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/customers/${c.key}`}
-                className="flex items-center justify-between py-2.5 hover:opacity-80"
-              >
-                <div>
-                  <div className="font-medium">{c.display_name}</div>
-                  {c.ae_owner ? (
-                    <div className="text-xs text-[color:var(--brand-gray)]">AE · {c.ae_owner}</div>
-                  ) : null}
-                </div>
-                {c.partner ? (
-                  <span className="text-xs text-[color:var(--brand-gray)]">{c.partner}</span>
-                ) : null}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 

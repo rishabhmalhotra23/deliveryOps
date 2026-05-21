@@ -3,7 +3,7 @@
 # without explicit human confirmation. Used by npm scripts in package.json
 # and intended for direct human use too — symlink or alias if you want.
 #
-# Why this exists: the 2026-05-15 incident wiped 41 customers because
+# Why this exists: the 2026-05-15 incident wiped the local database because
 # `supabase stop --no-backup` was invoked from inside Cursor. The Cursor
 # hook (.cursor/hooks/block-destructive.sh) blocks the agent. This script
 # is the same gate for humans typing in their own terminal.

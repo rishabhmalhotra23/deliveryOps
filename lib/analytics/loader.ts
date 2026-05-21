@@ -244,6 +244,59 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     });
   }
 
+  // Placeholder strings Monday users sometimes put in the TAM / Dev columns.
+  // None of these are real people; they pollute the workload charts.
+  const PLACEHOLDER_NAMES = new Set([
+    "customer implementing",
+    "tbd",
+    "unassigned",
+    "n/a",
+    "na",
+    "tba",
+    "—",
+    "-",
+    "?",
+    "open",
+    "kognitos",
+    "partner",
+  ]);
+
+  // Workload aggregation: only count people on actively in-flight work. A
+  // historical project that someone on the team handed off two quarters
+  // ago shouldn't count against them now, and ex-teammates whose names
+  // still sit in Monday columns shouldn't show up at all once their
+  // projects ship or are reassigned. The active-status filter handles both.
+  const ACTIVE_PROJECT_STATUSES = new Set([
+    "In Progress",
+    "Active",
+    "Not Started",
+    "Paused",
+    "Pending",
+  ]);
+  const ACTIVE_PROJECT_GROUPS = new Set([
+    "Active",
+    "Pipeline",
+    "On Hold",
+    "Backlog",
+    "Active Projects",
+    "Upcoming Projects",
+  ]);
+
+  function isActiveProject(p: ProjectRow): boolean {
+    const status = txt(p.raw_columns, PROJECT_COL_STATUS);
+    // If Monday has a status that explicitly says active, trust it.
+    if (status && ACTIVE_PROJECT_STATUSES.has(status)) return true;
+    // Otherwise fall back to the group label.
+    if (status && (status === "Delivered" || status === "Live" || status === "Cancelled")) {
+      return false;
+    }
+    return ACTIVE_PROJECT_GROUPS.has(p.group_title ?? "");
+  }
+
+  function cleanWorkloadNames(raw: string | null): string[] {
+    return peopleName(raw).filter((n) => !PLACEHOLDER_NAMES.has(n.toLowerCase().trim()));
+  }
+
   for (const p of projectList) {
     const g = p.group_title ?? "(other)";
     projGroupAgg.set(g, (projGroupAgg.get(g) ?? 0) + 1);
@@ -252,13 +305,14 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     const ph = txt(p.raw_columns, PROJECT_COL_PHASE) ?? "(unset)";
     projPhaseAgg.set(ph, (projPhaseAgg.get(ph) ?? 0) + 1);
 
-    // TAM / FDE workload
-    for (const name of peopleName(txt(p.raw_columns, PROJECT_COL_TAM))) {
-      tamAgg.set(name, (tamAgg.get(name) ?? 0) + 1);
-    }
-    // Dev / SE workload
-    for (const name of peopleName(txt(p.raw_columns, PROJECT_COL_DEV))) {
-      devAgg.set(name, (devAgg.get(name) ?? 0) + 1);
+    // TAM / FDE + SE / Dev workload — counted on active projects only.
+    if (isActiveProject(p)) {
+      for (const name of cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_TAM))) {
+        tamAgg.set(name, (tamAgg.get(name) ?? 0) + 1);
+      }
+      for (const name of cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_DEV))) {
+        devAgg.set(name, (devAgg.get(name) ?? 0) + 1);
+      }
     }
 
     // TTV distribution

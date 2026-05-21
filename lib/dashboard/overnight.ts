@@ -6,8 +6,13 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
 
 export interface OvernightChange {
+  customer_id: string;
   customer_key: string;
   customer_display_name: string;
+  customer_logo_url: string | null;
+  customer_email_alias: string | null;
+  customer_category: string | null;
+  customer_lifecycle_group: string | null;
   event_count: number;
   latest_summary: string | null;
   latest_ts: string | null;
@@ -34,7 +39,7 @@ export async function loadOvernightChanges(limit = 6): Promise<OvernightChange[]
   const cutoff = new Date(Date.now() - HOURS_WINDOW * 60 * 60 * 1000).toISOString();
 
   // Pull recent events across all customers in one query, then bucket
-  // by customer in TS. Cheaper than 41 round-trips.
+  // by customer in TS. Avoids one round-trip per customer.
   const { data, error } = await sb
     .from("events")
     .select("customer_id, summary, ts")
@@ -61,8 +66,13 @@ export async function loadOvernightChanges(limit = 6): Promise<OvernightChange[]
     const bucket = byCustomer.get(c.id);
     if (!bucket) return null;
     return {
+      customer_id: c.id,
       customer_key: c.key,
       customer_display_name: c.display_name,
+      customer_logo_url: c.logo_url,
+      customer_email_alias: c.email_alias,
+      customer_category: c.custom_category,
+      customer_lifecycle_group: c.lifecycle_group,
       event_count: bucket.count,
       latest_summary: bucket.latest_summary,
       latest_ts: bucket.latest_ts,
