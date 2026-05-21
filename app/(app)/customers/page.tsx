@@ -113,6 +113,17 @@ function CustomerStrip({
           <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${catStyle}`}>
             {category}
           </span>
+          {/* Secondary tag — "Partner Managed" is independent of the
+              main category bucket.  A Strategic Growth customer routed
+              through a partner shows both labels. */}
+          {customer.partner && category !== "Partner Managed" ? (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+              title={`Partner-managed via ${customer.partner}`}
+            >
+              Partner Managed
+            </span>
+          ) : null}
         </div>
         <div className="flex items-center gap-3 mt-0.5">
           {customer.ae_owner ? (
@@ -219,17 +230,40 @@ export default async function CustomersPage() {
     });
   };
 
+  // Past-state customers (Churned / Dropped / Past) collapse into one
+  // section.  The individual chip on each row still distinguishes which
+  // one they are — the section header just groups them so the CSM can
+  // see the whole "no longer active" cohort in one place instead of
+  // hunting across three separate sections.
+  const PAST_GROUP_KEY = "_past";
+  const PAST_GROUP_MEMBERS = new Set(["Churned", "Dropped", "Past"]);
+  function groupKeyFor(category: string): string {
+    return PAST_GROUP_MEMBERS.has(category) ? PAST_GROUP_KEY : category;
+  }
+
   const grouped = new Map<string, Customer[]>();
+  // Per-individual-category count, kept separately because `grouped` now
+  // keys the past states under a single PAST_GROUP_KEY.  The distribution
+  // bar at the top still shows the granular counts.
+  const categoryCount: Record<string, number> = {};
   for (const c of customers) {
     const cat = categoryFor(c);
-    if (!grouped.has(cat)) grouped.set(cat, []);
-    grouped.get(cat)!.push(c);
+    categoryCount[cat] = (categoryCount[cat] ?? 0) + 1;
+    const key = groupKeyFor(cat);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(c);
   }
   for (const list of grouped.values()) {
     list.sort((a, b) => a.display_name.localeCompare(b.display_name));
   }
   const orderedGroups = Array.from(grouped.entries()).sort(
-    ([a], [b]) => categorySortIndex(a) - categorySortIndex(b) || a.localeCompare(b)
+    ([a], [b]) => {
+      // Past group always sorts to the very bottom regardless of which
+      // individual past category a customer is in.
+      const ai = a === PAST_GROUP_KEY ? 100 : categorySortIndex(a);
+      const bi = b === PAST_GROUP_KEY ? 100 : categorySortIndex(b);
+      return ai - bi || a.localeCompare(b);
+    }
   );
 
   return (
@@ -257,7 +291,7 @@ export default async function CustomersPage() {
         <div className="eyebrow text-[color:var(--muted-foreground)] mb-3">Distribution</div>
         <div className="flex flex-wrap gap-4">
           {CATEGORY_ORDER.map((category) => {
-            const count = grouped.get(category)?.length ?? 0;
+            const count = categoryCount[category] ?? 0;
             if (count === 0) return null;
             const dot = CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]";
             return (
@@ -280,39 +314,56 @@ export default async function CustomersPage() {
       </div>
 
       {/* Customer groups */}
-      {orderedGroups.map(([category, list]) => {
+      {orderedGroups.map(([groupKey, list]) => {
         if (list.length === 0) return null;
-        // Softer framing for past/inactive accounts. "Past" is the auto-class
-        // for Monday's ambiguous "Churned/Dropped" group — the CSM can
-        // disambiguate per-customer into "Churned" or "Dropped" via inline
-        // edit on the customer page.
-        const isPastEngagement = PAST_CATEGORIES.has(category);
-        const PAST_HEADER: Record<string, string> = {
-          Churned: "Churned customers",
-          Dropped: "Dropped accounts",
-          Past: "Past customers · awaiting classification",
-          "To Drop": "Winding down",
-        };
-        const displayLabel = isPastEngagement
-          ? `${PAST_HEADER[category] ?? category} · ${list.length}`
-          : null;
+
+        const isPastGroup = groupKey === PAST_GROUP_KEY;
+        const isToDrop = groupKey === "To Drop";
+        // Past + To Drop both get softer framing; the merged past group
+        // (Churned / Dropped / Past auto-class) all live under one header.
+        const isPastEngagement = isPastGroup || isToDrop;
+
+        let displayLabel: string;
+        let subtitle: string | null = null;
+        if (isPastGroup) {
+          // Count breakdown — show the mix so the CSM knows how many of
+          // each still need disambiguation.
+          const counts = { Churned: 0, Dropped: 0, Past: 0 } as Record<string, number>;
+          for (const c of list) counts[categoryFor(c)]++;
+          const parts: string[] = [];
+          if (counts.Churned) parts.push(`${counts.Churned} churned`);
+          if (counts.Dropped) parts.push(`${counts.Dropped} dropped`);
+          if (counts.Past) parts.push(`${counts.Past} unclassified`);
+          displayLabel = `Churned or Dropped · ${list.length}`;
+          subtitle = parts.length > 1 ? `(${parts.join(" · ")})` : null;
+        } else if (isToDrop) {
+          displayLabel = `Winding down · ${list.length}`;
+          subtitle = "(decided to drop at renewal)";
+        } else {
+          displayLabel = groupKey;
+        }
+
         return (
-          <section key={category} className={`space-y-2 ${isPastEngagement ? "opacity-70" : ""}`}>
+          <section key={groupKey} className={`space-y-2 ${isPastEngagement ? "opacity-70" : ""}`}>
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${CATEGORY_DOT[category] ?? "bg-[color:var(--muted-foreground)]"}`} />
-                <span className={`text-sm font-semibold tracking-tight ${isPastEngagement ? "text-[color:var(--muted-foreground)]" : "text-[color:var(--foreground)]"}`}>
-                  {displayLabel ?? category}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isPastGroup
+                      ? "bg-[color:var(--muted-foreground)]"
+                      : CATEGORY_DOT[groupKey] ?? "bg-[color:var(--muted-foreground)]"
+                  }`}
+                />
+                <span
+                  className={`text-sm font-semibold tracking-tight ${
+                    isPastEngagement ? "text-[color:var(--muted-foreground)]" : "text-[color:var(--foreground)]"
+                  }`}
+                >
+                  {displayLabel}
                 </span>
-                {isPastEngagement ? (
+                {subtitle ? (
                   <span className="text-[10px] text-[color:var(--muted-foreground)] italic">
-                    {category === "Past"
-                      ? "(Monday says \u201cChurned/Dropped\u201d — open a customer to mark them Churned or Dropped)"
-                      : category === "Dropped"
-                        ? "(disengaged before go-live)"
-                        : category === "To Drop"
-                          ? "(decided to drop at renewal)"
-                          : "(no longer using DeliveryOps)"}
+                    {subtitle}
                   </span>
                 ) : null}
               </div>

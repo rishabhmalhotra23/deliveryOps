@@ -76,6 +76,19 @@ export function CustomerHero({
                 {displayName}
               </h1>
               <Badge variant={badgeVariant}>{category}</Badge>
+              {/* Partner Managed is a secondary tag — independent of the
+                  main category bucket.  A customer routed through a
+                  partner shows both labels (Strategic Growth + Partner
+                  Managed, etc.). */}
+              {partner && category !== "Partner Managed" ? (
+                <Badge
+                  variant="secondary"
+                  className="bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20"
+                  title={`Partner-managed via ${partner}`}
+                >
+                  Partner Managed
+                </Badge>
+              ) : null}
               {industry ? (
                 <Badge variant="outline" className="text-xs">{industry}</Badge>
               ) : null}
