@@ -16,3 +16,4 @@ supabase/.temp/
 # Generated outputs from scripts/ utilities (write plans, audit snapshots,
 # publish logs). These are local-only — committing them leaks state.
 scripts/.*.json
+.env.cloud
