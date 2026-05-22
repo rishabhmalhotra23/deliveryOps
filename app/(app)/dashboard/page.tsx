@@ -7,11 +7,11 @@ import { loadUpcomingPipeline } from "@/lib/dashboard/pipeline";
 import { CustomerAvatar } from "@/app/_components/customer-avatar";
 import { deriveCustomerDomain } from "@/app/_components/customer-domain";
 import { PipelineList } from "./_components/pipeline-list";
+import { DashboardStatsRow } from "./_components/stats-row";
 import {
   CategoryChip,
   PageHeader,
   SectionMark,
-  StatBlock,
   formatMoney,
   formatTimeAgo,
   CATEGORY_ORDER,
@@ -22,11 +22,29 @@ import {
   loadCustomerCommercialsMap,
   type CustomerCommercials,
 } from "@/lib/cache/integrations";
+import {
+  loadArrBreakdown,
+  loadNeedAttention,
+  loadOpenCases,
+  loadOpenOpportunities,
+} from "@/lib/dashboard/stats-drilldown";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [customers, summary, overnight, approvals, pipeline, sfDomains, commercialsMap] = await Promise.all([
+  const [
+    customers,
+    summary,
+    overnight,
+    approvals,
+    pipeline,
+    sfDomains,
+    commercialsMap,
+    arrRows,
+    attentionRows,
+    oppsRows,
+    casesRows,
+  ] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadOvernightChanges(6).catch(() => []),
@@ -34,6 +52,10 @@ export default async function Dashboard() {
     loadUpcomingPipeline().catch(() => null),
     loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
     loadCustomerCommercialsMap().catch(() => new Map<string, CustomerCommercials>()),
+    loadArrBreakdown().catch(() => []),
+    loadNeedAttention().catch(() => []),
+    loadOpenOpportunities().catch(() => []),
+    loadOpenCases().catch(() => []),
   ]);
 
   // Dynamic-category helper — same signals everywhere on the dashboard.
@@ -98,29 +120,17 @@ export default async function Dashboard() {
         }
       />
 
-      <section className="grid gap-3 md:grid-cols-4">
-        <StatBlock
-          label="Total ARR"
-          value={formatMoney(totalArr)}
-          hint={`${summary?.with_salesforce ?? 0} customers mapped to Salesforce`}
-          emphasis
-        />
-        <StatBlock
-          label="Need attention"
-          value={String(needAttention)}
-          hint="At Risk + Upcoming Renewals"
-        />
-        <StatBlock
-          label="Open opportunities"
-          value={String(summary?.total_open_opportunities ?? 0)}
-          hint="Across all customers (cached)"
-        />
-        <StatBlock
-          label="Open cases"
-          value={String(summary?.total_open_cases ?? 0)}
-          hint="Across all customers (cached)"
-        />
-      </section>
+      <DashboardStatsRow
+        totalArr={totalArr}
+        needAttention={needAttention}
+        openOpportunities={summary?.total_open_opportunities ?? 0}
+        openCases={summary?.total_open_cases ?? 0}
+        customersWithSf={summary?.with_salesforce ?? 0}
+        arrRows={arrRows}
+        attentionRows={attentionRows}
+        oppsRows={oppsRows}
+        casesRows={casesRows}
+      />
 
       <section>
         <SectionMark>Category distribution</SectionMark>

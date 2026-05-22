@@ -17,7 +17,7 @@ import {
   ProjectsByGroupChart,
   TeamWorkloadChart,
 } from "../charts";
-import { DrillDownPanel } from "./drilldown-panel";
+import { DrillDownPanel } from "@/app/_components/drilldown-panel";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 import { InlineEdit } from "@/app/_components/inline-edit";
 import { formatMoney } from "@/app/_components/brand";

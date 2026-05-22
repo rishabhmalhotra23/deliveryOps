@@ -212,39 +212,57 @@ export function StatBlock({
   value,
   hint,
   emphasis = false,
+  onClick,
 }: {
   label: ReactNode;
   value: string;
   hint?: ReactNode;
   emphasis?: boolean;
+  /** When provided, the block renders as a button. Click → caller-decides
+   *  what to do (typically opens a drill-down panel). Adds a hover lift. */
+  onClick?: () => void;
 }) {
-  return (
-    <div
-      className={`rounded-lg border p-5 ${
-        emphasis
-          ? "bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] border-[color:var(--brand-night)] dark:bg-white/8 dark:border-white/15"
-          : "bg-white border-line dark:bg-white/6 dark:border-white/12"
-      }`}
-    >
-      <div
-        className={`text-[10px] uppercase tracking-[0.22em] font-medium ${
-          emphasis ? "text-[color:var(--brand-yellow)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
-        }`}
-      >
-        {label}
+  const baseClasses = `rounded-lg border p-5 text-left transition-all w-full ${
+    emphasis
+      ? "bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] border-[color:var(--brand-night)] dark:bg-white/8 dark:border-white/15"
+      : "bg-white border-line dark:bg-white/6 dark:border-white/12"
+  } ${onClick ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-[color:var(--brand-night)] dark:hover:border-white/30" : ""}`;
+
+  const labelClasses = `text-[10px] uppercase tracking-[0.22em] font-medium ${
+    emphasis ? "text-[color:var(--brand-yellow)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
+  }`;
+  const hintClasses = `mt-1 text-xs ${
+    emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)]"
+  }`;
+
+  const inner = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <div className={labelClasses}>{label}</div>
+        {onClick ? (
+          <span
+            aria-hidden="true"
+            className={`text-[10px] tabular-nums ${
+              emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)]"
+            }`}
+          >
+            ↗
+          </span>
+        ) : null}
       </div>
       <div className="mt-2 text-display text-3xl tracking-tight tabular-nums">{value}</div>
-      {hint ? (
-        <div
-          className={`mt-1 text-xs ${
-            emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)]"
-          }`}
-        >
-          {hint}
-        </div>
-      ) : null}
-    </div>
+      {hint ? <div className={hintClasses}>{hint}</div> : null}
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={baseClasses}>
+        {inner}
+      </button>
+    );
+  }
+  return <div className={baseClasses}>{inner}</div>;
 }
 
 export function PageHeader({

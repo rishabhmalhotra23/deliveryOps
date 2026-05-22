@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { loadAnalytics } from "@/lib/analytics/loader";
-import { formatMoney, formatTimeAgo } from "@/app/_components/brand";
+import { formatTimeAgo } from "@/app/_components/brand";
 import { BackButton } from "@/app/_components/back-button";
 import {
   ArrByCategoryChart,
@@ -14,11 +14,24 @@ import {
   DeliveriesOverTimeChart,
 } from "./charts";
 import { WorkloadDrilldownSection } from "./_components/workload-drilldown-section";
+import { AnalyticsKpiRow } from "./_components/kpi-row";
+import {
+  loadActiveProjects,
+  loadArrBreakdown,
+  loadNpsResponses,
+  loadOpenOpportunities,
+} from "@/lib/dashboard/stats-drilldown";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  const bundle = await loadAnalytics();
+  const [bundle, arrRows, activeProjects, npsResponses, oppsRows] = await Promise.all([
+    loadAnalytics(),
+    loadArrBreakdown().catch(() => []),
+    loadActiveProjects().catch(() => []),
+    loadNpsResponses().catch(() => []),
+    loadOpenOpportunities().catch(() => []),
+  ]);
   const { totals } = bundle;
 
   const lastSynced = bundle.last_sync.monday ?? bundle.last_sync.salesforce;
@@ -43,34 +56,15 @@ export default async function AnalyticsPage() {
         </p>
       </div>
 
-      {/* Hero KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard
-          label="Total ARR"
-          value={formatMoney(totals.total_arr)}
-          sub={`${totals.customers} customers`}
-          color="#818cf8"
-          featured
-        />
-        <KpiCard
-          label="Active projects"
-          value={String(totals.projects_in_progress)}
-          sub={`${totals.projects_total} total · ${totals.projects_delivered} delivered`}
-          color="#34d399"
-        />
-        <KpiCard
-          label="Average NPS"
-          value={totals.nps_average != null ? totals.nps_average.toFixed(1) : "—"}
-          sub={`${totals.nps_responses} responses`}
-          color={totals.nps_average != null && totals.nps_average >= 8 ? "#34d399" : totals.nps_average != null && totals.nps_average >= 6 ? "#fbbf24" : "#f43f5e"}
-        />
-        <KpiCard
-          label="Open pipeline"
-          value={String(totals.open_opportunities)}
-          sub={`${totals.open_cases} open cases`}
-          color="#fb923c"
-        />
-      </div>
+      {/* Hero KPI row — every card is click-through to the underlying
+          rows (customers / projects / NPS responses / opportunities). */}
+      <AnalyticsKpiRow
+        totals={totals}
+        arrRows={arrRows}
+        activeProjects={activeProjects}
+        npsResponses={npsResponses}
+        oppsRows={oppsRows}
+      />
 
       {/* ARR + Customer distribution */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -191,46 +185,7 @@ export default async function AnalyticsPage() {
 }
 
 // ── Components ───────────────────────────────────────────────────────────────
-
-function KpiCard({
-  label,
-  value,
-  sub,
-  color,
-  featured,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  color: string;
-  featured?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl p-5 flex flex-col justify-between min-h-[110px] ${featured ? "lg:min-h-[130px]" : ""}`}
-      style={{
-        // In dark mode the page bg is #0d0d12 so we need enough opacity
-        // for the card to read against it. Featured uses the accent colour
-        // tinted; regular uses a neutral elevated surface.
-        background: featured
-          ? `color-mix(in srgb, ${color} 14%, transparent)`
-          : "rgba(255, 255, 255, 0.07)",
-        border: `1px solid color-mix(in srgb, ${color} ${featured ? "30" : "18"}%, transparent)`,
-      }}
-    >
-      <div className="text-xs font-medium text-[color:var(--muted-foreground)] uppercase tracking-wider">{label}</div>
-      <div>
-        <div
-          className="font-bold tabular-nums leading-none"
-          style={{ fontSize: featured ? "2.5rem" : "2rem", color }}
-        >
-          {value}
-        </div>
-        <div className="text-xs text-[color:var(--muted-foreground)] mt-1.5">{sub}</div>
-      </div>
-    </div>
-  );
-}
+// (KpiCard moved to ./_components/kpi-row.tsx as a click-through KPI button.)
 
 function Chart({
   title,

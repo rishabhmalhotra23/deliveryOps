@@ -174,18 +174,11 @@ function CustomerStrip({
         </div>
       ) : null}
 
-      {/* Integration badges */}
+      {/* "Edited" badge — surfaces manual overrides so a CSM at-a-glance
+          knows the row has been hand-tuned away from sync defaults.
+          (SF / MON badges removed — the data source is implicit; the
+          edited count is the only badge that adds information.) */}
       <div className="flex items-center gap-1.5 shrink-0">
-        {customer.salesforce_account_id ? (
-          <span className="data-label px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
-            SF
-          </span>
-        ) : null}
-        {customer.monday_item_id ? (
-          <span className="data-label px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20">
-            MON
-          </span>
-        ) : null}
         {(customer.deliveryops_protected_fields?.length ?? 0) > 0 ? (
           <span
             title={`${customer.deliveryops_protected_fields.length} field(s) manually edited`}

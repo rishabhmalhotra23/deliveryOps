@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { loadDeliveryBundle } from "@/lib/delivery/loader";
-import { PageHeader, StatBlock, formatTimeAgo } from "@/app/_components/brand";
+import { PageHeader, formatTimeAgo } from "@/app/_components/brand";
 import { BackButton } from "@/app/_components/back-button";
 import { DeliveryClient } from "./delivery-client";
+import { DeliveryStatsRow } from "./_components/delivery-stats-row";
 
 export const dynamic = "force-dynamic";
 
@@ -31,16 +32,7 @@ export default async function DeliveryPage() {
         }
       />
 
-      <section className="grid gap-3 md:grid-cols-4 glass-card-hover">
-        <StatBlock label="Projects" value={String(bundle.totals.total)} hint="all boards" emphasis />
-        <StatBlock label="In-flight" value={String(bundle.totals.active_in_flight)} hint="active board" />
-        <StatBlock label="Delivered all-time" value={String(bundle.totals.delivered_all_time)} hint="Live / Delivered" />
-        <StatBlock
-          label="Delivered Q-to-date"
-          value={String(bundle.totals.delivered_this_quarter)}
-          hint="go-live this quarter"
-        />
-      </section>
+      <DeliveryStatsRow projects={bundle.projects} totals={bundle.totals} />
 
       <DeliveryClient projects={bundle.projects} facets={bundle.facets} />
     </div>
