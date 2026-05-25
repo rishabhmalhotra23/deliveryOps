@@ -150,6 +150,23 @@ export interface QoQBucket {
   cumulative: number;  // running total of all go-lives
 }
 
+export interface WorkloadEntry {
+  person: string;
+  /** Total active projects assigned to this person (sum of the three below). */
+  active: number;
+  on_track: number;
+  at_risk: number;
+  /** Projects where Health is empty / unset — surfaced separately so the
+   *  chart doesn't quietly classify "no data" as "on track". */
+  other: number;
+  /** Slim project list for the tooltip — name + customer + health each. */
+  projects: Array<{
+    name: string;
+    customer: string;
+    health: string | null;
+  }>;
+}
+
 export interface WeeklyBundle {
   range: DateRange;
   generated_at: string;
@@ -189,8 +206,10 @@ export interface WeeklyBundle {
     last_quarter: number;
     last_q_label: string;
   };
-  workload_tam: Array<{ person: string; active: number }>;
-  workload_dev: Array<{ person: string; active: number }>;
+  /** Per-person workload — active in-flight projects with a health
+   *  breakdown so the chart can stack On Track / At Risk / Other. */
+  workload_tam: WorkloadEntry[];
+  workload_dev: WorkloadEntry[];
   nps_this_quarter: { quarter: string; average: number; count: number } | null;
   /** Active customer-process migrations from Kognitos v1 → v2.  Curated
    *  list today (see lib/reports/v2-migrations.ts); will move to a
@@ -418,14 +437,59 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   }).length;
 
   // ── Team workload (snapshot, in-progress group only) ─────────────────────
-  const tamAgg = new Map<string, number>();
-  const devAgg = new Map<string, number>();
-  for (const p of activeGroupProjects) {
-    for (const name of p.tam) tamAgg.set(name, (tamAgg.get(name) ?? 0) + 1);
-    for (const name of p.dev) devAgg.set(name, (devAgg.get(name) ?? 0) + 1);
+  // Aggregates per-person with a health breakdown so the chart can show
+  // stacked bars (On Track / At Risk / Other). Also captures the project
+  // list per person — the chart tooltip surfaces the actual names so the
+  // "who's overloaded" question is followed naturally by "with what?".
+  type WorkloadAgg = {
+    on_track: number;
+    at_risk: number;
+    other: number;
+    projects: WorkloadEntry["projects"];
+  };
+  const blankAgg = (): WorkloadAgg => ({ on_track: 0, at_risk: 0, other: 0, projects: [] });
+  const tamAgg = new Map<string, WorkloadAgg>();
+  const devAgg = new Map<string, WorkloadAgg>();
+
+  function addToWorkload(map: Map<string, WorkloadAgg>, name: string, p: WeeklyProject) {
+    const agg = map.get(name) ?? blankAgg();
+    const h = (p.health ?? "").toLowerCase();
+    if (h === "on track" || h === "healthy") agg.on_track++;
+    else if (isAtRisk(p.health)) agg.at_risk++;
+    else agg.other++;
+    agg.projects.push({
+      name: p.name,
+      customer: p.customer_display_name,
+      health: p.health,
+    });
+    map.set(name, agg);
   }
-  const workload_tam = [...tamAgg.entries()].map(([person, active]) => ({ person, active })).sort((a, b) => b.active - a.active);
-  const workload_dev = [...devAgg.entries()].map(([person, active]) => ({ person, active })).sort((a, b) => b.active - a.active);
+
+  for (const p of activeGroupProjects) {
+    for (const name of p.tam) addToWorkload(tamAgg, name, p);
+    for (const name of p.dev) addToWorkload(devAgg, name, p);
+  }
+
+  function aggToEntry(map: Map<string, WorkloadAgg>): WorkloadEntry[] {
+    return [...map.entries()]
+      .map(([person, agg]) => ({
+        person,
+        active: agg.on_track + agg.at_risk + agg.other,
+        on_track: agg.on_track,
+        at_risk: agg.at_risk,
+        other: agg.other,
+        projects: agg.projects,
+      }))
+      .sort((a, b) => {
+        // Primary sort: most loaded first.  Secondary sort: more at-risk
+        // work bubbles up among ties so the urgent column is visible.
+        if (b.active !== a.active) return b.active - a.active;
+        return b.at_risk - a.at_risk;
+      });
+  }
+
+  const workload_tam = aggToEntry(tamAgg);
+  const workload_dev = aggToEntry(devAgg);
 
   // ── NPS this quarter ──────────────────────────────────────────────────────
   type NpsRow = { raw_columns: RawCols };
@@ -449,7 +513,16 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     pipeline_funnel,
     in_uat: inUat,
     active_projects: activeGroupProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
-    all_active_board: allActiveBoardProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
+    // In-flight ordering: In progress → Pipeline → On hold → Backlog,
+    // then alphabetical within each group.  CSMs scan the active work
+    // top-down — burying it under alphabetical sort hid it.
+    all_active_board: allActiveBoardProjects.slice().sort((a, b) => {
+      const order = { in_progress: 0, pipeline: 1, on_hold: 2, backlog: 3 } as const;
+      const aRank = order[flightGroup(a.group_title)];
+      const bRank = order[flightGroup(b.group_title)];
+      if (aRank !== bRank) return aRank - bRank;
+      return a.customer_display_name < b.customer_display_name ? -1 : 1;
+    }),
     at_risk: atRisk,
     flight_breakdown,
     by_phase,

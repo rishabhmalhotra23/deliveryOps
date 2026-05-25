@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import type { WeeklyBundle, WeeklyProject } from "@/lib/reports/weekly-loader";
+import type { WeeklyBundle, WeeklyProject, WorkloadEntry } from "@/lib/reports/weekly-loader";
 import type { V2Migration } from "@/lib/reports/v2-migrations";
 import {
   PHASE_GROUP_META, ACTIVE_WORK_PHASES,
@@ -241,15 +241,132 @@ function shortName(s: string, max = 18): string {
   return s.slice(0, max - 1) + "…";
 }
 
-function WorkloadChart({ data, label }: { data: Array<{ person: string; active: number }>; label: string }) {
+// Workload chart: stacked horizontal bars per person (On Track / At Risk /
+// Other) with a custom tooltip that lists the actual projects.  Surfaces
+// "who's overloaded" AND "with what kind of risk" in one glance — flat
+// counts didn't tell the second part of that story.
+const HEALTH_FILL = {
+  on_track: "#10b981",
+  at_risk:  "#ef4444",
+  other:    "#9ca3af",
+} as const;
+const HEALTH_LABEL = {
+  on_track: "On Track",
+  at_risk:  "At Risk",
+  other:    "Unset",
+} as const;
+
+interface WorkloadDatum {
+  person: string;
+  displayName: string;
+  active: number;
+  on_track: number;
+  at_risk: number;
+  other: number;
+  projects: Array<{ name: string; customer: string; health: string | null }>;
+}
+
+interface WorkloadTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: WorkloadDatum }>;
+}
+
+function WorkloadTooltip({ active, payload }: WorkloadTooltipProps) {
+  if (!active || !payload?.[0]?.payload) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-3 py-2 text-xs shadow-lg max-w-xs">
+      <div className="font-semibold text-sm text-[color:var(--foreground)] mb-0.5">
+        {d.person}
+      </div>
+      <div className="text-[10px] text-[color:var(--muted-foreground)] uppercase tracking-wider">
+        {d.active} active project{d.active === 1 ? "" : "s"}
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-[10px]">
+        {d.on_track > 0 ? (
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.on_track }} />
+            {d.on_track} on track
+          </span>
+        ) : null}
+        {d.at_risk > 0 ? (
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.at_risk }} />
+            {d.at_risk} at risk
+          </span>
+        ) : null}
+        {d.other > 0 ? (
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.other }} />
+            {d.other} unset
+          </span>
+        ) : null}
+      </div>
+      <ul className="mt-2 pt-2 border-t border-[var(--glass-border)] space-y-0.5 max-h-48 overflow-y-auto">
+        {d.projects.map((p, i) => {
+          const isRisk = (p.health ?? "").toLowerCase().includes("risk") ||
+            ["off track", "stuck"].includes((p.health ?? "").toLowerCase());
+          return (
+            <li key={i} className="flex items-baseline gap-1.5">
+              <span
+                className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
+                style={{
+                  background: isRisk
+                    ? HEALTH_FILL.at_risk
+                    : (p.health ?? "").toLowerCase() === "on track" || (p.health ?? "").toLowerCase() === "healthy"
+                      ? HEALTH_FILL.on_track
+                      : HEALTH_FILL.other,
+                }}
+              />
+              <span className="text-[color:var(--foreground)] truncate">
+                <span className="font-medium">{p.customer}</span>
+                <span className="text-[color:var(--muted-foreground)]"> · {p.name}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function WorkloadChart({ data, label }: { data: WorkloadEntry[]; label: string }) {
   const t = useChartTheme();
   if (data.length === 0) return <Empty text="No assignments found." />;
-  const display = data.map((d) => ({ ...d, displayName: shortName(d.person) }));
+  const display: WorkloadDatum[] = data.map((d) => ({
+    person: d.person,
+    displayName: shortName(d.person),
+    active: d.active,
+    on_track: d.on_track,
+    at_risk: d.at_risk,
+    other: d.other,
+    projects: d.projects,
+  }));
+  // Total at-risk count for the header badge — operational summary.
+  const totalAtRisk = display.reduce((s, d) => s + d.at_risk, 0);
+  const totalProjects = display.reduce((s, d) => s + d.active, 0);
+
   return (
     <>
-      <div className="text-[11px] text-[color:var(--muted-foreground)] mb-2">{label}</div>
-      <ResponsiveContainer width="100%" height={Math.max(90, data.length * 32)}>
-        <BarChart data={display} layout="vertical" margin={{ top: 0, right: 24, left: 4, bottom: 0 }}>
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div className="text-[11px] text-[color:var(--muted-foreground)]">{label}</div>
+        <div className="flex items-center gap-2 text-[10px] text-[color:var(--muted-foreground)]">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.on_track }} />
+            On track
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.at_risk }} />
+            At risk
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.other }} />
+            Unset
+          </span>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={Math.max(120, data.length * 36)}>
+        <BarChart data={display} layout="vertical" margin={{ top: 0, right: 32, left: 4, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
           <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
           <YAxis
@@ -261,16 +378,26 @@ function WorkloadChart({ data, label }: { data: Array<{ person: string; active: 
             width={130}
             interval={0}
           />
-          <Tooltip
-            contentStyle={t.tooltipStyle}
-            labelFormatter={(_, payload) => (payload?.[0]?.payload as { person?: string } | undefined)?.person ?? ""}
-            formatter={(v) => [v, "Active projects"]}
-          />
-          <Bar dataKey="active" radius={[0, 3, 3, 0]}>
-            {display.map((_, i) => <Cell key={i} fill={WORKLOAD_COLORS[i % WORKLOAD_COLORS.length]} />)}
-          </Bar>
+          <Tooltip content={<WorkloadTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+          {/* Order matters: rendered left-to-right.  Risk to the right
+              of On-Track puts attention-needed work next to the count. */}
+          <Bar dataKey="on_track" stackId="health" fill={HEALTH_FILL.on_track} name={HEALTH_LABEL.on_track} />
+          <Bar dataKey="at_risk"  stackId="health" fill={HEALTH_FILL.at_risk}  name={HEALTH_LABEL.at_risk} />
+          <Bar dataKey="other"    stackId="health" fill={HEALTH_FILL.other}    name={HEALTH_LABEL.other} radius={[0, 3, 3, 0]} />
         </BarChart>
       </ResponsiveContainer>
+      <div className="mt-2 text-[10px] text-[color:var(--muted-foreground)] flex items-center justify-between flex-wrap gap-2">
+        <span>{totalProjects} active assignment{totalProjects === 1 ? "" : "s"}</span>
+        {totalAtRisk > 0 ? (
+          <span className="text-red-600 dark:text-red-400 font-medium">
+            {totalAtRisk} at-risk slot{totalAtRisk === 1 ? "" : "s"} across the team
+          </span>
+        ) : (
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+            No at-risk assignments
+          </span>
+        )}
+      </div>
     </>
   );
 }
@@ -644,14 +771,18 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
 }
 
 // ── V2 Migrations Section ─────────────────────────────────────────────
-// Surfaces the in-flight v1 → v2 migrations.  Each row carries:
-//   - Customer name (deep-linked to /customers/[key])
-//   - Optional process name (when only one process is being migrated)
-//   - Delivery-team owners + Engineering-team owners (chips)
-//   - Status sentence (the freeform update)
-//   - Optional blocker pill — surfaced loudly so it stays visible
+// Lightweight: customer + process pill(s), with optional Delivery /
+// Engineering owner chips inline. No freeform status text — that
+// decays between weekly cadences. Once the Monday column is live the
+// list refreshes automatically per sync; until then the curated list
+// at lib/reports/v2-migrations.ts is the source.
 
 function V2MigrationsSection({ migrations }: { migrations: V2Migration[] }) {
+  const ownerCls = (tone: "emerald" | "indigo") =>
+    tone === "emerald"
+      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+      : "border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400";
+
   return (
     <Section
       title="Migrations to v2"
@@ -659,93 +790,64 @@ function V2MigrationsSection({ migrations }: { migrations: V2Migration[] }) {
       countCls="bg-indigo-500/12 text-indigo-700 dark:text-indigo-400"
     >
       <p className="text-xs text-[color:var(--muted-foreground)] mb-3">
-        Customer processes actively being migrated from Kognitos v1 to v2.
-        Each entry lists the delivery + engineering owners and the latest
-        status. Source: curated weekly list — moves to a Monday column once
-        the &ldquo;v2 Migration Status&rdquo; field is added to the Customers
-        board.
+        Customer processes currently being migrated from Kognitos v1 to v2.
+        Source today: curated list — moves to a Monday column once the
+        &ldquo;v2 Migration Status&rdquo; field is added to the Customers board
+        and rows refresh on the daily sync.
       </p>
-      <div className="space-y-3">
-        {migrations.map((m) => (
-          <V2MigrationRow key={m.customer_key} migration={m} />
-        ))}
-      </div>
+      <ul className="divide-y divide-[var(--glass-border)]">
+        {migrations.map((m) => {
+          const owners = [...(m.delivery_team ?? []), ...(m.engineering_team ?? [])];
+          return (
+            <li key={m.customer_key} className="py-2.5 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <Link
+                  href={`/customers/${m.customer_key}`}
+                  className="text-sm font-semibold text-[color:var(--foreground)] hover:underline"
+                >
+                  {m.customer_display_name ?? m.customer_key}
+                </Link>
+                {m.processes.length === 0 ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] uppercase tracking-wider">
+                    All processes
+                  </span>
+                ) : (
+                  m.processes.map((p) => (
+                    <span
+                      key={p}
+                      className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-medium uppercase tracking-wider"
+                    >
+                      {p}
+                    </span>
+                  ))
+                )}
+              </div>
+              {owners.length > 0 ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(m.delivery_team ?? []).map((p) => (
+                    <span
+                      key={`d-${p}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${ownerCls("emerald")}`}
+                      title="Delivery team"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                  {(m.engineering_team ?? []).map((p) => (
+                    <span
+                      key={`e-${p}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${ownerCls("indigo")}`}
+                      title="Engineering"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </Section>
-  );
-}
-
-function V2MigrationRow({ migration }: { migration: V2Migration }) {
-  return (
-    <div className="rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] p-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              href={`/customers/${migration.customer_key}`}
-              className="text-sm font-semibold text-[color:var(--foreground)] hover:underline"
-            >
-              {migration.customer_display_name ?? migration.customer_key}
-            </Link>
-            {migration.process ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-medium uppercase tracking-wider">
-                {migration.process}
-              </span>
-            ) : (
-              <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] uppercase tracking-wider">
-                All processes
-              </span>
-            )}
-            {migration.blocker ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-400 font-medium">
-                Blocker · {migration.blocker}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-[color:var(--muted-foreground)]">
-            <OwnerGroup label="Delivery" people={migration.delivery_team} tone="emerald" />
-            <OwnerGroup label="Engineering" people={migration.engineering_team} tone="indigo" />
-          </div>
-        </div>
-      </div>
-      <p className="text-sm text-[color:var(--foreground)] mt-3 leading-relaxed">
-        {migration.status}
-      </p>
-    </div>
-  );
-}
-
-function OwnerGroup({
-  label,
-  people,
-  tone,
-}: {
-  label: string;
-  people: string[];
-  tone: "emerald" | "indigo";
-}) {
-  if (people.length === 0) {
-    return (
-      <span className="flex items-center gap-1.5">
-        <span className="text-[10px] uppercase tracking-wider opacity-70">{label}:</span>
-        <span className="italic">none assigned</span>
-      </span>
-    );
-  }
-  const cls =
-    tone === "emerald"
-      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-      : "border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400";
-  return (
-    <span className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-[10px] uppercase tracking-wider opacity-70">{label}:</span>
-      {people.map((p) => (
-        <span
-          key={p}
-          className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${cls}`}
-        >
-          {p}
-        </span>
-      ))}
-    </span>
   );
 }
