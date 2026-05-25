@@ -241,132 +241,33 @@ function shortName(s: string, max = 18): string {
   return s.slice(0, max - 1) + "…";
 }
 
-// Workload chart: stacked horizontal bars per person (On Track / At Risk /
-// Other) with a custom tooltip that lists the actual projects.  Surfaces
-// "who's overloaded" AND "with what kind of risk" in one glance — flat
-// counts didn't tell the second part of that story.
-const HEALTH_FILL = {
-  on_track: "#10b981",
-  at_risk:  "#ef4444",
-  other:    "#9ca3af",
-} as const;
-const HEALTH_LABEL = {
-  on_track: "On Track",
-  at_risk:  "At Risk",
-  other:    "Unset",
-} as const;
-
-interface WorkloadDatum {
-  person: string;
-  displayName: string;
-  active: number;
-  on_track: number;
-  at_risk: number;
-  other: number;
-  projects: Array<{ name: string; customer: string; health: string | null }>;
-}
-
-interface WorkloadTooltipProps {
-  active?: boolean;
-  payload?: Array<{ payload: WorkloadDatum }>;
-}
-
-function WorkloadTooltip({ active, payload }: WorkloadTooltipProps) {
-  if (!active || !payload?.[0]?.payload) return null;
-  const d = payload[0].payload;
-  return (
-    <div className="rounded-md border border-[var(--glass-border)] bg-[color:var(--background)] px-3 py-2 text-xs shadow-lg max-w-xs">
-      <div className="font-semibold text-sm text-[color:var(--foreground)] mb-0.5">
-        {d.person}
-      </div>
-      <div className="text-[10px] text-[color:var(--muted-foreground)] uppercase tracking-wider">
-        {d.active} active project{d.active === 1 ? "" : "s"}
-      </div>
-      <div className="mt-2 flex items-center gap-2 text-[10px]">
-        {d.on_track > 0 ? (
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.on_track }} />
-            {d.on_track} on track
-          </span>
-        ) : null}
-        {d.at_risk > 0 ? (
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.at_risk }} />
-            {d.at_risk} at risk
-          </span>
-        ) : null}
-        {d.other > 0 ? (
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.other }} />
-            {d.other} unset
-          </span>
-        ) : null}
-      </div>
-      <ul className="mt-2 pt-2 border-t border-[var(--glass-border)] space-y-0.5 max-h-48 overflow-y-auto">
-        {d.projects.map((p, i) => {
-          const isRisk = (p.health ?? "").toLowerCase().includes("risk") ||
-            ["off track", "stuck"].includes((p.health ?? "").toLowerCase());
-          return (
-            <li key={i} className="flex items-baseline gap-1.5">
-              <span
-                className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-                style={{
-                  background: isRisk
-                    ? HEALTH_FILL.at_risk
-                    : (p.health ?? "").toLowerCase() === "on track" || (p.health ?? "").toLowerCase() === "healthy"
-                      ? HEALTH_FILL.on_track
-                      : HEALTH_FILL.other,
-                }}
-              />
-              <span className="text-[color:var(--foreground)] truncate">
-                <span className="font-medium">{p.customer}</span>
-                <span className="text-[color:var(--muted-foreground)]"> · {p.name}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-function WorkloadChart({ data, label }: { data: WorkloadEntry[]; label: string }) {
+// Workload chart — flat horizontal bar per person, one colour each.
+// (Reverted from the stacked-by-health attempt 2026-05-25 — tried to add
+// too much information and the result felt cluttered. The richer
+// per-person fields stay on WorkloadEntry though, so callers can render
+// detail panels off them if needed later.)
+//
+// `height` is opt-in from the caller so two side-by-side charts can
+// match each other regardless of their row counts (otherwise the shorter
+// one feels lopsided next to the taller one).
+function WorkloadChart({
+  data,
+  label,
+  height,
+}: {
+  data: WorkloadEntry[];
+  label: string;
+  height?: number;
+}) {
   const t = useChartTheme();
   if (data.length === 0) return <Empty text="No assignments found." />;
-  const display: WorkloadDatum[] = data.map((d) => ({
-    person: d.person,
-    displayName: shortName(d.person),
-    active: d.active,
-    on_track: d.on_track,
-    at_risk: d.at_risk,
-    other: d.other,
-    projects: d.projects,
-  }));
-  // Total at-risk count for the header badge — operational summary.
-  const totalAtRisk = display.reduce((s, d) => s + d.at_risk, 0);
-  const totalProjects = display.reduce((s, d) => s + d.active, 0);
-
+  const display = data.map((d) => ({ ...d, displayName: shortName(d.person) }));
+  const computedHeight = height ?? Math.max(120, data.length * 32);
   return (
     <>
-      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-        <div className="text-[11px] text-[color:var(--muted-foreground)]">{label}</div>
-        <div className="flex items-center gap-2 text-[10px] text-[color:var(--muted-foreground)]">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.on_track }} />
-            On track
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.at_risk }} />
-            At risk
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_FILL.other }} />
-            Unset
-          </span>
-        </div>
-      </div>
-      <ResponsiveContainer width="100%" height={Math.max(120, data.length * 36)}>
-        <BarChart data={display} layout="vertical" margin={{ top: 0, right: 32, left: 4, bottom: 0 }}>
+      <div className="text-[11px] text-[color:var(--muted-foreground)] mb-2">{label}</div>
+      <ResponsiveContainer width="100%" height={computedHeight}>
+        <BarChart data={display} layout="vertical" margin={{ top: 0, right: 24, left: 4, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
           <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
           <YAxis
@@ -378,26 +279,16 @@ function WorkloadChart({ data, label }: { data: WorkloadEntry[]; label: string }
             width={130}
             interval={0}
           />
-          <Tooltip content={<WorkloadTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-          {/* Order matters: rendered left-to-right.  Risk to the right
-              of On-Track puts attention-needed work next to the count. */}
-          <Bar dataKey="on_track" stackId="health" fill={HEALTH_FILL.on_track} name={HEALTH_LABEL.on_track} />
-          <Bar dataKey="at_risk"  stackId="health" fill={HEALTH_FILL.at_risk}  name={HEALTH_LABEL.at_risk} />
-          <Bar dataKey="other"    stackId="health" fill={HEALTH_FILL.other}    name={HEALTH_LABEL.other} radius={[0, 3, 3, 0]} />
+          <Tooltip
+            contentStyle={t.tooltipStyle}
+            labelFormatter={(_, payload) => (payload?.[0]?.payload as { person?: string } | undefined)?.person ?? ""}
+            formatter={(v) => [v, "Active projects"]}
+          />
+          <Bar dataKey="active" radius={[0, 3, 3, 0]}>
+            {display.map((_, i) => <Cell key={i} fill={WORKLOAD_COLORS[i % WORKLOAD_COLORS.length]} />)}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <div className="mt-2 text-[10px] text-[color:var(--muted-foreground)] flex items-center justify-between flex-wrap gap-2">
-        <span>{totalProjects} active assignment{totalProjects === 1 ? "" : "s"}</span>
-        {totalAtRisk > 0 ? (
-          <span className="text-red-600 dark:text-red-400 font-medium">
-            {totalAtRisk} at-risk slot{totalAtRisk === 1 ? "" : "s"} across the team
-          </span>
-        ) : (
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-            No at-risk assignments
-          </span>
-        )}
-      </div>
     </>
   );
 }
@@ -752,15 +643,28 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
       {/* Row 7 — In production */}
       <InProdSection in_prod={bundle.in_prod} nps={bundle.nps_this_quarter} />
 
-      {/* Row 8 — Team workload (TAM + FDE) */}
+      {/* Row 8 — Team workload (TAM + FDE).
+          Both charts share a height computed off the longer of the two
+          rosters so the side-by-side layout doesn't feel lopsided when
+          one side has more people than the other. */}
       <div className="glass-card p-5">
         <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-4">
           Team workload — active projects (In progress group)
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <WorkloadChart data={bundle.workload_tam} label="TAM / CSM" />
-          <WorkloadChart data={bundle.workload_dev} label="FDE / Engineering" />
-        </div>
+        {(() => {
+          const maxRows = Math.max(
+            bundle.workload_tam.length,
+            bundle.workload_dev.length,
+            3 // floor — keeps the chart card from collapsing when the team is small
+          );
+          const sharedHeight = Math.max(140, maxRows * 36);
+          return (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <WorkloadChart data={bundle.workload_tam} label="TAM / CSM" height={sharedHeight} />
+              <WorkloadChart data={bundle.workload_dev} label="FDE / Engineering" height={sharedHeight} />
+            </div>
+          );
+        })()}
       </div>
 
       <div className="text-[11px] text-[color:var(--muted-foreground)] text-center pt-1">
