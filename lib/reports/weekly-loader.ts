@@ -19,6 +19,7 @@ import {
   peopleNames, ttvDays,
   kognitosFYQuarter, previousKognitosFYQuarter,
 } from "@/lib/delivery/taxonomy";
+import { loadV2Migrations, type V2Migration } from "@/lib/reports/v2-migrations";
 
 function parseDate(iso: string | null): Date | null {
   if (!iso) return null;
@@ -191,6 +192,10 @@ export interface WeeklyBundle {
   workload_tam: Array<{ person: string; active: number }>;
   workload_dev: Array<{ person: string; active: number }>;
   nps_this_quarter: { quarter: string; average: number; count: number } | null;
+  /** Active customer-process migrations from Kognitos v1 → v2.  Curated
+   *  list today (see lib/reports/v2-migrations.ts); will move to a
+   *  Monday column once Rishabh adds it to the Customers board. */
+  v2_migrations: V2Migration[];
 
   totals: {
     shipped_in_range: number;
@@ -208,7 +213,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   const now = new Date();
   const range = resolveRange(req, now);
 
-  const [projectsRes, customersRes, npsRes, lastSyncRes] = await Promise.all([
+  const [projectsRes, customersRes, npsRes, lastSyncRes, v2Migrations] = await Promise.all([
     sb.from("monday_projects")
       .select("monday_item_id, name, group_title, customer_id, fiscal_year, go_live_date, kickoff_date, latest_update, raw_columns")
       .limit(2000),
@@ -216,6 +221,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     sb.from("monday_nps_responses").select("raw_columns"),
     sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok")
       .order("finished_at", { ascending: false }).limit(1).maybeSingle(),
+    loadV2Migrations().catch(() => [] as V2Migration[]),
   ]);
 
   type CustomerRow = { id: string; key: string; display_name: string; custom_category: string | null; lifecycle_group: string | null };
@@ -455,6 +461,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     workload_tam,
     workload_dev,
     nps_this_quarter,
+    v2_migrations: v2Migrations,
     totals: {
       shipped_in_range: shippedInRange.length,
       in_flight_active: activeGroupProjects.length,
