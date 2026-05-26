@@ -281,10 +281,85 @@ export const DELIVERY_OPS_TOOLS: Anthropic.Tool[] = [
       },
       required: ["rules"],
     },
-    // Anthropic prompt caching: marking the LAST tool with cache_control
-    // caches the entire tools block. Since tool definitions virtually never
-    // change between calls, this is effectively a one-time cost per ~5 min
-    // window. https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+  },
+
+  // ─── Read-only views into the rest of DeliveryOps's customer data ────────
+  // These mirror what the customer page already shows.  Without them the
+  // agent only sees Salesforce-derived profile data and is blind to the
+  // Monday side of the world (projects, FDEs, NPS, activities).
+
+  {
+    name: "list_customer_projects",
+    description:
+      "List this customer's projects across every Monday board: name, status, phase, health, kickoff + go-live dates, FDE roster, and the latest update.  Use this whenever the question is about delivery work — 'what's in flight?', 'who's working on it?', 'when does this go live?', 'show me UAT projects'.  Monday splits delivery + engineering into two people-columns; DeliveryOps surfaces them as a single FDE roster.",
+    input_schema: {
+      type: "object",
+      properties: {
+        include_delivered: {
+          type: "boolean",
+          description: "Default true.  When false, exclude projects already Live/Delivered/Cancelled.",
+        },
+        limit: { type: "number", description: "Cap on rows returned (default 25)." },
+      },
+    },
+  },
+  {
+    name: "list_customer_nps",
+    description:
+      "Recent NPS responses for this customer with score, category (Promoter/Passive/Detractor), respondent, quarter, and verbatim feedback.  Use for 'how does this customer feel?', 'what's the latest NPS?', 'who's a detractor?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Default 10." },
+      },
+    },
+  },
+  {
+    name: "list_customer_opportunities",
+    description:
+      "Open Salesforce opportunities for this customer: name, stage, amount, close date, AE owner, probability.  Use for renewal / expansion / pipeline questions.",
+    input_schema: {
+      type: "object",
+      properties: {
+        include_closed: { type: "boolean", description: "Default false — include closed-won/lost too." },
+      },
+    },
+  },
+  {
+    name: "list_customer_cases",
+    description: "Salesforce support cases for this customer: case number, subject, status, priority, origin.",
+    input_schema: {
+      type: "object",
+      properties: {
+        include_closed: { type: "boolean", description: "Default false." },
+      },
+    },
+  },
+  {
+    name: "list_customer_activities",
+    description:
+      "Monday activity-log entries for this customer (tickets, meeting notes, follow-ups).  Each entry has status, priority, due date, AI summary, and a Monday source link.",
+    input_schema: {
+      type: "object",
+      properties: {
+        include_resolved: { type: "boolean", description: "Default false." },
+        limit: { type: "number", description: "Default 20." },
+      },
+    },
+  },
+  {
+    name: "list_customer_events",
+    description:
+      "Read this customer's event timeline — every emails sent, Slack thread, profile edit, project change, escalation.  Filter by event_type or limit window.  Use when the question is 'what happened recently?' or 'when did X change?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        event_type: { type: "string", description: "Optional filter (e.g. 'EMAIL_SENT', 'CATEGORY_CHANGED')." },
+        days: { type: "number", description: "Look-back window in days.  Default 30." },
+        limit: { type: "number", description: "Default 20." },
+      },
+    },
+    // Prompt-caching marker on the LAST tool caches the whole tools block.
     cache_control: { type: "ephemeral" },
   },
 ];

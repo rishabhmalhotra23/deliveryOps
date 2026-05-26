@@ -17,6 +17,12 @@ import {
 import { recentConversations } from "@/lib/conversations";
 import type { TaskAction, TaskSchedule } from "@/lib/supabase/types";
 import { GATED_TOOLS_EMAIL } from "@/lib/agent/tools";
+import { loadCustomerEnrichment } from "@/lib/cache/integrations";
+import {
+  formatPersonName,
+  formatPeopleList,
+  isDelivered as txIsDelivered,
+} from "@/lib/delivery/taxonomy";
 
 export type AgentSource = "slack" | "email" | "web" | "approved";
 
@@ -80,6 +86,18 @@ export async function executeTool(
       return await toolGetCustomerRules(ctx);
     case "update_customer_rules":
       return await toolUpdateCustomerRules(toolInput, ctx);
+    case "list_customer_projects":
+      return await toolListCustomerProjects(toolInput, ctx);
+    case "list_customer_nps":
+      return await toolListCustomerNps(toolInput, ctx);
+    case "list_customer_opportunities":
+      return await toolListCustomerOpportunities(toolInput, ctx);
+    case "list_customer_cases":
+      return await toolListCustomerCases(toolInput, ctx);
+    case "list_customer_activities":
+      return await toolListCustomerActivities(toolInput, ctx);
+    case "list_customer_events":
+      return await toolListCustomerEvents(toolInput, ctx);
     default:
       return `Unknown tool: ${toolName}`;
   }
@@ -520,6 +538,150 @@ async function toolUpdateCustomerRules(
     tags: ["rules"],
   });
   return `Customer rules updated (${content.length} chars).`;
+}
+
+// ─── Read-only views into the rest of DeliveryOps's customer data ───────────
+//
+// Each tool below reads the per-customer enrichment cache that the customer
+// page already uses (Monday projects + activities + NPS, Salesforce opps +
+// cases).  Result strings are kept under ~3000 chars so they fit comfortably
+// in the tool-result window.
+
+async function toolListCustomerProjects(
+  input: Record<string, unknown>,
+  ctx: HandlerContext
+): Promise<string> {
+  const includeDelivered = input.include_delivered !== false; // default true
+  const limit = clamp(Number(input.limit ?? 25), 1, 100);
+  const customer = await requireCustomerByKey(ctx.customerKey);
+  const enrichment = await loadCustomerEnrichment(customer.id);
+  let projects = enrichment.projects;
+  if (!includeDelivered) {
+    projects = projects.filter((p) => !txIsDelivered(p.project_status, p.group_title));
+  }
+  if (projects.length === 0) return "No projects on file.";
+
+  const lines = projects.slice(0, limit).map((p) => {
+    const fde = formatPeopleList(p.fde) || "(no FDE)";
+    const parts = [
+      p.project_status ?? "—",
+      p.current_phase ?? "—",
+      p.health ?? null,
+      p.dev_platform ?? null,
+      p.fiscal_year ?? null,
+    ].filter(Boolean);
+    const dates = [
+      p.kickoff_date ? `kickoff ${p.kickoff_date}` : null,
+      p.go_live_date ? `go-live ${p.go_live_date}` : null,
+    ].filter(Boolean);
+    const update = p.latest_update ? `\n   update: ${truncate(p.latest_update, 200)}` : "";
+    return `- ${p.name}\n   ${parts.join(" · ")}\n   FDE: ${fde}${dates.length ? `\n   ${dates.join(" · ")}` : ""}${update}`;
+  });
+  const more = projects.length > limit ? `\n… ${projects.length - limit} more not shown.` : "";
+  return `${projects.length} project${projects.length === 1 ? "" : "s"}.\n${lines.join("\n")}${more}`;
+}
+
+async function toolListCustomerNps(
+  input: Record<string, unknown>,
+  ctx: HandlerContext
+): Promise<string> {
+  const limit = clamp(Number(input.limit ?? 10), 1, 50);
+  const customer = await requireCustomerByKey(ctx.customerKey);
+  const enrichment = await loadCustomerEnrichment(customer.id);
+  if (enrichment.nps.length === 0) return "No NPS responses on file.";
+  const lines = enrichment.nps.slice(0, limit).map(
+    (n) =>
+      `- ${n.respondent ?? "?"} · ${n.score ?? "—"} (${n.category ?? "—"})${n.quarter ? ` · ${n.quarter}` : ""}${n.response_date ? ` · ${n.response_date}` : ""}${n.feedback ? `\n   "${truncate(n.feedback, 240)}"` : ""}`
+  );
+  return `${enrichment.nps.length} response${enrichment.nps.length === 1 ? "" : "s"}.\n${lines.join("\n")}`;
+}
+
+async function toolListCustomerOpportunities(
+  input: Record<string, unknown>,
+  ctx: HandlerContext
+): Promise<string> {
+  const includeClosed = input.include_closed === true;
+  const customer = await requireCustomerByKey(ctx.customerKey);
+  const enrichment = await loadCustomerEnrichment(customer.id);
+  const opps = enrichment.opportunities.filter((o) => includeClosed || !o.is_closed);
+  if (opps.length === 0) return includeClosed ? "No opportunities on file." : "No open opportunities.";
+  const lines = opps.slice(0, 25).map(
+    (o) =>
+      `- ${o.name ?? "(unnamed)"} · ${o.stage_name ?? "—"} · ${o.amount != null ? `$${o.amount.toLocaleString()}` : "—"}${o.close_date ? ` · closes ${o.close_date}` : ""}${o.probability != null ? ` · ${o.probability}%` : ""}${o.owner_name ? ` · AE ${formatPersonName(o.owner_name)}` : ""}`
+  );
+  return `${opps.length} ${includeClosed ? "" : "open "}opportunit${opps.length === 1 ? "y" : "ies"}.\n${lines.join("\n")}`;
+}
+
+async function toolListCustomerCases(
+  input: Record<string, unknown>,
+  ctx: HandlerContext
+): Promise<string> {
+  const includeClosed = input.include_closed === true;
+  const customer = await requireCustomerByKey(ctx.customerKey);
+  const enrichment = await loadCustomerEnrichment(customer.id);
+  const cases = enrichment.cases.filter((c) => includeClosed || !c.is_closed);
+  if (cases.length === 0) return includeClosed ? "No cases on file." : "No open cases.";
+  const lines = cases.slice(0, 25).map(
+    (c) =>
+      `- ${c.case_number ?? "?"} · ${truncate(c.subject ?? "—", 120)} · ${c.status ?? "—"}${c.priority ? ` · ${c.priority}` : ""}${c.origin ? ` · ${c.origin}` : ""}`
+  );
+  return `${cases.length} ${includeClosed ? "" : "open "}case${cases.length === 1 ? "" : "s"}.\n${lines.join("\n")}`;
+}
+
+async function toolListCustomerActivities(
+  input: Record<string, unknown>,
+  ctx: HandlerContext
+): Promise<string> {
+  const includeResolved = input.include_resolved === true;
+  const limit = clamp(Number(input.limit ?? 20), 1, 50);
+  const customer = await requireCustomerByKey(ctx.customerKey);
+  const enrichment = await loadCustomerEnrichment(customer.id);
+  const activities = enrichment.activities.filter((a) => {
+    if (includeResolved) return true;
+    const status = (a.status ?? "").toLowerCase();
+    return status !== "closed" && status !== "resolved" && !a.resolved_date;
+  });
+  if (activities.length === 0) return includeResolved ? "No activities on file." : "No open activities.";
+  const lines = activities.slice(0, limit).map((a) => {
+    const meta = [
+      a.status ?? null,
+      a.priority ?? null,
+      a.due_date ? `due ${a.due_date}` : null,
+    ].filter(Boolean);
+    const summary = a.ai_summary ? `\n   ${truncate(a.ai_summary, 200)}` : "";
+    return `- ${a.name}${meta.length ? `\n   ${meta.join(" · ")}` : ""}${summary}`;
+  });
+  const more = activities.length > limit ? `\n… ${activities.length - limit} more not shown.` : "";
+  return `${activities.length} activit${activities.length === 1 ? "y" : "ies"}.\n${lines.join("\n")}${more}`;
+}
+
+async function toolListCustomerEvents(
+  input: Record<string, unknown>,
+  ctx: HandlerContext
+): Promise<string> {
+  const eventType = typeof input.event_type === "string" ? input.event_type : undefined;
+  const days = clamp(Number(input.days ?? 30), 1, 365);
+  const limit = clamp(Number(input.limit ?? 20), 1, 100);
+  // listEvents doesn't have a "since" option, so we overfetch and filter by
+  // timestamp in JS.  Cap the fetch at 500 (the loader's max) — far past
+  // any practical limit for a single customer event timeline.
+  const cutoff = Date.now() - days * 86_400_000;
+  const fetched = await listEvents(ctx.customerKey, { eventType, limit: 500 });
+  const events = fetched
+    .filter((e) => new Date(e.ts).getTime() >= cutoff)
+    .slice(0, limit);
+  if (events.length === 0) {
+    return `No events in the last ${days} day${days === 1 ? "" : "s"}.`;
+  }
+  const lines = events.map(
+    (e) => `- ${e.ts.slice(0, 16).replace("T", " ")} · ${e.event_type} · ${truncate(e.summary, 160)}`
+  );
+  return `${events.length} event${events.length === 1 ? "" : "s"} (last ${days}d).\n${lines.join("\n")}`;
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  if (!Number.isFinite(n)) return lo;
+  return Math.max(lo, Math.min(hi, Math.round(n)));
 }
 
 // Re-export so consumers can access the gated set without pulling in the
