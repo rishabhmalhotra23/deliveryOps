@@ -45,12 +45,12 @@ const MIGRATIONS: V2Migration[] = [
   {
     customer_key: "ttx",
     processes: ["Lease Invoicing"],
-    delivery_team: ["Ayush"],
+    delivery_team: ["Ayush", "Paige"],
   },
   {
     customer_key: "kort-payments",
     processes: [],
-    delivery_team: ["Karthik"],
+    delivery_team: ["Karthik", "Paige"],
     engineering_team: ["Sasha"],
   },
   {
