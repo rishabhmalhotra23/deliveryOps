@@ -94,7 +94,10 @@ function PipelineRow({ opp }: { opp: PipelineOpportunity }) {
             >
               {kind.label}
             </span>
-            <span className="text-sm font-medium text-[color:var(--foreground)] truncate">
+            <span
+              className="text-sm font-medium text-[color:var(--foreground)] break-words"
+              title={opp.customer_display_name ?? opp.name}
+            >
               {opp.customer_display_name ?? opp.name}
             </span>
           </div>

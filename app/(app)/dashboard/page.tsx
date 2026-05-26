@@ -180,7 +180,7 @@ export default async function Dashboard() {
                       · {a.kind === "email_draft" ? "Email draft" : "Action"}
                     </span>
                   </div>
-                  <div className="text-xs text-[color:var(--brand-gray)] truncate">{a.preview}</div>
+                  <div className="text-xs text-[color:var(--brand-gray)] line-clamp-2 break-words" title={a.preview}>{a.preview}</div>
                 </Link>
                 <span className="text-[10px] text-[color:var(--brand-gray)] shrink-0 tabular-nums">
                   {formatTimeAgo(a.created_at)}
@@ -259,7 +259,7 @@ export default async function Dashboard() {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="text-display text-base truncate">{o.customer_display_name}</div>
+                        <div className="text-display text-base break-words" title={o.customer_display_name}>{o.customer_display_name}</div>
                         <span className="rounded-full bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] text-[10px] font-mono px-2 py-0.5 tabular-nums shrink-0">
                           +{o.event_count}
                         </span>
@@ -315,7 +315,7 @@ export default async function Dashboard() {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="text-display text-base truncate">{c.display_name}</div>
+                        <div className="text-display text-base break-words" title={c.display_name}>{c.display_name}</div>
                         <CategoryChip category={category} size="sm" />
                       </div>
                       <div className="mt-1 text-xs text-[color:var(--brand-gray)] space-y-0.5">

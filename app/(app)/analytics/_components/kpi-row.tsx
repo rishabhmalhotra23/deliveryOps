@@ -231,7 +231,8 @@ function ArrList({ rows }: { rows: ArrBreakdownRow[] }) {
           <div className="min-w-0 flex-1">
             <Link
               href={`/customers/${r.customer_key}`}
-              className="text-sm font-medium text-[color:var(--foreground)] truncate hover:underline"
+              className="text-sm font-medium text-[color:var(--foreground)] hover:underline break-words"
+              title={r.customer_display_name}
             >
               {r.customer_display_name}
             </Link>
@@ -288,10 +289,18 @@ function ActiveProjectsList({
             }
             className="w-full text-left hover:opacity-80 transition-opacity"
           >
-            <div className="text-sm font-medium text-[color:var(--foreground)] truncate">
+            <div
+              className="text-sm font-medium text-[color:var(--foreground)] break-words"
+              title={p.customer_display_name ?? undefined}
+            >
               {p.customer_display_name ?? "—"}
             </div>
-            <div className="text-xs text-[color:var(--muted-foreground)] truncate mt-0.5">{p.name}</div>
+            <div
+              className="text-xs text-[color:var(--muted-foreground)] break-words mt-0.5"
+              title={p.name}
+            >
+              {p.name}
+            </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">
               {p.phase ? <span>{p.phase}</span> : null}
               {p.health ? <Pill tone={/risk|stuck/i.test(p.health) ? "red" : "emerald"}>{p.health}</Pill> : null}
@@ -325,12 +334,16 @@ function NpsList({ rows }: { rows: NpsResponseRow[] }) {
                   {r.customer_key ? (
                     <Link
                       href={`/customers/${r.customer_key}`}
-                      className="text-sm font-medium text-[color:var(--foreground)] truncate hover:underline"
+                      className="text-sm font-medium text-[color:var(--foreground)] hover:underline break-words"
+                      title={r.customer_display_name ?? undefined}
                     >
                       {r.customer_display_name ?? "—"}
                     </Link>
                   ) : (
-                    <span className="text-sm font-medium text-[color:var(--foreground)] truncate">
+                    <span
+                      className="text-sm font-medium text-[color:var(--foreground)] break-words"
+                      title={r.customer_display_name ?? undefined}
+                    >
                       {r.customer_display_name ?? "—"}
                     </span>
                   )}
@@ -376,7 +389,10 @@ function PipelineList({ rows }: { rows: OpenOpportunityRow[] }) {
       {rows.map((o) => (
         <li key={o.sf_id} className="py-3 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-[color:var(--foreground)] truncate">
+            <div
+              className="text-sm font-medium text-[color:var(--foreground)] break-words"
+              title={o.customer_display_name ?? o.name}
+            >
               {o.customer_key ? (
                 <Link href={`/customers/${o.customer_key}`} className="hover:underline">
                   {o.customer_display_name ?? o.name}
@@ -385,7 +401,12 @@ function PipelineList({ rows }: { rows: OpenOpportunityRow[] }) {
                 o.name
               )}
             </div>
-            <div className="text-xs text-[color:var(--muted-foreground)] truncate mt-0.5">{o.name}</div>
+            <div
+              className="text-xs text-[color:var(--muted-foreground)] break-words mt-0.5"
+              title={o.name}
+            >
+              {o.name}
+            </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">
               {o.stage_name ? <span>{o.stage_name}</span> : null}
               {o.close_date ? <span>closes {o.close_date}</span> : null}

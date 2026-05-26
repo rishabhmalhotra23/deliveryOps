@@ -228,10 +228,16 @@ function ProjectList({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-[color:var(--foreground)] truncate">
+                  <div
+                    className="text-sm font-medium text-[color:var(--foreground)] break-words"
+                    title={p.customer_display_name ?? undefined}
+                  >
                     {p.customer_display_name ?? "—"}
                   </div>
-                  <div className="text-xs text-[color:var(--muted-foreground)] truncate mt-0.5">
+                  <div
+                    className="text-xs text-[color:var(--muted-foreground)] break-words mt-0.5"
+                    title={p.name}
+                  >
                     {p.name}
                   </div>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap text-[10px] uppercase tracking-wider">
@@ -293,7 +299,8 @@ function CustomerList({
             <div className="flex items-center gap-2 flex-wrap">
               <Link
                 href={`/customers/${c.key}`}
-                className="text-sm font-medium text-[color:var(--foreground)] truncate hover:underline"
+                className="text-sm font-medium text-[color:var(--foreground)] hover:underline break-words"
+                title={c.display_name}
               >
                 {c.display_name}
               </Link>

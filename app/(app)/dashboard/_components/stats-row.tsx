@@ -136,7 +136,8 @@ function CustomerArrList({ rows }: { rows: ArrBreakdownRow[] }) {
           <div className="min-w-0 flex-1">
             <Link
               href={`/customers/${r.customer_key}`}
-              className="text-sm font-medium text-[color:var(--foreground)] truncate hover:underline"
+              className="text-sm font-medium text-[color:var(--foreground)] hover:underline break-words"
+              title={r.customer_display_name}
             >
               {r.customer_display_name}
             </Link>
@@ -180,7 +181,10 @@ function OpportunityList({ rows }: { rows: OpenOpportunityRow[] }) {
         return (
           <li key={o.sf_id} className="py-3 flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-[color:var(--foreground)] truncate">
+              <div
+                className="text-sm font-medium text-[color:var(--foreground)] break-words"
+                title={o.customer_display_name ?? o.name}
+              >
                 {o.customer_key ? (
                   <Link href={`/customers/${o.customer_key}`} className="hover:underline">
                     {o.customer_display_name ?? o.name}
@@ -189,7 +193,10 @@ function OpportunityList({ rows }: { rows: OpenOpportunityRow[] }) {
                   o.name
                 )}
               </div>
-              <div className="text-xs text-[color:var(--muted-foreground)] truncate mt-0.5">
+              <div
+                className="text-xs text-[color:var(--muted-foreground)] break-words mt-0.5"
+                title={o.name}
+              >
                 {o.name}
               </div>
               <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">
@@ -216,7 +223,10 @@ function CaseList({ rows }: { rows: OpenCaseRow[] }) {
       {rows.map((c) => (
         <li key={c.sf_id} className="py-3 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-[color:var(--foreground)] truncate">
+            <div
+              className="text-sm font-medium text-[color:var(--foreground)] break-words"
+              title={c.customer_display_name ?? undefined}
+            >
               {c.customer_key ? (
                 <Link href={`/customers/${c.customer_key}`} className="hover:underline">
                   {c.customer_display_name ?? "—"}
@@ -225,7 +235,10 @@ function CaseList({ rows }: { rows: OpenCaseRow[] }) {
                 c.customer_display_name ?? "—"
               )}
             </div>
-            <div className="text-xs text-[color:var(--muted-foreground)] truncate mt-0.5">
+            <div
+              className="text-xs text-[color:var(--muted-foreground)] break-words mt-0.5"
+              title={c.subject ?? undefined}
+            >
               {c.subject ?? "(no subject)"}
             </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">

@@ -184,7 +184,11 @@ export const ACTIVE_WORK_PHASES: PhaseGroup[] = ["discovery", "dev", "uat", "wai
 
 export function peopleNames(raw: string | null | undefined): string[] {
   if (!raw?.trim()) return [];
-  return raw.split(",").map((s) => formatPersonName(s)).filter(Boolean);
+  return raw
+    .split(",")
+    .filter((s) => !isPlaceholderName(s))
+    .map((s) => formatPersonName(s))
+    .filter(Boolean);
 }
 function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
@@ -249,17 +253,47 @@ export function formatPeopleList(
   return `${shown.join(", ")} +${extra}`;
 }
 
+/** Placeholder strings Monday users sometimes drop into the delivery /
+ *  engineering people-columns when no real person has been assigned yet.
+ *  None of these are FDEs and they pollute workload charts + filters.
+ *  Match is case-insensitive; first-name and full-name forms both hit. */
+const PLACEHOLDER_NAMES = new Set([
+  "customer implementing",
+  "tbd",
+  "unassigned",
+  "n/a",
+  "na",
+  "tba",
+  "—",
+  "-",
+  "?",
+  "open",
+  "kognitos",
+  "partner",
+]);
+
+/** True when a raw Monday people-column entry is a placeholder rather
+ *  than a real person. */
+export function isPlaceholderName(raw: string | null | undefined): boolean {
+  if (!raw) return true;
+  return PLACEHOLDER_NAMES.has(raw.trim().toLowerCase());
+}
+
 // Merge two Monday people-columns (delivery + engineering) into a single
-// comma-separated FDE roster, deduped + trimmed.  Returns null when both
-// columns are empty.  Used everywhere that "FDE" is a single concept
-// (delivery table, customer projects card, dashboard drill-downs).
+// comma-separated FDE roster, deduped + trimmed.  Placeholder names
+// ("Customer Implementing", "TBD", …) are dropped so they don't pollute
+// downstream charts and filters.  Returns null when both columns are
+// empty / only contained placeholders.  Used everywhere that "FDE" is a
+// single concept (delivery table, customer projects card, dashboard
+// drill-downs).
 export function unionPeopleColumns(a: string | null, b: string | null): string | null {
   const seen = new Set<string>();
   for (const raw of [a, b]) {
     if (!raw) continue;
     for (const piece of raw.split(",")) {
       const name = piece.trim();
-      if (name) seen.add(name);
+      if (!name || isPlaceholderName(name)) continue;
+      seen.add(name);
     }
   }
   return seen.size === 0 ? null : Array.from(seen).join(", ");

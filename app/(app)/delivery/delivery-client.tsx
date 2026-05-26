@@ -246,7 +246,12 @@ function Kanban({ projects, onSelect }: { projects: DeliveryProject[]; onSelect:
                 onClick={() => onSelect(p)}
                 className="w-full text-left border border-[var(--glass-border)] rounded-md p-2.5 hover:border-[var(--brand-yellow)] transition-colors cursor-pointer"
               >
-              <div className="text-sm font-medium text-[color:var(--foreground)] truncate">{p.name}</div>
+              <div
+                className="text-sm font-medium text-[color:var(--foreground)] line-clamp-2 break-words"
+                title={p.name}
+              >
+                {p.name}
+              </div>
               <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] mt-0.5">
                 {p.customer_display_name}
               </div>

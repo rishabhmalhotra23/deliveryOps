@@ -116,7 +116,7 @@ interface AccountRow {
 
 // Column IDs + helpers come from the canonical taxonomy. See
 // lib/delivery/taxonomy.ts — adding a new column ID here is a smell.
-import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText } from "@/lib/delivery/taxonomy";
+import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText, peopleNames } from "@/lib/delivery/taxonomy";
 
 const PROJECT_COL_STATUS = MONDAY_PROJECT_COLS.status;
 const PROJECT_COL_PHASE  = MONDAY_PROJECT_COLS.phase;
@@ -355,7 +355,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   function unionPeople(...sources: Array<string | null>): string[] {
     const seen = new Set<string>();
     for (const src of sources) {
-      for (const name of peopleName(src)) seen.add(name);
+      for (const name of peopleNames(src)) seen.add(name);
     }
     return Array.from(seen);
   }
@@ -382,41 +382,9 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     };
   }
 
-  // Helper: extract people from a comma-separated text column.
-  // Monday returns "First Last, Other Person" or "first.last@kognitos.com".
-  function peopleName(raw: string | null): string[] {
-    if (!raw || !raw.trim()) return [];
-    return raw.split(",").flatMap((s) => {
-      const t = s.trim();
-      if (!t) return [];
-      if (t.includes("@")) {
-        const local = t.split("@")[0].replace(/[._]/g, " ");
-        const parts = local.split(" ").filter(Boolean);
-        if (parts.length >= 2) {
-          return [`${parts[0].charAt(0).toUpperCase()}${parts[0].slice(1)} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`];
-        }
-        return [parts[0] ?? t];
-      }
-      return [t];
-    });
-  }
-
-  // Placeholder strings Monday users sometimes put in the FDE-assignment
-  // columns.  None of these are real people; they pollute the workload chart.
-  const PLACEHOLDER_NAMES = new Set([
-    "customer implementing",
-    "tbd",
-    "unassigned",
-    "n/a",
-    "na",
-    "tba",
-    "—",
-    "-",
-    "?",
-    "open",
-    "kognitos",
-    "partner",
-  ]);
+  // People-extraction + placeholder filtering live in lib/delivery/taxonomy.ts
+  // so the analytics loader, weekly report, and operations chat all read
+  // from the same canonical rule.  See `peopleNames` / `isPlaceholderName`.
 
   // Workload aggregation: only count people on actively in-flight work. A
   // historical project that someone on the team handed off two quarters
@@ -450,8 +418,9 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     return ACTIVE_PROJECT_GROUPS.has(p.group_title ?? "");
   }
 
+  // Placeholder filter happens inside peopleNames() — see taxonomy.ts.
   function cleanWorkloadNames(raw: string | null): string[] {
-    return peopleName(raw).filter((n) => !PLACEHOLDER_NAMES.has(n.toLowerCase().trim()));
+    return peopleNames(raw);
   }
 
   for (const p of projectList) {

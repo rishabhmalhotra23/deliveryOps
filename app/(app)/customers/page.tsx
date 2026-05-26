@@ -111,7 +111,10 @@ function CustomerStrip({
       {/* Name + metadata */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-semibold tracking-tight text-[color:var(--foreground)] truncate">
+          <span
+            className="text-sm font-semibold tracking-tight text-[color:var(--foreground)]"
+            title={customer.display_name}
+          >
             {customer.display_name}
           </span>
           <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${catStyle}`}>
@@ -131,20 +134,26 @@ function CustomerStrip({
         </div>
         <div className="flex items-center gap-x-3 gap-y-0.5 mt-0.5 flex-wrap">
           {customer.ae_owner ? (
-            <span className="data-label text-[color:var(--muted-foreground)] truncate">
+            <span
+              className="data-label text-[color:var(--muted-foreground)]"
+              title={`AE: ${customer.ae_owner}`}
+            >
               <span className="opacity-70">AE</span> {formatPersonName(customer.ae_owner)}
             </span>
           ) : null}
           {fdes.length > 0 ? (
             <span
-              className="data-label text-[color:var(--muted-foreground)] truncate"
-              title={fdes.join(", ")}
+              className="data-label text-[color:var(--muted-foreground)]"
+              title={`FDE: ${fdes.join(", ")}`}
             >
               <span className="opacity-70">FDE</span> {formatPeopleList(fdes)}
             </span>
           ) : null}
           {customer.partner ? (
-            <span className="data-label text-[color:var(--muted-foreground)] truncate">
+            <span
+              className="data-label text-[color:var(--muted-foreground)]"
+              title={`Partner: ${customer.partner}`}
+            >
               via {customer.partner}
             </span>
           ) : null}

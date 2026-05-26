@@ -190,8 +190,16 @@ function ProjectRow({ p, showTtv, tag }: { p: WeeklyProject; showTtv?: boolean; 
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-[var(--glass-border)] last:border-0">
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-[color:var(--foreground)] truncate">{p.name}</div>
-        <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 truncate">
+        <div
+          className="text-sm font-medium text-[color:var(--foreground)] break-words"
+          title={p.name}
+        >
+          {p.name}
+        </div>
+        <div
+          className="text-xs text-[color:var(--muted-foreground)] mt-0.5 break-words"
+          title={[p.customer_display_name, p.phase].filter(Boolean).join(" · ")}
+        >
           {p.customer_display_name}
           {p.phase && <span className="ml-2 opacity-55">[{p.phase}]</span>}
           {fdeLine && <span className="ml-2 opacity-60">· {fdeLine}</span>}
@@ -601,7 +609,12 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
                 <div key={p.monday_item_id} className="py-2.5 border-b border-[var(--glass-border)] last:border-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-[color:var(--foreground)] truncate">{p.name}</div>
+                      <div
+                        className="text-sm font-medium text-[color:var(--foreground)] break-words"
+                        title={p.name}
+                      >
+                        {p.name}
+                      </div>
                       <div className="text-xs text-[color:var(--muted-foreground)]">{p.customer_display_name}</div>
                     </div>
                     <HealthPill health={p.health} />
