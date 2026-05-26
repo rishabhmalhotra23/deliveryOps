@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { DrillDownPanel } from "@/app/_components/drilldown-panel";
 import { StatBlock, formatMoney } from "@/app/_components/brand";
+import { formatPeopleList, formatPersonName } from "@/lib/delivery/taxonomy";
 import type {
   ArrBreakdownRow,
   OpenCaseRow,
@@ -143,7 +144,8 @@ function CustomerArrList({ rows }: { rows: ArrBreakdownRow[] }) {
               <span>
                 <CategoryPill category={r.category} />
               </span>
-              {r.ae_owner ? <span>AE · {r.ae_owner}</span> : null}
+              {r.ae_owner ? <span>AE · {formatPersonName(r.ae_owner)}</span> : null}
+              {r.fde.length > 0 ? <span>FDE · {formatPeopleList(r.fde)}</span> : null}
               {r.partner ? <span>via {r.partner}</span> : null}
               {r.renewal_date ? <span>renews {r.renewal_date}</span> : null}
             </div>

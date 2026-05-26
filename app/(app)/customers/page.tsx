@@ -7,6 +7,7 @@ import {
   loadPortfolioSummary,
   type CustomerCommercials,
 } from "@/lib/cache/integrations";
+import { loadFdesByCustomerId } from "@/lib/dashboard/stats-drilldown";
 import { CustomerAvatar } from "@/app/_components/customer-avatar";
 import { deriveCustomerDomain } from "@/app/_components/customer-domain";
 import {
@@ -17,6 +18,7 @@ import {
   categoryFromCustomer,
   categorySortIndex,
 } from "@/app/_components/brand";
+import { formatPeopleList, formatPersonName } from "@/lib/delivery/taxonomy";
 import type { Customer } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -75,10 +77,12 @@ function CustomerStrip({
   customer,
   domain,
   commercials,
+  fdes,
 }: {
   customer: Customer;
   domain: string | null;
   commercials: CustomerCommercials | null;
+  fdes: string[];
 }) {
   const category = categoryFromCustomer(customer, {
     renewal_date: commercials?.renewal_date,
@@ -125,10 +129,18 @@ function CustomerStrip({
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-3 mt-0.5">
+        <div className="flex items-center gap-x-3 gap-y-0.5 mt-0.5 flex-wrap">
           {customer.ae_owner ? (
             <span className="data-label text-[color:var(--muted-foreground)] truncate">
-              {customer.ae_owner}
+              <span className="opacity-70">AE</span> {formatPersonName(customer.ae_owner)}
+            </span>
+          ) : null}
+          {fdes.length > 0 ? (
+            <span
+              className="data-label text-[color:var(--muted-foreground)] truncate"
+              title={fdes.join(", ")}
+            >
+              <span className="opacity-70">FDE</span> {formatPeopleList(fdes)}
             </span>
           ) : null}
           {customer.partner ? (
@@ -200,11 +212,12 @@ function CustomerStrip({
 }
 
 export default async function CustomersPage() {
-  const [customers, summary, sfDomains, commercialsMap] = await Promise.all([
+  const [customers, summary, sfDomains, commercialsMap, fdesByCustomer] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
     loadCustomerCommercialsMap().catch(() => new Map<string, CustomerCommercials>()),
+    loadFdesByCustomerId().catch(() => new Map<string, string[]>()),
   ]);
 
   // Resolve a domain per customer with a graceful fallback chain so favicon
@@ -371,6 +384,7 @@ export default async function CustomersPage() {
                   customer={c}
                   domain={domainFor(c)}
                   commercials={commercialsMap.get(c.id) ?? null}
+                  fdes={fdesByCustomer.get(c.id) ?? []}
                 />
               ))}
             </div>

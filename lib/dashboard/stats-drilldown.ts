@@ -7,9 +7,61 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
 import { categoryFromCustomer } from "@/app/_components/brand";
-import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText, unionPeopleColumns } from "@/lib/delivery/taxonomy";
+import {
+  MONDAY_PROJECT_COLS,
+  MONDAY_NPS_COLS,
+  colText,
+  formatPersonName,
+  isDelivered,
+  unionPeopleColumns,
+} from "@/lib/delivery/taxonomy";
 
 const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
+
+/**
+ * Build a Map<customer_id → canonical FDE roster> across every project that
+ * is *not* delivered/cancelled.  Used by the dashboard ARR drill-down, the
+ * Customers page strips, and the dashboard Pipeline list to surface which
+ * delivery team is working a customer right now.
+ *
+ * Each person is canonical-cased (e.g. "Shyam P. (PM)") and deduped per
+ * customer.  Returns an empty Map if Monday hasn't synced yet — callers
+ * should treat "no entry" as "no FDE on file" not as an error.
+ */
+export async function loadFdesByCustomerId(): Promise<Map<string, string[]>> {
+  const sb = requireAdmin();
+  const { data } = await sb
+    .from("monday_projects")
+    .select("customer_id, raw_columns, group_title")
+    .limit(2000);
+
+  type Row = {
+    customer_id: string;
+    raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
+    group_title: string | null;
+  };
+
+  const out = new Map<string, Set<string>>();
+  for (const p of (data as Row[] | null) ?? []) {
+    const cols = p.raw_columns ?? {};
+    const status = colText(cols, MONDAY_PROJECT_COLS.status);
+    if (isDelivered(status, p.group_title)) continue;
+    const merged = unionPeopleColumns(
+      colText(cols, MONDAY_PROJECT_COLS.tam),
+      colText(cols, MONDAY_PROJECT_COLS.dev),
+    );
+    if (!merged) continue;
+    const set = out.get(p.customer_id) ?? new Set<string>();
+    for (const piece of merged.split(",")) {
+      const name = formatPersonName(piece);
+      if (name) set.add(name);
+    }
+    out.set(p.customer_id, set);
+  }
+  return new Map(
+    Array.from(out.entries(), ([id, set]) => [id, Array.from(set).sort()])
+  );
+}
 
 export interface ArrBreakdownRow {
   customer_key: string;
@@ -19,14 +71,19 @@ export interface ArrBreakdownRow {
   category: string;
   arr: number;
   renewal_date: string | null;
+  /** Canonical FDE roster across this customer's active projects.
+   *  Empty array when no FDE is assigned (e.g. new logo / Monday hasn't
+   *  surfaced the team yet) — UI should hide the FDE chip in that case. */
+  fde: string[];
 }
 
 export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
   const sb = requireAdmin();
-  const [customers, profiles, accounts] = await Promise.all([
+  const [customers, profiles, accounts, fdesByCustomer] = await Promise.all([
     listCustomers(),
     sb.from("profiles").select("customer_id, arr, renewal_date"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
+    loadFdesByCustomerId().catch(() => new Map<string, string[]>()),
   ]);
   const arrByC = new Map<string, { arr: number; renewal_date: string | null }>();
   for (const p of (profiles.data as Array<{ customer_id: string; arr: number | null; renewal_date: string | null }> | null) ?? []) {
@@ -52,6 +109,7 @@ export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
       category: cat,
       arr: profile?.arr ?? 0,
       renewal_date: profile?.renewal_date ?? null,
+      fde: fdesByCustomer.get(c.id) ?? [],
     });
   }
   return rows.sort((a, b) => b.arr - a.arr);

@@ -519,17 +519,33 @@ function Table({ projects, onSelect }: { projects: DeliveryProject[]; onSelect: 
             </tr>
           </thead>
           <tbody>
+            {/* Cell sizing rules:
+                - Long-text columns (Project, Customer, Phase, FDE, Latest update)
+                  use `min-w-[…]` + `whitespace-normal` so they wrap inside a
+                  comfortable column width.  No hard max-w / truncate so all
+                  content stays readable.
+                - Short / numeric / chip columns keep `whitespace-nowrap` so a
+                  single line is preserved.
+                Tooltips on the long cells give the full string on hover. */}
             {sorted.map((p) => (
               <tr
                 key={p.monday_item_id}
-                className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors cursor-pointer"
+                className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors cursor-pointer align-top"
                 onClick={() => onSelect(p)}
               >
-                <td className="px-3 py-2 font-medium text-[color:var(--foreground)] whitespace-nowrap max-w-[200px] truncate">
+                <td
+                  className="px-3 py-2 font-medium text-[color:var(--foreground)] min-w-[180px] whitespace-normal break-words leading-snug"
+                  title={p.name}
+                >
                   {p.name.replace(new RegExp(`^${p.customer_display_name}\\s*[-—]\\s*`), "")}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap text-[color:var(--foreground)]">{p.customer_display_name}</td>
-                <td className="px-3 py-2">
+                <td
+                  className="px-3 py-2 text-[color:var(--foreground)] min-w-[140px] whitespace-normal break-words leading-snug"
+                  title={p.customer_display_name}
+                >
+                  {p.customer_display_name}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
                   {p.fiscal_year ? (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${chipClass(FY_CLASS, p.fiscal_year)}`}>
                       {p.fiscal_year === "active" ? "Active" : p.fiscal_year}
@@ -537,34 +553,47 @@ function Table({ projects, onSelect }: { projects: DeliveryProject[]; onSelect: 
                   ) : "—"}
                 </td>
                 <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.group_title ?? "—"}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 whitespace-nowrap">
                   {p.health ? (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${chipClass(HEALTH_CLASS, p.health)}`}>{p.health}</span>
                   ) : "—"}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 whitespace-nowrap">
                   {p.status ? (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${chipClass(STATUS_CLASS, p.status)}`}>{p.status}</span>
                   ) : "—"}
                 </td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap max-w-[140px] truncate">{p.phase ?? "—"}</td>
-                <td className="px-3 py-2">
+                <td
+                  className="px-3 py-2 text-[color:var(--muted-foreground)] min-w-[140px] whitespace-normal break-words leading-snug"
+                  title={p.phase ?? undefined}
+                >
+                  {p.phase ?? "—"}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
                   {p.platform ? (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${chipClass(PLATFORM_CLASS, p.platform)}`}>{p.platform}</span>
                   ) : "—"}
                 </td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap max-w-[180px] truncate">{formatPeopleList(p.fde) || "—"}</td>
+                <td
+                  className="px-3 py-2 text-[color:var(--muted-foreground)] min-w-[180px] whitespace-normal break-words leading-snug"
+                  title={p.fde ?? undefined}
+                >
+                  {formatPeopleList(p.fde, { expand: true }) || "—"}
+                </td>
                 <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.partner ?? "—"}</td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)]">{p.complexity ?? "—"}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)]">
+                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.complexity ?? "—"}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
                   {p.total_effort_days != null ? `${p.total_effort_days}d` : "—"}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)]">
+                <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
                   {p.ttv_days_text ? `${p.ttv_days_text}d` : "—"}
                 </td>
                 <td className="px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">{p.kickoff_date ?? "—"}</td>
                 <td className="px-3 py-2 tabular-nums font-medium text-[color:var(--foreground)] whitespace-nowrap">{p.go_live_date ?? "—"}</td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] max-w-[200px] truncate italic text-[11px]">
+                <td
+                  className="px-3 py-2 text-[color:var(--muted-foreground)] min-w-[260px] max-w-[420px] whitespace-normal break-words italic text-[11px] leading-snug"
+                  title={p.latest_update ?? undefined}
+                >
                   {p.latest_update ?? "—"}
                 </td>
               </tr>
