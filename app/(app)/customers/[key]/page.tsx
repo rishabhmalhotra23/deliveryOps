@@ -6,6 +6,7 @@ import { listEvents } from "@/lib/events/events";
 import { listTasks } from "@/lib/tasks/tasks";
 import { loadCustomerEnrichment } from "@/lib/cache/integrations";
 import { loadK2Metrics } from "@/lib/customers/k2-metrics";
+import { formatPersonName, isDelivered as txIsDelivered } from "@/lib/delivery/taxonomy";
 
 import {
   buildHeroProps,
@@ -57,12 +58,27 @@ export default async function CustomerPage({ params }: Props) {
   const opps = enrichment?.opportunities ?? [];
   const npsResponses = enrichment?.nps ?? [];
 
+  // FDE roster for the hero — union of every non-delivered project's
+  // delivery + engineering columns, canonical-cased + deduped.  Pulled
+  // from the same enrichment we already loaded — no extra round-trip.
+  const fdeSet = new Set<string>();
+  for (const p of enrichment?.projects ?? []) {
+    if (txIsDelivered(p.project_status, p.group_title)) continue;
+    if (!p.fde) continue;
+    for (const piece of p.fde.split(",")) {
+      const name = formatPersonName(piece);
+      if (name) fdeSet.add(name);
+    }
+  }
+  const customerFdes = Array.from(fdeSet).sort();
+
   const heroProps = buildHeroProps(
     customer,
     profile,
     allCustomers,
     enrichment?.account?.website ?? null,
-    enrichment?.account?.annual_revenue ?? null
+    enrichment?.account?.annual_revenue ?? null,
+    customerFdes,
   );
   const snapshotProps = buildAccountSnapshotProps(
     internalProfile,

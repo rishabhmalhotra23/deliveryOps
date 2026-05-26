@@ -125,14 +125,53 @@ export function isAtRisk(health: string | null | undefined): boolean {
 
 // Pill styling for the Health column. Keep this list in sync with the
 // values Monday's "Health" column produces.
+/**
+ * Canonical health-pill colour map.  Used by the delivery table, the
+ * customer projects card, the weekly report, and any other surface that
+ * renders a project's health.  Adding a new health value Monday emits
+ * goes here — never inline another local copy.
+ */
 export const HEALTH_PILL_CLS: Record<string, string> = {
   "On Track":  "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
   "Healthy":   "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  "At Risk":   "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
+  "At Risk":   "bg-amber-500/12 text-amber-700 dark:text-amber-400 border-amber-500/25",
   "Off Track": "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
   "Stuck":     "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
+  "Blocked":   "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
   "Finished":  "bg-blue-500/12 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "Done":      "bg-blue-500/12 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "Inactive":  "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
 };
+
+/**
+ * Canonical project-status colour map — same audience as HEALTH_PILL_CLS,
+ * different Monday column.  Adding a new status value goes here.
+ */
+export const STATUS_PILL_CLS: Record<string, string> = {
+  "Live":         "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  "Delivered":    "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  "In Progress": "bg-blue-500/12 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "Active":      "bg-blue-500/12 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "Not Started": "bg-slate-500/12 text-slate-700 dark:text-slate-300 border-slate-500/25",
+  "Paused":      "bg-amber-500/12 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  "On Hold":     "bg-amber-500/12 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  "Pending":     "bg-amber-500/12 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  "Cancelled":   "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
+  "Inactive":    "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+};
+
+/** Neutral fallback for any unknown chip key. */
+export const NEUTRAL_PILL_CLS =
+  "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
+
+/** Helper: look up a pill class with a safe neutral fallback. */
+export function pillClass(
+  map: Record<string, string>,
+  key: string | null | undefined
+): string {
+  if (!key) return NEUTRAL_PILL_CLS;
+  return map[key] ?? NEUTRAL_PILL_CLS;
+}
 
 // ─── Phase classification ─────────────────────────────────────────────────────
 // Real Kognitos phase values from Monday (verified live 2026-05-15):

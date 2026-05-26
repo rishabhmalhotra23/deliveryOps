@@ -202,7 +202,7 @@ function OpportunityList({ rows }: { rows: OpenOpportunityRow[] }) {
               <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">
                 {o.stage_name ? <span>{o.stage_name}</span> : null}
                 {o.close_date ? <span>closes {o.close_date}</span> : null}
-                {o.owner_name ? <span>{o.owner_name}</span> : null}
+                {o.owner_name ? <span>AE · {formatPersonName(o.owner_name)}</span> : null}
                 {o.probability != null ? <Pill tone={probColor}>{o.probability}%</Pill> : null}
               </div>
             </div>

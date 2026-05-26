@@ -33,6 +33,10 @@ export interface HeroCardProps {
   category: string;
   lifecycleGroup: string | null;
   aeOwner: string | null;
+  /** Canonical FDE roster derived from the customer's active projects.
+   *  Empty when no FDE is assigned (e.g. new logo / POV).  Read-only —
+   *  the source of truth is Monday's delivery + engineering columns. */
+  fdes: string[];
   partner: string | null;
   industry: string | null;
   renewalDate: string | null;
@@ -70,7 +74,10 @@ export function buildHeroProps(
    * Pass `null` when SF data isn't available — the function falls back to
    * the lifecycle-only category.
    */
-  annualRevenue: number | null = null
+  annualRevenue: number | null = null,
+  /** Canonical FDE roster derived from active projects.  Pass an empty
+   *  array when no Monday data exists yet. */
+  fdes: string[] = []
 ): HeroCardProps {
   const knownAes = Array.from(
     new Set(allCustomers.map((c) => c.ae_owner).filter((v): v is string => !!v))
@@ -101,6 +108,7 @@ export function buildHeroProps(
     }),
     lifecycleGroup: customer.lifecycle_group,
     aeOwner: customer.ae_owner,
+    fdes,
     partner: customer.partner,
     industry: profile?.industry || null,
     renewalDate: profile?.renewal_date ?? null,

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatPersonName } from "@/lib/delivery/taxonomy";
 import type { AccountSnapshotProps } from "@/lib/customers/view-model";
 
 export function AccountSnapshot({
@@ -41,10 +42,13 @@ export function AccountSnapshot({
         </div>
 
         {sfAccountOwner ? (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="eyebrow">SF owner</span>
-            <span className="data-label text-[color:var(--foreground)] truncate max-w-[120px]">
-              {sfAccountOwner}
+            <span
+              className="data-label text-[color:var(--foreground)] break-words text-right"
+              title={`Salesforce account owner: ${sfAccountOwner}`}
+            >
+              {formatPersonName(sfAccountOwner)}
             </span>
           </div>
         ) : null}

@@ -145,7 +145,7 @@ export function OperationsClient({ suggested }: { suggested: string[] }) {
       {/* Conversation */}
       <div
         ref={scrollRef}
-        className="rounded-lg border border-line bg-white p-6 max-h-[60vh] overflow-y-auto space-y-5"
+        className="rounded-lg border border-line bg-[color:var(--card)] p-6 max-h-[60vh] overflow-y-auto space-y-5"
       >
         {messages.length === 0 ? (
           <div className="text-sm text-[color:var(--brand-gray)] space-y-3">
@@ -175,7 +175,7 @@ export function OperationsClient({ suggested }: { suggested: string[] }) {
       </div>
 
       {error ? (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       ) : null}
@@ -193,7 +193,7 @@ export function OperationsClient({ suggested }: { suggested: string[] }) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Tell DeliveryOps what changed…"
           disabled={busy}
-          className="flex-1 rounded-md border border-line bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-yellow)]"
+          className="flex-1 rounded-md border border-line bg-[color:var(--card)] text-[color:var(--foreground)] px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-yellow)]"
         />
         <button
           type="submit"
@@ -233,7 +233,7 @@ function AgentBubble({ message }: { message: AssistantMessage }) {
         </div>
       ) : null}
       {message.text || message.done ? (
-        <div className="rounded-2xl rounded-bl-sm bg-white border border-line px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed">
+        <div className="rounded-2xl rounded-bl-sm bg-[color:var(--card)] border border-line text-[color:var(--foreground)] px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed">
           {message.text || (message.done ? "(no reply)" : "")}
           {!message.done && message.text ? (
             <span className="inline-block w-2 h-4 bg-[color:var(--brand-yellow)] ml-0.5 animate-pulse" />

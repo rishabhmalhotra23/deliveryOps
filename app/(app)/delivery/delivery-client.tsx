@@ -9,7 +9,14 @@ import {
   ResponsiveContainer, Legend, AreaChart, Area,
 } from "recharts";
 import type { DeliveryProject, DeliveryFilterFacets } from "@/lib/delivery/loader";
-import { formatPeopleList } from "@/lib/delivery/taxonomy";
+import {
+  HEALTH_PILL_CLS,
+  STATUS_PILL_CLS,
+  NEUTRAL_PILL_CLS,
+  formatPeopleList,
+  formatPersonName,
+  pillClass,
+} from "@/lib/delivery/taxonomy";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 
 interface DeliveryClientProps {
@@ -50,46 +57,31 @@ const QOQ_COLORS = {
 };
 
 // ── Colour maps ───────────────────────────────────────────────────────────────
+// Health + Status come from lib/delivery/taxonomy.ts so every surface
+// (delivery table, customer projects card, weekly report) renders the
+// same chip palette.  Platform + FY are delivery-page-specific and stay
+// local.
 
-const HEALTH_CLASS: Record<string, string> = {
-  "On Track":  "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  Healthy:     "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  Finished:    "bg-blue-500/12 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  Done:        "bg-blue-500/12 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  "At Risk":   "bg-amber-500/12 text-amber-700 dark:text-amber-400 border-amber-500/25",
-  Blocked:     "bg-red-500/12 text-red-700 dark:text-red-400 border-red-500/25",
-  Inactive:    "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
-};
-
-const STATUS_CLASS: Record<string, string> = {
-  Live:          "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  Delivered:     "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  "In Progress": "bg-blue-500/12 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  "On Hold":     "bg-amber-500/12 text-amber-700 dark:text-amber-400 border-amber-500/25",
-  Inactive:      "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
-  Cancelled:     "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
-};
+const HEALTH_CLASS = HEALTH_PILL_CLS;
+const STATUS_CLASS = STATUS_PILL_CLS;
 
 const PLATFORM_CLASS: Record<string, string> = {
-  V1: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+  V1: "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/20",
   V2: "bg-indigo-500/12 text-indigo-700 dark:text-indigo-400 border-indigo-500/25",
 };
 
 const FY_CLASS: Record<string, string> = {
   active:           "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  inactive:         "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+  inactive:         NEUTRAL_PILL_CLS,
   "FY-2026":        "bg-[rgba(242,255,112,0.18)] text-[color:var(--brand-night)] dark:text-yellow-300 border-[rgba(242,255,112,0.4)]",
   "FY-2025":        "bg-purple-500/12 text-purple-700 dark:text-purple-400 border-purple-500/25",
   "FY-2024":        "bg-cyan-500/12 text-cyan-700 dark:text-cyan-400 border-cyan-500/25",
   "FY-2023":        "bg-orange-500/12 text-orange-700 dark:text-orange-400 border-orange-500/25",
   account_overview: "bg-teal-500/12 text-teal-700 dark:text-teal-400 border-teal-500/25",
-  portfolio:        "bg-slate-500/12 text-slate-600 dark:text-slate-400 border-slate-500/25",
+  portfolio:        "bg-slate-500/12 text-slate-600 dark:text-slate-300 border-slate-500/25",
 };
 
-function chipClass(map: Record<string, string>, key: string | null | undefined): string {
-  if (!key) return "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
-  return map[key] ?? "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
-}
+const chipClass = pillClass;
 
 function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -125,11 +117,13 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
       if (ae && p.ae_owner !== ae) return false;
       if (partner && p.partner !== partner) return false;
       if (fiscalYear && p.fiscal_year !== fiscalYear) return false;
-      // FDE filter: match against the canonical-cased name of any person
-      // in the project's combined fde field (same form facets.fdes ships).
+      // FDE filter: match the selected canonical name against any person
+      // in the project's combined fde field.  facets.fdes ships values
+      // that pass through formatPersonName, so we run each project's
+      // names through the same formatter for an exact === comparison.
       if (fde) {
         if (!p.fde) return false;
-        const names = p.fde.split(",").map((n) => formatPeopleList(n.trim()));
+        const names = p.fde.split(",").map((n) => formatPersonName(n));
         if (!names.some((n) => n === fde)) return false;
       }
       if (s) {

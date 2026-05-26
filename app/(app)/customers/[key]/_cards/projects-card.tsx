@@ -16,49 +16,36 @@ import {
   isStalled as txIsStalled,
   isCancelledOrInactive as txIsCancelled,
   formatPeopleList,
+  HEALTH_PILL_CLS,
+  STATUS_PILL_CLS,
+  NEUTRAL_PILL_CLS,
+  pillClass,
 } from "@/lib/delivery/taxonomy";
 
 // ── Status/health colour maps ────────────────────────────────────────────────
+// Health + Status reuse the canonical maps from taxonomy.ts.  Platform +
+// FY are customer-page-specific and stay local.
 
-const HEALTH_CLASS: Record<string, string> = {
-  "On Track":  "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  Healthy:     "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  Finished:    "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  Done:        "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  "At Risk":   "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
-  Blocked:     "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25",
-  Inactive:    "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
-};
-
-const STATUS_CLASS: Record<string, string> = {
-  Live:          "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  Delivered:     "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
-  "In Progress": "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  "On Hold":     "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
-  Inactive:      "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
-  Cancelled:     "bg-red-500/8 text-red-700 dark:text-red-400 border-red-500/20",
-};
+const HEALTH_CLASS = HEALTH_PILL_CLS;
+const STATUS_CLASS = STATUS_PILL_CLS;
 
 const FY_CLASS: Record<string, string> = {
   active:           "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
-  inactive:         "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]",
+  inactive:         NEUTRAL_PILL_CLS,
   "FY-2026":        "bg-[rgba(242,255,112,0.15)] text-[color:var(--brand-night)] dark:text-yellow-300 border-[rgba(242,255,112,0.35)]",
   "FY-2025":        "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/25",
   "FY-2024":        "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/25",
   "FY-2023":        "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/25",
   account_overview: "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20",
-  portfolio:        "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+  portfolio:        "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/20",
 };
 
 const PLATFORM_CLASS: Record<string, string> = {
-  V1: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+  V1: "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/20",
   V2: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/25",
 };
 
-function chipClass(map: Record<string, string>, key: string | null | undefined): string {
-  if (!key) return "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
-  return map[key] ?? "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)]";
-}
+const chipClass = pillClass;
 
 function Chip({ label }: { label: string }) {
   return (

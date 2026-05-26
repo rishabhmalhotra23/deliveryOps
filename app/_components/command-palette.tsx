@@ -13,6 +13,8 @@ import {
   CommandSeparator,
 } from "cmdk";
 
+import { formatPersonName } from "@/lib/delivery/taxonomy";
+
 interface CustomerEntry {
   key: string;
   display_name: string;
@@ -145,7 +147,12 @@ export function CommandPalette() {
                     <span className="flex-1 min-w-0">
                       <span className="block text-[color:var(--foreground)] truncate">{c.display_name}</span>
                       {c.ae_owner && (
-                        <span className="block text-[11px] text-[color:var(--muted-foreground)] truncate">{c.ae_owner}</span>
+                        <span
+                          className="block text-[11px] text-[color:var(--muted-foreground)] break-words"
+                          title={`AE: ${c.ae_owner}`}
+                        >
+                          AE · {formatPersonName(c.ae_owner)}
+                        </span>
                       )}
                     </span>
                     {c.custom_category && (

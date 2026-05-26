@@ -3,6 +3,7 @@
 import { InlineEdit } from "@/app/_components/inline-edit";
 import { CustomerAvatar } from "@/app/_components/customer-avatar";
 import { Badge } from "@kognitos/lattice";
+import { formatPeopleList } from "@/lib/delivery/taxonomy";
 import type { HeroCardProps } from "@/lib/customers/view-model";
 
 const CATEGORY_VARIANT: Record<string, "destructive" | "warning" | "success" | "secondary" | "default" | "outline"> = {
@@ -21,6 +22,7 @@ export function CustomerHero({
   displayName,
   category,
   aeOwner,
+  fdes,
   partner,
   industry,
   renewalDate,
@@ -72,7 +74,10 @@ export function CustomerHero({
           {/* Name + badges */}
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2.5 mb-1">
-              <h1 className="text-2xl font-display font-semibold tracking-tighter text-[color:var(--foreground)] truncate">
+              <h1
+                className="text-2xl font-display font-semibold tracking-tighter text-[color:var(--foreground)] break-words"
+                title={displayName}
+              >
                 {displayName}
               </h1>
               <Badge variant={badgeVariant}>{category}</Badge>
@@ -111,6 +116,21 @@ export function CustomerHero({
                   placeholder="(unassigned)"
                   suggestions={knownAes}
                 />
+              </div>
+              {/* FDE roster — read-only.  Source of truth is Monday's
+                  delivery + engineering columns; sync is one-way today. */}
+              <div className="max-w-[420px]">
+                <div className="eyebrow mb-1">FDE</div>
+                {fdes.length > 0 ? (
+                  <span
+                    className="text-sm text-[color:var(--foreground)] break-words"
+                    title={`FDE roster across active projects: ${fdes.join(", ")}`}
+                  >
+                    {formatPeopleList(fdes, { expand: true })}
+                  </span>
+                ) : (
+                  <span className="text-sm text-[color:var(--brand-gray)] italic">(none on active work)</span>
+                )}
               </div>
               <div>
                 <div className="eyebrow mb-1">Category</div>

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { DrillDownPanel } from "@/app/_components/drilldown-panel";
 import { formatMoney } from "@/app/_components/brand";
+import { formatPersonName } from "@/lib/delivery/taxonomy";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 import type {
   ActiveProjectRow,
@@ -238,7 +239,7 @@ function ArrList({ rows }: { rows: ArrBreakdownRow[] }) {
             </Link>
             <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-[color:var(--muted-foreground)]">
               <CategoryPill category={r.category} />
-              {r.ae_owner ? <span>AE · {r.ae_owner}</span> : null}
+              {r.ae_owner ? <span>AE · {formatPersonName(r.ae_owner)}</span> : null}
               {r.partner ? <span>via {r.partner}</span> : null}
               {r.renewal_date ? <span>renews {r.renewal_date}</span> : null}
             </div>
@@ -410,7 +411,7 @@ function PipelineList({ rows }: { rows: OpenOpportunityRow[] }) {
             <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">
               {o.stage_name ? <span>{o.stage_name}</span> : null}
               {o.close_date ? <span>closes {o.close_date}</span> : null}
-              {o.owner_name ? <span>{o.owner_name}</span> : null}
+              {o.owner_name ? <span>AE · {formatPersonName(o.owner_name)}</span> : null}
               {o.probability != null ? (
                 <Pill
                   tone={o.probability >= 75 ? "emerald" : o.probability >= 50 ? "amber" : "neutral"}
