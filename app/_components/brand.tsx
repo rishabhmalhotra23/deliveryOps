@@ -201,7 +201,7 @@ export function LifecycleChip({ group, size = "md" }: { group: string | null; si
 
 export function SectionMark({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] mb-2 font-medium">
+    <div className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)] mb-2 font-medium">
       <span className="sparkle">{children}</span>
     </div>
   );
@@ -232,7 +232,7 @@ export function StatBlock({
     emphasis ? "text-[color:var(--brand-yellow)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
   }`;
   const hintClasses = `mt-1 text-xs ${
-    emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)]"
+    emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
   }`;
 
   const inner = (
@@ -243,7 +243,7 @@ export function StatBlock({
           <span
             aria-hidden="true"
             className={`text-[10px] tabular-nums ${
-              emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)]"
+              emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
             }`}
           >
             ↗

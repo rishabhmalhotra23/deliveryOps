@@ -8,7 +8,19 @@
 
 /* DeliveryOps brand palette — verbatim from Kognitos brand guide v01 (July 2025).
  * Yellow is the "neuron firing" accent — used sparingly, never as a fill.
- * Night/Black is the foundation. Seasalt is the canvas. */
+ * Night/Black is the foundation. Seasalt is the canvas.
+ *
+ * CSS organisation:
+ *   1. Brand palette tokens (this block) — shared
+ *   2. Light mode tokens + glass + page-bg under `:root`
+ *   3. Light mode glass-card visual treatment
+ *   4. .dark token overrides + .dark .glass-card — last so they win
+ *
+ * KEEP THIS ORDER.  `:root` and `.dark` both target the html element with
+ * equal specificity; whichever comes last in source order wins.  Moving
+ * dark-mode rules earlier in the file silently breaks every glass surface
+ * in dark mode (seen 2026-05-26 — washed-out cards everywhere).
+ */
 :root {
   --brand-yellow: #F2FF70;
   --brand-yellow-soft: rgba(242, 255, 112, 0.18);
@@ -25,6 +37,14 @@
    * Machina + Neue Montreal woff2 files are dropped in app/fonts/. */
   --font-display: var(--font-neue-machina, var(--font-inter-tight)), system-ui, sans-serif;
   --font-body: var(--font-neue-montreal, var(--font-inter)), system-ui, sans-serif;
+
+  /* Light mode glass + page-bg vars (kept here so the cascade order is
+   * obvious — `.dark` block at the bottom of the file overrides these). */
+  --glass-bg:             rgba(255, 255, 255, 0.75);
+  --glass-border:         rgba(0, 0, 0, 0.08);
+  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.90);
+  --page-bg-gradient:     radial-gradient(circle at 20% 20%, rgba(242,255,112,0.04) 0%, transparent 50%),
+                          radial-gradient(circle at 80% 80%, rgba(23,23,23,0.03) 0%, transparent 50%);
 }
 
 /* Lattice theme overrides — light mode is the default for DeliveryOps. */
@@ -74,7 +94,9 @@
   /* Number callouts get tabular figures so columns line up. */
   .tabular-nums { font-variant-numeric: tabular-nums; }
 
-  /* Dotted divider line — used in stat rows + section breaks. */
+  /* Dotted divider line — used in stat rows + section breaks.
+     `--brand-metal-line` itself flips in dark mode, so we just point
+     at it and the cascade does the rest. */
   .border-line { border-color: var(--brand-metal-line); }
 }
 
@@ -126,90 +148,16 @@
 .chat-markdown h3 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; }
 .chat-markdown h4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
 
-/* ─── Dark mode token overrides ──────────────────────────────────────────── */
-.dark {
-  --background:           #0d0d12;
-  --foreground:           #ECECF1;
-  --card:                 #16161e;
-  --card-foreground:      #ECECF1;
-  --muted:                #1e1e28;
-  --muted-foreground:     #8b8b9e;
-  --border:               rgba(255, 255, 255, 0.12);
-  --input:                rgba(255, 255, 255, 0.12);
-  --primary:              #F2FF70;
-  --primary-foreground:   #0d0d12;
-  --accent:               #F2FF70;
-  --accent-foreground:    #0d0d12;
-  --ring:                 #F2FF70;
-
-  /* Glass system — dark variant: meaningfully visible against #0d0d12 */
-  --glass-bg:             rgba(255, 255, 255, 0.06);
-  --glass-border:         rgba(255, 255, 255, 0.11);
-  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.07);
-
-  color-scheme: dark;
-}
-
-/* Dark mode glass cards get a solid-enough background so they stand out.
-   Without this they blend into the #0d0d12 page and vanish. */
-.dark .glass-card {
-  background: rgba(255, 255, 255, 0.065);
-  border-color: rgba(255, 255, 255, 0.11);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255,255,255,0.07);
-}
-
-/* Select / input elements in dark mode: explicit background + foreground so
-   native controls don't render as invisible white-on-white or black-on-black. */
-.dark select,
-.dark input[type="text"],
-.dark input[type="datetime-local"],
-.dark input[type="number"],
-.dark input[type="date"],
-.dark textarea {
-  background-color: rgba(255, 255, 255, 0.07) !important;
-  color: #ECECF1 !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-}
-.dark select option {
-  background-color: #1e1e28;
-  color: #ECECF1;
-}
-
-/* Recharts tooltips always need a solid background */
-.recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: var(--card) !important;
-  border-color: var(--border) !important;
-  color: var(--card-foreground) !important;
-}
-
-/* Light mode glass + page background vars */
-:root {
-  --glass-bg:             rgba(255, 255, 255, 0.75);
-  --glass-border:         rgba(0, 0, 0, 0.08);
-  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.90);
-  /* Subtle dot-grid texture for content area depth in light mode */
-  --page-bg-gradient:     radial-gradient(circle at 20% 20%, rgba(242,255,112,0.04) 0%, transparent 50%),
-                          radial-gradient(circle at 80% 80%, rgba(23,23,23,0.03) 0%, transparent 50%);
-}
-
-/* ─── Glass card utility ─────────────────────────────────────────────────── */
+/* ─── Glass card utility (light mode is the base) ────────────────────────── */
 .glass-card {
-  background: var(--glass-bg);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  box-shadow: var(--glass-inner-glow), 0 2px 8px rgba(0, 0, 0, 0.07);
-  border: 1px solid var(--glass-border);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 0.875rem;
-}
-
-/* In light mode, cards need stronger presence so they read against the page */
-:root .glass-card {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(0, 0, 0, 0.07);
   box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,0.9);
 }
 
-/* Hover glow — brand yellow soft shadow. */
 .glass-card-hover {
   transition: box-shadow 200ms ease, border-color 200ms ease, transform 150ms ease;
 }
@@ -218,10 +166,107 @@
   border-color: rgba(242, 255, 112, 0.30);
   transform: translateY(-1px);
 }
-.dark .glass-card-hover:hover {
-  box-shadow: 0 0 24px rgba(242, 255, 112, 0.12), 0 4px 24px rgba(0,0,0,0.4), var(--glass-inner-glow);
-  border-color: rgba(242, 255, 112, 0.18);
+
+/* Recharts tooltips always need a solid background — applies in both
+   themes; relies on the theme-aware `--card` + `--border` tokens. */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--card-foreground) !important;
 }
+
+/* ─── Dark mode — must come AFTER every :root + .glass-card rule so the
+       cascade lets dark mode win.  See top-of-file note. ───────────────── */
+.dark {
+  --background:           #0d0d12;
+  --foreground:           #ECECF1;
+  --card:                 #16161e;
+  --card-foreground:      #ECECF1;
+  --muted:                #1e1e28;
+  --muted-foreground:     #b4b4c4;
+  --border:               rgba(255, 255, 255, 0.14);
+  --input:                rgba(255, 255, 255, 0.14);
+  --primary:              #F2FF70;
+  --primary-foreground:   #0d0d12;
+  --accent:               #F2FF70;
+  --accent-foreground:    #0d0d12;
+  --ring:                 #F2FF70;
+
+  /* Override brand tokens that drift in dark mode.  Many components
+     reach for `--brand-gray` directly for secondary text — #737373 is
+     unreadable on near-black, so we redirect it to the dark-mode
+     muted-foreground.  Likewise `--brand-metal-line` becomes a
+     translucent white so dividers stay visible.
+     We deliberately do NOT flip `--brand-night` / `--brand-seasalt` —
+     those are foreground/background of the brand "emphasis" surface
+     (the black-with-yellow callout) and must hold their literal values
+     so dark-mode overrides on emphasis cards still read correctly. */
+  --brand-gray:           #b4b4c4;
+  --brand-metal-line:     rgba(255, 255, 255, 0.12);
+
+  /* Glass system tokens — these power any `bg-[var(--glass-bg)]` chip,
+     filter input, or pill that wants a theme-aware surface.  Bumped from
+     0.06 → 0.10 so neutral pills are actually visible against the page. */
+  --glass-bg:             rgba(255, 255, 255, 0.10);
+  --glass-border:         rgba(255, 255, 255, 0.16);
+  --glass-inner-glow:     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+
+  /* Skip the dot-grid gradient — looks muddy on near-black. */
+  --page-bg-gradient:     none;
+
+  color-scheme: dark;
+}
+
+/* Dark glass cards: lift the background a notch above the page (#0d0d12)
+   so cards have presence without going stark white. */
+.dark .glass-card {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+.dark .glass-card-hover:hover {
+  box-shadow: 0 0 24px rgba(242, 255, 112, 0.12), 0 4px 24px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.08);
+  border-color: rgba(242, 255, 112, 0.20);
+}
+
+/* Native form controls — dark mode browsers render these with light
+   defaults that vanish against #0d0d12.  Pin explicit values. */
+.dark select,
+.dark input[type="text"],
+.dark input[type="search"],
+.dark input[type="email"],
+.dark input[type="datetime-local"],
+.dark input[type="number"],
+.dark input[type="date"],
+.dark textarea {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: #ECECF1 !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+.dark select option {
+  background-color: #1e1e28;
+  color: #ECECF1;
+}
+
+/* Tone chips that ship with light backgrounds (FEF2F2, ECFDF5, …) need
+   a dark-mode treatment — the pale fills wash to near-white on #0d0d12.
+   Swap for tinted overlays that match the dark-theme colour story. */
+.dark .tone-high-risk   { background: rgba(239, 68, 68, 0.15);  color: #FCA5A5; border-color: rgba(239, 68, 68, 0.35); }
+.dark .tone-renewal     { background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: rgba(245, 158, 11, 0.35); }
+.dark .tone-growth      { background: rgba(16, 185, 129, 0.15); color: #6EE7B7; border-color: rgba(16, 185, 129, 0.35); }
+.dark .tone-tier2       { background: rgba(59, 130, 246, 0.15); color: #93C5FD; border-color: rgba(59, 130, 246, 0.35); }
+.dark .tone-partner     { background: rgba(139, 92, 246, 0.15); color: #C4B5FD; border-color: rgba(139, 92, 246, 0.35); }
+.dark .tone-pov         { background: rgba(242, 255, 112, 0.15); color: #F2FF70; border-color: rgba(242, 255, 112, 0.40); }
+.dark .tone-todrop      { background: rgba(239, 68, 68, 0.15); color: #FCA5A5; border-color: rgba(239, 68, 68, 0.35); }
+.dark .tone-churned     { background: rgba(255, 255, 255, 0.06); color: #b4b4c4; border-color: rgba(255, 255, 255, 0.14); }
+.dark .tone-other       { background: rgba(255, 255, 255, 0.05); color: #b4b4c4; border-color: rgba(255, 255, 255, 0.12); }
+
+/* Sparkle marker turns yellow in dark mode so it doesn't disappear. */
+.dark .sparkle::before { color: var(--brand-yellow); }
+
+/* `.border-line` already flows from `--brand-metal-line` (flipped above),
+   so no separate rule needed here. */
 
 /* ─── Animations ─────────────────────────────────────────────────────────── */
 
