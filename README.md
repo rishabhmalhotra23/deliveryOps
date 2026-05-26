@@ -2,7 +2,7 @@
 
 **One screen for every customer, after the deal closes.**
 
-DeliveryOps is the operational system of record for Kognitos customer success. It collapses Salesforce, Kognitos (v1 + v2), Google Workspace (Drive · Gmail · Calendar · Slides), Slack, and Monday.com into one customer page driven by one Claude-powered agent. Every fact about a customer lives in exactly one row in Postgres; every customer-facing string flows through one prompt with the brand voice baked in.
+DeliveryOps is the operational system of record for the Kognitos Forward Deployed Engineering team. It collapses Salesforce, Kognitos (v1 + v2), Google Workspace (Drive · Gmail · Calendar · Slides), Slack, and Monday.com into one customer page driven by one Claude-powered agent. Every fact about a customer lives in exactly one row in Postgres; every customer-facing string flows through one prompt with the brand voice baked in.
 
 This repo is the production rewrite of an internal Python prototype called **Curator**. Curator's brain — tools, prompts, profile schema, ingestion pipeline — lives under [`legacy/`](./legacy) as a port-from reference and never deploys.
 
@@ -12,7 +12,7 @@ This repo is the production rewrite of an internal Python prototype called **Cur
 
 ## The problem in one paragraph
 
-A Kognitos customer signs the contract. To answer _"what's going on with this customer?"_ a CSM opens Salesforce, the Kognitos workspace, Drive, Gmail, Slack, Monday, and the QBR deck from three months ago. Seven tabs. Maybe nine. Every week, for every customer, by hand. The information is all there — it's just smeared across seven systems and one human's memory. **The CSM _is_ the database.** That doesn't scale. DeliveryOps replaces the dig.
+A Kognitos customer signs the contract. To answer _"what's going on with this customer?"_ an FDE opens Salesforce, the Kognitos workspace, Drive, Gmail, Slack, Monday, and the QBR deck from three months ago. Seven tabs. Maybe nine. Every week, for every customer, by hand. The information is all there — it's just smeared across seven systems and one human's memory. **The FDE _is_ the database.** That doesn't scale. DeliveryOps replaces the dig.
 
 ## The principle
 
@@ -100,7 +100,7 @@ Honest list, in rough priority order.
 3. **Calendar sync + QBR follow-ups.** Calendar sync is currently a stub — once Google OAuth lands, it'll be wired into the daily-sync cron and the QBR follow-up job.
 4. **Kognitos v1 adapter.** Legacy customers.
 5. **Microsoft Teams listener.** Mirror of the Slack listener for customers on Teams.
-6. **Multi-tenant + per-CSM scoping.** RLS through `customer_users`, per-CSM OAuth so every CSM sends from their own Gmail / Salesforce credentials. Read-only customer portal.
+6. **Multi-tenant + per-FDE scoping.** RLS through `customer_users`, per-FDE OAuth so every FDE sends from their own Gmail / Salesforce credentials. Read-only customer portal.
 
 The end-state target — what "done" looks like — is in [`docs/VISION.md`](./docs/VISION.md).
 

@@ -43,7 +43,7 @@ const UPDATES: UpdateEntry[] = [
   {
     customerKey: "kort-payments",
     tag: "Flat Renewal",
-    body: `Testing is on track. Adam is out of office, so we're waiting on Sasha's team for production access. In parallel, Karthik and Sasha are building the equivalent capability on v2 — if that lands before their target system is ready, we'll go-live on v2 instead. No AE assigned yet (CSM is driving). Flat renewal is the working assumption; upsell conversation is on hold until go-live lands.`,
+    body: `Testing is on track. Adam is out of office, so we're waiting on Sasha's team for production access. In parallel, Karthik and Sasha are building the equivalent capability on v2 — if that lands before their target system is ready, we'll go-live on v2 instead. No AE assigned yet (FDE is driving). Flat renewal is the working assumption; upsell conversation is on hold until go-live lands.`,
   },
   {
     customerKey: "mitie",

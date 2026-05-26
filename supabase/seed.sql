@@ -29,7 +29,7 @@ select id, '# Customer rules
 - Anything covered by the master MSA — point to legal first.
 
 ## Escalation policies
-- Tag the on-call CSM in #cs-escalations for anything urgency=high.
+- Tag the on-call FDE in #cs-escalations for anything urgency=high.
 
 ## Other notes
 - Acme uses Salesforce as the source of truth for renewal dates.

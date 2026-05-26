@@ -7,7 +7,7 @@ import { DrillDownPanel } from "@/app/_components/drilldown-panel";
 import { StatBlock } from "@/app/_components/brand";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 import type { DeliveryProject } from "@/lib/delivery/loader";
-import { isDelivered as txIsDelivered } from "@/lib/delivery/taxonomy";
+import { isDelivered as txIsDelivered, formatPeopleList } from "@/lib/delivery/taxonomy";
 
 type Drill = "all" | "in-flight" | "delivered-all" | "delivered-q" | null;
 
@@ -148,8 +148,7 @@ function ProjectList({
                 dev_platform: p.platform,
                 go_live_date: p.go_live_date,
                 kickoff_date: p.kickoff_date,
-                tam: p.tam,
-                dev: p.dev,
+                fde: p.fde,
                 partner: p.partner,
                 ae_owner: p.ae_owner,
                 group_title: p.group_title,
@@ -189,8 +188,7 @@ function ProjectList({
                 </div>
                 <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">
                   {p.phase ? <span>{p.phase}</span> : null}
-                  {p.tam ? <span>TAM: {shortName(p.tam)}</span> : null}
-                  {p.dev ? <span>Dev: {shortName(p.dev)}</span> : null}
+                  {p.fde ? <span>FDE: {formatPeopleList(p.fde)}</span> : null}
                   {p.go_live_date ? <span>go-live {p.go_live_date}</span> : null}
                 </div>
               </div>
@@ -213,12 +211,7 @@ function ProjectList({
   );
 }
 
-function shortName(s: string | null | undefined): string {
-  if (!s) return "—";
-  const raw = s.includes("@") ? s.split("@")[0].replace(/[._]/g, " ") : s;
-  const parts = raw.trim().split(/\s+/);
-  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]?.toUpperCase()}.` : raw;
-}
+// Name rendering centralised in lib/delivery/taxonomy.ts.
 
 type Tone = "red" | "amber" | "emerald" | "indigo" | "neutral";
 const TONE_CLASS: Record<Tone, string> = {

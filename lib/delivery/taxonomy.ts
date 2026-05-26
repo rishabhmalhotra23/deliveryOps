@@ -184,21 +184,85 @@ export const ACTIVE_WORK_PHASES: PhaseGroup[] = ["discovery", "dev", "uat", "wai
 
 export function peopleNames(raw: string | null | undefined): string[] {
   if (!raw?.trim()) return [];
-  return raw.split(",").flatMap((s) => {
-    const t = s.trim();
-    if (!t) return [];
-    if (t.includes("@")) {
-      const local = t.split("@")[0].replace(/[._]/g, " ");
-      const parts = local.split(" ").filter(Boolean);
-      return parts.length >= 2
-        ? [`${cap(parts[0])} ${parts[parts.length - 1][0]?.toUpperCase()}.`]
-        : [cap(parts[0] ?? t)];
-    }
-    return [t];
-  });
+  return raw.split(",").map((s) => formatPersonName(s)).filter(Boolean);
 }
 function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+// ─── Canonical person-name formatter ─────────────────────────────────────────
+// Single source of truth for how a name is rendered across DeliveryOps.
+// Handles three things every UI needed locally before:
+//   1. "first.last@kognitos.com"   → "First L."
+//   2. "rishabh malhotra"           → "Rishabh M."   (case-normalised)
+//   3. Role suffixes for non-FDE team members           (Shyam → "(PM)")
+//
+// If you add a new helper that renders a person's name, route it through
+// here.  Local copies invariably drift on case + role rendering.
+
+/** Role suffixes — appended after the short-formatted name.  Keys are
+ *  first names matched case-insensitively. */
+const ROLE_SUFFIX_BY_FIRST_NAME: Record<string, string> = {
+  shyam: "(PM)",
+};
+
+/** Format a single person string in DeliveryOps's canonical form. */
+export function formatPersonName(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  // Email → strip domain, normalise separators.
+  const source = trimmed.includes("@")
+    ? trimmed.split("@")[0].replace(/[._]/g, " ")
+    : trimmed;
+  const parts = source.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  const firstWord = parts[0];
+  const first = cap(firstWord);
+  const lastInitial = parts.length > 1
+    ? `${(parts[parts.length - 1][0] ?? "").toUpperCase()}.`
+    : "";
+  const base = lastInitial ? `${first} ${lastInitial}` : first;
+  const suffix = ROLE_SUFFIX_BY_FIRST_NAME[firstWord.toLowerCase()];
+  return suffix ? `${base} ${suffix}` : base;
+}
+
+/** Format a comma-separated list of people compactly:
+ *   1 name  → "Rishabh M."
+ *   2 names → "Rishabh M., Shyam P. (PM)"
+ *   3+      → "Rishabh M., Shyam P. (PM) +1"
+ *  Set `expand: true` to render every name instead of collapsing the tail. */
+export function formatPeopleList(
+  raw: string | string[] | null | undefined,
+  opts: { expand?: boolean; max?: number } = {}
+): string {
+  if (!raw) return "";
+  const parts = Array.isArray(raw) ? raw : raw.split(",");
+  const names = Array.from(
+    new Set(parts.map((p) => formatPersonName(p)).filter(Boolean))
+  );
+  if (names.length === 0) return "";
+  const max = opts.max ?? 2;
+  if (opts.expand || names.length <= max) return names.join(", ");
+  const shown = names.slice(0, max);
+  const extra = names.length - max;
+  return `${shown.join(", ")} +${extra}`;
+}
+
+// Merge two Monday people-columns (delivery + engineering) into a single
+// comma-separated FDE roster, deduped + trimmed.  Returns null when both
+// columns are empty.  Used everywhere that "FDE" is a single concept
+// (delivery table, customer projects card, dashboard drill-downs).
+export function unionPeopleColumns(a: string | null, b: string | null): string | null {
+  const seen = new Set<string>();
+  for (const raw of [a, b]) {
+    if (!raw) continue;
+    for (const piece of raw.split(",")) {
+      const name = piece.trim();
+      if (name) seen.add(name);
+    }
+  }
+  return seen.size === 0 ? null : Array.from(seen).join(", ");
 }
 
 // ─── TTV ──────────────────────────────────────────────────────────────────────

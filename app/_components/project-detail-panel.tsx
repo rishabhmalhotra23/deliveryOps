@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { formatPeopleList, formatPersonName } from "@/lib/delivery/taxonomy";
+
 // Minimal project shape shared by customer page and delivery page.
 export interface ProjectPanelItem {
   monday_item_id: string;
@@ -21,8 +23,10 @@ export interface ProjectPanelItem {
   ttv_days_text?: string | null;
   delivered_value?: string | null;
   latest_update?: string | null;
-  tam?: string | null;
-  dev?: string | null;
+  /** FDE roster — accepts either a comma-separated string (the delivery
+   *  table format) or a pre-split string[] (the analytics drill-down
+   *  format).  Replaces the old `tam` + `dev` props. */
+  fde?: string | string[] | null;
   partner?: string | null;
   ae_owner?: string | null;
   group_title?: string | null;
@@ -51,13 +55,6 @@ function fmtRelTime(iso: string): string {
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
   return `${Math.round(ms / 86_400_000)}d ago`;
-}
-
-function firstName(s: string | null | undefined): string {
-  if (!s) return "";
-  const raw = s.includes("@") ? s.split("@")[0].replace(/[._]/g, " ") : s;
-  const parts = raw.trim().split(/\s+/);
-  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.` : raw;
 }
 
 function Chip({ label, color }: { label: string; color?: string }) {
@@ -201,17 +198,21 @@ export function ProjectDetailPanel({
           ) : null}
 
           {/* Delivery team */}
-          {(p.tam || p.dev || p.partner || p.ae_owner) ? (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-[color:var(--muted-foreground)] mb-2">Delivery team</div>
-              <div className="space-y-1.5">
-                {p.tam ? <Row label="TAM / FDE" name={p.tam} color="#818cf8" /> : null}
-                {p.dev ? <Row label="SE / Dev" name={p.dev} color="#34d399" /> : null}
-                {p.partner ? <Row label="Partner" name={p.partner} color="#fb923c" /> : null}
-                {p.ae_owner ? <Row label="AE" name={p.ae_owner} color="#f472b6" /> : null}
+          {(() => {
+            const fdeNames = formatPeopleList(p.fde, { expand: true });
+            const hasTeam = !!fdeNames || !!p.partner || !!p.ae_owner;
+            if (!hasTeam) return null;
+            return (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-[color:var(--muted-foreground)] mb-2">Delivery team</div>
+                <div className="space-y-1.5">
+                  {fdeNames ? <Row label="FDE" name={fdeNames} color="#818cf8" /> : null}
+                  {p.partner ? <Row label="Partner" name={p.partner} color="#fb923c" /> : null}
+                  {p.ae_owner ? <Row label="AE" name={formatPersonName(p.ae_owner)} color="#f472b6" /> : null}
+                </div>
               </div>
-            </div>
-          ) : null}
+            );
+          })()}
 
           {/* Delivered value */}
           {p.delivered_value ? (
@@ -278,12 +279,11 @@ export function ProjectDetailPanel({
 }
 
 function Row({ label, name, color }: { label: string; name: string; color: string }) {
-  const names = name.split(",").map(s => firstName(s.trim())).filter(Boolean).join(", ");
   return (
     <div className="flex items-center gap-3 text-sm">
       <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
       <span className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] w-16 shrink-0">{label}</span>
-      <span className="text-[color:var(--foreground)]">{names}</span>
+      <span className="text-[color:var(--foreground)]">{name}</span>
     </div>
   );
 }
@@ -291,3 +291,4 @@ function Row({ label, name, color }: { label: string; name: string; color: strin
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+

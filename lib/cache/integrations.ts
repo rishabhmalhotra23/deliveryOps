@@ -65,8 +65,10 @@ export interface MondayProjectCache {
   timeline_start: string | null;
   timeline_end: string | null;
   partner: string | null;
-  tam: string | null;
-  dev: string | null;
+  /** Combined FDE roster — comma-separated union of Monday's delivery +
+   *  engineering columns, deduped.  Replaces the old `tam` + `dev`
+   *  fields as part of the "1 single flow" simplification. */
+  fde: string | null;
   total_effort_days: number | null;
   delivered_value: string | null;
   ttv_days_text: string | null;
@@ -143,7 +145,7 @@ const NPS_COLS = {
 // Monday Projects board column IDs come from lib/delivery/taxonomy.ts.
 // Aliases below match this module's pre-existing field names so call sites
 // keep working without churn.
-import { MONDAY_PROJECT_COLS } from "@/lib/delivery/taxonomy";
+import { MONDAY_PROJECT_COLS, unionPeopleColumns } from "@/lib/delivery/taxonomy";
 
 const PROJECT_COLS = {
   health:         MONDAY_PROJECT_COLS.health,
@@ -154,6 +156,8 @@ const PROJECT_COLS = {
   kickoff_date:   MONDAY_PROJECT_COLS.kickoff_date,
   go_live_date:   MONDAY_PROJECT_COLS.go_live_date,
   partner:        MONDAY_PROJECT_COLS.partner,
+  // Monday still exposes two separate people-columns (delivery + engineering);
+  // we union them into a single "fde" field downstream.
   tam:            MONDAY_PROJECT_COLS.tam,
   dev:            MONDAY_PROJECT_COLS.dev,
 };
@@ -250,8 +254,7 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
       go_live_date:    p.go_live_date ?? txt(cols, PROJECT_COLS.go_live_date),
       kickoff_date:    p.kickoff_date ?? txt(cols, PROJECT_COLS.kickoff_date),
       partner:         txt(cols, PROJECT_COLS.partner),
-      tam:             txt(cols, PROJECT_COLS.tam),
-      dev:             txt(cols, PROJECT_COLS.dev),
+      fde:             unionPeopleColumns(txt(cols, PROJECT_COLS.tam), txt(cols, PROJECT_COLS.dev)),
       total_effort_days: p.total_effort_days,
       delivered_value: p.delivered_value,
       ttv_days_text:   p.ttv_days_text,

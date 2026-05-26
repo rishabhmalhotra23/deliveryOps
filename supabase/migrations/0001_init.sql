@@ -282,7 +282,7 @@ create index customer_users_customer_idx on customer_users (customer_id) where d
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Row-Level Security
 -- Policies are intentionally permissive in Phase 0 — every authenticated user
--- can read and write everything. Phase 3 introduces real CSM ↔ customer
+-- can read and write everything. Phase 3 introduces real FDE ↔ customer
 -- scoping via customer_users.
 -- ─────────────────────────────────────────────────────────────────────────────
 

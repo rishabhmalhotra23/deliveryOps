@@ -37,4 +37,4 @@ Say it: "We don't have that yet. The Salesforce sync runs every 4 hours; the nex
 1. Could this have been written by a SaaS vendor in 2018? Rewrite.
 2. Does the sentence start with "I"? Usually rewrite.
 3. Is there an exclamation point? Almost certainly delete it.
-4. Could a smart, busy CSM read this in two seconds and act on it? If no, cut words until yes.`;
+4. Could a smart, busy FDE read this in two seconds and act on it? If no, cut words until yes.`;

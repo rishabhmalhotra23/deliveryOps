@@ -292,7 +292,7 @@ create index customer_users_customer_idx on customer_users (customer_id) where d
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Row-Level Security
 -- Policies are intentionally permissive in Phase 0 — every authenticated user
--- can read and write everything. Phase 3 introduces real CSM ↔ customer
+-- can read and write everything. Phase 3 introduces real FDE ↔ customer
 -- scoping via customer_users.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -554,7 +554,7 @@ create index if not exists customers_custom_category_idx
 
 -- Backfill custom_category from lifecycle_group using DeliveryOps's taxonomy.
 -- Monday's labels are noisy and inconsistent — we collapse them into seven
--- buckets that map to actual CSM workflow.
+-- buckets that map to actual FDE workflow.
 update customers
 set custom_category = case lifecycle_group
   when 'High Risk'                      then 'At Risk'
@@ -905,7 +905,7 @@ comment on column chat_messages.tool_calls is
 --      anon client can't see internal notes.
 --
 -- Phase 3 (multi-tenant) will tighten further by joining through
--- customer_users for per-CSM scoping. For now we are single-tenant — every
+-- customer_users for per-FDE scoping. For now we are single-tenant — every
 -- kognitos.com user sees every customer.
 
 -- ── Helper: SQL function the policies call ────────────────────────────────

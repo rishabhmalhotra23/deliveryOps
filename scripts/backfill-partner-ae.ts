@@ -36,7 +36,7 @@ async function main() {
   const customers = await listCustomers();
 
   // "Chittu" is the *default* for partner-managed customers — set when no
-  // human AE has been assigned yet.  If a CSM has explicitly set the AE
+  // human AE has been assigned yet.  If an FDE has explicitly set the AE
   // to a real person (Rajesh / Binny / etc.), this backfill leaves them
   // alone.  Without this guard, a re-run silently undoes manual
   // corrections like the 2026-05-21 fix-customer-assignments.ts updates.

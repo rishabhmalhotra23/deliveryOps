@@ -299,7 +299,7 @@ async function toolSendEmail(input: Record<string, unknown>, ctx: HandlerContext
   const body = String(input.body ?? "");
 
   // `source: "approved"` flows through executeEmailApproval in
-  // lib/approvals/flow.ts — the CSM already clicked "Approve & send" on
+  // lib/approvals/flow.ts — the FDE already clicked "Approve & send" on
   // the Slack card. Send directly via Gmail and skip the approval card.
   if (ctx.source === "approved") {
     const customer = await requireCustomerByKey(ctx.customerKey);
@@ -322,7 +322,7 @@ async function toolSendEmail(input: Record<string, unknown>, ctx: HandlerContext
   }
 
   // Default path (web / slack / email sources): queue for Slack approval.
-  // The CSM sees a Block Kit card with the draft and clicks Approve / Reject / Discuss.
+  // The FDE sees a Block Kit card with the draft and clicks Approve / Reject / Discuss.
   const { queueEmailDraft } = await import("@/lib/approvals/flow");
   const approval = await queueEmailDraft({
     customerKey: ctx.customerKey,
@@ -333,7 +333,7 @@ async function toolSendEmail(input: Record<string, unknown>, ctx: HandlerContext
     references: typeof input.references === "string" ? input.references : undefined,
     gmailThreadId: typeof input.gmailThreadId === "string" ? input.gmailThreadId : undefined,
   });
-  return `Email draft queued for approval (\`${approval.id}\`). The CSM team sees a preview in the customer's internal Slack channel and can approve, reject, or revise it in thread.`;
+  return `Email draft queued for approval (\`${approval.id}\`). The FDE team sees a preview in the customer's internal Slack channel and can approve, reject, or revise it in thread.`;
 }
 
 async function toolReviseEmailDraft(
@@ -367,7 +367,7 @@ async function toolReviseEmailDraft(
   const revised = await applyRevision(approvalId, patch, "agent", "agent_revise");
   if (!revised) return `Approval ${approvalId} not found.`;
 
-  // Re-post an updated card in the same thread so the CSM can re-approve.
+  // Re-post an updated card in the same thread so the FDE can re-approve.
   if (revised.slack_channel && revised.slack_thread_ts) {
     try {
       await postMessage(revised.slack_channel, `Email draft revised — re-review.`, {

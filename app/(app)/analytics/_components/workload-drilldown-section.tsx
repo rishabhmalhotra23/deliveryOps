@@ -1,12 +1,12 @@
 "use client";
 
-// Client wrapper around the four workload-related charts.  Holds the
+// Client wrapper around the three workload-related charts.  Holds the
 // drill-down panel state and dispatches based on which chart was clicked:
-//   * TAM / Dev / Projects-by-stage  →  project list (read-only summary +
-//                                       deep links to Monday + customer page)
-//   * AE workload                    →  customer list with inline-edit AE
-//                                       dropdown that propagates everywhere
-//                                       via /api/customers/[key]/manual-update
+//   * FDE / Projects-by-stage  →  project list (read-only summary +
+//                                 deep links to Monday + customer page)
+//   * AE workload              →  customer list with inline-edit AE
+//                                 dropdown that propagates everywhere
+//                                 via /api/customers/[key]/manual-update
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -21,13 +21,14 @@ import { DrillDownPanel } from "@/app/_components/drilldown-panel";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 import { InlineEdit } from "@/app/_components/inline-edit";
 import { formatMoney } from "@/app/_components/brand";
+import { formatPersonName } from "@/lib/delivery/taxonomy";
 import type {
   AnalyticsBundle,
   DrillDownCustomer,
   DrillDownProject,
 } from "@/lib/analytics/loader";
 
-type DrillKind = "tam" | "dev" | "stage" | "ae";
+type DrillKind = "fde" | "stage" | "ae";
 
 interface DrillState {
   kind: DrillKind;
@@ -48,8 +49,7 @@ export function WorkloadDrilldownSection({
   // new function identity on every render.
   const open = useMemo(
     () => ({
-      tam: (key: string) => setDrill({ kind: "tam", key }),
-      dev: (key: string) => setDrill({ kind: "dev", key }),
+      fde: (key: string) => setDrill({ kind: "fde", key }),
       stage: (key: string) => setDrill({ kind: "stage", key }),
       ae: (key: string) => setDrill({ kind: "ae", key }),
     }),
@@ -58,27 +58,18 @@ export function WorkloadDrilldownSection({
 
   return (
     <>
-      {/* TAM/FDE + SE/Dev (row 1) */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {bundle.by_tam.length > 0 ? (
-          <ChartShell
-            title="TAM / FDE workload"
-            subtitle="Active projects per Technical Account Manager / Field Delivery Engineer · click a bar to drill in"
-          >
-            <TeamWorkloadChart data={bundle.by_tam} onBarClick={open.tam} />
-          </ChartShell>
-        ) : null}
-        {bundle.by_dev.length > 0 ? (
-          <ChartShell
-            title="SE / Dev workload"
-            subtitle="Active projects per Solutions Engineer · click a bar to drill in"
-          >
-            <TeamWorkloadChart data={bundle.by_dev} onBarClick={open.dev} />
-          </ChartShell>
-        ) : null}
-      </div>
+      {/* FDE workload — one chart for the whole delivery team (was previously
+          split into TAM and Dev which forced the same person onto two bars). */}
+      {bundle.by_fde.length > 0 ? (
+        <ChartShell
+          title="FDE workload"
+          subtitle="Active projects per Forward Deployed Engineer · click a bar to drill in"
+        >
+          <TeamWorkloadChart data={bundle.by_fde} onBarClick={open.fde} />
+        </ChartShell>
+      ) : null}
 
-      {/* Projects by stage + AE workload (row 2) */}
+      {/* Projects by stage + AE workload */}
       <div className="grid gap-6 lg:grid-cols-2">
         <ChartShell
           title="Projects by stage"
@@ -164,18 +155,14 @@ function DrillPanelDispatcher({
   }
 
   const items =
-    drill.kind === "tam"
-      ? bundle.drilldowns.by_tam_items[drill.key] ?? []
-      : drill.kind === "dev"
-        ? bundle.drilldowns.by_dev_items[drill.key] ?? []
-        : bundle.drilldowns.projects_by_lifecycle_items[drill.key] ?? [];
+    drill.kind === "fde"
+      ? bundle.drilldowns.by_fde_items[drill.key] ?? []
+      : bundle.drilldowns.projects_by_lifecycle_items[drill.key] ?? [];
 
   const title =
-    drill.kind === "tam"
-      ? `TAM/FDE: ${drill.key}`
-      : drill.kind === "dev"
-        ? `SE/Dev: ${drill.key}`
-        : `Stage: ${drill.key}`;
+    drill.kind === "fde"
+      ? `FDE: ${formatPersonName(drill.key)}`
+      : `Stage: ${drill.key}`;
 
   return (
     <DrillDownPanel
@@ -184,7 +171,7 @@ function DrillPanelDispatcher({
       onClose={onClose}
       footer={
         <>
-          Project assignments (TAM, Dev, stage, status) are sourced from Monday.
+          Project assignments (FDE, stage, status) are sourced from Monday.
           {" "}
           Click a project to see its details and updates. To change an
           assignment, open the customer page or the project on Monday — the
@@ -233,8 +220,7 @@ function ProjectList({
                   dev_platform: p.platform,
                   go_live_date: p.go_live_date,
                   kickoff_date: p.kickoff_date,
-                  tam: p.tam,
-                  dev: p.dev,
+                  fde: p.fde,
                   group_title: p.group_title,
                 })
               }

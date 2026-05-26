@@ -282,8 +282,7 @@ function ActiveProjectsList({
                 current_phase: p.phase,
                 go_live_date: p.go_live_date,
                 kickoff_date: p.kickoff_date,
-                tam: p.tam,
-                dev: p.dev,
+                fde: p.fde,
                 group_title: p.group_title,
               })
             }

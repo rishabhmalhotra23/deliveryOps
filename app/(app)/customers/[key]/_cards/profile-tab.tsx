@@ -270,7 +270,7 @@ export function ProfileTab({ customerKey }: ProfileTabProps) {
       <div className="glass-card glass-card-hover p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="eyebrow text-[color:var(--muted-foreground)]">Internal · CSM only</div>
+            <div className="eyebrow text-[color:var(--muted-foreground)]">Internal · FDE only</div>
             <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">
               QBR dates and notes — agent has zero read access to these fields
             </div>

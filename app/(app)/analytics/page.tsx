@@ -149,8 +149,8 @@ export default async function AnalyticsPage() {
         </div>
       ) : null}
 
-      {/* Delivery team workload + projects-by-stage + AE workload.
-          All four charts get click-through to a drill-down side panel —
+      {/* FDE workload + projects-by-stage + AE workload.
+          All three charts get click-through to a drill-down side panel —
           see WorkloadDrilldownSection for the dispatch logic. */}
       <WorkloadDrilldownSection
         bundle={bundle}

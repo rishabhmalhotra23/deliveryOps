@@ -23,7 +23,7 @@ create index if not exists customers_custom_category_idx
 
 -- Backfill custom_category from lifecycle_group using DeliveryOps's taxonomy.
 -- Monday's labels are noisy and inconsistent — we collapse them into seven
--- buckets that map to actual CSM workflow.
+-- buckets that map to actual FDE workflow.
 update customers
 set custom_category = case lifecycle_group
   when 'High Risk'                      then 'At Risk'

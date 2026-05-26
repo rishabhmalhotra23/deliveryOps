@@ -1,6 +1,6 @@
 // Google OAuth helper — exchanges refresh tokens for access tokens for the
 // Drive / Gmail / Calendar APIs. Phase-1 single-tenant: one shared service
-// account or refresh token. Per-CSM OAuth lands in Phase 3.
+// account or refresh token. Per-FDE OAuth lands in Phase 3.
 
 interface AccessToken {
   token: string;

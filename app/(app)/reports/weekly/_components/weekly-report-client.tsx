@@ -13,6 +13,7 @@ import type { V2Migration } from "@/lib/reports/v2-migrations";
 import {
   PHASE_GROUP_META, ACTIVE_WORK_PHASES,
   HEALTH_PILL_CLS, FLIGHT_GROUP_META,
+  formatPersonName, formatPeopleList,
   type PhaseGroup,
 } from "@/lib/delivery/taxonomy";
 import { RangeSelector } from "./range-selector";
@@ -180,11 +181,12 @@ function StatCard({ label, value, sub, accent }: { label: string; value: number 
 }
 
 // ── Project row ───────────────────────────────────────────────────────────────
-// Shows BOTH TAM and FDE (Dev) names — was previously TAM only, which hid
-// FDE assignments on UAT and other rows.
+// Single FDE roster — Monday still splits delivery + engineering across
+// two columns but the report shows them together so the same person
+// doesn't appear twice on a row.
 function ProjectRow({ p, showTtv, tag }: { p: WeeklyProject; showTtv?: boolean; tag?: React.ReactNode }) {
-  const tamLine = p.tam.length > 0 ? `TAM: ${p.tam[0]}${p.tam.length > 1 ? ` +${p.tam.length - 1}` : ""}` : null;
-  const fdeLine = p.dev.length > 0 ? `FDE: ${p.dev[0]}${p.dev.length > 1 ? ` +${p.dev.length - 1}` : ""}` : null;
+  const fdeText = formatPeopleList(p.fde);
+  const fdeLine = fdeText ? `FDE: ${fdeText}` : null;
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-[var(--glass-border)] last:border-0">
       <div className="min-w-0 flex-1">
@@ -192,7 +194,6 @@ function ProjectRow({ p, showTtv, tag }: { p: WeeklyProject; showTtv?: boolean; 
         <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 truncate">
           {p.customer_display_name}
           {p.phase && <span className="ml-2 opacity-55">[{p.phase}]</span>}
-          {tamLine && <span className="ml-2 opacity-60">· {tamLine}</span>}
           {fdeLine && <span className="ml-2 opacity-60">· {fdeLine}</span>}
         </div>
       </div>
@@ -234,9 +235,10 @@ function Empty({ text }: { text: string }) {
 // ── Workload chart ─────────────────────────────────────────────────────────────
 const WORKLOAD_COLORS = ["#818cf8","#6366f1","#a78bfa","#8b5cf6","#34d399","#10b981","#60a5fa","#3b82f6"];
 
-// Truncate names so the YAxis stays a sane width even with long names.
-// Tooltip still shows the full name.
-function shortName(s: string, max = 18): string {
+// Truncate a pre-formatted display name so the YAxis stays sane.
+// Names already pass through formatPersonName upstream — this is just an
+// overflow guard for unusually long ones.
+function truncate(s: string, max = 20): string {
   if (s.length <= max) return s;
   return s.slice(0, max - 1) + "…";
 }
@@ -261,7 +263,11 @@ function WorkloadChart({
 }) {
   const t = useChartTheme();
   if (data.length === 0) return <Empty text="No assignments found." />;
-  const display = data.map((d) => ({ ...d, displayName: shortName(d.person) }));
+  const display = data.map((d) => ({
+    ...d,
+    fullName: formatPersonName(d.person),
+    displayName: truncate(formatPersonName(d.person)),
+  }));
   const computedHeight = height ?? Math.max(120, data.length * 32);
   return (
     <>
@@ -281,7 +287,7 @@ function WorkloadChart({
           />
           <Tooltip
             contentStyle={t.tooltipStyle}
-            labelFormatter={(_, payload) => (payload?.[0]?.payload as { person?: string } | undefined)?.person ?? ""}
+            labelFormatter={(_, payload) => (payload?.[0]?.payload as { fullName?: string } | undefined)?.fullName ?? ""}
             formatter={(v) => [v, "Active projects"]}
           />
           <Bar dataKey="active" radius={[0, 3, 3, 0]}>
@@ -643,27 +649,17 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
       {/* Row 7 — In production */}
       <InProdSection in_prod={bundle.in_prod} nps={bundle.nps_this_quarter} />
 
-      {/* Row 8 — Team workload (TAM + FDE).
-          Both charts share a height computed off the longer of the two
-          rosters so the side-by-side layout doesn't feel lopsided when
-          one side has more people than the other. */}
+      {/* Row 8 — FDE workload.  Single roster — Monday splits assignments
+          across two columns (delivery + engineering) but for the weekly
+          report the whole delivery team is one list. */}
       <div className="glass-card p-5">
         <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-4">
-          Team workload — active projects (In progress group)
+          FDE workload — active projects (In progress group)
         </div>
         {(() => {
-          const maxRows = Math.max(
-            bundle.workload_tam.length,
-            bundle.workload_dev.length,
-            3 // floor — keeps the chart card from collapsing when the team is small
-          );
-          const sharedHeight = Math.max(140, maxRows * 36);
-          return (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <WorkloadChart data={bundle.workload_tam} label="TAM / CSM" height={sharedHeight} />
-              <WorkloadChart data={bundle.workload_dev} label="FDE / Engineering" height={sharedHeight} />
-            </div>
-          );
+          const rows = Math.max(bundle.workload_fde.length, 3);
+          const height = Math.max(140, rows * 36);
+          return <WorkloadChart data={bundle.workload_fde} label="FDE" height={height} />;
         })()}
       </div>
 

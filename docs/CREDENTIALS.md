@@ -201,7 +201,7 @@ You need a public URL Slack can POST to. **For local dev, use ngrok** ([Tier 3 s
 
 ~30 min. Free.
 
-One Google Cloud project covers Drive + Gmail + Calendar + Slides. We use a single OAuth client (the kognitos.com service account or your CSM's account) for Phase 1; per-CSM OAuth lands in Phase 3.
+One Google Cloud project covers Drive + Gmail + Calendar + Slides. We use a single OAuth client (the kognitos.com service account or your FDE's account) for Phase 1; per-FDE OAuth lands in Phase 3.
 
 ### 2a. Create the GCP project
 

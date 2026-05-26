@@ -1,11 +1,18 @@
 // Upcoming pipeline — SF opportunities closing in the next 90 days.
-// Gives the CS team a rolling forward-looking view of what's incoming so
+// Gives the team a rolling forward-looking view of what's incoming so
 // they can prepare renewals and expansions before they land. A rolling
 // window (rather than calendar-quarter) means the section stays useful
 // late in a quarter when most upcoming closes are actually in Q+1.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
+import {
+  MONDAY_PROJECT_COLS,
+  colText,
+  formatPersonName,
+  isDelivered,
+  unionPeopleColumns,
+} from "@/lib/delivery/taxonomy";
 
 const WINDOW_DAYS = 90;
 
@@ -39,6 +46,12 @@ export interface PipelineOpportunity {
   kind: PipelineKind;
   /** Raw SF Type string for the tooltip / debugging. */
   type_raw: string | null;
+  /**
+   * Canonical-cased list of FDEs currently working this customer's
+   * non-delivered projects.  `null` when the opportunity is for a new
+   * logo (no FDE assigned yet) or when no active project exists.
+   */
+  fdes: string[] | null;
 }
 
 export interface PipelineBundle {
@@ -86,7 +99,7 @@ export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
   const sb = requireAdmin();
   const { start, end, label } = windowBounds();
 
-  const [opps, customers] = await Promise.all([
+  const [opps, customers, projects] = await Promise.all([
     sb
       .from("sf_opportunities")
       .select(
@@ -98,9 +111,42 @@ export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
       .order("amount", { ascending: false })
       .limit(50),
     listCustomers().catch(() => []),
+    // Pull every project's raw_columns so we can derive the FDE roster
+    // per customer.  Cheap (~few hundred rows) and keeps the dashboard a
+    // single round-trip.
+    sb
+      .from("monday_projects")
+      .select("customer_id, raw_columns")
+      .limit(2000)
+      .then((r) => r, () => ({ data: null as null | unknown })),
   ]);
 
   const custById = new Map(customers.map((c) => [c.id, c]));
+
+  // FDE-per-customer: union of TAM + Dev across every project that is
+  // still in flight (i.e. not delivered).  Names are canonical-cased so
+  // they match what we display elsewhere.
+  type ProjRow = {
+    customer_id: string;
+    raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
+  };
+  const fdesByCustomer = new Map<string, Set<string>>();
+  for (const p of (projects.data as ProjRow[] | null) ?? []) {
+    const cols = p.raw_columns ?? {};
+    const status = colText(cols, MONDAY_PROJECT_COLS.status);
+    if (isDelivered(status)) continue;
+    const merged = unionPeopleColumns(
+      colText(cols, MONDAY_PROJECT_COLS.tam),
+      colText(cols, MONDAY_PROJECT_COLS.dev),
+    );
+    if (!merged) continue;
+    const set = fdesByCustomer.get(p.customer_id) ?? new Set<string>();
+    for (const piece of merged.split(",")) {
+      const name = formatPersonName(piece);
+      if (name) set.add(name);
+    }
+    fdesByCustomer.set(p.customer_id, set);
+  }
 
   const opportunities: PipelineOpportunity[] = ((opps.data as OppRow[] | null) ?? []).map((o) => {
     const cust = custById.get(o.customer_id);
@@ -113,6 +159,10 @@ export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
       (raw["Opportunity_Type__c"] as string | undefined) ??
       null;
     const { kind, raw: type_raw } = classifyOpportunityType(typeStr);
+    // New-logo opportunities skip the FDE column — no team is assigned
+    // yet, and showing one from an unrelated project would be misleading.
+    const fdes =
+      kind === "New" ? null : Array.from(fdesByCustomer.get(o.customer_id) ?? []).sort();
     return {
       sf_id: o.sf_id,
       name: o.name,
@@ -125,6 +175,7 @@ export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
       customer_display_name: cust?.display_name ?? null,
       kind,
       type_raw,
+      fdes: fdes && fdes.length > 0 ? fdes : null,
     };
   });
 

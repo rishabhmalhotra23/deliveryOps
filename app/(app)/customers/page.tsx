@@ -174,7 +174,7 @@ function CustomerStrip({
         </div>
       ) : null}
 
-      {/* "Edited" badge — surfaces manual overrides so a CSM at-a-glance
+      {/* "Edited" badge — surfaces manual overrides so an FDE at-a-glance
           knows the row has been hand-tuned away from sync defaults.
           (SF / MON badges removed — the data source is implicit; the
           edited count is the only badge that adds information.) */}
@@ -225,7 +225,7 @@ export default async function CustomersPage() {
 
   // Past-state customers (Churned / Dropped / Past) collapse into one
   // section.  The individual chip on each row still distinguishes which
-  // one they are — the section header just groups them so the CSM can
+  // one they are — the section header just groups them so the FDE can
   // see the whole "no longer active" cohort in one place instead of
   // hunting across three separate sections.
   const PAST_GROUP_KEY = "_past";
@@ -319,7 +319,7 @@ export default async function CustomersPage() {
         let displayLabel: string;
         let subtitle: string | null = null;
         if (isPastGroup) {
-          // Count breakdown — show the mix so the CSM knows how many of
+          // Count breakdown — show the mix so the FDE knows how many of
           // each still need disambiguation.
           const counts = { Churned: 0, Dropped: 0, Past: 0 } as Record<string, number>;
           for (const c of list) counts[categoryFor(c)]++;

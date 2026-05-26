@@ -17,7 +17,7 @@
 --      anon client can't see internal notes.
 --
 -- Phase 3 (multi-tenant) will tighten further by joining through
--- customer_users for per-CSM scoping. For now we are single-tenant — every
+-- customer_users for per-FDE scoping. For now we are single-tenant — every
 -- kognitos.com user sees every customer.
 
 -- ── Helper: SQL function the policies call ────────────────────────────────

@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import type { PipelineKind, PipelineOpportunity } from "@/lib/dashboard/pipeline";
 import { formatMoney } from "@/app/_components/brand";
+import { formatPeopleList, formatPersonName } from "@/lib/delivery/taxonomy";
 
 const KIND_STYLE: Record<PipelineKind, { chip: string; label: string }> = {
   Renewal: {
@@ -105,7 +106,15 @@ function PipelineRow({ opp }: { opp: PipelineOpportunity }) {
               <span className="text-xs text-[color:var(--brand-gray)]">closes {opp.close_date}</span>
             ) : null}
             {opp.owner_name ? (
-              <span className="text-xs text-[color:var(--brand-gray)]">{opp.owner_name}</span>
+              <span className="text-xs text-[color:var(--brand-gray)]">AE · {formatPersonName(opp.owner_name)}</span>
+            ) : null}
+            {/* FDEs are only shown for existing customers (Renewal / Expansion /
+                Other) where there's actually a delivery team in flight.  New-
+                logo opportunities surface AE only — no team is assigned yet. */}
+            {opp.fdes && opp.fdes.length > 0 ? (
+              <span className="text-xs text-[color:var(--brand-gray)]">
+                FDE · {formatPeopleList(opp.fdes)}
+              </span>
             ) : null}
             {opp.probability != null ? (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${probColor}`}>
@@ -151,7 +160,10 @@ function PipelineRow({ opp }: { opp: PipelineOpportunity }) {
             }
           />
           <DetailField label="SF Type" value={opp.type_raw ?? "(not set)"} />
-          <DetailField label="Owner" value={opp.owner_name ?? "—"} />
+          <DetailField label="AE" value={opp.owner_name ? formatPersonName(opp.owner_name) : "—"} />
+          {opp.fdes && opp.fdes.length > 0 ? (
+            <DetailField label="FDE" value={formatPeopleList(opp.fdes, { expand: true })} />
+          ) : null}
           <DetailField label="Stage" value={opp.stage_name ?? "—"} />
           <DetailField label="Close date" value={opp.close_date ?? "—"} />
           <DetailField

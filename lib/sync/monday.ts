@@ -331,7 +331,7 @@ const CUSTOMERS_BOARD_COLS = {
 // Monday group titles → DeliveryOps custom_category. Kept in sync with
 // app/_components/brand.tsx LIFECYCLE_TO_CATEGORY. When a customer's
 // lifecycle_group changes from one Monday group to another, we also flip
-// custom_category in lockstep — UNLESS the CSM has manually pinned it via
+// custom_category in lockstep — UNLESS the FDE has manually pinned it via
 // the operations chat or inline editor (tracked by protected_fields).
 const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
   "High Risk": "At Risk",
@@ -368,7 +368,7 @@ async function syncCustomerRegistry(
     const updates: Record<string, string | null> = {};
 
     // Monday group = lifecycle_group (always pulled — never protected; the
-    // CSM's primary lever for moving customers between buckets lives in
+    // FDE's primary lever for moving customers between buckets lives in
     // Monday's group, not in our DB).
     const newLifecycle = item.group?.title ?? null;
     if (newLifecycle && newLifecycle !== cust.lifecycle_group) {

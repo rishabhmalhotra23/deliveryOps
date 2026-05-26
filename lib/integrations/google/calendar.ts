@@ -64,7 +64,7 @@ function mockEvents(timeMin: Date, timeMax: Date): CalEvent[] {
     {
       id: "mock-1",
       summary: "Acme weekly check-in",
-      description: "Standing weekly with the Acme CSM team.",
+      description: "Standing weekly with the Acme FDE team.",
       start: { dateTime: new Date(now + 24 * 3600_000).toISOString() },
       end: { dateTime: new Date(now + 24 * 3600_000 + 30 * 60_000).toISOString() },
       attendees: [{ email: "csm@kognitos.com", responseStatus: "accepted" }],

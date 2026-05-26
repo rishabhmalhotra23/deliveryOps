@@ -15,6 +15,7 @@ import {
   isDelivered as txIsDelivered,
   isStalled as txIsStalled,
   isCancelledOrInactive as txIsCancelled,
+  formatPeopleList,
 } from "@/lib/delivery/taxonomy";
 
 // ── Status/health colour maps ────────────────────────────────────────────────
@@ -131,8 +132,7 @@ export function ProjectsCard({
       ttv_days_text: p.ttv_days_text,
       delivered_value: p.delivered_value,
       latest_update: p.latest_update,
-      tam: p.tam,
-      dev: p.dev,
+      fde: p.fde,
       partner: p.partner,
       group_title: p.group_title,
     };
@@ -343,8 +343,7 @@ function ProjectRow({
         {p.total_effort_days ? <Meta label="Effort">{p.total_effort_days}d</Meta> : null}
         {p.ttv_days_text ? <Meta label="TTV">{p.ttv_days_text}d</Meta> : null}
         {p.partner ? <Meta label="Partner">{p.partner}</Meta> : null}
-        {p.tam ? <Meta label="TAM">{firstName(p.tam)}</Meta> : null}
-        {p.dev ? <Meta label="Dev">{firstName(p.dev)}</Meta> : null}
+        {p.fde ? <Meta label="FDE">{formatPeopleList(p.fde, { expand: true })}</Meta> : null}
       </div>
 
       {/* Row 3: delivered value */}
@@ -375,13 +374,6 @@ function Meta({ label, children }: { label: string; children: React.ReactNode })
       {label}: <span className="text-[color:var(--foreground)]">{children}</span>
     </span>
   );
-}
-
-// Extract first name from "John Doe" or email "john.doe@company.com"
-function firstName(s: string | null | undefined): string {
-  if (!s) return "";
-  const raw = s.includes("@") ? s.split("@")[0].replace(/\./g, " ") : s;
-  return raw.split(" ")[0] ?? raw;
 }
 
 function escapeRegex(s: string): string {

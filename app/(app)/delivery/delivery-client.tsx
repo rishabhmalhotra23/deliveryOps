@@ -9,6 +9,7 @@ import {
   ResponsiveContainer, Legend, AreaChart, Area,
 } from "recharts";
 import type { DeliveryProject, DeliveryFilterFacets } from "@/lib/delivery/loader";
+import { formatPeopleList } from "@/lib/delivery/taxonomy";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
 
 interface DeliveryClientProps {
@@ -111,6 +112,7 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
   const [tab, setTab] = useState<Tab>("Kanban");
   const [customer, setCustomer] = useState("");
   const [ae, setAe] = useState("");
+  const [fde, setFde] = useState("");
   const [partner, setPartner] = useState("");
   const [fiscalYear, setFiscalYear] = useState("");
   const [search, setSearch] = useState("");
@@ -123,6 +125,13 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
       if (ae && p.ae_owner !== ae) return false;
       if (partner && p.partner !== partner) return false;
       if (fiscalYear && p.fiscal_year !== fiscalYear) return false;
+      // FDE filter: match against the canonical-cased name of any person
+      // in the project's combined fde field (same form facets.fdes ships).
+      if (fde) {
+        if (!p.fde) return false;
+        const names = p.fde.split(",").map((n) => formatPeopleList(n.trim()));
+        if (!names.some((n) => n === fde)) return false;
+      }
       if (s) {
         const hay = [
           p.name,
@@ -131,8 +140,7 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
           p.partner ?? "",
           p.health ?? "",
           p.status ?? "",
-          p.tam ?? "",
-          p.dev ?? "",
+          p.fde ?? "",
           p.delivered_value ?? "",
         ]
           .join(" ")
@@ -141,7 +149,7 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
       }
       return true;
     });
-  }, [projects, customer, ae, partner, fiscalYear, search]);
+  }, [projects, customer, ae, fde, partner, fiscalYear, search]);
 
   return (
     <div className="space-y-4">
@@ -155,6 +163,7 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
         />
         <SelectFilter value={customer} setValue={setCustomer} label="Customer" options={facets.customers} />
         <SelectFilter value={ae} setValue={setAe} label="AE" options={facets.aes} />
+        <SelectFilter value={fde} setValue={setFde} label="FDE" options={facets.fdes} />
         <SelectFilter value={partner} setValue={setPartner} label="Partner" options={facets.partners} />
         <SelectFilter value={fiscalYear} setValue={setFiscalYear} label="FY" options={facets.fiscal_years} />
         <div className="ml-auto data-label text-[color:var(--muted-foreground)] tabular-nums">
@@ -284,8 +293,7 @@ type SortKey =
   | "status"
   | "phase"
   | "platform"
-  | "tam"
-  | "dev"
+  | "fde"
   | "partner"
   | "complexity"
   | "effort"
@@ -391,8 +399,7 @@ function sortProjects(
     status:      (a, b) => compareString(a.status, b.status),
     phase:       (a, b) => compareString(a.phase, b.phase),
     platform:    (a, b) => compareString(a.platform, b.platform),
-    tam:         (a, b) => compareString(a.tam, b.tam),
-    dev:         (a, b) => compareString(a.dev, b.dev),
+    fde:         (a, b) => compareString(a.fde, b.fde),
     partner:     (a, b) => compareString(a.partner, b.partner),
     complexity:  (a, b) => compareString(a.complexity, b.complexity),
     effort:      (a, b) => compareNumber(a.total_effort_days, b.total_effort_days),
@@ -419,8 +426,7 @@ const TABLE_COLS: ColDef[] = [
   { key: "status", label: "Status" },
   { key: "phase", label: "Phase" },
   { key: "platform", label: "Platform" },
-  { key: "tam", label: "TAM" },
-  { key: "dev", label: "Dev" },
+  { key: "fde", label: "FDE" },
   { key: "partner", label: "Partner" },
   { key: "complexity", label: "Complexity" },
   { key: "effort", label: "Effort", align: "right" },
@@ -547,8 +553,7 @@ function Table({ projects, onSelect }: { projects: DeliveryProject[]; onSelect: 
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${chipClass(PLATFORM_CLASS, p.platform)}`}>{p.platform}</span>
                   ) : "—"}
                 </td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap max-w-[120px] truncate">{shortName(p.tam)}</td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap max-w-[120px] truncate">{shortName(p.dev)}</td>
+                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap max-w-[180px] truncate">{formatPeopleList(p.fde) || "—"}</td>
                 <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.partner ?? "—"}</td>
                 <td className="px-3 py-2 text-[color:var(--muted-foreground)]">{p.complexity ?? "—"}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)]">
@@ -876,9 +881,6 @@ function QonQ({ projects }: { projects: DeliveryProject[] }) {
   );
 }
 
-function shortName(s: string | null | undefined): string {
-  if (!s) return "—";
-  const raw = s.includes("@") ? s.split("@")[0].replace(/[._]/g, " ") : s;
-  const parts = raw.trim().split(/\s+/);
-  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : raw;
-}
+// Name rendering is centralised in lib/delivery/taxonomy.ts —
+// formatPersonName / formatPeopleList apply consistent case and the
+// PM suffix for non-FDE program managers.

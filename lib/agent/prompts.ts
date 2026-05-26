@@ -10,7 +10,7 @@
 //   3. Customer context + rules (per-customer, occasionally edits) → not cached
 //
 // `cache_control: { type: "ephemeral" }` keeps the cache hot for ~5 minutes
-// of inactivity. A CSM working a single customer for a few minutes hits the
+// of inactivity. An FDE working a single customer for a few minutes hits the
 // cache on every turn. See https://docs.anthropic.com/.../prompt-caching.
 
 import type Anthropic from "@anthropic-ai/sdk";

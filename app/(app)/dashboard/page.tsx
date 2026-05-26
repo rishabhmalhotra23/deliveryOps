@@ -24,10 +24,11 @@ import {
 } from "@/lib/cache/integrations";
 import {
   loadArrBreakdown,
-  loadNeedAttention,
+  filterNeedAttention,
   loadOpenCases,
   loadOpenOpportunities,
 } from "@/lib/dashboard/stats-drilldown";
+import { formatPersonName } from "@/lib/delivery/taxonomy";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,6 @@ export default async function Dashboard() {
     sfDomains,
     commercialsMap,
     arrRows,
-    attentionRows,
     oppsRows,
     casesRows,
   ] = await Promise.all([
@@ -53,10 +53,13 @@ export default async function Dashboard() {
     loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
     loadCustomerCommercialsMap().catch(() => new Map<string, CustomerCommercials>()),
     loadArrBreakdown().catch(() => []),
-    loadNeedAttention().catch(() => []),
     loadOpenOpportunities().catch(() => []),
     loadOpenCases().catch(() => []),
   ]);
+  // `attentionRows` is derived in-process from arrRows — used to do an
+  // extra Supabase round-trip via loadNeedAttention(), which doubled the
+  // customer/profile/account joins on every dashboard render.
+  const attentionRows = filterNeedAttention(arrRows);
 
   // Dynamic-category helper — same signals everywhere on the dashboard.
   const categoryFor = (c: { id: string; custom_category: string | null; lifecycle_group: string | null }): string => {
@@ -153,8 +156,8 @@ export default async function Dashboard() {
       </section>
 
       {/* Pending approvals — surfaces the email drafts + gated actions that
-          are waiting on a CSM click in Slack. Lives on the dashboard so the
-          CSM doesn't have to context-switch to Slack to see what's queued. */}
+          are waiting on an FDE click in Slack. Lives on the dashboard so the
+          FDE doesn't have to context-switch to Slack to see what's queued. */}
       {approvals.length > 0 ? (
         <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5">
           <div className="flex items-center justify-between mb-3">
@@ -276,7 +279,7 @@ export default async function Dashboard() {
         </section>
       ) : null}
 
-      {/* Quiet customers — early-warning surface. The CSM hears from the
+      {/* Quiet customers — early-warning surface. The FDE hears from the
           loud customers; this surfaces the silent ones, who are the actual
           renewal risk. Replaces the old "Recently updated" tile. */}
       {quietCustomers.length > 0 ? (
@@ -316,7 +319,7 @@ export default async function Dashboard() {
                         <CategoryChip category={category} size="sm" />
                       </div>
                       <div className="mt-1 text-xs text-[color:var(--brand-gray)] space-y-0.5">
-                        {c.ae_owner ? <div>AE · {c.ae_owner}</div> : null}
+                        {c.ae_owner ? <div>AE · {formatPersonName(c.ae_owner)}</div> : null}
                         <div>
                           {c.updated_at
                             ? `Last touched ${formatTimeAgo(c.updated_at)}`

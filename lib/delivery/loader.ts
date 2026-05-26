@@ -7,7 +7,7 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer } from "@/app/_components/brand";
-import { MONDAY_PROJECT_COLS as COLS, colText, isDelivered as txIsDelivered } from "@/lib/delivery/taxonomy";
+import { MONDAY_PROJECT_COLS as COLS, colText, isDelivered as txIsDelivered, unionPeopleColumns, formatPersonName } from "@/lib/delivery/taxonomy";
 
 type RawColumns = Record<string, { type: string; text: string | null; value: string | null }>;
 function txt(cols: RawColumns, id: string): string | null {
@@ -36,8 +36,10 @@ export interface DeliveryProject {
   complexity: string | null;
   kickoff_date: string | null;
   go_live_date: string | null;
-  tam: string | null;
-  dev: string | null;
+  /** Combined FDE roster — comma-separated union of Monday's delivery +
+   *  engineering columns, deduped.  Replaces the old separate `tam` +
+   *  `dev` fields as part of the "1 single flow" simplification. */
+  fde: string | null;
   partner: string | null;
   // Stored columns from migration 0010
   total_effort_days: number | null;
@@ -51,6 +53,8 @@ export interface DeliveryProject {
 export interface DeliveryFilterFacets {
   customers: string[];
   aes: string[];
+  /** Individual FDE names (already canonical-cased) across all active projects. */
+  fdes: string[];
   partners: string[];
   fiscal_years: string[];
   statuses: string[];
@@ -153,9 +157,9 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
   // Portfolio board are *aggregate* surfaces — every project they list is
   // already on one of the FY delivery boards.  Including them here triples
   // the row count and pollutes every chart with placeholder "Active
-  // Projects" rows that have empty status / phase / TAM / Dev fields.  We
-  // keep them in the per-customer cache (used by /customers/[key]) but
-  // exclude them from the portfolio-wide view.
+  // Projects" rows that have empty status / phase / FDE fields.  We keep
+  // them in the per-customer cache (used by /customers/[key]) but exclude
+  // them from the portfolio-wide view.
   const PORTFOLIO_DUPE_FYS = new Set(["account_overview", "portfolio"]);
 
   const allRows: DeliveryProject[] = [];
@@ -186,8 +190,7 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
       complexity:   txt(cols, COLS.complexity),
       kickoff_date: p.kickoff_date ?? txt(cols, COLS.kickoff_date),
       go_live_date: p.go_live_date ?? txt(cols, COLS.go_live_date),
-      tam:          txt(cols, COLS.tam),
-      dev:          txt(cols, COLS.dev),
+      fde:          unionPeopleColumns(txt(cols, COLS.tam), txt(cols, COLS.dev)),
       partner:      txt(cols, COLS.partner) ?? cust.partner,
       total_effort_days: p.total_effort_days,
       delivered_value:   p.delivered_value,
@@ -207,9 +210,21 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
 
   // Build platform list from actual data, not just a hardcoded set.
   const FY_PRIORITY = ["active", "FY-2026", "FY-2025", "FY-2024", "FY-2023", "inactive"];
+  // FDE facet: every individual person across the (collapsed) fde field,
+  // canonical-cased so "shyam" and "Shyam Prabhakara" both become
+  // "Shyam P. (PM)" — the same string the UI displays.
+  const fdeSet = new Set<string>();
+  for (const r of rows) {
+    if (!r.fde) continue;
+    for (const piece of r.fde.split(",")) {
+      const name = formatPersonName(piece);
+      if (name) fdeSet.add(name);
+    }
+  }
   const facets: DeliveryFilterFacets = {
     customers: dedup(rows.map((r) => r.customer_display_name)),
     aes:       dedup(rows.map((r) => r.ae_owner).filter((v): v is string => !!v)),
+    fdes:      Array.from(fdeSet).sort(),
     partners:  dedup(rows.map((r) => r.partner).filter((v): v is string => !!v)),
     fiscal_years: Array.from(new Set(rows.map((r) => r.fiscal_year).filter((v): v is string => !!v)))
       .sort((a, b) => {
@@ -262,14 +277,14 @@ function infoScore(p: DeliveryProject): number {
   if (p.kickoff_date) s += 2;
   if (p.health) s += 1;
   if (p.platform) s += 1;
-  if (p.tam) s += 1;
-  if (p.dev) s += 1;
+  if (p.fde) s += 1;
   if (p.total_effort_days != null) s += 1;
   if (p.latest_update) s += 1;
   // "active" board rows are the live source of truth, beat all FY history.
   if (p.fiscal_year === "active") s += 5;
   return s;
 }
+
 
 function dedupeByCustomerAndName(rows: DeliveryProject[]): DeliveryProject[] {
   const byKey = new Map<string, DeliveryProject>();

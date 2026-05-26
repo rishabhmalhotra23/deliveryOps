@@ -79,7 +79,7 @@ export function deriveArr(opps: OppForArr[]): ArrDerivation {
 // ─────────────────────────────────────────────────────────────────────────
 // ARR trend — current vs prior contract
 //
-// "How is this year's ARR vs last year's?" The CSM wants to see expansion
+// "How is this year's ARR vs last year's?" The FDE wants to see expansion
 // vs contraction at a glance. Strategy: take the latest signed/expected
 // contract (deriveArr result), then find the next-most-recent Won
 // contract before it. Compare amounts. Returns delta + percent change.
@@ -153,7 +153,7 @@ export function deriveArrTrend(opps: OppForArr[]): ArrTrend {
 
 // ─────────────────────────────────────────────────────────────────────────
 // Health-score derivation explainer — pairs with deriveHealthScore.
-// Used by the customer page to show CSMs how the number was computed.
+// Used by the customer page to show FDEs how the number was computed.
 // ─────────────────────────────────────────────────────────────────────────
 
 export const HEALTH_SCORE_TABLE: Record<string, { score: number; reasoning: string }> = {
@@ -178,7 +178,7 @@ export function explainHealthScore(category: string | null): string {
 //
 // DeliveryOps's seven customer categories map to a small enum-bounded set
 // of profile + internal_profile fields. These mappings encode our defaults;
-// CSMs override per-customer via the inline editor or the operations chat.
+// FDEs override per-customer via the inline editor or the operations chat.
 // ─────────────────────────────────────────────────────────────────────────
 
 export function deriveTier(category: string | null): ContractTier | null {

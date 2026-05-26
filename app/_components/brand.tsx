@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 // "Past" is the auto-classification for customers whose Monday lifecycle is
 // "Churned/Dropped" — that single Monday group conflates two distinct end-
 // states (Churned = left after using us, Dropped = we disengaged pre-go-
-// live). When a CSM knows which, they override via the inline edit on the
+// live). When the FDE knows which, they override via the inline edit on the
 // customer page, choosing "Churned" or "Dropped" explicitly.
 //
 // "Active" is the legacy name for the default bucket — we still recognise
@@ -53,7 +53,7 @@ const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: num
   // adjacent to Churned but with its own warmer-warning tone.
   "To Drop": { class: "tone-todrop", weight: 6 },
   // "Past" — the safe default for customers Monday flagged as
-  // "Churned/Dropped". The CSM disambiguates per-customer.
+  // "Churned/Dropped". The FDE disambiguates per-customer.
   Past: { class: "tone-churned", weight: 7 },
   Churned: { class: "tone-churned", weight: 8 },
   Dropped: { class: "tone-todrop", weight: 9 },
@@ -64,7 +64,7 @@ const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: num
 //
 // "Churned/Dropped" is intentionally mapped to the neutral "Past" — Monday
 // lumps the two states together and we don't want to make a false claim.
-// CSMs disambiguate via the inline-edit category dropdown.
+// FDEs disambiguate via the inline-edit category dropdown.
 const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
   "High Risk": "At Risk", // historical Monday label, no longer in use
   "Upcoming Renewal": "Upcoming Renewals",
@@ -77,7 +77,7 @@ const LIFECYCLE_TO_CATEGORY: Record<string, string> = {
 };
 
 // Lifecycle states that are "explicit business decisions" — these never get
-// auto-flipped by the revenue / renewal rules.  At Risk is the CSM's
+// auto-flipped by the revenue / renewal rules.  At Risk is the FDE's
 // judgment call and should survive; Partner Managed is a relationship
 // structure independent of size; POV / To Drop / Past are end-state
 // declarations.

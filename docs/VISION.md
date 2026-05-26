@@ -6,7 +6,7 @@ This is the long-form why. If you only have 30 seconds, [TL;DR](#tldr) is at the
 
 ## TL;DR
 
-Customer success at Kognitos is a daily archaeological dig across Salesforce, Kognitos, Slack, Gmail, Drive, Calendar, and Monday. DeliveryOps replaces that dig with one customer page, one event timeline, one agent, and one voice. Every fact about a customer lives in exactly one row in Postgres; every customer-facing string flows through one prompt with the brand voice baked in; every external system becomes part of one knowledge graph instead of seven separate dashboards. End state: a CSM does in 30 minutes what used to take half a day, and the company can support hundreds of customers without "Rishabh's brain" being the index.
+Delivering and supporting Kognitos customers is a daily archaeological dig across Salesforce, Kognitos, Slack, Gmail, Drive, Calendar, and Monday. DeliveryOps replaces that dig with one customer page, one event timeline, one agent, and one voice. Every fact about a customer lives in exactly one row in Postgres; every customer-facing string flows through one prompt with the brand voice baked in; every external system becomes part of one knowledge graph instead of seven separate dashboards. End state: an FDE does in 30 minutes what used to take half a day, and the company can support hundreds of customers without "Rishabh's brain" being the index.
 
 ---
 
@@ -14,13 +14,13 @@ Customer success at Kognitos is a daily archaeological dig across Salesforce, Ko
 
 A Kognitos customer signs the contract. What happens next?
 
-A CSM gets pinged on Slack. They open Salesforce to find the account. They check the Kognitos workspace to see what the customer has built. They look in Drive for the SOW. They search their inbox for the latest email thread. They open Monday to see what the dev team owes the customer. They open the spreadsheet where they tracked last week's conversation. They open the QBR deck from three months ago to remember where we left off.
+An FDE gets pinged on Slack. They open Salesforce to find the account. They check the Kognitos workspace to see what the customer has built. They look in Drive for the SOW. They search their inbox for the latest email thread. They open Monday to see what the dev team owes the customer. They open the spreadsheet where they tracked last week's conversation. They open the QBR deck from three months ago to remember where we left off.
 
 Seven tabs. Maybe nine. To answer one question: *"what's going on with this customer?"*
 
-We do this every week, for every customer, by hand. The information is all there — it's just smeared across seven systems and one human's memory. The CSM *is* the database.
+We do this every week, for every customer, by hand. The information is all there — it's just smeared across seven systems and one human's memory. The FDE *is* the database.
 
-That doesn't scale. Today we have a handful of customers and the team knows each one personally. In two years we'll have ten times as many, and "the CSM's working memory" will not be the right place to look up Acme's renewal status.
+That doesn't scale. Today we have a handful of customers and the team knows each one personally. In two years we'll have ten times as many, and "the FDE's working memory" will not be the right place to look up Acme's renewal status.
 
 There's also a quality cost that's harder to see. Every customer-facing email is composed from scratch by a tired person at 4:30 PM. Every QBR deck is rebuilt from a template by hand. Every monthly digest gets skipped half the time because it's nobody's #1 priority on a busy day. Inconsistency creeps in. Mistakes get made. Customers notice.
 
@@ -32,25 +32,25 @@ There's also a quality cost that's harder to see. Every customer-facing email is
 - **One agent.** Exactly one assistant operates on that source of truth — the DeliveryOps agent. It answers questions, updates profiles, logs events, drafts emails, schedules reminders, escalates to humans, writes the monthly digest. It works in *one* style because one prompt drives everything.
 - **One voice.** Every customer-facing string — agent replies, email drafts, QBR slide copy, monthly digests, even error messages — sounds like the same person wrote it. Because it is the same person.
 
-If you can describe what a CSM should do, the agent can do most of it. What it can't do, it knows to escalate.
+If you can describe what an FDE should do, the agent can do most of it. What it can't do, it knows to escalate.
 
 ## The end state
 
-When DeliveryOps is fully shipped, it is the system every CSM at Kognitos opens at the start of every day. They don't open Salesforce. They don't search their inbox. They don't ping the dev team in Slack to ask "what's blocked?" Those tools still exist — DeliveryOps just talks to them on the CSM's behalf.
+When DeliveryOps is fully shipped, it is the system every FDE at Kognitos opens at the start of every day. They don't open Salesforce. They don't search their inbox. They don't ping the dev team in Slack to ask "what's blocked?" Those tools still exist — DeliveryOps just talks to them on the FDE's behalf.
 
 A typical morning, end-state:
 
-1. CSM opens DeliveryOps. The dashboard lists every customer, sorted by **what changed overnight**.
+1. FDE opens DeliveryOps. The dashboard lists every customer, sorted by **what changed overnight**.
 2. Click into Acme. The overview reads: *credit usage spiked 4× yesterday, the QBR is in 2 days, the head of ops sent an email at 11 PM saying they're worried about their renewal, and the dev team flagged one Monday ticket as blocked.*
-3. The agent already drafted a response to the late-night email. It's queued for approval in Slack — no human typing required. The CSM reads it, says *"tighten the second paragraph"*, and the agent revises in place.
-4. The CSM clicks "Generate QBR". A twelve-slide deck lands in Drive in sixty seconds, with real numbers from Kognitos, real meeting summaries from Calendar, and a brand-correct narrative the CSM reviews and sends.
-5. By 9:30 AM the CSM has done what used to take half a day.
+3. The agent already drafted a response to the late-night email. It's queued for approval in Slack — no human typing required. The FDE reads it, says *"tighten the second paragraph"*, and the agent revises in place.
+4. The FDE clicks "Generate QBR". A twelve-slide deck lands in Drive in sixty seconds, with real numbers from Kognitos, real meeting summaries from Calendar, and a brand-correct narrative the FDE reviews and sends.
+5. By 9:30 AM the FDE has done what used to take half a day.
 
 Everything customer-facing sounds like the same person wrote it. Because it is.
 
-When the customer asks "have you sent us the renewal terms?", the CSM doesn't search their inbox. They ask DeliveryOps. The answer is correct because DeliveryOps watched the email get sent.
+When the customer asks "have you sent us the renewal terms?", the FDE doesn't search their inbox. They ask DeliveryOps. The answer is correct because DeliveryOps watched the email get sent.
 
-When a new CSM joins the team, they're up to speed on a customer in ten minutes — they read the profile, scroll the events feed, glance at the rules, and they know everything the previous CSM knew.
+When a new FDE joins the team, they're up to speed on a customer in ten minutes — they read the profile, scroll the events feed, glance at the rules, and they know everything the previous FDE knew.
 
 ## The shape — three pieces, all in one app
 
@@ -77,7 +77,7 @@ Claude (Sonnet 4.5) with sixteen tools, all scoped to the current customer:
 | `log_event` | Append to the customer event log |
 | `get_credit_usage` | Pull live credit data from Kognitos v2 (Phase 2) |
 | `send_slack_message` | Post to the customer's Slack channel |
-| `send_email` / `revise_email_draft` | Draft an email; revise per CSM feedback in Slack thread |
+| `send_email` / `revise_email_draft` | Draft an email; revise per FDE feedback in Slack thread |
 | `revise_pending_action` | Edit a queued profile/rules update before approval |
 | `escalate_to_human` | Flag for the CS team in `#cs-escalations` |
 | `create_task` / `list_tasks` / `cancel_task` | Schedule reminders, recurring checks, cron jobs |
@@ -100,14 +100,14 @@ Seven external systems become one operational view, not seven dashboards:
 | **Slack** | The daily conversation, files auto-ingested when dropped in channel |
 | **Monday** | Dev + CS work owed to the customer |
 
-These don't show up as seven panels. They show up as one customer page where the agent treats every system as part of one knowledge graph. The CSM never has to remember which system the answer lives in.
+These don't show up as seven panels. They show up as one customer page where the agent treats every system as part of one knowledge graph. The FDE never has to remember which system the answer lives in.
 
 ## What "done" measures
 
-- **Time-to-context for a new customer ticket.** Today: 5–10 minutes of clicking around. Goal: <30 seconds — the CSM opens the customer page and the answer is on screen.
-- **Number of CSM-typed words per customer per week.** Today: thousands (emails, Slack messages, QBR notes, internal updates). Goal: hundreds — the CSM edits and approves drafts the agent produced.
-- **Customers per CSM.** Today: ~8–12 with full attention. Goal: 25–30 with the same quality of attention, because the agent absorbs the routine work.
-- **Time-to-onboard a new CSM.** Today: weeks of shadowing. Goal: a couple of days, because every customer's history is in one queryable place.
+- **Time-to-context for a new customer ticket.** Today: 5–10 minutes of clicking around. Goal: <30 seconds — the FDE opens the customer page and the answer is on screen.
+- **Number of FDE-typed words per customer per week.** Today: thousands (emails, Slack messages, QBR notes, internal updates). Goal: hundreds — the FDE edits and approves drafts the agent produced.
+- **Customers per FDE.** Today: ~8–12 with full attention. Goal: 25–30 with the same quality of attention, because the agent absorbs the routine work.
+- **Time-to-onboard a new FDE.** Today: weeks of shadowing. Goal: a couple of days, because every customer's history is in one queryable place.
 - **QBR consistency.** Today: every deck looks slightly different. Goal: every deck has the same brand-correct narrative spine and is generated in <60 seconds from real metrics.
 - **Monthly digests sent on time.** Today: variable; depends on bandwidth. Goal: every customer, first business day of every month, no exceptions.
 
@@ -119,9 +119,9 @@ The shape that emerges from these constraints is sharper than a "do everything" 
 
 - **A generic CRM.** DeliveryOps knows about Kognitos automations, Kognitos credits, Kognitos workspaces. It's opinionated. We will not pretend it works for non-Kognitos customers.
 - **A marketplace of plugins.** The integrations list is finite. We add them ourselves, deliberately, because each integration is designed to compose with the others. A plugin marketplace fragments the source of truth.
-- **A native mobile app.** The browser is the product surface. CSMs work at desks.
+- **A native mobile app.** The browser is the product surface. FDEs work at desks.
 - **A Salesforce replacement.** Salesforce remains the source of truth for contract data. DeliveryOps mirrors it; it does not try to replace it.
-- **An external customer-facing chatbot.** The agent serves the CSM. A customer-facing bot is a different product with different failure modes.
+- **An external customer-facing chatbot.** The agent serves the FDE. A customer-facing bot is a different product with different failure modes.
 - **A "low-code" workflow builder.** If you need a workflow we don't have, you write a TypeScript function in `app/api/jobs/`. We optimise for engineering velocity, not citizen-developer reach.
 
 ## The voice
@@ -138,7 +138,7 @@ Five traits, in priority order:
 
 The full rules live in [`.cursor/rules/brand-voice.mdc`](../.cursor/rules/brand-voice.mdc) and get injected into every system prompt via [`lib/voice/brand-voice.ts`](../lib/voice/brand-voice.ts).
 
-**Why is voice in the product spec?** Because the alternative is the SaaS-vendor sludge that floods a CSM's inbox every day, and the whole point of DeliveryOps is to be unmistakably the opposite of that. If our outbound copy reads like everyone else's outbound copy, we've lost the most distinguishable thing about the product.
+**Why is voice in the product spec?** Because the alternative is the SaaS-vendor sludge that floods an FDE's inbox every day, and the whole point of DeliveryOps is to be unmistakably the opposite of that. If our outbound copy reads like everyone else's outbound copy, we've lost the most distinguishable thing about the product.
 
 ## How we get there
 
@@ -164,19 +164,19 @@ What you can do: a brand-new engineer clones the repo, runs `npm install && supa
 
 Salesforce sync. Kognitos v2 sync. Calendar sync. Monday sync. Monthly digest generator. Pilot customer named and fully migrated — every customer fact in DeliveryOps, every customer interaction running through it.
 
-What you can do: a CSM uses DeliveryOps as their daily driver for one customer. The whole loop works end-to-end in production.
+What you can do: an FDE uses DeliveryOps as their daily driver for one customer. The whole loop works end-to-end in production.
 
 ### Phase 3 — Roadmap
 
-Kognitos v1 adapter (legacy customers). QBR deck generator (twelve slides via Google Slides API). Microsoft Teams listener (mirror of the Slack listener). Multi-tenant external version (RLS by `csm_id`, customer-facing portal). Per-CSM OAuth so each team member uses their own Salesforce / Drive / Gmail credentials.
+Kognitos v1 adapter (legacy customers). QBR deck generator (twelve slides via Google Slides API). Microsoft Teams listener (mirror of the Slack listener). Multi-tenant external version (RLS by `fde_id`, customer-facing portal). Per-FDE OAuth so each team member uses their own Salesforce / Drive / Gmail credentials.
 
-What you can do: every CSM is on it. The customer's primary contact has a read-only portal. The platform is the product.
+What you can do: every FDE is on it. The customer's primary contact has a read-only portal. The platform is the product.
 
 The honest path from "Phase 0 was last week" to "external version is live" is roughly twelve to sixteen weeks of focused work. The pilot customer is week four to six. Everything after that is iteration.
 
 ## Who this is for, today
 
-- **Internal Kognitos CSMs** — the primary user, today and forever.
+- **Internal Kognitos FDEs (Forward Deployed Engineers)** — the primary user, today and forever.
 - **The agent itself** — half the dashboard exists so the agent has somewhere to read and write. The other half exists so a human can see what the agent did and intervene.
 - **Eventually (Phase 3), the customer's primary contact** — a read-only / write-restricted version where they see their profile, their events, their pending items, their open tickets. The internal-profile / health-score / internal-notes columns stay invisible to them.
 
@@ -184,15 +184,15 @@ Not for: AEs chasing new logos, marketing chasing campaigns, finance chasing AR.
 
 ## Why this is worth building
 
-Customer success at a vertical AI company is a high-leverage activity. One CSM with the right tools can keep a portfolio of thirty customers happy and renewing. Without the right tools, the same CSM keeps eight customers semi-happy and spends most of their week context-switching between systems.
+Delivering and supporting customers at a vertical AI company is a high-leverage activity. One FDE with the right tools can keep a portfolio of thirty customers happy and renewing. Without the right tools, the same FDE keeps eight customers semi-happy and spends most of their week context-switching between systems.
 
 The difference between those two outcomes is the difference between a sustainable post-sales motion and a never-ending fire drill.
 
-DeliveryOps is the bet that a thoughtfully-designed system of record + a Claude agent + the right integrations beats a Notion template + a Slack channel + good intentions. If we're right, every CSM at Kognitos gets to do the part of the job they were hired for — talking to customers, solving problems, finding patterns — instead of the part nobody was ever hired for: typing the same context into seven different tools.
+DeliveryOps is the bet that a thoughtfully-designed system of record + a Claude agent + the right integrations beats a Notion template + a Slack channel + good intentions. If we're right, every FDE at Kognitos gets to do the part of the job they were hired for — talking to customers, solving problems, finding patterns — instead of the part nobody was ever hired for: typing the same context into seven different tools.
 
 ## The bigger picture
 
-If DeliveryOps works internally, it's the prototype for what we eventually offer to *every* Kognitos customer running their own automations. They'd run a customer-success function on top of *their* customers, with their own data, their own brand voice, their own integrations. Same architecture, different tenant.
+If DeliveryOps works internally, it's the prototype for what we eventually offer to *every* Kognitos customer running their own automations. They'd run a delivery + customer-success function on top of *their* customers, with their own data, their own brand voice, their own integrations. Same architecture, different tenant.
 
 That's beyond Phase 3 — not on the roadmap yet, but worth knowing it's the destination. We're building DeliveryOps the way we'd build it if we were going to sell it to ourselves first, then to everyone like us.
 

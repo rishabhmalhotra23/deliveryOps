@@ -16,8 +16,10 @@ export interface DrillDownProject {
   health: string | null;
   phase: string | null;
   platform: string | null;
-  tam: string | null;
-  dev: string | null;
+  /** Combined FDE roster — union of every person Monday lists on the
+   *  project's delivery columns, deduped.  Replaces the old separate
+   *  TAM + Dev fields.  See "1 single flow" simplification. */
+  fde: string[];
   go_live_date: string | null;
   kickoff_date: string | null;
 }
@@ -51,8 +53,7 @@ export interface AnalyticsBundle {
   by_category: Array<{ category: string; count: number; arr: number }>;
   by_ae: Array<{ ae: string; count: number; arr: number }>;
   by_partner: Array<{ partner: string; count: number; arr: number }>;
-  by_tam: Array<{ person: string; count: number }>; // TAM / FDE workload
-  by_dev: Array<{ person: string; count: number }>; // SE / Dev workload
+  by_fde: Array<{ person: string; count: number }>; // FDE workload (union of Monday's delivery columns)
   ttv_distribution: Array<{ bucket: string; count: number }>; // TTV in days buckets
   ttv_avg_by_quarter: Array<{ quarter: string; avg_days: number; count: number }>;
   projects_by_group: Array<{ group: string; count: number }>;
@@ -68,14 +69,12 @@ export interface AnalyticsBundle {
    * Per-bar drill-down items.  Keys mirror the chart's series keys exactly
    * so a click on a bar can look up the underlying rows in O(1).
    *
-   *   by_tam_items[shortName]            → projects assigned to that TAM/FDE
-   *   by_dev_items[shortName]            → projects assigned to that SE/Dev
+   *   by_fde_items[shortName]            → projects this FDE is on
    *   projects_by_lifecycle_items[group] → projects sitting in that stage
    *   by_ae_items[ae]                    → customers owned by that AE
    */
   drilldowns: {
-    by_tam_items: Record<string, DrillDownProject[]>;
-    by_dev_items: Record<string, DrillDownProject[]>;
+    by_fde_items: Record<string, DrillDownProject[]>;
     projects_by_lifecycle_items: Record<string, DrillDownProject[]>;
     by_ae_items: Record<string, DrillDownCustomer[]>;
   };
@@ -339,17 +338,27 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const projGroupAgg = new Map<string, number>();
   const projStatusAgg = new Map<string, number>();
   const projPhaseAgg = new Map<string, number>();
-  const tamAgg = new Map<string, number>();
-  const devAgg = new Map<string, number>();
+  // Single FDE workload aggregate — Monday still surfaces two columns
+  // (delivery + engineering), but for "1 single flow" we merge both into
+  // one roster and count each unique person once per project.
+  const fdeAgg = new Map<string, number>();
   const ttvBuckets = new Map<string, number>();
   const ttvByQtrAgg = new Map<string, { sum: number; count: number }>();
 
   // Drill-down item maps populated in the same loop as the aggregates.
   // Keys mirror the chart's bar labels exactly so a click can look up
   // the underlying rows in O(1).
-  const by_tam_items: Record<string, DrillDownProject[]> = {};
-  const by_dev_items: Record<string, DrillDownProject[]> = {};
+  const by_fde_items: Record<string, DrillDownProject[]> = {};
   const projects_by_lifecycle_items: Record<string, DrillDownProject[]> = {};
+
+  // Dedupe two comma-separated people strings into one sorted list.
+  function unionPeople(...sources: Array<string | null>): string[] {
+    const seen = new Set<string>();
+    for (const src of sources) {
+      for (const name of peopleName(src)) seen.add(name);
+    }
+    return Array.from(seen);
+  }
 
   function toDrillDownProject(p: ProjectRow): DrillDownProject {
     const cust = customerById.get(p.customer_id);
@@ -364,8 +373,10 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       health: txt(p.raw_columns, MONDAY_PROJECT_COLS.health),
       phase: txt(p.raw_columns, PROJECT_COL_PHASE),
       platform: txt(p.raw_columns, MONDAY_PROJECT_COLS.platform),
-      tam: txt(p.raw_columns, PROJECT_COL_TAM),
-      dev: txt(p.raw_columns, PROJECT_COL_DEV),
+      fde: unionPeople(
+        txt(p.raw_columns, PROJECT_COL_TAM),
+        txt(p.raw_columns, PROJECT_COL_DEV),
+      ),
       go_live_date: p.go_live_date ?? txt(p.raw_columns, PROJECT_COL_GOLIVE),
       kickoff_date: p.kickoff_date ?? txt(p.raw_columns, MONDAY_PROJECT_COLS.kickoff_date),
     };
@@ -390,8 +401,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     });
   }
 
-  // Placeholder strings Monday users sometimes put in the TAM / Dev columns.
-  // None of these are real people; they pollute the workload charts.
+  // Placeholder strings Monday users sometimes put in the FDE-assignment
+  // columns.  None of these are real people; they pollute the workload chart.
   const PLACEHOLDER_NAMES = new Set([
     "customer implementing",
     "tbd",
@@ -455,16 +466,17 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     // the "Projects by stage" chart click yields the matching project list.
     (projects_by_lifecycle_items[g] ??= []).push(toDrillDownProject(p));
 
-    // TAM / FDE + SE / Dev workload — counted on active projects only.
+    // FDE workload — counted on active projects only, deduped so a person
+    // who's on both the delivery and engineering Monday columns for the
+    // same project counts once (not twice).
     if (isActiveProject(p)) {
       const ddProject = toDrillDownProject(p);
-      for (const name of cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_TAM))) {
-        tamAgg.set(name, (tamAgg.get(name) ?? 0) + 1);
-        (by_tam_items[name] ??= []).push(ddProject);
-      }
-      for (const name of cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_DEV))) {
-        devAgg.set(name, (devAgg.get(name) ?? 0) + 1);
-        (by_dev_items[name] ??= []).push(ddProject);
+      const tamNames = cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_TAM));
+      const devNames = cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_DEV));
+      const fdeNames = new Set<string>([...tamNames, ...devNames]);
+      for (const name of fdeNames) {
+        fdeAgg.set(name, (fdeAgg.get(name) ?? 0) + 1);
+        (by_fde_items[name] ??= []).push(ddProject);
       }
     }
 
@@ -537,10 +549,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     .map(([phase, count]) => ({ phase, count }))
     .sort((a, b) => b.count - a.count);
 
-  const by_tam = [...tamAgg.entries()]
-    .map(([person, count]) => ({ person, count }))
-    .sort((a, b) => b.count - a.count);
-  const by_dev = [...devAgg.entries()]
+  const by_fde = [...fdeAgg.entries()]
     .map(([person, count]) => ({ person, count }))
     .sort((a, b) => b.count - a.count);
 
@@ -657,8 +666,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     by_category: by_category.sort((a, b) => b.arr - a.arr),
     by_ae,
     by_partner,
-    by_tam,
-    by_dev,
+    by_fde,
     ttv_distribution,
     ttv_avg_by_quarter,
     projects_by_group,
@@ -670,8 +678,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     nps_by_customer_category,
     deliveries_over_time,
     drilldowns: {
-      by_tam_items,
-      by_dev_items,
+      by_fde_items,
       projects_by_lifecycle_items,
       by_ae_items,
     },

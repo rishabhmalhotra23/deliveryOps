@@ -7,7 +7,7 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
 import { categoryFromCustomer } from "@/app/_components/brand";
-import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText } from "@/lib/delivery/taxonomy";
+import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText, unionPeopleColumns } from "@/lib/delivery/taxonomy";
 
 const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
 
@@ -57,10 +57,19 @@ export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
   return rows.sort((a, b) => b.arr - a.arr);
 }
 
-/** Customers in the "needs attention" buckets — At Risk + Upcoming Renewals. */
+/** Customers in the "needs attention" buckets — At Risk + Upcoming Renewals.
+ *  Accepts a pre-fetched ARR breakdown so the dashboard can derive both
+ *  drill-downs from one round-trip instead of two. */
+export function filterNeedAttention(arrRows: ArrBreakdownRow[]): ArrBreakdownRow[] {
+  return arrRows.filter((r) => r.category === "At Risk" || r.category === "Upcoming Renewals");
+}
+
+/** @deprecated Use filterNeedAttention(arrRows) instead — this redundantly
+ *  re-runs the ARR breakdown query.  Kept for legacy callers; will be
+ *  removed once they're migrated. */
 export async function loadNeedAttention(): Promise<ArrBreakdownRow[]> {
   const all = await loadArrBreakdown();
-  return all.filter((r) => r.category === "At Risk" || r.category === "Upcoming Renewals");
+  return filterNeedAttention(all);
 }
 
 export interface OpenOpportunityRow {
@@ -173,8 +182,10 @@ export interface ActiveProjectRow {
   group_title: string | null;
   go_live_date: string | null;
   kickoff_date: string | null;
-  tam: string | null;
-  dev: string | null;
+  /** Combined FDE roster — comma-separated union of Monday's delivery +
+   *  engineering columns, deduped.  Replaces the old separate `tam` +
+   *  `dev` fields. */
+  fde: string | null;
 }
 
 /** Projects currently in flight — status === "In Progress". */
@@ -222,8 +233,10 @@ export async function loadActiveProjects(): Promise<ActiveProjectRow[]> {
       group_title: p.group_title,
       go_live_date: p.go_live_date ?? colText(cols, MONDAY_PROJECT_COLS.go_live_date),
       kickoff_date: p.kickoff_date ?? colText(cols, MONDAY_PROJECT_COLS.kickoff_date),
-      tam: colText(cols, MONDAY_PROJECT_COLS.tam),
-      dev: colText(cols, MONDAY_PROJECT_COLS.dev),
+      fde: unionPeopleColumns(
+        colText(cols, MONDAY_PROJECT_COLS.tam),
+        colText(cols, MONDAY_PROJECT_COLS.dev),
+      ),
     });
   }
   return rows;

@@ -427,8 +427,7 @@ export interface ProjectsCardProps {
     go_live_date: string | null;
     timeline_start: string | null;
     timeline_end: string | null;
-    tam: string | null;
-    dev: string | null;
+    fde: string | null;
     partner: string | null;
     total_effort_days: number | null;
     delivered_value: string | null;

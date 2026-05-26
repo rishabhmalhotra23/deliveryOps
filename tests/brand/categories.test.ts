@@ -26,7 +26,7 @@ describe("categoryFromCustomer", () => {
     expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "POV" })).toBe("POV");
     // Monday lumps churned + dropped customers into one group — we default to
     // the neutral "Past" so the UI never claims a customer churned when they
-    // were actually dropped pre-go-live (or vice versa). The CSM disambiguates
+    // were actually dropped pre-go-live (or vice versa). The FDE disambiguates
     // per-customer via the inline-edit category dropdown.
     expect(categoryFromCustomer({ custom_category: null, lifecycle_group: "Churned/Dropped" })).toBe(
       "Past"

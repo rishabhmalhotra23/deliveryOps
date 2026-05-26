@@ -123,8 +123,10 @@ export interface WeeklyProject {
   kickoff_date: string | null;
   latest_update: string | null;
   ttv_days: number | null;
-  tam: string[];
-  dev: string[];   // FDE / engineering
+  /** Combined FDE roster — union of Monday's delivery + engineering columns,
+   *  deduped.  Was previously `tam` + `dev`; collapsed into one list as part
+   *  of the "1 single flow" simplification. */
+  fde: string[];
   fiscal_year: string | null;
   group_title: string | null;
 }
@@ -206,10 +208,11 @@ export interface WeeklyBundle {
     last_quarter: number;
     last_q_label: string;
   };
-  /** Per-person workload — active in-flight projects with a health
-   *  breakdown so the chart can stack On Track / At Risk / Other. */
-  workload_tam: WorkloadEntry[];
-  workload_dev: WorkloadEntry[];
+  /** Per-FDE workload — active in-flight projects with a health
+   *  breakdown so the chart can stack On Track / At Risk / Other.
+   *  Each person counts once per project even if Monday lists them on
+   *  both the delivery and engineering columns. */
+  workload_fde: WorkloadEntry[];
   nps_this_quarter: { quarter: string; average: number; count: number } | null;
   /** Active customer-process migrations from Kognitos v1 → v2.  Curated
    *  list today (see lib/reports/v2-migrations.ts); will move to a
@@ -261,6 +264,9 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     const status = colText(cols, PCOLS.status);
     const phase  = colText(cols, PCOLS.phase);
     const go = p.go_live_date ?? colText(cols, PCOLS.go_live_date);
+    const fdeSeen = new Set<string>();
+    for (const name of peopleNames(colText(cols, PCOLS.tam))) fdeSeen.add(name);
+    for (const name of peopleNames(colText(cols, PCOLS.dev))) fdeSeen.add(name);
     projects.push({
       monday_item_id: p.monday_item_id,
       name: p.name,
@@ -273,8 +279,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       kickoff_date: p.kickoff_date,
       latest_update: p.latest_update,
       ttv_days: ttvDays(p.kickoff_date, go),
-      tam: peopleNames(colText(cols, PCOLS.tam)),
-      dev: peopleNames(colText(cols, PCOLS.dev)),
+      fde: Array.from(fdeSeen),
       fiscal_year: p.fiscal_year,
       group_title: p.group_title,
     });
@@ -436,7 +441,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     return d !== null && d >= lastQ.start && d <= lastQ.end;
   }).length;
 
-  // ── Team workload (snapshot, in-progress group only) ─────────────────────
+  // ── FDE workload (snapshot, in-progress group only) ──────────────────────
   // Aggregates per-person with a health breakdown so the chart can show
   // stacked bars (On Track / At Risk / Other). Also captures the project
   // list per person — the chart tooltip surfaces the actual names so the
@@ -448,8 +453,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     projects: WorkloadEntry["projects"];
   };
   const blankAgg = (): WorkloadAgg => ({ on_track: 0, at_risk: 0, other: 0, projects: [] });
-  const tamAgg = new Map<string, WorkloadAgg>();
-  const devAgg = new Map<string, WorkloadAgg>();
+  const fdeAggMap = new Map<string, WorkloadAgg>();
 
   function addToWorkload(map: Map<string, WorkloadAgg>, name: string, p: WeeklyProject) {
     const agg = map.get(name) ?? blankAgg();
@@ -466,30 +470,24 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   }
 
   for (const p of activeGroupProjects) {
-    for (const name of p.tam) addToWorkload(tamAgg, name, p);
-    for (const name of p.dev) addToWorkload(devAgg, name, p);
+    for (const name of p.fde) addToWorkload(fdeAggMap, name, p);
   }
 
-  function aggToEntry(map: Map<string, WorkloadAgg>): WorkloadEntry[] {
-    return [...map.entries()]
-      .map(([person, agg]) => ({
-        person,
-        active: agg.on_track + agg.at_risk + agg.other,
-        on_track: agg.on_track,
-        at_risk: agg.at_risk,
-        other: agg.other,
-        projects: agg.projects,
-      }))
-      .sort((a, b) => {
-        // Primary sort: most loaded first.  Secondary sort: more at-risk
-        // work bubbles up among ties so the urgent column is visible.
-        if (b.active !== a.active) return b.active - a.active;
-        return b.at_risk - a.at_risk;
-      });
-  }
-
-  const workload_tam = aggToEntry(tamAgg);
-  const workload_dev = aggToEntry(devAgg);
+  const workload_fde: WorkloadEntry[] = [...fdeAggMap.entries()]
+    .map(([person, agg]) => ({
+      person,
+      active: agg.on_track + agg.at_risk + agg.other,
+      on_track: agg.on_track,
+      at_risk: agg.at_risk,
+      other: agg.other,
+      projects: agg.projects,
+    }))
+    .sort((a, b) => {
+      // Primary sort: most loaded first.  Secondary sort: more at-risk
+      // work bubbles up among ties so the urgent column is visible.
+      if (b.active !== a.active) return b.active - a.active;
+      return b.at_risk - a.at_risk;
+    });
 
   // ── NPS this quarter ──────────────────────────────────────────────────────
   type NpsRow = { raw_columns: RawCols };
@@ -514,7 +512,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     in_uat: inUat,
     active_projects: activeGroupProjects.sort((a, b) => (a.customer_display_name < b.customer_display_name ? -1 : 1)),
     // In-flight ordering: In progress → Pipeline → On hold → Backlog,
-    // then alphabetical within each group.  CSMs scan the active work
+    // then alphabetical within each group.  The team scans the active work
     // top-down — burying it under alphabetical sort hid it.
     all_active_board: allActiveBoardProjects.slice().sort((a, b) => {
       const order = { in_progress: 0, pipeline: 1, on_hold: 2, backlog: 3 } as const;
@@ -531,8 +529,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       this_quarter: thisQCount, this_q_label: thisQ.label,
       last_quarter: lastQCount, last_q_label: lastQ.label,
     },
-    workload_tam,
-    workload_dev,
+    workload_fde,
     nps_this_quarter,
     v2_migrations: v2Migrations,
     totals: {

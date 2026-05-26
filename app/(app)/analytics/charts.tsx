@@ -8,6 +8,8 @@ import {
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
+import { formatPersonName } from "@/lib/delivery/taxonomy";
+
 // ── Theme hook ───────────────────────────────────────────────────────────────
 function useChartTheme() {
   const { resolvedTheme } = useTheme();
@@ -475,25 +477,9 @@ export function AeWorkloadChart({
   );
 }
 
-// ── Team Workload (TAM / FDE or Dev / SE) ────────────────────────────────────
-
-function shortName(s: string): string {
-  // Email → "First L." (first name + last initial). Compact + unambiguous.
-  if (s.includes("@")) {
-    const local = s.split("@")[0].replace(/[._]/g, " ");
-    const parts = local.split(" ").filter(Boolean);
-    return parts.length >= 2
-      ? `${capitalise(parts[0])} ${parts[parts.length - 1][0].toUpperCase()}.`
-      : capitalise(parts[0]);
-  }
-  // "Karthik Nagabhushana" → "Karthik N." so the y-axis doesn't wrap.
-  const parts = s.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
-  return s;
-}
-function capitalise(w: string): string {
-  return w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
-}
+// ── Team Workload (FDE) ───────────────────────────────────────────────────────
+// Name rendering goes through formatPersonName so case + role suffix
+// (Shyam → "(PM)") stay consistent with the rest of the app.
 
 export function TeamWorkloadChart({
   data,
@@ -508,7 +494,7 @@ export function TeamWorkloadChart({
   const t = useChartTheme();
   // Keep the raw key around as `personKey` so click handlers map back to
   // the items dictionary built in the loader (which uses the raw name).
-  const top = data.slice(0, 10).map((d) => ({ ...d, personKey: d.person, person: shortName(d.person) }));
+  const top = data.slice(0, 10).map((d) => ({ ...d, personKey: d.person, person: formatPersonName(d.person) }));
   return (
     <ResponsiveContainer width="100%" height={Math.max(280, top.length * 48)}>
       <BarChart data={top} layout="vertical" margin={{ top: 8, right: 56, left: 8, bottom: 8 }}>
