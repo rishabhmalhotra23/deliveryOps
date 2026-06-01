@@ -15,6 +15,7 @@ import {
   isDelivered,
   unionPeopleColumns,
 } from "@/lib/delivery/taxonomy";
+import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 
 const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
 
@@ -82,46 +83,6 @@ export interface ArrBreakdownRow {
   fde: string[];
 }
 
-/** Derive the current confirmed ARR for a customer from their SF
- *  opportunities.  Rules that match how the GTM team tracks ARR:
- *
- *  - **Closed Won** with `close_date ≤ today` — contracted.
- *    Take the most recent one (latest close_date).
- *  - Exclude opps where `close_date > today` even if Closed Won —
- *    those are forward contracts not yet in effect.
- *  - Exclude all open/pipeline opps — those inflate ARR with estimates.
- *
- *  Returns { arr: 0, stage: null } when no qualifying opp exists.
- */
-function deriveConfirmedArr(opps: Array<{
-  amount: number | null;
-  close_date: string | null;
-  is_won: boolean;
-  is_closed: boolean;
-  stage_name: string | null;
-}>): { arr: number; stage: string | null; renewal_date: string | null } {
-  const today = new Date().toISOString().slice(0, 10);
-  // Only Closed Won contracts that have already taken effect.
-  const confirmed = opps
-    .filter((o) => o.is_won && (o.close_date ?? "") <= today && o.amount != null)
-    .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
-
-  // Next renewal: soonest OPEN opp with close_date > today (the upcoming
-  // renewal this customer is negotiating).
-  const nextRenewal = opps
-    .filter((o) => !o.is_closed && (o.close_date ?? "") > today)
-    .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? -1 : 1));
-
-  if (confirmed.length === 0) {
-    return { arr: 0, stage: null, renewal_date: nextRenewal[0]?.close_date ?? null };
-  }
-  return {
-    arr: confirmed[0].amount ?? 0,
-    stage: confirmed[0].stage_name,
-    renewal_date: nextRenewal[0]?.close_date ?? null,
-  };
-}
-
 export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
   const sb = requireAdmin();
   const [customers, oppsRes, accounts, fdesByCustomer] = await Promise.all([
@@ -157,7 +118,7 @@ export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
   const rows: ArrBreakdownRow[] = [];
   for (const c of customers) {
     const opps = oppsByC.get(c.id) ?? [];
-    const { arr, stage, renewal_date } = deriveConfirmedArr(opps);
+    const { arr, stage, renewal_date } = getConfirmedArrForCustomer(c.key, opps);
 
     const cat = categoryFromCustomer(c, {
       renewal_date,

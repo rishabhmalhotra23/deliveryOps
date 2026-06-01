@@ -2,11 +2,7 @@
 // loaders + derive helpers, output is typed props that each card component
 // accepts. No Supabase/SF/Monday calls here; all that happens in page.tsx.
 
-import {
-  deriveArr,
-  deriveArrTrend,
-  type OppForArr,
-} from "@/lib/profile/derive";
+import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 import { categoryFromCustomer } from "@/app/_components/brand";
 import type { Customer, Profile, InternalProfile, CuratorTask, CuratorEvent } from "@/lib/supabase/types";
 import type { CustomerEnrichment, MondayActivityCache } from "@/lib/cache/integrations";
@@ -174,23 +170,53 @@ export function buildArrStatProps(
     is_won: boolean;
     probability: number | null;
   }>,
-  profile: Profile | null
+  profile: Profile | null,
+  customerKey?: string
 ): ArrStatProps {
-  const forDeriv: OppForArr[] = opps.map((o) => ({
-    amount: o.amount,
-    close_date: o.close_date,
-    is_closed: o.is_closed,
-    is_won: o.is_won,
-    probability: o.probability,
-  }));
-  const arrDeriv = deriveArr(forDeriv);
-  const trend = deriveArrTrend(forDeriv);
+  const confirmed = getConfirmedArrForCustomer(customerKey, opps);
+  const currentArr = confirmed.arr > 0 ? confirmed.arr : null;
+
+  const wonHistory = opps
+    .filter((o) => o.is_won && o.amount != null && o.close_date)
+    .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
+
+  const priorWon = wonHistory.find(
+    (o) => (o.close_date ?? "") < (confirmed.source_close_date ?? "")
+  );
+
+  if (currentArr == null) {
+    return {
+      currentArr: profile?.arr ?? null,
+      previousArr: null,
+      direction: "no-data",
+      deltaPct: null,
+      renewalDate: profile?.renewal_date ?? confirmed.renewal_date,
+    };
+  }
+
+  if (!priorWon?.amount) {
+    return {
+      currentArr,
+      previousArr: null,
+      direction: "first-contract",
+      deltaPct: null,
+      renewalDate: profile?.renewal_date ?? confirmed.renewal_date,
+    };
+  }
+
+  const delta = currentArr - priorWon.amount;
+  const deltaPct =
+    priorWon.amount === 0 ? null : Math.round((delta / priorWon.amount) * 1000) / 10;
+  let direction: ArrStatProps["direction"] = "flat";
+  if (delta > 0) direction = "growth";
+  else if (delta < 0) direction = "contraction";
+
   return {
-    currentArr: trend.current ?? profile?.arr ?? null,
-    previousArr: trend.previous,
-    direction: trend.direction,
-    deltaPct: trend.delta_pct,
-    renewalDate: profile?.renewal_date ?? arrDeriv.renewal_date ?? null,
+    currentArr,
+    previousArr: priorWon.amount,
+    direction,
+    deltaPct,
+    renewalDate: profile?.renewal_date ?? confirmed.renewal_date,
   };
 }
 

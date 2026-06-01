@@ -50,25 +50,32 @@ describe("buildArrStatProps", () => {
     name: "JBI 2025 lost",
   };
 
-  it("picks the latest eligible opp for currentArr", () => {
+  it("uses latest Closed Won (not open pipeline) for currentArr", () => {
     const props = buildArrStatProps([openOpp, wonOpp, lostOpp], null);
     expect(props.currentArr).toBe(384_335);
   });
 
-  it("reports flat when prev and current match", () => {
+  it("reports first-contract when only one Closed Won exists", () => {
     const props = buildArrStatProps([openOpp, wonOpp], null);
-    expect(props.direction).toBe("flat");
-  });
-
-  it("reports first-contract when no prior Won exists", () => {
-    const props = buildArrStatProps([openOpp], null);
     expect(props.direction).toBe("first-contract");
     expect(props.previousArr).toBeNull();
   });
 
-  it("reports growth when current > prior", () => {
-    const bigOpp = { ...openOpp, amount: 700_000, close_date: "2026-06-22" };
-    const props = buildArrStatProps([bigOpp, wonOpp], null);
+  it("reports no-data when only open pipeline opps exist", () => {
+    const props = buildArrStatProps([openOpp], null);
+    expect(props.direction).toBe("no-data");
+    expect(props.currentArr).toBeNull();
+  });
+
+  it("reports growth when current Closed Won > prior Closed Won", () => {
+    const priorWon = {
+      amount: 200_000,
+      close_date: "2023-06-01",
+      is_closed: true,
+      is_won: true,
+      probability: 100,
+    };
+    const props = buildArrStatProps([wonOpp, priorWon], null);
     expect(props.direction).toBe("growth");
     expect(props.deltaPct).toBeGreaterThan(0);
   });

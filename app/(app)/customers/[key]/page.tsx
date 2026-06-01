@@ -85,7 +85,7 @@ export default async function CustomerPage({ params }: Props) {
     npsResponses,
     enrichment?.account?.owner_name ?? null
   );
-  const arrStatProps = buildArrStatProps(opps, profile);
+  const arrStatProps = buildArrStatProps(opps, profile, customer.key);
   const npsStatProps = buildNpsStatProps(npsResponses);
   const projectsStatProps = buildProjectsStatProps(enrichment?.projects ?? []);
   const arrPoints = buildArrPoints(opps);

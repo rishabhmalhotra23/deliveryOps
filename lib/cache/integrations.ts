@@ -4,6 +4,7 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer as brandCategoryFromCustomer } from "@/app/_components/brand";
+import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 
 export interface SfAccountCache {
   sf_id: string;
@@ -365,10 +366,11 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
 
   const { data: customers } = await sb
     .from("customers")
-    .select("id, custom_category, lifecycle_group, partner, ae_owner, salesforce_account_id, monday_workspace_id")
+    .select("id, key, custom_category, lifecycle_group, partner, ae_owner, salesforce_account_id, monday_workspace_id")
     .is("deleted_at", null);
   const list = (customers ?? []) as Array<{
     id: string;
+    key: string;
     custom_category: string | null;
     lifecycle_group: string | null;
     partner: string | null;
@@ -405,7 +407,6 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   // Compute confirmed ARR per customer from Closed-Won SF opps
   // (close_date ≤ today).  Open/pipeline opps are excluded to prevent
   // inflating the figure with unconfirmed estimates.
-  const today = new Date().toISOString().slice(0, 10);
   type OppRow = { customer_id: string; amount: number | null; close_date: string | null; is_won: boolean; is_closed: boolean };
   const oppsByC = new Map<string, OppRow[]>();
   for (const o of (allOppsForArr.data as OppRow[] | null) ?? []) {
@@ -413,19 +414,13 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     list2.push(o);
     oppsByC.set(o.customer_id, list2);
   }
+  const keyById = new Map(list.map((c) => [c.id, c.key]));
   function confirmedArrForCustomer(customerId: string): { arr: number; renewal_date: string | null } {
     const opps = oppsByC.get(customerId) ?? [];
-    // Most recent Closed-Won with close_date ≤ today.
-    const won = opps
-      .filter((o) => o.is_won && (o.close_date ?? "") <= today && o.amount != null)
-      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
-    // Next open opp for renewal_date.
-    const upcoming = opps
-      .filter((o) => !o.is_closed && (o.close_date ?? "") > today)
-      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? -1 : 1));
+    const { arr, renewal_date } = getConfirmedArrForCustomer(keyById.get(customerId), opps);
     return {
-      arr: won[0]?.amount ?? 0,
-      renewal_date: upcoming[0]?.close_date ?? renewalByC.get(customerId) ?? null,
+      arr,
+      renewal_date: renewal_date ?? renewalByC.get(customerId) ?? null,
     };
   }
 
@@ -507,9 +502,10 @@ export async function loadCustomerCommercialsMap(): Promise<
   Map<string, CustomerCommercials>
 > {
   const sb = requireAdmin();
-  const [oppsRes, accountsRes] = await Promise.all([
+  const [oppsRes, accountsRes, customersRes] = await Promise.all([
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
+    sb.from("customers").select("id, key").is("deleted_at", null),
   ]);
 
   type OppRow = {
@@ -519,7 +515,9 @@ export async function loadCustomerCommercialsMap(): Promise<
     is_won: boolean;
     is_closed: boolean;
   };
-  const today2 = new Date().toISOString().slice(0, 10);
+  const keyById = new Map(
+    ((customersRes.data ?? []) as Array<{ id: string; key: string }>).map((c) => [c.id, c.key])
+  );
   const oppsByCId = new Map<string, OppRow[]>();
   for (const o of (oppsRes.data ?? []) as OppRow[]) {
     const list = oppsByCId.get(o.customer_id) ?? [];
@@ -544,15 +542,10 @@ export async function loadCustomerCommercialsMap(): Promise<
   const map = new Map<string, CustomerCommercials>();
   for (const cid of allCustomerIds) {
     const opps = oppsByCId.get(cid) ?? [];
-    const wonSorted = opps
-      .filter((o) => o.is_won && (o.close_date ?? "") <= today2 && o.amount != null)
-      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
-    const nextOpen = opps
-      .filter((o) => !o.is_closed && (o.close_date ?? "") > today2)
-      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? -1 : 1));
+    const { arr, renewal_date } = getConfirmedArrForCustomer(keyById.get(cid), opps);
     map.set(cid, {
-      arr: wonSorted[0]?.amount ?? null,
-      renewal_date: nextOpen[0]?.close_date ?? null,
+      arr: arr > 0 ? arr : null,
+      renewal_date,
       annual_revenue: revenueMap.get(cid) ?? null,
     });
   }
