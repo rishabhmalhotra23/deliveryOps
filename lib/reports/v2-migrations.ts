@@ -65,6 +65,12 @@ const MIGRATIONS: V2Migration[] = [
     delivery_team: ["Ayush"],
     engineering_team: ["Sasha", "Vihang"],
   },
+  {
+    customer_key: "wipro-fss",
+    processes: [],
+    delivery_team: ["Sid"],
+    engineering_team: ["Karthik"],
+  },
 ];
 
 /**

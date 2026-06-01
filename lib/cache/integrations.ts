@@ -347,9 +347,10 @@ export interface PortfolioSummary {
   by_category: Record<string, number>;
   by_ae: Record<string, number>;
   by_partner: Record<string, number>;
-  // total_arr = sum of profiles.arr across all customers (Kognitos deal ARR).
-  // NOT sum of sf_accounts.annual_revenue — that's the customer's company-wide
-  // revenue, which is meaningless to aggregate and was producing $billions.
+  // total_arr = sum of most-recent Closed-Won SF opp amounts across active
+  // customers, close_date ≤ today.  This is the confirmed contracted ARR —
+  // open/pipeline opps are excluded because they inflate the figure with
+  // estimates.  See loadArrBreakdown() for per-customer breakdown.
   total_arr: number;
   total_company_revenue: number;
   total_open_opportunities: number;
@@ -380,10 +381,10 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   // dynamic rules (renewal-in-90-days → Upcoming Renewals, revenue>$20M →
   // Strategic Growth).  Without these the dashboard chip counts would
   // diverge from what /customers shows.
-  const [arr, accountsForCat, opps, cases, lastSf, lastMon, profilesForCat] = await Promise.all([
-    // Pull customer_id alongside ARR so we can filter past-state customers
-    // out of total_arr.
-    sb.from("profiles").select("customer_id, arr"),
+  const [allOppsForArr, accountsForCat, openOppsCount, cases, lastSf, lastMon, profilesForCat] = await Promise.all([
+    // All SF opps needed to compute confirmed ARR (closed-won, close_date ≤ today)
+    // and renewal dates.
+    sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
     sb.from("sf_opportunities").select("id", { count: "exact", head: true }).eq("is_closed", false),
     sb.from("sf_cases").select("id", { count: "exact", head: true }).eq("is_closed", false),
@@ -401,6 +402,33 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     revenueByC.set(a.customer_id, a.annual_revenue);
   }
 
+  // Compute confirmed ARR per customer from Closed-Won SF opps
+  // (close_date ≤ today).  Open/pipeline opps are excluded to prevent
+  // inflating the figure with unconfirmed estimates.
+  const today = new Date().toISOString().slice(0, 10);
+  type OppRow = { customer_id: string; amount: number | null; close_date: string | null; is_won: boolean; is_closed: boolean };
+  const oppsByC = new Map<string, OppRow[]>();
+  for (const o of (allOppsForArr.data as OppRow[] | null) ?? []) {
+    const list2 = oppsByC.get(o.customer_id) ?? [];
+    list2.push(o);
+    oppsByC.set(o.customer_id, list2);
+  }
+  function confirmedArrForCustomer(customerId: string): { arr: number; renewal_date: string | null } {
+    const opps = oppsByC.get(customerId) ?? [];
+    // Most recent Closed-Won with close_date ≤ today.
+    const won = opps
+      .filter((o) => o.is_won && (o.close_date ?? "") <= today && o.amount != null)
+      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
+    // Next open opp for renewal_date.
+    const upcoming = opps
+      .filter((o) => !o.is_closed && (o.close_date ?? "") > today)
+      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? -1 : 1));
+    return {
+      arr: won[0]?.amount ?? 0,
+      renewal_date: upcoming[0]?.close_date ?? renewalByC.get(customerId) ?? null,
+    };
+  }
+
   // Past-state customers (Churned / Dropped / Past) are excluded from the
   // active-book aggregates (total_arr, total_company_revenue, by_ae,
   // by_partner, total customer count).  The `by_category` chip strip keeps
@@ -412,8 +440,9 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   const byPartner: Record<string, number> = {};
   const activeIds = new Set<string>();
   for (const c of list) {
+    const { arr: cArr, renewal_date } = confirmedArrForCustomer(c.id);
     const cat = brandCategoryFromCustomer(c, {
-      renewal_date: renewalByC.get(c.id) ?? null,
+      renewal_date,
       annual_revenue: revenueByC.get(c.id) ?? null,
     });
     byCategory[cat] = (byCategory[cat] ?? 0) + 1;
@@ -423,13 +452,13 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     byAe[ae] = (byAe[ae] ?? 0) + 1;
     const p = c.partner ?? "Direct";
     byPartner[p] = (byPartner[p] ?? 0) + 1;
+    void cArr; // used per-customer below
   }
   const activeCount = activeIds.size;
-  // Sum ARR only over active customers — past-state rows contribute zero.
-  const arrRows = (arr.data as Array<{ customer_id: string; arr: number | null }> | null) ?? [];
+  // Sum confirmed ARR only over active customers.
   let totalArr = 0;
-  for (const row of arrRows) {
-    if (activeIds.has(row.customer_id)) totalArr += row.arr ?? 0;
+  for (const id of activeIds) {
+    totalArr += confirmedArrForCustomer(id).arr;
   }
   let totalCompanyRevenue = 0;
   for (const [id, v] of revenueByC) {
@@ -443,7 +472,7 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     by_partner: byPartner,
     total_arr: totalArr,
     total_company_revenue: totalCompanyRevenue,
-    total_open_opportunities: opps.count ?? 0,
+    total_open_opportunities: openOppsCount.count ?? 0,
     total_open_cases: cases.count ?? 0,
     with_salesforce: list.filter((c) => c.salesforce_account_id).length,
     with_monday_workspace: list.filter((c) => c.monday_workspace_id).length,
@@ -457,10 +486,10 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
 /** Per-customer commercial summary used by the customers list strips +
  *  the dynamic category derivation (see `categoryFromCustomer`).
  *
- *  - `arr` and `renewal_date` come from `profiles` (the Kognitos deal facts).
- *  - `annual_revenue` comes from `sf_accounts` (the customer's company-
- *    wide revenue per Salesforce) — used to bucket large customers into
- *    "Strategic Growth".
+ *  - `arr` = most recent Closed-Won SF opp amount (close_date ≤ today).
+ *  - `renewal_date` = soonest open opp close_date after today.
+ *  - `annual_revenue` from `sf_accounts` — the customer's company-wide
+ *    Salesforce revenue, used to bucket large customers into "Strategic Growth".
  */
 export interface CustomerCommercials {
   arr: number | null;
@@ -470,48 +499,62 @@ export interface CustomerCommercials {
 
 /**
  * Bulk-load ARR + renewal date + company revenue for every customer.
- * Two parallel round-trips (profiles + sf_accounts); consumers look up
- * by customer_id.
+ * ARR is derived from the most-recent Closed-Won SF opportunity per customer
+ * (close_date ≤ today) so it stays accurate as SF is updated without needing
+ * a manual profile backfill.
  */
 export async function loadCustomerCommercialsMap(): Promise<
   Map<string, CustomerCommercials>
 > {
   const sb = requireAdmin();
-  const [profilesRes, accountsRes] = await Promise.all([
-    sb.from("profiles").select("customer_id, arr, renewal_date"),
+  const [oppsRes, accountsRes] = await Promise.all([
+    sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
   ]);
-  const profiles = (profilesRes.data ?? []) as Array<{
+
+  type OppRow = {
     customer_id: string;
-    arr: number | null;
-    renewal_date: string | null;
-  }>;
+    amount: number | null;
+    close_date: string | null;
+    is_won: boolean;
+    is_closed: boolean;
+  };
+  const today2 = new Date().toISOString().slice(0, 10);
+  const oppsByCId = new Map<string, OppRow[]>();
+  for (const o of (oppsRes.data ?? []) as OppRow[]) {
+    const list = oppsByCId.get(o.customer_id) ?? [];
+    list.push(o);
+    oppsByCId.set(o.customer_id, list);
+  }
+
   const accounts = (accountsRes.data ?? []) as Array<{
     customer_id: string;
     annual_revenue: number | null;
   }>;
+  const revenueMap = new Map<string, number | null>(
+    accounts.map((a) => [a.customer_id, a.annual_revenue])
+  );
+
+  // Collect all unique customer IDs from both sources.
+  const allCustomerIds = new Set<string>([
+    ...oppsByCId.keys(),
+    ...revenueMap.keys(),
+  ]);
 
   const map = new Map<string, CustomerCommercials>();
-  for (const row of profiles) {
-    map.set(row.customer_id, {
-      arr: row.arr,
-      renewal_date: row.renewal_date,
-      annual_revenue: null,
+  for (const cid of allCustomerIds) {
+    const opps = oppsByCId.get(cid) ?? [];
+    const wonSorted = opps
+      .filter((o) => o.is_won && (o.close_date ?? "") <= today2 && o.amount != null)
+      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
+    const nextOpen = opps
+      .filter((o) => !o.is_closed && (o.close_date ?? "") > today2)
+      .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? -1 : 1));
+    map.set(cid, {
+      arr: wonSorted[0]?.amount ?? null,
+      renewal_date: nextOpen[0]?.close_date ?? null,
+      annual_revenue: revenueMap.get(cid) ?? null,
     });
-  }
-  for (const row of accounts) {
-    const prev = map.get(row.customer_id);
-    if (prev) {
-      prev.annual_revenue = row.annual_revenue;
-    } else {
-      // SF account exists but no profile row yet — keep the revenue so the
-      // category rule still fires.
-      map.set(row.customer_id, {
-        arr: null,
-        renewal_date: null,
-        annual_revenue: row.annual_revenue,
-      });
-    }
   }
   return map;
 }

@@ -41,9 +41,9 @@ export function DashboardStatsRow({
     <>
       <section className="grid gap-3 md:grid-cols-4">
         <StatBlock
-          label="Total ARR"
+          label="Confirmed ARR"
           value={formatMoney(totalArr)}
-          hint={`${customersWithSf} customers mapped to Salesforce`}
+          hint="Closed-Won SF deals · click to see per-customer breakdown"
           emphasis
           onClick={() => setDrill("arr")}
         />
@@ -69,19 +69,23 @@ export function DashboardStatsRow({
 
       {drill === "arr" ? (
         <DrillDownPanel
-          title="Total ARR"
+          title="Confirmed ARR"
           subtitle={
             <>
               <span className="text-[color:var(--foreground)] font-semibold">{formatMoney(totalArr)}</span>{" "}
-              across {arrRows.length} active customers · sorted by ARR desc
+              across {arrRows.filter(r => r.arr > 0).length} customers with Closed-Won SF deals ·{" "}
+              {arrRows.filter(r => r.arr === 0).length} have no confirmed deal yet
             </>
           }
           onClose={() => setDrill(null)}
-          footer="Past-state customers (Churned / Dropped / Past) are excluded from the active-book total."
+          footer="ARR = most recent Closed-Won SF opportunity per customer (close date ≤ today). Open pipeline deals are excluded. Past-state customers are excluded."
         >
           <CustomerArrList rows={arrRows} />
         </DrillDownPanel>
       ) : null}
+
+      {/* Note: Total ARR = sum of most-recent Closed-Won SF deals (close_date ≤ today).
+          Open/pipeline opps are in "Open opportunities", not here. */}
 
       {drill === "attention" ? (
         <DrillDownPanel
@@ -149,6 +153,13 @@ function CustomerArrList({ rows }: { rows: ArrBreakdownRow[] }) {
               {r.fde.length > 0 ? <span>FDE · {formatPeopleList(r.fde)}</span> : null}
               {r.partner ? <span>via {r.partner}</span> : null}
               {r.renewal_date ? <span>renews {r.renewal_date}</span> : null}
+              {r.arr === 0 ? (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">no closed deal</span>
+              ) : r.arr_opp_stage && r.arr_opp_stage !== "Closed Won" ? (
+                <span className="text-amber-600 dark:text-amber-400" title={`SF stage: ${r.arr_opp_stage}`}>
+                  {r.arr_opp_stage}
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="text-right shrink-0">

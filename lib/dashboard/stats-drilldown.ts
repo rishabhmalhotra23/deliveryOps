@@ -69,46 +69,111 @@ export interface ArrBreakdownRow {
   ae_owner: string | null;
   partner: string | null;
   category: string;
+  /** Confirmed ARR: amount from the most recent Closed-Won SF opportunity
+   *  whose close_date ≤ today.  $0 when no Closed-Won deal exists yet
+   *  (e.g. POV / partner payment pending). */
   arr: number;
   renewal_date: string | null;
+  /** Stage name of the opp that drove `arr`, e.g. "Closed Won".
+   *  Useful for spotting "Closed Won - Pending Payment" partner deals. */
+  arr_opp_stage: string | null;
   /** Canonical FDE roster across this customer's active projects.
-   *  Empty array when no FDE is assigned (e.g. new logo / Monday hasn't
-   *  surfaced the team yet) — UI should hide the FDE chip in that case. */
+   *  Empty array when no FDE is assigned. */
   fde: string[];
+}
+
+/** Derive the current confirmed ARR for a customer from their SF
+ *  opportunities.  Rules that match how the GTM team tracks ARR:
+ *
+ *  - **Closed Won** with `close_date ≤ today` — contracted.
+ *    Take the most recent one (latest close_date).
+ *  - Exclude opps where `close_date > today` even if Closed Won —
+ *    those are forward contracts not yet in effect.
+ *  - Exclude all open/pipeline opps — those inflate ARR with estimates.
+ *
+ *  Returns { arr: 0, stage: null } when no qualifying opp exists.
+ */
+function deriveConfirmedArr(opps: Array<{
+  amount: number | null;
+  close_date: string | null;
+  is_won: boolean;
+  is_closed: boolean;
+  stage_name: string | null;
+}>): { arr: number; stage: string | null; renewal_date: string | null } {
+  const today = new Date().toISOString().slice(0, 10);
+  // Only Closed Won contracts that have already taken effect.
+  const confirmed = opps
+    .filter((o) => o.is_won && (o.close_date ?? "") <= today && o.amount != null)
+    .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? 1 : -1));
+
+  // Next renewal: soonest OPEN opp with close_date > today (the upcoming
+  // renewal this customer is negotiating).
+  const nextRenewal = opps
+    .filter((o) => !o.is_closed && (o.close_date ?? "") > today)
+    .sort((a, b) => ((a.close_date ?? "") < (b.close_date ?? "") ? -1 : 1));
+
+  if (confirmed.length === 0) {
+    return { arr: 0, stage: null, renewal_date: nextRenewal[0]?.close_date ?? null };
+  }
+  return {
+    arr: confirmed[0].amount ?? 0,
+    stage: confirmed[0].stage_name,
+    renewal_date: nextRenewal[0]?.close_date ?? null,
+  };
 }
 
 export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
   const sb = requireAdmin();
-  const [customers, profiles, accounts, fdesByCustomer] = await Promise.all([
+  const [customers, oppsRes, accounts, fdesByCustomer] = await Promise.all([
     listCustomers(),
-    sb.from("profiles").select("customer_id, arr, renewal_date"),
+    // Pull ALL SF opps — we need is_won, is_closed, amount, stage for the
+    // confirmed-ARR derivation, and open ones for renewal_date.
+    sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed, stage_name, probability"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
     loadFdesByCustomerId().catch(() => new Map<string, string[]>()),
   ]);
-  const arrByC = new Map<string, { arr: number; renewal_date: string | null }>();
-  for (const p of (profiles.data as Array<{ customer_id: string; arr: number | null; renewal_date: string | null }> | null) ?? []) {
-    arrByC.set(p.customer_id, { arr: p.arr ?? 0, renewal_date: p.renewal_date });
+
+  type OppRow = {
+    customer_id: string;
+    amount: number | null;
+    close_date: string | null;
+    is_won: boolean;
+    is_closed: boolean;
+    stage_name: string | null;
+    probability: number | null;
+  };
+  const oppsByC = new Map<string, OppRow[]>();
+  for (const o of (oppsRes.data as OppRow[] | null) ?? []) {
+    const list = oppsByC.get(o.customer_id) ?? [];
+    list.push(o);
+    oppsByC.set(o.customer_id, list);
   }
+
   const revByC = new Map<string, number | null>();
   for (const a of (accounts.data as Array<{ customer_id: string; annual_revenue: number | null }> | null) ?? []) {
     revByC.set(a.customer_id, a.annual_revenue);
   }
+
   const rows: ArrBreakdownRow[] = [];
   for (const c of customers) {
+    const opps = oppsByC.get(c.id) ?? [];
+    const { arr, stage, renewal_date } = deriveConfirmedArr(opps);
+
     const cat = categoryFromCustomer(c, {
-      renewal_date: arrByC.get(c.id)?.renewal_date,
+      renewal_date,
       annual_revenue: revByC.get(c.id) ?? null,
     });
     if (PAST_STATE_CATEGORIES.has(cat)) continue;
-    const profile = arrByC.get(c.id);
+
     rows.push({
       customer_key: c.key,
       customer_display_name: c.display_name,
       ae_owner: c.ae_owner,
       partner: c.partner,
       category: cat,
-      arr: profile?.arr ?? 0,
-      renewal_date: profile?.renewal_date ?? null,
+      arr,
+      renewal_date,
+      arr_opp_stage: stage,
       fde: fdesByCustomer.get(c.id) ?? [],
     });
   }
