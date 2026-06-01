@@ -64,7 +64,7 @@ export function AnalyticsKpiRow({
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Kpi
-          label="Total ARR"
+          label="Confirmed ARR"
           value={formatMoney(totals.total_arr)}
           sub={`${totals.customers} customers`}
           color={COLOR.arr}
@@ -96,11 +96,11 @@ export function AnalyticsKpiRow({
 
       {drill === "arr" ? (
         <DrillDownPanel
-          title="Total ARR"
+          title="Confirmed ARR"
           subtitle={
             <>
               <span className="text-[color:var(--foreground)] font-semibold">{formatMoney(totals.total_arr)}</span>{" "}
-              across {arrRows.length} active customers · sorted by ARR desc
+              across {arrRows.length} active customers · Closed Won only · sorted by ARR desc
             </>
           }
           onClose={() => setDrill(null)}

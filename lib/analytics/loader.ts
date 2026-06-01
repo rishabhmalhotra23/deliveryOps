@@ -3,6 +3,7 @@
 // /analytics page renders with Recharts.
 
 import { requireAdmin } from "@/lib/supabase/server";
+import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 
 /** Slim project row used by the chart drill-down panels. */
 export interface DrillDownProject {
@@ -80,11 +81,6 @@ export interface AnalyticsBundle {
   };
 }
 
-interface ProfileRow {
-  customer_id: string;
-  arr: number | null;
-  renewal_date: string | null;
-}
 interface CustomerRow {
   id: string;
   key: string;
@@ -141,7 +137,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
 
   const [
     customers,
-    profiles,
+    sfOpps,
     projects,
     nps,
     accounts,
@@ -154,7 +150,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       .from("customers")
       .select("id, key, display_name, custom_category, lifecycle_group, ae_owner, partner")
       .is("deleted_at", null),
-    sb.from("profiles").select("customer_id, arr, renewal_date"),
+    sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
     sb
       .from("monday_projects")
       .select(
@@ -187,7 +183,20 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   ]);
 
   const customerList = ((customers.data as CustomerRow[]) ?? []);
-  const profileList = ((profiles.data as ProfileRow[]) ?? []);
+  type OppRow = {
+    customer_id: string;
+    amount: number | null;
+    close_date: string | null;
+    is_won: boolean;
+    is_closed: boolean;
+  };
+  const oppList = ((sfOpps.data as OppRow[]) ?? []);
+  const oppsByC = new Map<string, OppRow[]>();
+  for (const o of oppList) {
+    const list = oppsByC.get(o.customer_id) ?? [];
+    list.push(o);
+    oppsByC.set(o.customer_id, list);
+  }
   // Exclude Account Overview + Projects Portfolio rows — they're aggregate
   // duplicates of the FY-board rows.  Same rule as lib/delivery/loader.ts.
   const PORTFOLIO_DUPE_FYS = new Set(["account_overview", "portfolio"]);
@@ -202,23 +211,28 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const npsList = ((nps.data as NpsRow[]) ?? []);
   const accountList = ((accounts.data as AccountRow[]) ?? []);
 
-  const profileByC = new Map(
-    profileList.map((p) => [p.customer_id, { arr: p.arr ?? 0, renewal_date: p.renewal_date }])
-  );
   const revenueByC = new Map<string, number | null>();
   for (const a of accountList) {
     if (a.customer_id) revenueByC.set(a.customer_id, a.annual_revenue);
   }
   const customerById = new Map(customerList.map((c) => [c.id, c]));
+  // Confirmed ARR — same derivation as Dashboard / Customers (Closed Won,
+  // close_date ≤ today, plus GTM overrides e.g. Norco $284K).
+  const confirmedByC = new Map(
+    customerList.map((c) => [
+      c.id,
+      getConfirmedArrForCustomer(c.key, oppsByC.get(c.id) ?? []),
+    ])
+  );
   // Dynamic category — feeds renewal_date + annual_revenue so the 90-day
   // renewal rule and the $20M Strategic Growth rule both fire here.
   const categoryByC = new Map<string, string>();
   for (const c of customerList) {
-    const profile = profileByC.get(c.id);
+    const confirmed = confirmedByC.get(c.id);
     categoryByC.set(
       c.id,
       brandCategoryFromCustomer(c, {
-        renewal_date: profile?.renewal_date ?? null,
+        renewal_date: confirmed?.renewal_date ?? null,
         annual_revenue: revenueByC.get(c.id) ?? null,
       })
     );
@@ -234,9 +248,10 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       .filter((c) => !PAST_FOR_TOTALS.has(categoryByC.get(c.id) ?? ""))
       .map((c) => c.id)
   );
-  const totalArr = profileList
-    .filter((p) => activeCustomerIds.has(p.customer_id))
-    .reduce((s, p) => s + (p.arr ?? 0), 0);
+  const totalArr = [...activeCustomerIds].reduce(
+    (s, id) => s + (confirmedByC.get(id)?.arr ?? 0),
+    0
+  );
   const totalCompanyRevenue = accountList
     .filter((a) => a.customer_id && activeCustomerIds.has(a.customer_id))
     .reduce((s, a) => s + (a.annual_revenue ?? 0), 0);
@@ -259,9 +274,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     ? Math.round((npsScores.reduce((a, b) => a + b, 0) / npsScores.length) * 10) / 10
     : null;
 
-  // Helper — pull the ARR component for a given customer.  Returns 0 when
-  // no profile row exists, matching the legacy behaviour.
-  const arrFor = (id: string) => profileByC.get(id)?.arr ?? 0;
+  const arrFor = (id: string) => confirmedByC.get(id)?.arr ?? 0;
 
   // Past-state customers are excluded from "active book" aggregates (AE
   // workload, partner workload, ARR-by-category, totals).  They're still
@@ -301,7 +314,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     prev.arr += arrFor(c.id);
     byAeAgg.set(ae, prev);
 
-    const profile = profileByC.get(c.id);
+    const confirmed = confirmedByC.get(c.id);
     (by_ae_items[ae] ??= []).push({
       id: c.id,
       key: c.key,
@@ -309,8 +322,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       partner: c.partner,
       custom_category: c.custom_category,
       lifecycle_group: c.lifecycle_group,
-      arr: profile?.arr ?? 0,
-      renewal_date: profile?.renewal_date ?? null,
+      arr: confirmed?.arr ?? 0,
+      renewal_date: confirmed?.renewal_date ?? null,
     });
   }
   for (const list of Object.values(by_ae_items)) {
