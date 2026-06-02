@@ -1,16 +1,25 @@
-// Upcoming pipeline — SF opportunities closing in the next 90 days.
-// Gives the team a rolling forward-looking view of what's incoming so
-// they can prepare renewals and expansions before they land. A rolling
-// window (rather than calendar-quarter) means the section stays useful
-// late in a quarter when most upcoming closes are actually in Q+1.
+// Upcoming pipeline — open SF opportunities closing in the next 90 days.
+//
+// Primary source: Salesforce Pipeline Inspection list view (Binny Gill's
+// Team by default — see SALESFORCE_PIPELINE_LIST_VIEW_ID). Matches what GTM
+// reviews weekly in Lightning. Falls back to the cached sf_opportunities
+// table when SF credentials are missing or the live call fails.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
 import { loadFdesByCustomerId } from "@/lib/dashboard/stats-drilldown";
+import {
+  listOpportunitiesFromListView,
+  opportunityRecordUrl,
+  pipelineInspectionUrl,
+  pipelineListViewId,
+  salesforceConfigured,
+  type SfOpportunity,
+} from "@/lib/integrations/salesforce";
 
 const WINDOW_DAYS = 90;
 
-function windowBounds(): { start: string; end: string; label: string } {
+export function windowBounds(): { start: string; end: string; label: string } {
   const now = new Date();
   const end = new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const isoDate = (d: Date) =>
@@ -36,16 +45,10 @@ export interface PipelineOpportunity {
   owner_name: string | null;
   customer_key: string | null;
   customer_display_name: string | null;
-  /** Classified from Salesforce `Opportunity.Type` (read from raw jsonb). */
   kind: PipelineKind;
-  /** Raw SF Type string for the tooltip / debugging. */
   type_raw: string | null;
-  /**
-   * Canonical-cased list of FDEs currently working this customer's
-   * non-delivered projects.  `null` when the opportunity is for a new
-   * logo (no FDE assigned yet) or when no active project exists.
-   */
   fdes: string[] | null;
+  sf_url: string | null;
 }
 
 export interface PipelineBundle {
@@ -53,8 +56,10 @@ export interface PipelineBundle {
   total_amount: number;
   count: number;
   quarter_label: string;
-  /** Counts per kind, useful for the section header summary. */
   by_kind: Record<PipelineKind, number>;
+  source: "salesforce_list_view" | "cache";
+  list_view_label: string | null;
+  pipeline_inspection_url: string | null;
 }
 
 interface OppRow {
@@ -67,14 +72,9 @@ interface OppRow {
   probability: number | null;
   owner_name: string | null;
   raw: Record<string, unknown> | null;
+  account_sf_id?: string | null;
 }
 
-/**
- * Map a Salesforce `Opportunity.Type` value to our four-way classification.
- * Salesforce orgs are inconsistent: some use "New Business" / "Renewal" /
- * "Existing Customer - Upgrade", others use "New" / "Existing", others leave
- * it blank entirely. We do a forgiving substring match.
- */
 export function classifyOpportunityType(type: string | null | undefined): {
   kind: PipelineKind;
   raw: string | null;
@@ -89,41 +89,129 @@ export function classifyOpportunityType(type: string | null | undefined): {
   return { kind: "Other", raw: type };
 }
 
-export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
+function emptyByKind(): Record<PipelineKind, number> {
+  return { Renewal: 0, Expansion: 0, New: 0, Other: 0 };
+}
+
+function mapSfOpportunityToPipeline(
+  o: SfOpportunity,
+  custBySfAccount: Map<string, { key: string; display_name: string; id: string }>,
+  fdesByCustomer: Map<string, string[]>
+): PipelineOpportunity {
+  const cust = custBySfAccount.get(o.AccountId);
+  const { kind, raw: type_raw } = classifyOpportunityType(o.Type ?? null);
+  const fdes =
+    kind === "New" || !cust ? null : fdesByCustomer.get(cust.id) ?? null;
+  return {
+    sf_id: o.Id,
+    name: o.Name,
+    stage_name: o.StageName ?? null,
+    amount: o.Amount,
+    close_date: o.CloseDate ?? null,
+    probability: o.Probability,
+    owner_name: o.Owner?.Name ?? null,
+    customer_key: cust?.key ?? null,
+    customer_display_name: cust?.display_name ?? o.Account?.Name ?? null,
+    kind,
+    type_raw,
+    fdes: fdes && fdes.length > 0 ? fdes : null,
+    sf_url: opportunityRecordUrl(o.Id),
+  };
+}
+
+function finishBundle(
+  opportunities: PipelineOpportunity[],
+  label: string,
+  source: PipelineBundle["source"],
+  listViewLabel: string | null
+): PipelineBundle {
+  const total_amount = opportunities.reduce((s, o) => s + (o.amount ?? 0), 0);
+  const by_kind = emptyByKind();
+  for (const o of opportunities) by_kind[o.kind]++;
+  return {
+    opportunities,
+    total_amount,
+    count: opportunities.length,
+    quarter_label: label,
+    by_kind,
+    source,
+    list_view_label: listViewLabel,
+    pipeline_inspection_url: pipelineInspectionUrl(),
+  };
+}
+
+function buildCustomerMaps(customers: Awaited<ReturnType<typeof listCustomers>>) {
+  const custBySfAccount = new Map<string, { key: string; display_name: string; id: string }>();
+  const custById = new Map(customers.map((c) => [c.id, c]));
+  for (const c of customers) {
+    if (c.salesforce_account_id) {
+      custBySfAccount.set(c.salesforce_account_id, {
+        key: c.key,
+        display_name: c.display_name,
+        id: c.id,
+      });
+    }
+  }
+  return { custBySfAccount, custById };
+}
+
+async function loadFromSalesforceListView(
+  start: string,
+  end: string,
+  label: string
+): Promise<PipelineBundle> {
+  const listViewId = pipelineListViewId();
+  const [live, customers, fdesByCustomer] = await Promise.all([
+    listOpportunitiesFromListView(listViewId, { start, end }),
+    listCustomers(),
+    loadFdesByCustomerId().catch(() => new Map<string, string[]>()),
+  ]);
+
+  const { custBySfAccount } = buildCustomerMaps(customers);
+  const opportunities = live.records.map((o) =>
+    mapSfOpportunityToPipeline(o, custBySfAccount, fdesByCustomer)
+  );
+
+  return finishBundle(opportunities, label, "salesforce_list_view", live.label);
+}
+
+async function loadFromCache(
+  start: string,
+  end: string,
+  label: string
+): Promise<PipelineBundle> {
   const sb = requireAdmin();
-  const { start, end, label } = windowBounds();
 
   const [opps, customers, fdesByCustomer] = await Promise.all([
     sb
       .from("sf_opportunities")
       .select(
-        "sf_id, customer_id, name, stage_name, amount, close_date, probability, owner_name, raw"
+        "sf_id, customer_id, name, stage_name, amount, close_date, probability, owner_name, raw, account_sf_id"
       )
       .eq("is_closed", false)
       .gte("close_date", start)
       .lte("close_date", end)
       .order("amount", { ascending: false })
-      .limit(50),
+      .limit(100),
     listCustomers().catch(() => []),
     loadFdesByCustomerId().catch(() => new Map<string, string[]>()),
   ]);
 
-  const custById = new Map(customers.map((c) => [c.id, c]));
+  const { custById, custBySfAccount } = buildCustomerMaps(customers);
 
   const opportunities: PipelineOpportunity[] = ((opps.data as OppRow[] | null) ?? []).map((o) => {
     const cust = custById.get(o.customer_id);
-    // SF `Type` lives only in the raw blob — we don't have a typed column
-    // for it. Read the standard SF field name first; fall back to the
-    // less-common variants some orgs use.
     const raw = o.raw ?? {};
     const typeStr =
       (raw["Type"] as string | undefined) ??
       (raw["Opportunity_Type__c"] as string | undefined) ??
       null;
     const { kind, raw: type_raw } = classifyOpportunityType(typeStr);
-    // New-logo opportunities skip the FDE column — no team is assigned
-    // yet, and showing one from an unrelated project would be misleading.
     const fdes = kind === "New" ? null : fdesByCustomer.get(o.customer_id) ?? null;
+    const accountName =
+      (raw["Account"] as { Name?: string } | undefined)?.Name ??
+      (o.account_sf_id ? custBySfAccount.get(o.account_sf_id)?.display_name : null) ??
+      null;
     return {
       sf_id: o.sf_id,
       name: o.name,
@@ -133,27 +221,30 @@ export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
       probability: o.probability,
       owner_name: o.owner_name,
       customer_key: cust?.key ?? null,
-      customer_display_name: cust?.display_name ?? null,
+      customer_display_name: cust?.display_name ?? accountName,
       kind,
       type_raw,
       fdes: fdes && fdes.length > 0 ? fdes : null,
+      sf_url: opportunityRecordUrl(o.sf_id),
     };
   });
 
-  const total_amount = opportunities.reduce((s, o) => s + (o.amount ?? 0), 0);
-  const by_kind: Record<PipelineKind, number> = {
-    Renewal: 0,
-    Expansion: 0,
-    New: 0,
-    Other: 0,
-  };
-  for (const o of opportunities) by_kind[o.kind]++;
+  return finishBundle(opportunities, label, "cache", null);
+}
 
-  return {
-    opportunities,
-    total_amount,
-    count: opportunities.length,
-    quarter_label: label,
-    by_kind,
-  };
+export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
+  const { start, end, label } = windowBounds();
+
+  if (salesforceConfigured()) {
+    try {
+      return await loadFromSalesforceListView(start, end, label);
+    } catch (err) {
+      console.warn(
+        "[pipeline] Live Salesforce list view failed; using cache.",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  return loadFromCache(start, end, label);
 }

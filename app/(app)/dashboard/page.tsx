@@ -195,26 +195,70 @@ export default async function Dashboard() {
         </section>
       ) : null}
 
-      {/* ── Upcoming pipeline ── */}
-      {pipeline && pipeline.count > 0 ? (
+      {/* ── Upcoming pipeline (GTM Pipeline Inspection · next 90 days) ── */}
+      {pipeline ? (
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <SectionMark>Pipeline · {pipeline.quarter_label.toLowerCase()}</SectionMark>
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-              {formatMoney(pipeline.total_amount)} expected
-            </span>
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <SectionMark>
+              Upcoming pipeline · {pipeline.quarter_label.toLowerCase()}
+            </SectionMark>
+            <div className="flex items-center gap-3 flex-wrap">
+              {pipeline.count > 0 ? (
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                  {formatMoney(pipeline.total_amount)} pipeline value
+                </span>
+              ) : null}
+              {pipeline.pipeline_inspection_url ? (
+                <a
+                  href={pipeline.pipeline_inspection_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-[color:var(--foreground)] underline underline-offset-2 hover:opacity-80"
+                >
+                  Open in Salesforce ↗
+                </a>
+              ) : null}
+            </div>
           </div>
           <p className="text-xs text-[color:var(--brand-gray)] mb-3">
-            Open Salesforce opportunities closing in the next 90 days — click a row to expand.
-            {" "}
-            <span className="text-[color:var(--foreground)]">
-              {pipeline.by_kind.Renewal} renewal{pipeline.by_kind.Renewal === 1 ? "" : "s"} ·{" "}
-              {pipeline.by_kind.Expansion} expansion{pipeline.by_kind.Expansion === 1 ? "" : "s"} ·{" "}
-              {pipeline.by_kind.New} new
-              {pipeline.by_kind.Other > 0 ? ` · ${pipeline.by_kind.Other} unclassified` : ""}
-            </span>
+            {pipeline.source === "salesforce_list_view"
+              ? `Live from Salesforce Pipeline Inspection${
+                  pipeline.list_view_label ? ` · ${pipeline.list_view_label}` : " · Binny Gill's Team"
+                }. Open opportunities with close dates in the next 90 days.`
+              : "Open opportunities closing in the next 90 days (cached sync — live Pipeline Inspection unavailable)."}
+            {pipeline.count > 0 ? (
+              <>
+                {" "}
+                <span className="text-[color:var(--foreground)]">
+                  {pipeline.by_kind.Renewal} renewal{pipeline.by_kind.Renewal === 1 ? "" : "s"} ·{" "}
+                  {pipeline.by_kind.Expansion} expansion{pipeline.by_kind.Expansion === 1 ? "" : "s"} ·{" "}
+                  {pipeline.by_kind.New} new
+                  {pipeline.by_kind.Other > 0 ? ` · ${pipeline.by_kind.Other} other` : ""}
+                </span>
+              </>
+            ) : null}
           </p>
-          <PipelineList opportunities={pipeline.opportunities} />
+          {pipeline.count > 0 ? (
+            <PipelineList opportunities={pipeline.opportunities} />
+          ) : (
+            <div className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-6 text-sm text-[color:var(--brand-gray)]">
+              No open opportunities closing in the next 90 days in this pipeline view.
+              {pipeline.pipeline_inspection_url ? (
+                <>
+                  {" "}
+                  <a
+                    href={pipeline.pipeline_inspection_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[color:var(--foreground)] underline"
+                  >
+                    Check Pipeline Inspection in Salesforce
+                  </a>{" "}
+                  for the full team book.
+                </>
+              ) : null}
+            </div>
+          )}
         </section>
       ) : null}
 

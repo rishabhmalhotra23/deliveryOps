@@ -88,6 +88,59 @@ export async function soql<T = Record<string, unknown>>(query: string): Promise<
   return (await res.json()) as SoqlResponse<T>;
 }
 
+/** Page through a SOQL query until `done` (Salesforce returns ≤2000 per page). */
+export async function soqlAll<T = Record<string, unknown>>(query: string): Promise<T[]> {
+  const out: T[] = [];
+  let page = await soql<T>(query);
+  out.push(...page.records);
+  while (!page.done && page.nextRecordsUrl) {
+    page = await rest<SoqlResponse<T>>(page.nextRecordsUrl);
+    out.push(...page.records);
+  }
+  return out;
+}
+
+interface OpportunityListViewDescribe {
+  id: string;
+  label: string;
+  query: string;
+}
+
+/** Read the SOQL behind a saved Opportunity list view (Pipeline Inspection filter). */
+export async function describeOpportunityListView(
+  listViewId: string
+): Promise<OpportunityListViewDescribe> {
+  return rest<OpportunityListViewDescribe>(
+    `/sobjects/Opportunity/listviews/${encodeURIComponent(listViewId)}/describe`
+  );
+}
+
+const PIPELINE_OPP_SELECT = `
+  Id, Name, StageName, Amount, CloseDate, Probability, IsClosed, IsWon,
+  Type, AccountId, Account.Name, Owner.Name, LastModifiedDate
+`.trim();
+
+/**
+ * Opportunities from a Pipeline Inspection / list-view filter (e.g. Binny
+ * Gill's Team). Runs the list view's SOQL, then applies a close-date window.
+ */
+export async function listOpportunitiesFromListView(
+  listViewId: string,
+  window: { start: string; end: string }
+): Promise<{ label: string; records: SfOpportunity[] }> {
+  const desc = await describeOpportunityListView(listViewId);
+  let records = await soqlAll<SfOpportunity>(desc.query);
+  records = records.filter(
+    (o) =>
+      !o.IsClosed &&
+      !o.IsWon &&
+      (o.CloseDate ?? "") >= window.start &&
+      (o.CloseDate ?? "") <= window.end
+  );
+  records.sort((a, b) => (b.Amount ?? 0) - (a.Amount ?? 0));
+  return { label: desc.label, records };
+}
+
 export async function rest<T = unknown>(
   path: string,
   init: RequestInit = {}
@@ -138,9 +191,41 @@ export interface SfOpportunity {
   Probability: number | null;
   IsClosed: boolean;
   IsWon: boolean;
+  Type?: string | null;
   AccountId: string;
+  Account?: { Name: string } | null;
   Owner: { Name: string } | null;
   LastModifiedDate: string;
+}
+
+/** Default Pipeline Inspection list view — Binny Gill's Team (GTM weekly). */
+export const DEFAULT_PIPELINE_LIST_VIEW_ID = "00BQQ000001ZI7x2AG";
+
+export function pipelineListViewId(): string {
+  return process.env.SALESFORCE_PIPELINE_LIST_VIEW_ID?.trim() || DEFAULT_PIPELINE_LIST_VIEW_ID;
+}
+
+/** Lightning host for deep links (Pipeline Inspection, opportunity records). */
+export function salesforceLightningBase(): string | null {
+  const instance = process.env.SALESFORCE_INSTANCE_URL?.trim().replace(/\/+$/, "");
+  if (!instance) return null;
+  if (instance.includes(".lightning.force.com")) return instance;
+  if (instance.includes(".my.salesforce.com")) {
+    return instance.replace(".my.salesforce.com", ".lightning.force.com");
+  }
+  return instance;
+}
+
+export function pipelineInspectionUrl(listViewId = pipelineListViewId()): string | null {
+  const base = salesforceLightningBase();
+  if (!base) return null;
+  return `${base}/lightning/o/Opportunity/pipelineInspection?filterName=${encodeURIComponent(listViewId)}`;
+}
+
+export function opportunityRecordUrl(sfId: string): string | null {
+  const base = salesforceLightningBase();
+  if (!base) return null;
+  return `${base}/lightning/r/Opportunity/${encodeURIComponent(sfId)}/view`;
 }
 
 export interface SfCase {
@@ -193,8 +278,7 @@ export async function listOpportunities(opts: { accountId?: string; limit?: numb
     ? `WHERE AccountId = '${escapeSoqlLiteral(opts.accountId)}'`
     : "";
   const q = `
-    SELECT Id, Name, StageName, Amount, CloseDate, Probability, IsClosed, IsWon,
-           AccountId, Owner.Name, LastModifiedDate
+    SELECT ${PIPELINE_OPP_SELECT}
     FROM Opportunity ${where}
     ORDER BY LastModifiedDate DESC
     LIMIT ${limit}

@@ -174,6 +174,21 @@ function PipelineRow({ opp }: { opp: PipelineOpportunity }) {
             value={opp.probability != null ? `${opp.probability}%` : "—"}
           />
           <DetailField label="Amount" value={formatMoney(opp.amount)} />
+          {opp.sf_url ? (
+            <DetailField
+              label="Salesforce"
+              value={
+                <a
+                  href={opp.sf_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:opacity-80"
+                >
+                  View opportunity ↗
+                </a>
+              }
+            />
+          ) : null}
         </div>
       ) : null}
     </li>
