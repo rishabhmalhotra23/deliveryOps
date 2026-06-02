@@ -124,12 +124,42 @@ const PIPELINE_OPP_SELECT = `
  * Opportunities from a Pipeline Inspection / list-view filter (e.g. Binny
  * Gill's Team). Runs the list view's SOQL, then applies a close-date window.
  */
+async function fetchOpportunitiesByIds(ids: string[]): Promise<SfOpportunity[]> {
+  if (ids.length === 0) return [];
+  const out: SfOpportunity[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    const batch = ids.slice(i, i + 200);
+    const inClause = batch.map((id) => `'${escapeSoqlLiteral(id)}'`).join(",");
+    const q = `SELECT ${PIPELINE_OPP_SELECT} FROM Opportunity WHERE Id IN (${inClause})`;
+    out.push(...(await soqlAll<SfOpportunity>(q)));
+  }
+  return out;
+}
+
 export async function listOpportunitiesFromListView(
   listViewId: string,
   window: { start: string; end: string }
 ): Promise<{ label: string; records: SfOpportunity[] }> {
   const desc = await describeOpportunityListView(listViewId);
-  let records = await soqlAll<SfOpportunity>(desc.query);
+  const stubs = await soqlAll<Record<string, unknown>>(desc.query);
+
+  // List-view SOQL often returns only Id — without CloseDate our 90-day
+  // filter would drop every row. Hydrate full rows when needed.
+  let records: SfOpportunity[];
+  const sample = stubs[0];
+  const hasCloseDate =
+    sample != null &&
+    ("CloseDate" in sample || "closeDate" in sample) &&
+    (sample.CloseDate != null || sample.closeDate != null);
+  if (!hasCloseDate && stubs.length > 0) {
+    const ids = stubs
+      .map((s) => (typeof s.Id === "string" ? s.Id : typeof s.id === "string" ? s.id : null))
+      .filter((id): id is string => Boolean(id));
+    records = await fetchOpportunitiesByIds(ids);
+  } else {
+    records = stubs as unknown as SfOpportunity[];
+  }
+
   records = records.filter(
     (o) =>
       !o.IsClosed &&

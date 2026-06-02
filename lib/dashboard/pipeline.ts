@@ -234,17 +234,35 @@ async function loadFromCache(
 
 export async function loadUpcomingPipeline(): Promise<PipelineBundle> {
   const { start, end, label } = windowBounds();
+  const inspectionUrl = pipelineInspectionUrl();
 
-  if (salesforceConfigured()) {
-    try {
-      return await loadFromSalesforceListView(start, end, label);
-    } catch (err) {
-      console.warn(
-        "[pipeline] Live Salesforce list view failed; using cache.",
-        err instanceof Error ? err.message : err
-      );
-    }
+  // Always load from the Supabase cache first — this is what powered the
+  // dashboard before and matches synced SF opps for DeliveryOps customers.
+  const cached = await loadFromCache(start, end, label);
+
+  if (!salesforceConfigured()) {
+    return { ...cached, pipeline_inspection_url: inspectionUrl };
   }
 
-  return loadFromCache(start, end, label);
+  // Try Pipeline Inspection (Binny Gill's Team list view). Only replace the
+  // cached list when live returns rows — an empty list view must not hide
+  // deals that are already in our cache.
+  try {
+    const live = await loadFromSalesforceListView(start, end, label);
+    if (live.count > 0) {
+      return { ...live, pipeline_inspection_url: inspectionUrl };
+    }
+  } catch (err) {
+    console.warn(
+      "[pipeline] Live Salesforce list view failed; using cache.",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  return {
+    ...cached,
+    pipeline_inspection_url: inspectionUrl,
+    source: "cache",
+    list_view_label: null,
+  };
 }
