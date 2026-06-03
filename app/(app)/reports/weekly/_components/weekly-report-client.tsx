@@ -420,80 +420,63 @@ function InProdSection({ in_prod, portfolio: pf, nps }: {
   const val = in_prod.value;
   const np = pf.not_in_prod;
   const universe = pf.total_cards || 1;
+  const inFlight = pf.in_dev.total + pf.migrating + pf.upcoming + pf.on_hold + pf.backlog;
+  const inFlightSub = [
+    pf.in_dev.total ? `In development ${pf.in_dev.total}` : "",
+    pf.migrating ? `Migrating to V2 ${pf.migrating}` : "",
+    pf.upcoming ? `Upcoming ${pf.upcoming}` : "",
+    pf.on_hold ? `On hold ${pf.on_hold}` : "",
+    pf.backlog ? `Backlog ${pf.backlog}` : "",
+  ].filter(Boolean).join(" · ");
+  const tiers = [
+    { n: pf.live.total, label: "Live in production", sub: `V1 ${pf.live.v1} · V2 ${pf.live.v2}`, dot: "#10b981", num: "text-emerald-600 dark:text-emerald-400" },
+    { n: inFlight, label: "In flight & pipeline", sub: inFlightSub, dot: "#6366f1", num: "text-indigo-600 dark:text-indigo-400" },
+    { n: np.total, label: "Inactive / not in production", sub: `retired ${np.retired} · cancelled ${np.cancelled} · churned ${np.churned} · POV ${np.pov}`, dot: "#9ca3af", num: "text-[color:var(--muted-foreground)]" },
+  ];
   const segs = [
     { label: "Live", count: pf.live.total, color: "#10b981" },
-    { label: "In development", count: pf.in_dev.total, color: "#6366f1" },
-    { label: "Migrating to V2", count: pf.migrating, color: "#f59e0b" },
-    { label: "Upcoming", count: pf.upcoming, color: "#a78bfa" },
-    { label: "On hold", count: pf.on_hold, color: "#0ea5e9" },
-    { label: "Backlog / pipeline", count: pf.backlog, color: "#94a3b8" },
-    { label: "Not in production", count: np.total, color: "#9ca3af" },
+    { label: "In flight", count: inFlight, color: "#6366f1" },
+    { label: "Inactive", count: np.total, color: "#9ca3af" },
   ].filter((s) => s.count > 0);
-  const devSub = [
-    pf.in_dev.v2 ? `V2 ${pf.in_dev.v2}` : "",
-    pf.in_dev.v1 ? `V1 ${pf.in_dev.v1}` : "",
-    pf.in_dev.custom ? `Custom ${pf.in_dev.custom}` : "",
-  ].filter(Boolean).join(" · ");
-  const tiles = [
-    { label: "In development", count: pf.in_dev.total, color: "#6366f1", sub: devSub || "—" },
-    { label: "Migrating to V2", count: pf.migrating, color: "#f59e0b", sub: "new v2 builds" },
-    { label: "Upcoming migration", count: pf.upcoming, color: "#a78bfa", sub: "queued" },
-    { label: "On hold", count: pf.on_hold, color: "#0ea5e9", sub: "" },
-    { label: "Backlog / pipeline", count: pf.backlog, color: "#94a3b8", sub: "not started" },
-  ].filter((t) => t.count > 0);
   return (
     <div className="glass-card p-5">
       <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">In production &amp; portfolio</div>
       <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-4">
-        Current delivery state across {pf.total_cards} processes ever tracked. Enhancements counted separately, below.
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-        <div className="text-center">
-          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{pf.live.total}</div>
-          <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">Total live</div>
-          <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-60">V1 {pf.live.v1} · V2 {pf.live.v2}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-3xl font-bold text-[color:var(--foreground)] tabular-nums">{in_prod.customers}</div>
-          <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">Customers live</div>
-        </div>
-        <div className="text-center">
-          <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{in_prod.this_quarter}</div>
-          <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">This qtr</div>
-          <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-60">{in_prod.this_q_label}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-3xl font-bold text-[color:var(--foreground)] tabular-nums">{in_prod.last_quarter}</div>
-          <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">Last qtr</div>
-          <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-60">{in_prod.last_q_label}</div>
-        </div>
+        Every delivery project tracked in Monday, all-time. Enhancements counted separately, below.
       </div>
 
-      {/* Portfolio breakdown — single bar + tiles. Owns the platform split and
-          the entire V2 transition, so nothing is duplicated above. */}
-      <div className="border-t border-[var(--glass-border)] pt-4">
-        <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-2.5">Pipeline &amp; state</div>
-        <div className="flex rounded-full overflow-hidden h-2.5 mb-3 gap-px">
-          {segs.map((s) => (
-            <div key={s.label} style={{ width: `${(s.count / universe) * 100}%`, background: s.color }} title={`${s.label}: ${s.count}`} />
-          ))}
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {tiles.map((t) => (
-            <div key={t.label}>
-              <div className="text-2xl font-bold tabular-nums" style={{ color: t.color }}>{t.count}</div>
-              <div className="text-xs text-[color:var(--foreground)] font-medium">{t.label}</div>
-              {t.sub && <div className="text-[10px] text-[color:var(--muted-foreground)]">{t.sub}</div>}
+      {/* Funnel — total all-time → live → in flight → inactive */}
+      <div className="flex items-baseline gap-2.5 mb-2.5">
+        <span className="text-3xl font-bold text-[color:var(--foreground)] tabular-nums">{pf.total_cards}</span>
+        <span className="text-xs text-[color:var(--muted-foreground)]">projects tracked, all-time</span>
+      </div>
+      <div className="flex rounded-full overflow-hidden h-2.5 mb-3 gap-px">
+        {segs.map((s) => (
+          <div key={s.label} style={{ width: `${(s.count / universe) * 100}%`, background: s.color }} title={`${s.label}: ${s.count}`} />
+        ))}
+      </div>
+      <div>
+        {tiers.map((t) => (
+          <div key={t.label} className="flex items-center gap-3.5 py-2.5 border-t border-[var(--glass-border)]">
+            <span className={`text-2xl font-bold tabular-nums w-12 shrink-0 ${t.num}`}>{t.n}</span>
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: t.dot }} />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-[color:var(--foreground)]">{t.label}</div>
+              <div className="text-[11px] text-[color:var(--muted-foreground)]">{t.sub}</div>
             </div>
-          ))}
-        </div>
-        <div className="mt-3 text-xs text-[color:var(--muted-foreground)]">
-          <span className="font-semibold text-[color:var(--foreground)]">{np.total} not in production</span> — {np.churned} churned (customer left), {np.cancelled} cancelled (didn’t go through), {np.retired} retired, {np.pov} POVs that didn’t convert.
-        </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Operational snapshot */}
+      <div className="border-t border-[var(--glass-border)] mt-2 pt-3 flex gap-x-6 gap-y-2 flex-wrap">
+        <div className="text-xs text-[color:var(--muted-foreground)]"><span className="text-base font-bold text-[color:var(--foreground)] tabular-nums">{in_prod.customers}</span> customers live</div>
+        <div className="text-xs text-[color:var(--muted-foreground)]"><span className="text-base font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{in_prod.this_quarter}</span> delivered this qtr ({in_prod.this_q_label})</div>
+        <div className="text-xs text-[color:var(--muted-foreground)]"><span className="text-base font-bold text-[color:var(--foreground)] tabular-nums">{in_prod.last_quarter}</span> last qtr ({in_prod.last_q_label})</div>
       </div>
 
       {/* Enhancements — effort, not new processes. */}
-      <div className="mt-4 border-t border-[var(--glass-border)] pt-3 flex items-center justify-between gap-3 flex-wrap">
+      <div className="mt-3 border-t border-[var(--glass-border)] pt-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-xs text-[color:var(--foreground)] font-medium">
           Enhancements &amp; change requests
           <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">major, sometimes phase-replacing — counted as effort, not new processes</span>
