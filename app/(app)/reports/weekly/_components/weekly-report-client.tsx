@@ -405,35 +405,53 @@ function PipelineFunnel({ funnel }: { funnel: WeeklyBundle["pipeline_funnel"] })
 }
 
 // ── In-production stats ────────────────────────────────────────────────────────
-// Platform bucket display metadata. Only buckets with a non-zero count render.
-const PLATFORM_META: Array<{ key: keyof WeeklyBundle["in_prod"]["platform"]; label: string; color: string }> = [
-  { key: "v1",         label: "Live · V1",        color: "#378ADD" },
-  { key: "v2",         label: "Live · V2",        color: "#1D9E75" },
-  { key: "testing_v2", label: "Testing in V2",    color: "#EF9F27" },
-  { key: "migrating",  label: "Migrating v1→v2",  color: "#7F77DD" },
-  { key: "custom",     label: "Custom solution",  color: "#888780" },
-  { key: "unknown",    label: "Unspecified",      color: "#a1a1aa" },
-];
-
 function fmtMoney(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
   return `$${v}`;
 }
 
-function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps: WeeklyBundle["nps_this_quarter"] }) {
-  const platform = PLATFORM_META.map((m) => ({ ...m, count: in_prod.platform[m.key] })).filter((m) => m.count > 0);
-  const platformTotal = platform.reduce((s, m) => s + m.count, 0);
+// ── In production & portfolio — single merged story ─────────────────────────────
+function InProdSection({ in_prod, portfolio: pf, nps }: {
+  in_prod: WeeklyBundle["in_prod"];
+  portfolio: WeeklyBundle["portfolio"];
+  nps: WeeklyBundle["nps_this_quarter"];
+}) {
   const val = in_prod.value;
-  const v2 = in_prod.v2_progress;
-  const v2Total = v2.live + v2.in_dev + v2.migrating + v2.upcoming;
+  const np = pf.not_in_prod;
+  const universe = pf.total_cards || 1;
+  const segs = [
+    { label: "Live", count: pf.live.total, color: "#10b981" },
+    { label: "In development", count: pf.in_dev.total, color: "#6366f1" },
+    { label: "Migrating to V2", count: pf.migrating, color: "#f59e0b" },
+    { label: "Upcoming", count: pf.upcoming, color: "#a78bfa" },
+    { label: "On hold", count: pf.on_hold, color: "#0ea5e9" },
+    { label: "Backlog / pipeline", count: pf.backlog, color: "#94a3b8" },
+    { label: "Not in production", count: np.total, color: "#9ca3af" },
+  ].filter((s) => s.count > 0);
+  const devSub = [
+    pf.in_dev.v2 ? `V2 ${pf.in_dev.v2}` : "",
+    pf.in_dev.v1 ? `V1 ${pf.in_dev.v1}` : "",
+    pf.in_dev.custom ? `Custom ${pf.in_dev.custom}` : "",
+  ].filter(Boolean).join(" · ");
+  const tiles = [
+    { label: "In development", count: pf.in_dev.total, color: "#6366f1", sub: devSub || "—" },
+    { label: "Migrating to V2", count: pf.migrating, color: "#f59e0b", sub: "new v2 builds" },
+    { label: "Upcoming migration", count: pf.upcoming, color: "#a78bfa", sub: "queued" },
+    { label: "On hold", count: pf.on_hold, color: "#0ea5e9", sub: "" },
+    { label: "Backlog / pipeline", count: pf.backlog, color: "#94a3b8", sub: "not started" },
+  ].filter((t) => t.count > 0);
   return (
     <div className="glass-card p-5">
-      <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-4">In production</div>
+      <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">In production &amp; portfolio</div>
+      <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-4">
+        Current delivery state across {pf.total_cards} processes ever tracked. Enhancements counted separately, below.
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
         <div className="text-center">
-          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{in_prod.projects}</div>
+          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{pf.live.total}</div>
           <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">Total live</div>
+          <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-60">V1 {pf.live.v1} · V2 {pf.live.v2}</div>
         </div>
         <div className="text-center">
           <div className="text-3xl font-bold text-[color:var(--foreground)] tabular-nums">{in_prod.customers}</div>
@@ -451,55 +469,39 @@ function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps
         </div>
       </div>
 
-      {/* Platform mix — live projects by Development Platform column */}
-      {platformTotal > 0 && (
-        <div className="border-t border-[var(--glass-border)] pt-4 mb-4">
-          <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-2.5">Platform mix · live</div>
-          <div className="flex rounded-full overflow-hidden h-2 mb-3 gap-px">
-            {platform.map((m) => (
-              <div key={m.key} style={{ width: `${(m.count / platformTotal) * 100}%`, background: m.color }} />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {platform.map((m) => (
-              <div key={m.key} className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: m.color }} />
-                <span className="text-sm font-bold tabular-nums" style={{ color: m.color }}>{m.count}</span>
-                <span className="text-xs text-[color:var(--muted-foreground)]">{m.label}</span>
-              </div>
-            ))}
-          </div>
+      {/* Portfolio breakdown — single bar + tiles. Owns the platform split and
+          the entire V2 transition, so nothing is duplicated above. */}
+      <div className="border-t border-[var(--glass-border)] pt-4">
+        <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-2.5">Pipeline &amp; state</div>
+        <div className="flex rounded-full overflow-hidden h-2.5 mb-3 gap-px">
+          {segs.map((s) => (
+            <div key={s.label} style={{ width: `${(s.count / universe) * 100}%`, background: s.color }} title={`${s.label}: ${s.count}`} />
+          ))}
         </div>
-      )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {tiles.map((t) => (
+            <div key={t.label}>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: t.color }}>{t.count}</div>
+              <div className="text-xs text-[color:var(--foreground)] font-medium">{t.label}</div>
+              {t.sub && <div className="text-[10px] text-[color:var(--muted-foreground)]">{t.sub}</div>}
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-xs text-[color:var(--muted-foreground)]">
+          <span className="font-semibold text-[color:var(--foreground)]">{np.total} not in production</span> — {np.churned} churned (customer left), {np.cancelled} cancelled (didn’t go through), {np.retired} retired, {np.pov} POVs that didn’t convert.
+        </div>
+      </div>
 
-      {/* V2 transition — live + in-flight from the active board's Migration column.
-          Placeholder for the fuller week-on-week migration tracker coming later. */}
-      {v2Total > 0 && (
-        <div className="border-t border-[var(--glass-border)] pt-4 mb-4">
-          <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-2.5">V2 transition</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{v2.live}</div>
-              <div className="text-xs text-[color:var(--muted-foreground)]">Live on V2</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{v2.in_dev}</div>
-              <div className="text-xs text-[color:var(--muted-foreground)]">In development</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">{v2.migrating}</div>
-              <div className="text-xs text-[color:var(--muted-foreground)]">Migrating v1→v2</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-[color:var(--foreground)] tabular-nums">{v2.upcoming}</div>
-              <div className="text-xs text-[color:var(--muted-foreground)]">Upcoming migration</div>
-            </div>
-          </div>
-          <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-70 mt-2">
-            From the active board’s Migration column. A fuller week-on-week V2 migration tracker is coming soon.
-          </div>
+      {/* Enhancements — effort, not new processes. */}
+      <div className="mt-4 border-t border-[var(--glass-border)] pt-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-xs text-[color:var(--foreground)] font-medium">
+          Enhancements &amp; change requests
+          <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">major, sometimes phase-replacing — counted as effort, not new processes</span>
         </div>
-      )}
+        <div className="text-lg font-bold text-[color:var(--foreground)] tabular-nums">
+          {pf.enhancements}<span className="text-[10px] text-[color:var(--muted-foreground)] font-normal ml-1.5">major tracked · 100+ incl. minor CRs</span>
+        </div>
+      </div>
 
       {/* Value delivered — modelled estimate */}
       <div className="border-t border-[var(--glass-border)] pt-4 mb-4">
@@ -536,69 +538,8 @@ function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-// ── Portfolio overview (full waterfall) ─────────────────────────────────────────
-function PortfolioOverview({ p }: { p: WeeklyBundle["portfolio"] }) {
-  const np = p.not_in_prod;
-  const segs = [
-    { label: "Live", count: p.live.total, color: "#10b981" },
-    { label: "In development", count: p.in_dev.total, color: "#6366f1" },
-    { label: "Migrating to V2", count: p.migrating, color: "#f59e0b" },
-    { label: "Upcoming migration", count: p.upcoming, color: "#a78bfa" },
-    { label: "On hold", count: p.on_hold, color: "#0ea5e9" },
-    { label: "Backlog / pipeline", count: p.backlog, color: "#94a3b8" },
-    { label: "Not in production", count: np.total, color: "#9ca3af" },
-  ].filter((s) => s.count > 0);
-  const total = p.total_cards || 1;
-  const devSub = [
-    p.in_dev.v2 ? `V2 ${p.in_dev.v2}` : "",
-    p.in_dev.v1 ? `V1 ${p.in_dev.v1}` : "",
-    p.in_dev.custom ? `Custom ${p.in_dev.custom}` : "",
-  ].filter(Boolean).join(" · ");
-  const tiles = [
-    { label: "Live in production", count: p.live.total, color: "#10b981", sub: `V1 ${p.live.v1} · V2 ${p.live.v2}` },
-    { label: "In development", count: p.in_dev.total, color: "#6366f1", sub: devSub || "—" },
-    { label: "Migrating to V2", count: p.migrating, color: "#f59e0b", sub: "new v2 builds" },
-    { label: "Upcoming migration", count: p.upcoming, color: "#a78bfa", sub: "queued" },
-    { label: "On hold", count: p.on_hold, color: "#0ea5e9", sub: "" },
-    { label: "Backlog / pipeline", count: p.backlog, color: "#94a3b8", sub: "not started" },
-  ];
-  return (
-    <div className="glass-card p-5">
-      <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">Portfolio overview</div>
-      <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-3">
-        Every process ever tracked in Monday — {p.total_cards} projects. Enhancements are counted separately, below.
-      </div>
-      <div className="flex rounded-full overflow-hidden h-2.5 mb-4 gap-px">
-        {segs.map((s) => (
-          <div key={s.label} style={{ width: `${(s.count / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.count}`} />
-        ))}
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {tiles.map((t) => (
-          <div key={t.label}>
-            <div className="text-2xl font-bold tabular-nums" style={{ color: t.color }}>{t.count}</div>
-            <div className="text-xs text-[color:var(--foreground)] font-medium">{t.label}</div>
-            {t.sub && <div className="text-[10px] text-[color:var(--muted-foreground)]">{t.sub}</div>}
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 border-t border-[var(--glass-border)] pt-3 text-xs text-[color:var(--muted-foreground)]">
-        <span className="font-semibold text-[color:var(--foreground)]">{np.total} not in production</span> — {np.churned} churned (customer left), {np.cancelled} cancelled (didn’t go through), {np.retired} retired, {np.pov} POVs that didn’t convert.
-      </div>
-      <div className="mt-3 border-t border-[var(--glass-border)] pt-3 flex items-center justify-between gap-3 flex-wrap">
-        <div className="text-xs text-[color:var(--foreground)] font-medium">
-          Enhancements &amp; change requests
-          <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">major, sometimes phase-replacing — counted as effort, not new processes</span>
-        </div>
-        <div className="text-lg font-bold text-[color:var(--foreground)] tabular-nums">
-          {p.enhancements}<span className="text-[10px] text-[color:var(--muted-foreground)] font-normal ml-1.5">major tracked · 100+ incl. minor CRs</span>
-        </div>
-      </div>
-      <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-70 mt-3">
+      <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-70 mt-4 border-t border-[var(--glass-border)] pt-3">
         V1 and V2 versions are counted as separate projects — a v2 migration is a new build. A v1 process keeps running after its v2 version goes live; it moves to “retired” only once the customer signs off on V2, at which point the live count adjusts.
       </div>
     </div>
@@ -746,10 +687,7 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
       {/* Row 7 — In production.  FDE workload chart intentionally lives only
           in Analytics now — removed from this report 2026-06 to avoid
           duplicating the same view in two places. */}
-      <InProdSection in_prod={bundle.in_prod} nps={bundle.nps_this_quarter} />
-
-      {/* Row 7.5 — Portfolio overview waterfall (full universe of projects) */}
-      <PortfolioOverview p={bundle.portfolio} />
+      <InProdSection in_prod={bundle.in_prod} portfolio={bundle.portfolio} nps={bundle.nps_this_quarter} />
 
       <div className="text-[11px] text-[color:var(--muted-foreground)] text-center pt-1">
         Generated by DeliveryOps · {new Date(bundle.generated_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}

@@ -445,6 +445,10 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   };
   let liveHours = 0;
   for (const p of deliveredAll) {
+    // Exclude enhancements so the platform mix and modelled value line up with
+    // the portfolio "live" count (enhancements are effort, not live processes).
+    const isEnh = p.name.toLowerCase().includes("enhancement") || (p.phase ?? "").toLowerCase() === "enhancement";
+    if (isEnh) continue;
     platformMix[platformBucket(p.platform)]++;
     liveHours += tierHours(p.complexity);
   }
