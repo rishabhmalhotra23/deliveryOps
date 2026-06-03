@@ -26,6 +26,7 @@ export const MONDAY_PROJECT_COLS = {
   health:       "color_mm01ft4",   // "Health": On Track, At Risk, Off Track, …
   phase:        "color_mm06sdrj",  // "Current Phase": M1 Discovery, M2 Development, …
   platform:     "color_mm0698sb",  // V1 / V2 / Custom
+  migration:    "color_mm3pkg8t",   // "v2" (built on v2) / "Migrating to v2" / "Upcoming Migration"
   complexity:   "dropdown_mm06r92k",
   kickoff_date: "date_mm011n1f",
   go_live_date: "date_mm01dz3b",

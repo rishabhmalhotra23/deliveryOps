@@ -7,13 +7,11 @@ import {
   ComposedChart, Line, Area,
 } from "recharts";
 import { useTheme } from "next-themes";
-import Link from "next/link";
-import type { WeeklyBundle, WeeklyProject, WorkloadEntry } from "@/lib/reports/weekly-loader";
-import type { V2Migration } from "@/lib/reports/v2-migrations";
+import type { WeeklyBundle, WeeklyProject } from "@/lib/reports/weekly-loader";
 import {
   PHASE_GROUP_META, ACTIVE_WORK_PHASES,
   HEALTH_PILL_CLS, FLIGHT_GROUP_META,
-  formatPersonName, formatPeopleList,
+  formatPeopleList,
   type PhaseGroup,
 } from "@/lib/delivery/taxonomy";
 import { RangeSelector } from "./range-selector";
@@ -240,82 +238,6 @@ function Empty({ text }: { text: string }) {
   return <div className="text-xs text-[color:var(--muted-foreground)] italic py-2">{text}</div>;
 }
 
-// ── Workload chart ─────────────────────────────────────────────────────────────
-const WORKLOAD_COLORS = ["#818cf8","#6366f1","#a78bfa","#8b5cf6","#34d399","#10b981","#60a5fa","#3b82f6"];
-
-// Truncate a pre-formatted display name so the YAxis stays sane.
-// Names already pass through formatPersonName upstream — this is just an
-// overflow guard for unusually long ones.
-function truncate(s: string, max = 20): string {
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1) + "…";
-}
-
-// Workload chart — flat horizontal bar per person, one colour each.
-// (Reverted from the stacked-by-health attempt 2026-05-25 — tried to add
-// too much information and the result felt cluttered. The richer
-// per-person fields stay on WorkloadEntry though, so callers can render
-// detail panels off them if needed later.)
-//
-// `height` is opt-in from the caller so two side-by-side charts can
-// match each other regardless of their row counts (otherwise the shorter
-// one feels lopsided next to the taller one).
-function WorkloadChart({
-  data,
-  label,
-  height,
-  onBarClick,
-}: {
-  data: WorkloadEntry[];
-  label: string;
-  height?: number;
-  onBarClick?: (person: string) => void;
-}) {
-  const t = useChartTheme();
-  if (data.length === 0) return <Empty text="No assignments found." />;
-  const display = data.map((d) => ({
-    ...d,
-    fullName: formatPersonName(d.person),
-    displayName: truncate(formatPersonName(d.person)),
-  }));
-  const computedHeight = height ?? Math.max(120, data.length * 32);
-  return (
-    <>
-      <div className="text-[11px] text-[color:var(--muted-foreground)] mb-2">{label}</div>
-      <ResponsiveContainer width="100%" height={computedHeight}>
-        <BarChart data={display} layout="vertical" margin={{ top: 0, right: 24, left: 4, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
-          <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
-          <YAxis
-            type="category"
-            dataKey="displayName"
-            tick={{ fontSize: 11, fill: t.axis }}
-            tickLine={false}
-            axisLine={false}
-            width={130}
-            interval={0}
-          />
-          <Tooltip
-            contentStyle={t.tooltipStyle}
-            labelFormatter={(_, payload) => (payload?.[0]?.payload as { fullName?: string } | undefined)?.fullName ?? ""}
-            formatter={(v) => [v, onBarClick ? "Active projects · click to expand" : "Active projects"]}
-          />
-          <Bar
-            dataKey="active"
-            radius={[0, 3, 3, 0]}
-            cursor={onBarClick ? "pointer" : undefined}
-            onClick={onBarClick
-              ? (d) => onBarClick((d as unknown as { person: string }).person)
-              : undefined}
-          >
-            {display.map((_, i) => <Cell key={i} fill={WORKLOAD_COLORS[i % WORKLOAD_COLORS.length]} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </>
-  );
-}
-
 // ── Flight tags ────────────────────────────────────────────────────────────────
 function FlightTags({ fd }: { fd: WeeklyBundle["flight_breakdown"] }) {
   const items = (Object.keys(fd) as Array<keyof WeeklyBundle["flight_breakdown"]>)
@@ -483,7 +405,28 @@ function PipelineFunnel({ funnel }: { funnel: WeeklyBundle["pipeline_funnel"] })
 }
 
 // ── In-production stats ────────────────────────────────────────────────────────
+// Platform bucket display metadata. Only buckets with a non-zero count render.
+const PLATFORM_META: Array<{ key: keyof WeeklyBundle["in_prod"]["platform"]; label: string; color: string }> = [
+  { key: "v1",         label: "Live · V1",        color: "#378ADD" },
+  { key: "v2",         label: "Live · V2",        color: "#1D9E75" },
+  { key: "testing_v2", label: "Testing in V2",    color: "#EF9F27" },
+  { key: "migrating",  label: "Migrating v1→v2",  color: "#7F77DD" },
+  { key: "custom",     label: "Custom solution",  color: "#888780" },
+  { key: "unknown",    label: "Unspecified",      color: "#a1a1aa" },
+];
+
+function fmtMoney(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
+  return `$${v}`;
+}
+
 function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps: WeeklyBundle["nps_this_quarter"] }) {
+  const platform = PLATFORM_META.map((m) => ({ ...m, count: in_prod.platform[m.key] })).filter((m) => m.count > 0);
+  const platformTotal = platform.reduce((s, m) => s + m.count, 0);
+  const val = in_prod.value;
+  const v2 = in_prod.v2_progress;
+  const v2Total = v2.live + v2.in_dev + v2.migrating + v2.upcoming;
   return (
     <div className="glass-card p-5">
       <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-4">In production</div>
@@ -507,6 +450,81 @@ function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps
           <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-60">{in_prod.last_q_label}</div>
         </div>
       </div>
+
+      {/* Platform mix — live projects by Development Platform column */}
+      {platformTotal > 0 && (
+        <div className="border-t border-[var(--glass-border)] pt-4 mb-4">
+          <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-2.5">Platform mix · live</div>
+          <div className="flex rounded-full overflow-hidden h-2 mb-3 gap-px">
+            {platform.map((m) => (
+              <div key={m.key} style={{ width: `${(m.count / platformTotal) * 100}%`, background: m.color }} />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {platform.map((m) => (
+              <div key={m.key} className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: m.color }} />
+                <span className="text-sm font-bold tabular-nums" style={{ color: m.color }}>{m.count}</span>
+                <span className="text-xs text-[color:var(--muted-foreground)]">{m.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* V2 transition — live + in-flight from the active board's Migration column.
+          Placeholder for the fuller week-on-week migration tracker coming later. */}
+      {v2Total > 0 && (
+        <div className="border-t border-[var(--glass-border)] pt-4 mb-4">
+          <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-2.5">V2 transition</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{v2.live}</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">Live on V2</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{v2.in_dev}</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">In development</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">{v2.migrating}</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">Migrating v1→v2</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[color:var(--foreground)] tabular-nums">{v2.upcoming}</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">Upcoming migration</div>
+            </div>
+          </div>
+          <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-70 mt-2">
+            From the active board’s Migration column. A fuller week-on-week V2 migration tracker is coming soon.
+          </div>
+        </div>
+      )}
+
+      {/* Value delivered — modelled estimate */}
+      <div className="border-t border-[var(--glass-border)] pt-4 mb-4">
+        <div className="text-[10px] uppercase tracking-widest text-[color:var(--muted-foreground)] mb-2.5">
+          Value delivered · <span className="text-amber-600 dark:text-amber-400">modelled estimate</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">~{val.fte}</div>
+            <div className="text-xs text-[color:var(--muted-foreground)]">FTE freed / yr</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-[color:var(--foreground)] tabular-nums">~{Math.round(val.annual_hours / 1000)}K</div>
+            <div className="text-xs text-[color:var(--muted-foreground)]">Hours automated / yr</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-[color:var(--foreground)] tabular-nums">{fmtMoney(val.value_low)}–{fmtMoney(val.value_high)}</div>
+            <div className="text-xs text-[color:var(--muted-foreground)]">Est. annual value</div>
+          </div>
+        </div>
+        <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-70 mt-2">
+          Modelled from complexity at a blended $35/hr loaded rate. Replaced by measured figures once Kognitos platform run data is connected.
+        </div>
+      </div>
+
       {nps && (
         <div className="border-t border-[var(--glass-border)] pt-4 flex items-center gap-4">
           <div className={`text-2xl font-bold tabular-nums ${nps.average >= 50 ? "text-emerald-600 dark:text-emerald-400" : nps.average >= 0 ? "text-amber-600 dark:text-amber-400" : "text-red-500"}`}>
@@ -654,26 +672,16 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
         </div>
       </div>
 
-      {/* Row 5.5 — Migrations to v2.  Surfaces in-flight v1→v2 migrations
-          per customer with delivery + engineering owners and the latest
-          status update.  Source today: hand-curated list at
-          lib/reports/v2-migrations.ts. */}
-      {bundle.v2_migrations.length > 0 ? (
-        <V2MigrationsSection migrations={bundle.v2_migrations} />
-      ) : null}
-
       {/* Row 6 — Historical narrative: QoQ chart + pipeline funnel */}
       <div className="grid gap-4 lg:grid-cols-2">
         <QoQChart data={bundle.qoq_history} />
         <PipelineFunnel funnel={bundle.pipeline_funnel} />
       </div>
 
-      {/* Row 7 — In production */}
+      {/* Row 7 — In production.  FDE workload chart intentionally lives only
+          in Analytics now — removed from this report 2026-06 to avoid
+          duplicating the same view in two places. */}
       <InProdSection in_prod={bundle.in_prod} nps={bundle.nps_this_quarter} />
-
-      {/* Row 8 — FDE workload.  Bars are clickable — click any bar to see
-          the project list for that person. */}
-      <FdeWorkloadSection workload={bundle.workload_fde} />
 
       <div className="text-[11px] text-[color:var(--muted-foreground)] text-center pt-1">
         Generated by DeliveryOps · {new Date(bundle.generated_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
@@ -682,157 +690,3 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
   );
 }
 
-// ── FDE Workload Section with click-through ───────────────────────────
-// Wraps WorkloadChart with a drill panel: click a bar → see that FDE's
-// active project list (name + customer + health).  The `projects` field
-// on WorkloadEntry already carries exactly this data.
-
-function FdeWorkloadSection({ workload }: { workload: WorkloadEntry[] }) {
-  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
-
-  const selected = workload.find((w) => w.person === selectedPerson) ?? null;
-  const rows = Math.max(workload.length, 3);
-  const height = Math.max(140, rows * 36);
-
-  return (
-    <div className="glass-card p-5">
-      <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight mb-1">
-        FDE workload — active projects (In progress group)
-      </div>
-      <div className="text-xs text-[color:var(--muted-foreground)] mb-4">
-        Click a bar to see that person&apos;s project list.
-      </div>
-      <WorkloadChart
-        data={workload}
-        label="FDE"
-        height={height}
-        onBarClick={(person) =>
-          setSelectedPerson((prev) => (prev === person ? null : person))
-        }
-      />
-      {selected ? (
-        <div className="mt-4 border-t border-[var(--glass-border)] pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-semibold text-[color:var(--foreground)]">
-              {formatPersonName(selected.person)} —{" "}
-              <span className="font-normal text-[color:var(--muted-foreground)]">
-                {selected.active} active project{selected.active !== 1 ? "s" : ""}
-                {selected.at_risk > 0 ? ` · ${selected.at_risk} at risk` : ""}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedPerson(null)}
-              className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
-            >
-              close ×
-            </button>
-          </div>
-          <ul className="space-y-2">
-            {selected.projects.map((p, i) => (
-              <li
-                key={i}
-                className="flex items-start justify-between gap-3 text-sm py-1.5 border-b border-[var(--glass-border)] last:border-0"
-              >
-                <div>
-                  <div
-                    className="text-[color:var(--foreground)] font-medium break-words"
-                    title={p.name}
-                  >
-                    {p.name}
-                  </div>
-                  <div className="text-xs text-[color:var(--muted-foreground)]">
-                    {p.customer}
-                  </div>
-                </div>
-                <HealthPill health={p.health} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// ── V2 Migrations Section ─────────────────────────────────────────────
-// Lightweight: customer + process pill(s), with optional Delivery /
-// Engineering owner chips inline. No freeform status text — that
-// decays between weekly cadences. Once the Monday column is live the
-// list refreshes automatically per sync; until then the curated list
-// at lib/reports/v2-migrations.ts is the source.
-
-function V2MigrationsSection({ migrations }: { migrations: V2Migration[] }) {
-  const ownerCls = (tone: "emerald" | "indigo") =>
-    tone === "emerald"
-      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-      : "border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400";
-
-  return (
-    <Section
-      title="Migrations to v2"
-      count={migrations.length}
-      countCls="bg-indigo-500/12 text-indigo-700 dark:text-indigo-400"
-    >
-      <p className="text-xs text-[color:var(--muted-foreground)] mb-3">
-        Customer processes currently being migrated from Kognitos v1 to v2.
-        Source today: curated list — moves to a Monday column once the
-        &ldquo;v2 Migration Status&rdquo; field is added to the Customers board
-        and rows refresh on the daily sync.
-      </p>
-      <ul className="divide-y divide-[var(--glass-border)]">
-        {migrations.map((m) => {
-          const owners = [...(m.delivery_team ?? []), ...(m.engineering_team ?? [])];
-          return (
-            <li key={m.customer_key} className="py-2.5 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap min-w-0">
-                <Link
-                  href={`/customers/${m.customer_key}`}
-                  className="text-sm font-semibold text-[color:var(--foreground)] hover:underline"
-                >
-                  {m.customer_display_name ?? m.customer_key}
-                </Link>
-                {m.processes.length === 0 ? (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] uppercase tracking-wider">
-                    All processes
-                  </span>
-                ) : (
-                  m.processes.map((p) => (
-                    <span
-                      key={p}
-                      className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-medium uppercase tracking-wider"
-                    >
-                      {p}
-                    </span>
-                  ))
-                )}
-              </div>
-              {owners.length > 0 ? (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {(m.delivery_team ?? []).map((p) => (
-                    <span
-                      key={`d-${p}`}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${ownerCls("emerald")}`}
-                      title="Delivery team"
-                    >
-                      {p}
-                    </span>
-                  ))}
-                  {(m.engineering_team ?? []).map((p) => (
-                    <span
-                      key={`e-${p}`}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${ownerCls("indigo")}`}
-                      title="Engineering"
-                    >
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </Section>
-  );
-}

@@ -110,6 +110,34 @@ export function resolveRange(req: RangeRequest = {}, now: Date = new Date()): Da
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
+// ─── Platform + value modelling ───────────────────────────────────────────────
+// Live projects are bucketed by the Monday "Development Platform" column.
+// Order matters: the "migrating"/"testing" labels contain the substrings
+// "v1"/"v2", so they must be matched before the bare V1/V2 cases.
+export type PlatformBucket = "v1" | "v2" | "testing_v2" | "migrating" | "custom" | "unknown";
+export function platformBucket(raw: string | null | undefined): PlatformBucket {
+  const t = (raw ?? "").toLowerCase().trim();
+  if (!t) return "unknown";
+  if (t.includes("migrat")) return "migrating";    // "Live in V1; Migrating to V2"
+  if (t.includes("testing")) return "testing_v2";  // "Currently in V1; Testing in V2"
+  if (t.includes("custom")) return "custom";       // "Custom Solution"
+  if (t === "v2") return "v2";
+  if (t === "v1") return "v1";
+  return "unknown";
+}
+
+// Modelled value assumptions. Annual hours saved per live automation by
+// complexity tier, anchored below the deck's modal 3,300 hr figure so the
+// estimate stays conservative. Blended loaded labour rate back-solved from
+// customer-reported $/hour figures. These are ESTIMATES — clearly labelled in
+// the UI — and get replaced once Kognitos platform run data is connected.
+const TIER_HOURS: Record<string, number> = { low: 1200, medium: 2600, high: 5200 };
+const RATE_LOW = 30, RATE_MID = 35, RATE_HIGH = 45;
+const HOURS_PER_FTE = 2080;
+function tierHours(complexity: string | null | undefined): number {
+  return TIER_HOURS[(complexity ?? "").toLowerCase()] ?? TIER_HOURS.medium;
+}
+
 export interface WeeklyProject {
   monday_item_id: string;
   name: string;
@@ -119,6 +147,12 @@ export interface WeeklyProject {
   health: string | null;
   phase: string | null;
   phase_group: PhaseGroup;
+  /** Monday "Development Platform" raw text (V1 / V2 / migrating / testing / custom). */
+  platform: string | null;
+  /** Monday "Migration" status: "v2" / "Migrating to v2" / "Upcoming Migration". */
+  migration: string | null;
+  /** Monday "Complexity" dropdown (Low / Medium / High) — drives modelled value. */
+  complexity: string | null;
   go_live_date: string | null;
   kickoff_date: string | null;
   latest_update: string | null;
@@ -207,6 +241,24 @@ export interface WeeklyBundle {
     this_q_label: string;
     last_quarter: number;
     last_q_label: string;
+    /** Live projects split by Monday Development Platform column. */
+    platform: Record<PlatformBucket, number>;
+    /** Modelled value of the live portfolio (estimate — see TIER_HOURS notes). */
+    value: {
+      annual_hours: number;
+      fte: number;
+      value_low: number;
+      value_mid: number;
+      value_high: number;
+    };
+    /** V2 transition snapshot from the active board's Migration column.
+     *  Placeholder for the fuller week-on-week migration tracker coming later. */
+    v2_progress: {
+      live: number;       // already live on V2 (from platform mix)
+      in_dev: number;     // active, built natively on V2 (migration = "v2")
+      migrating: number;  // active, migrating v1 → v2 (migration = "Migrating to v2")
+      upcoming: number;   // queued for migration (migration = "Upcoming Migration")
+    };
   };
   /** Per-FDE workload — active in-flight projects with a health
    *  breakdown so the chart can stack On Track / At Risk / Other.
@@ -274,6 +326,9 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       customer_category: categoryFromCustomer({ custom_category: cust.custom_category, lifecycle_group: cust.lifecycle_group }),
       status, phase,
       phase_group: phaseGroup(phase, status),
+      platform: colText(cols, PCOLS.platform),
+      migration: colText(cols, PCOLS.migration),
+      complexity: colText(cols, PCOLS.complexity),
       health: colText(cols, PCOLS.health),
       go_live_date: go,
       kickoff_date: p.kickoff_date,
@@ -370,6 +425,33 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   const lastQ = previousKognitosFYQuarter(thisQ);
   const deliveredAll = projects.filter((p) => isDelivered(p.status, p.group_title));
   const prodCustomers = new Set(deliveredAll.map((p) => p.customer_display_name));
+
+  // Platform mix + modelled value of the live portfolio.
+  const platformMix: Record<PlatformBucket, number> = {
+    v1: 0, v2: 0, testing_v2: 0, migrating: 0, custom: 0, unknown: 0,
+  };
+  let liveHours = 0;
+  for (const p of deliveredAll) {
+    platformMix[platformBucket(p.platform)]++;
+    liveHours += tierHours(p.complexity);
+  }
+  const liveValue = {
+    annual_hours: liveHours,
+    fte: Math.round(liveHours / HOURS_PER_FTE),
+    value_low: Math.round(liveHours * RATE_LOW),
+    value_mid: Math.round(liveHours * RATE_MID),
+    value_high: Math.round(liveHours * RATE_HIGH),
+  };
+
+  // V2 transition snapshot. "Live" comes from the platform mix above; the
+  // in-flight counts come from the active board's Migration column.
+  const v2Progress = { live: platformMix.v2, in_dev: 0, migrating: 0, upcoming: 0 };
+  for (const p of allActiveBoardProjects) {
+    const m = (p.migration ?? "").toLowerCase();
+    if (m === "v2") v2Progress.in_dev++;
+    else if (m.includes("migrating")) v2Progress.migrating++;
+    else if (m.includes("upcoming")) v2Progress.upcoming++;
+  }
 
   // ── QoQ history ───────────────────────────────────────────────────────────
   // Build one entry per Kognitos FY quarter from the earliest go-live date
@@ -528,6 +610,9 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       projects: deliveredAll.length, customers: prodCustomers.size,
       this_quarter: thisQCount, this_q_label: thisQ.label,
       last_quarter: lastQCount, last_q_label: lastQ.label,
+      platform: platformMix,
+      value: liveValue,
+      v2_progress: v2Progress,
     },
     workload_fde,
     nps_this_quarter,
