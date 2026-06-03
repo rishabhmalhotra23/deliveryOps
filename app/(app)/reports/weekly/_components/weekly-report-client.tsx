@@ -541,13 +541,31 @@ function stagePill(stage: string) {
   return <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${cls}`}>{stage}</span>;
 }
 
+const stageRank = (s: string) => (s === "Testing" ? 0 : s === "Development" ? 1 : s === "Discovery" ? 2 : 3);
+function shortProc(customer: string, process: string): string {
+  let p = process;
+  if (p.toLowerCase().startsWith(customer.toLowerCase())) {
+    p = p.slice(customer.length).replace(/^[\s\-–·]+/, "").trim();
+  }
+  return p || process;
+}
+
 function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_list"]; inDev: number }) {
   if (list.length === 0) return null;
-  const stageOrder = ["Testing", "Development", "Discovery"];
+  // Group by customer — one block per customer, processes named inline.
+  const grouped = new Map<string, { processes: string[]; stages: string[] }>();
+  for (const m of list) {
+    const g = grouped.get(m.customer) ?? { processes: [], stages: [] };
+    g.processes.push(shortProc(m.customer, m.process));
+    if (!g.stages.includes(m.stage)) g.stages.push(m.stage);
+    grouped.set(m.customer, g);
+  }
+  const customers = [...grouped.entries()].sort(
+    (a, b) => Math.min(...a[1].stages.map(stageRank)) - Math.min(...b[1].stages.map(stageRank))
+  );
   const counts = ["Discovery", "Development", "Testing"]
     .map((s) => ({ s, n: list.filter((x) => x.stage === s).length }))
     .filter((x) => x.n > 0);
-  const sorted = [...list].sort((a, b) => stageOrder.indexOf(a.stage) - stageOrder.indexOf(b.stage));
   return (
     <Section title="Migrating to V2 — in progress" count={list.length}
       countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
@@ -555,15 +573,18 @@ function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_li
         The core focus. v1 keeps running until the customer signs off on v2.
         {counts.length > 0 && <span className="ml-1 opacity-80">{counts.map((c) => `${c.n} ${c.s}`).join(" · ")}.</span>}
       </p>
-      {sorted.map((m, i) => (
-        <div key={i} className="flex items-start justify-between gap-3 py-2.5 border-b border-[var(--glass-border)] last:border-0">
+      {customers.map(([customer, g]) => (
+        <div key={customer} className="flex items-start justify-between gap-3 py-2.5 border-b border-[var(--glass-border)] last:border-0">
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-[color:var(--foreground)] break-words">{m.process}</div>
-            <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
-              {m.customer}{m.fde.length > 0 ? ` · ${formatPeopleList(m.fde)}` : ""}
+            <div className="text-sm font-medium text-[color:var(--foreground)]">
+              {customer}
+              {g.processes.length > 1 && <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">· {g.processes.length} processes</span>}
             </div>
+            <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 break-words">{g.processes.join(", ")}</div>
           </div>
-          {stagePill(m.stage)}
+          <div className="flex flex-wrap justify-end gap-1 shrink-0 max-w-[40%]">
+            {[...g.stages].sort((a, b) => stageRank(a) - stageRank(b)).map((s) => <span key={s}>{stagePill(s)}</span>)}
+          </div>
         </div>
       ))}
       {inDev > 0 && (
