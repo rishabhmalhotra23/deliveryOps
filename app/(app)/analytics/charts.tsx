@@ -567,3 +567,22 @@ export function TtvTrendChart({ data }: { data: Array<{ quarter: string; avg_day
     </ResponsiveContainer>
   );
 }
+
+// ── Value by domain (modelled, project-wise) ──────────────────────────────────
+export function ValueByDomainChart({ data }: { data: Array<{ domain: string; value_mid: number; fte: number; count: number }> }) {
+  const t = useChartTheme();
+  if (!data.length) return null;
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(220, data.length * 40)}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
+        <XAxis type="number" tickFormatter={(v) => fmtMoney(Number(v))} tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} />
+        <YAxis type="category" dataKey="domain" width={180} tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} interval={0} />
+        <Tooltip contentStyle={t.tooltipStyle} formatter={(v) => [fmtMoney(Number(v)), "Est. annual value"]} />
+        <Bar dataKey="value_mid" radius={[0, 4, 4, 0]}>
+          {data.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}

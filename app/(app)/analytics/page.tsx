@@ -1,13 +1,14 @@
 import Link from "next/link";
 
 import { loadAnalytics } from "@/lib/analytics/loader";
-import { formatTimeAgo } from "@/app/_components/brand";
+import { formatTimeAgo, formatMoney } from "@/app/_components/brand";
 import { BackButton } from "@/app/_components/back-button";
 import {
   ArrByCategoryChart,
   CustomersByCategoryChart,
   TtvDistributionChart,
   TtvTrendChart,
+  ValueByDomainChart,
   NpsGauge,
   NpsDistributionChart,
   NpsByQuarterChart,
@@ -65,6 +66,35 @@ export default async function AnalyticsPage() {
         npsResponses={npsResponses}
         oppsRows={oppsRows}
       />
+
+      {/* Value delivered — modelled, project-wise by functional domain */}
+      {bundle.value.live_projects > 0 ? (
+        <Chart
+          title="Value delivered by domain"
+          subtitle="Modelled estimate — complexity × $35/hr loaded rate · classified project-wise by process, not customer industry · replaced by run data once connected"
+          featured
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+            <div>
+              <div className="text-2xl font-bold text-emerald-500 tabular-nums">~{bundle.value.fte}</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">FTE freed / yr</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[color:var(--foreground)] tabular-nums">~{Math.round(bundle.value.annual_hours / 1000)}K</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">Hours automated / yr</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[color:var(--foreground)] tabular-nums">{formatMoney(bundle.value.value_low)}–{formatMoney(bundle.value.value_high)}</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">Est. annual value</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-indigo-500 tabular-nums">{bundle.value.live_projects}</div>
+              <div className="text-xs text-[color:var(--muted-foreground)]">Live processes valued</div>
+            </div>
+          </div>
+          <ValueByDomainChart data={bundle.value_by_domain} />
+        </Chart>
+      ) : null}
 
       {/* ARR + Customer distribution */}
       <div className="grid gap-6 lg:grid-cols-2">

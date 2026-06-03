@@ -65,6 +65,12 @@ export interface AnalyticsBundle {
   nps_by_quarter: Array<{ quarter: string; average: number; count: number; promoter: number; passive: number; detractor: number }>;
   nps_by_customer_category: Array<{ category: string; average: number; responses: number }>;
   deliveries_over_time: Array<{ month: string; count: number }>; // YYYY-MM
+  /** Modelled value of the live portfolio (estimate — complexity × $35/hr). */
+  value: { live_projects: number; annual_hours: number; fte: number; value_low: number; value_mid: number; value_high: number };
+  /** Modelled value by functional domain (project-wise, inferred from name). */
+  value_by_domain: Array<{ domain: string; count: number; annual_hours: number; fte: number; value_mid: number }>;
+  /** Modelled value by customer account (top accounts by value). */
+  value_by_customer: Array<{ customer: string; count: number; annual_hours: number; value_mid: number }>;
   last_sync: { salesforce: string | null; monday: string | null };
   /**
    * Per-bar drill-down items.  Keys mirror the chart's series keys exactly
@@ -112,7 +118,31 @@ interface AccountRow {
 
 // Column IDs + helpers come from the canonical taxonomy. See
 // lib/delivery/taxonomy.ts — adding a new column ID here is a smell.
-import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText, peopleNames } from "@/lib/delivery/taxonomy";
+import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText, peopleNames, isDelivered } from "@/lib/delivery/taxonomy";
+
+// ── Value modelling (project-wise) ──────────────────────────────────────────
+// Domain is the project's *functional* area, inferred from the process name —
+// deliberately project-level, not the customer's industry (one customer runs
+// processes across several domains). Until a real "domain" field exists on
+// Monday this keyword map is the source. Value is modelled from complexity at a
+// blended $35/hr loaded rate — an ESTIMATE, labelled as such in the UI.
+function projectDomain(name: string): string {
+  const n = name.toLowerCase();
+  if (/\bbol\b|bill of lading|carrier booking|aircraft util|mother vessel|ocean carrier/.test(n)) return "Bill of Lading & Logistics";
+  if (/quote|qsr|pricing|sbux/.test(n)) return "Quote & Pricing";
+  if (/\btax\b|vouch|indirect tax|engagement letter|affidavit/.test(n)) return "Tax, Risk & Compliance";
+  if (/collection|receivable|\bar\b|customer payment|customer claim|cash flow/.test(n)) return "AR & Collections";
+  if (/recon|reconcil|\bbrs\b|\bcoa\b|parts recon|\bclose\b|pedigree/.test(n)) return "Reconciliation & Close";
+  if (/invoice|\bap\b|bill pay|goods receipt|registration log|payable/.test(n)) return "Accounts Payable & Invoice";
+  if (/\bpo\b|purchase order|procure|p-?card|vendor bill|vendor query|merch po|sales order|order entry|order intake|equipment order/.test(n)) return "Procure-to-Pay & Orders";
+  if (/enrollment|court|translat|extraction|\bscan\b|mailroom|returned mail|data extraction/.test(n)) return "Document Processing";
+  return "Operations & Shared Services";
+}
+const VAL_TIER_HOURS: Record<string, number> = { low: 1200, medium: 2600, high: 5200 };
+const VAL_RATE_LOW = 30, VAL_RATE_MID = 35, VAL_RATE_HIGH = 45, VAL_HOURS_PER_FTE = 2080;
+function valTierHours(complexity: string | null): number {
+  return VAL_TIER_HOURS[(complexity ?? "").toLowerCase()] ?? VAL_TIER_HOURS.medium;
+}
 
 const PROJECT_COL_STATUS = MONDAY_PROJECT_COLS.status;
 const PROJECT_COL_PHASE  = MONDAY_PROJECT_COLS.phase;
@@ -629,6 +659,37 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     .map(([month, count]) => ({ month, count }))
     .sort((a, b) => (a.month < b.month ? -1 : 1));
 
+  // ─── Modelled value (project-wise, live portfolio) ──────────────────────
+  const domainAgg = new Map<string, { count: number; hours: number }>();
+  const custValAgg = new Map<string, { count: number; hours: number }>();
+  let liveProjects = 0, liveHours = 0;
+  for (const p of projectList) {
+    const status = txt(p.raw_columns, PROJECT_COL_STATUS);
+    if (!isDelivered(status, p.group_title)) continue;
+    const hrs = valTierHours(txt(p.raw_columns, MONDAY_PROJECT_COLS.complexity));
+    liveProjects++; liveHours += hrs;
+    const dom = projectDomain(p.name);
+    const d = domainAgg.get(dom) ?? { count: 0, hours: 0 };
+    d.count++; d.hours += hrs; domainAgg.set(dom, d);
+    const custName = customerById.get(p.customer_id)?.display_name ?? "(unknown)";
+    const cv = custValAgg.get(custName) ?? { count: 0, hours: 0 };
+    cv.count++; cv.hours += hrs; custValAgg.set(custName, cv);
+  }
+  const value = {
+    live_projects: liveProjects,
+    annual_hours: liveHours,
+    fte: Math.round(liveHours / VAL_HOURS_PER_FTE),
+    value_low: Math.round(liveHours * VAL_RATE_LOW),
+    value_mid: Math.round(liveHours * VAL_RATE_MID),
+    value_high: Math.round(liveHours * VAL_RATE_HIGH),
+  };
+  const value_by_domain = [...domainAgg.entries()]
+    .map(([domain, v]) => ({ domain, count: v.count, annual_hours: v.hours, fte: Math.round((v.hours / VAL_HOURS_PER_FTE) * 10) / 10, value_mid: Math.round(v.hours * VAL_RATE_MID) }))
+    .sort((a, b) => b.annual_hours - a.annual_hours);
+  const value_by_customer = [...custValAgg.entries()]
+    .map(([customer, v]) => ({ customer, count: v.count, annual_hours: v.hours, value_mid: Math.round(v.hours * VAL_RATE_MID) }))
+    .sort((a, b) => b.annual_hours - a.annual_hours);
+
   return {
     generated_at: new Date().toISOString(),
     totals: {
@@ -659,6 +720,9 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     nps_by_quarter,
     nps_by_customer_category,
     deliveries_over_time,
+    value,
+    value_by_domain,
+    value_by_customer,
     drilldowns: {
       by_fde_items,
       projects_by_lifecycle_items,
