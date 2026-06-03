@@ -126,6 +126,16 @@ export function platformBucket(raw: string | null | undefined): PlatformBucket {
   return "unknown";
 }
 
+// Map a Monday "Current Phase" value to a coarse migration stage for the
+// weekly report's V2 migration tracker.
+export function migrationStage(phase: string | null | undefined): string {
+  const p = (phase ?? "").toLowerCase();
+  if (p.includes("m1") || p.includes("discovery") || p.includes("pre-kickoff")) return "Discovery";
+  if (p.includes("m2") || p.includes("development")) return "Development";
+  if (p.includes("m3") || p.includes("testing") || p.includes("uat") || p.includes("exception") || p.includes("support") || p.includes("production")) return "Testing";
+  return "Development";
+}
+
 // Modelled value assumptions. Annual hours saved per live automation by
 // complexity tier, anchored below the deck's modal 3,300 hr figure so the
 // estimate stays conservative. Blended loaded labour rate back-solved from
@@ -271,6 +281,8 @@ export interface WeeklyBundle {
    *  Monday column once Rishabh adds it to the Customers board. */
   v2_migrations: V2Migration[];
 
+  /** Processes currently migrating v1 → v2 (the weekly report's focus list). */
+  v2_migration_list: Array<{ customer: string; process: string; stage: string; fde: string[] }>;
   /** Full portfolio waterfall over every project card (see loader rules). */
   portfolio: {
     total_cards: number;
@@ -469,6 +481,10 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     else if (m.includes("migrating")) v2Progress.migrating++;
     else if (m.includes("upcoming")) v2Progress.upcoming++;
   }
+  const v2_migration_list = allActiveBoardProjects
+    .filter((p) => (p.migration ?? "").toLowerCase().includes("migrating"))
+    .map((p) => ({ customer: p.customer_display_name, process: p.name, stage: migrationStage(p.phase), fde: p.fde }))
+    .sort((a, b) => a.customer.localeCompare(b.customer));
 
   // ── Portfolio overview — the full waterfall over every project card ───────
   // Rules (signed off 2026-06): enhancements/CRs are pulled OUT of the project
@@ -680,6 +696,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       value: liveValue,
       v2_progress: v2Progress,
     },
+    v2_migration_list,
     portfolio,
     workload_fde,
     nps_this_quarter,

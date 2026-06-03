@@ -546,6 +546,52 @@ function InProdSection({ in_prod, portfolio: pf, nps }: {
   );
 }
 
+// ── V2 migration section — the weekly focus list ────────────────────────────────
+function stagePill(stage: string) {
+  const cls = stage === "Testing"
+    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
+    : stage === "Development"
+      ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
+      : stage === "Discovery"
+        ? "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/25"
+        : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/25";
+  return <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${cls}`}>{stage}</span>;
+}
+
+function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_list"]; inDev: number }) {
+  if (list.length === 0) return null;
+  const stageOrder = ["Testing", "Development", "Discovery"];
+  const counts = ["Discovery", "Development", "Testing"]
+    .map((s) => ({ s, n: list.filter((x) => x.stage === s).length }))
+    .filter((x) => x.n > 0);
+  const sorted = [...list].sort((a, b) => stageOrder.indexOf(a.stage) - stageOrder.indexOf(b.stage));
+  return (
+    <Section title="Migrating to V2 — in progress" count={list.length}
+      countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
+      <p className="text-xs text-[color:var(--muted-foreground)] mb-3">
+        The core focus. v1 keeps running until the customer signs off on v2.
+        {counts.length > 0 && <span className="ml-1 opacity-80">{counts.map((c) => `${c.n} ${c.s}`).join(" · ")}.</span>}
+      </p>
+      {sorted.map((m, i) => (
+        <div key={i} className="flex items-start justify-between gap-3 py-2.5 border-b border-[var(--glass-border)] last:border-0">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-[color:var(--foreground)] break-words">{m.process}</div>
+            <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+              {m.customer}{m.fde.length > 0 ? ` · ${formatPeopleList(m.fde)}` : ""}
+            </div>
+          </div>
+          {stagePill(m.stage)}
+        </div>
+      ))}
+      {inDev > 0 && (
+        <div className="text-[11px] text-[color:var(--muted-foreground)] pt-3 mt-1 border-t border-[var(--glass-border)]">
+          Plus {inDev} net-new builds on V2 in active development — full list in Analytics.
+        </div>
+      )}
+    </Section>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
   const { totals, range } = bundle;
@@ -577,63 +623,32 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
         </div>
       </div>
 
-      {/* Row 1 — hero stats */}
+      {/* The week pulse — four numbers a lead reads in two seconds. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          label={`Shipped in this ${range.preset === "custom" ? "range" : range.preset}`}
+          label={`Shipped this ${range.preset === "custom" ? "range" : range.preset}`}
           value={totals.shipped_in_range}
-          sub={`${totals.delivered_all_time} all time`}
+          sub={`${bundle.portfolio.live.total} live all-time`}
           accent={totals.shipped_in_range > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined}
         />
         <StatCard label="In progress" value={totals.in_flight_active}
-          sub={`${totals.in_flight_total} total on board`} />
-        <StatCard label="In UAT" value={totals.in_uat} sub="ready for sign-off"
+          sub={`${totals.in_flight_total} on the board`} />
+        <StatCard label="Ready for sign-off" value={totals.in_uat} sub="in UAT"
           accent={totals.in_uat > 0 ? "text-amber-600 dark:text-amber-400" : undefined} />
         <StatCard label="At risk" value={totals.at_risk} sub="need attention"
           accent={totals.at_risk > 0 ? "text-red-600 dark:text-red-400" : undefined} />
       </div>
 
-      {/* Row 2 — phase breakdown */}
-      <PhaseBreakdown by_phase={bundle.by_phase} />
+      {/* Shipped this period — the team's output, front and centre. */}
+      <Section title={`Shipped this ${range.preset === "custom" ? "range" : range.preset}`} count={totals.shipped_in_range}
+        countCls="bg-emerald-500/12 text-emerald-700 dark:text-emerald-400">
+        {bundle.shipped_in_range.length === 0
+          ? <Empty text={`Nothing shipped this ${range.preset === "custom" ? "range" : range.preset}. ${totals.in_uat} in UAT ready to close.`} />
+          : bundle.shipped_in_range.map((p) => <ProjectRow key={p.monday_item_id} p={p} showTtv />)}
+      </Section>
 
-      {/* Row 3 — Trend */}
-      <div className="glass-card p-5">
-        <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">{trendTitle}</div>
-        <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-4">{trendSub}</div>
-        <DeliveryTrendChart trend={bundle.delivery_trend} />
-      </div>
-
-      {/* Row 4 — Shipped (only if any) + UAT */}
-      {totals.shipped_in_range > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Section title={`Shipped in this ${range.preset === "custom" ? "range" : range.preset}`} count={totals.shipped_in_range}
-            countCls="bg-emerald-500/12 text-emerald-700 dark:text-emerald-400">
-            {bundle.shipped_in_range.map((p) => <ProjectRow key={p.monday_item_id} p={p} showTtv />)}
-          </Section>
-          <Section title="In UAT — ready for sign-off" count={totals.in_uat}
-            countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
-            {bundle.in_uat.length === 0
-              ? <Empty text="No projects currently in UAT." />
-              : bundle.in_uat.map((p) => (
-                  <ProjectRow key={p.monday_item_id} p={p}
-                    tag={<span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">UAT</span>} />
-                ))}
-          </Section>
-        </div>
-      ) : (
-        bundle.in_uat.length > 0 && (
-          <Section title="In UAT — ready for sign-off" count={totals.in_uat}
-            countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
-            {bundle.in_uat.map((p) => (
-              <ProjectRow key={p.monday_item_id} p={p}
-                tag={<span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">UAT</span>} />
-            ))}
-          </Section>
-        )
-      )}
-
-      {/* Row 5 — At risk + In flight */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* Needs attention — at risk + ready for sign-off, side by side. */}
+      <div className="grid gap-4 lg:grid-cols-2">
         <Section title="At risk" count={totals.at_risk}
           countCls={totals.at_risk > 0 ? "bg-red-500/12 text-red-700 dark:text-red-400" : undefined}>
           {bundle.at_risk.length === 0
@@ -642,12 +657,7 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
                 <div key={p.monday_item_id} className="py-2.5 border-b border-[var(--glass-border)] last:border-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div
-                        className="text-sm font-medium text-[color:var(--foreground)] break-words"
-                        title={p.name}
-                      >
-                        {p.name}
-                      </div>
+                      <div className="text-sm font-medium text-[color:var(--foreground)] break-words" title={p.name}>{p.name}</div>
                       <div className="text-xs text-[color:var(--muted-foreground)]">{p.customer_display_name}</div>
                     </div>
                     <HealthPill health={p.health} />
@@ -658,35 +668,28 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
                 </div>
               ))}
         </Section>
-
-        <div className="lg:col-span-2">
-          <Section title="In flight" count={totals.in_flight_total}>
-            <FlightTags fd={bundle.flight_breakdown} />
-            {bundle.all_active_board.length === 0
-              ? <Empty text="No active projects." />
-              : <div className="max-h-80 overflow-y-auto">
-                  {bundle.all_active_board.map((p) => (
-                    <ProjectRow key={p.monday_item_id} p={p}
-                      tag={
-                        p.group_title && p.group_title !== "Active"
-                          ? <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--glass-border)] text-[color:var(--muted-foreground)] font-medium">{p.group_title}</span>
-                          : undefined
-                      } />
-                  ))}
-                </div>}
-          </Section>
-        </div>
+        <Section title="Ready for sign-off" count={totals.in_uat}
+          countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
+          {bundle.in_uat.length === 0
+            ? <Empty text="Nothing in UAT right now." />
+            : bundle.in_uat.map((p) => (
+                <ProjectRow key={p.monday_item_id} p={p}
+                  tag={<span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">UAT</span>} />
+              ))}
+        </Section>
       </div>
 
-      {/* Row 6 — Historical narrative: QoQ chart + pipeline funnel */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <QoQChart data={bundle.qoq_history} />
-        <PipelineFunnel funnel={bundle.pipeline_funnel} />
+      {/* Migrating to V2 — the strategic focus. */}
+      <MigrationSection list={bundle.v2_migration_list} inDev={bundle.portfolio.in_dev.v2} />
+
+      {/* Momentum — go-lives over the trailing window. */}
+      <div className="glass-card p-5">
+        <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">{trendTitle}</div>
+        <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-4">{trendSub}</div>
+        <DeliveryTrendChart trend={bundle.delivery_trend} />
       </div>
 
-      {/* Row 7 — In production.  FDE workload chart intentionally lives only
-          in Analytics now — removed from this report 2026-06 to avoid
-          duplicating the same view in two places. */}
+      {/* Portfolio & production — standing all-time context. */}
       <InProdSection in_prod={bundle.in_prod} portfolio={bundle.portfolio} nps={bundle.nps_this_quarter} />
 
       <div className="text-[11px] text-[color:var(--muted-foreground)] text-center pt-1">
