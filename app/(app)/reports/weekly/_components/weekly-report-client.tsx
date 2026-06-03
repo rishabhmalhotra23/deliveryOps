@@ -540,6 +540,71 @@ function InProdSection({ in_prod, nps }: { in_prod: WeeklyBundle["in_prod"]; nps
   );
 }
 
+// ── Portfolio overview (full waterfall) ─────────────────────────────────────────
+function PortfolioOverview({ p }: { p: WeeklyBundle["portfolio"] }) {
+  const np = p.not_in_prod;
+  const segs = [
+    { label: "Live", count: p.live.total, color: "#10b981" },
+    { label: "In development", count: p.in_dev.total, color: "#6366f1" },
+    { label: "Migrating to V2", count: p.migrating, color: "#f59e0b" },
+    { label: "Upcoming migration", count: p.upcoming, color: "#a78bfa" },
+    { label: "On hold", count: p.on_hold, color: "#0ea5e9" },
+    { label: "Backlog / pipeline", count: p.backlog, color: "#94a3b8" },
+    { label: "Not in production", count: np.total, color: "#9ca3af" },
+  ].filter((s) => s.count > 0);
+  const total = p.total_cards || 1;
+  const devSub = [
+    p.in_dev.v2 ? `V2 ${p.in_dev.v2}` : "",
+    p.in_dev.v1 ? `V1 ${p.in_dev.v1}` : "",
+    p.in_dev.custom ? `Custom ${p.in_dev.custom}` : "",
+  ].filter(Boolean).join(" · ");
+  const tiles = [
+    { label: "Live in production", count: p.live.total, color: "#10b981", sub: `V1 ${p.live.v1} · V2 ${p.live.v2}` },
+    { label: "In development", count: p.in_dev.total, color: "#6366f1", sub: devSub || "—" },
+    { label: "Migrating to V2", count: p.migrating, color: "#f59e0b", sub: "new v2 builds" },
+    { label: "Upcoming migration", count: p.upcoming, color: "#a78bfa", sub: "queued" },
+    { label: "On hold", count: p.on_hold, color: "#0ea5e9", sub: "" },
+    { label: "Backlog / pipeline", count: p.backlog, color: "#94a3b8", sub: "not started" },
+  ];
+  return (
+    <div className="glass-card p-5">
+      <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">Portfolio overview</div>
+      <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 mb-3">
+        Every process ever tracked in Monday — {p.total_cards} projects. Enhancements are counted separately, below.
+      </div>
+      <div className="flex rounded-full overflow-hidden h-2.5 mb-4 gap-px">
+        {segs.map((s) => (
+          <div key={s.label} style={{ width: `${(s.count / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.count}`} />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {tiles.map((t) => (
+          <div key={t.label}>
+            <div className="text-2xl font-bold tabular-nums" style={{ color: t.color }}>{t.count}</div>
+            <div className="text-xs text-[color:var(--foreground)] font-medium">{t.label}</div>
+            {t.sub && <div className="text-[10px] text-[color:var(--muted-foreground)]">{t.sub}</div>}
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 border-t border-[var(--glass-border)] pt-3 text-xs text-[color:var(--muted-foreground)]">
+        <span className="font-semibold text-[color:var(--foreground)]">{np.total} not in production</span> — {np.churned} churned (customer left), {np.cancelled} cancelled (didn’t go through), {np.retired} retired, {np.pov} POVs that didn’t convert.
+      </div>
+      <div className="mt-3 border-t border-[var(--glass-border)] pt-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-xs text-[color:var(--foreground)] font-medium">
+          Enhancements &amp; change requests
+          <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">major, sometimes phase-replacing — counted as effort, not new processes</span>
+        </div>
+        <div className="text-lg font-bold text-[color:var(--foreground)] tabular-nums">
+          {p.enhancements}<span className="text-[10px] text-[color:var(--muted-foreground)] font-normal ml-1.5">major tracked · 100+ incl. minor CRs</span>
+        </div>
+      </div>
+      <div className="text-[10px] text-[color:var(--muted-foreground)] opacity-70 mt-3">
+        V1 and V2 versions are counted as separate projects — a v2 migration is a new build. A v1 process keeps running after its v2 version goes live; it moves to “retired” only once the customer signs off on V2, at which point the live count adjusts.
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
   const { totals, range } = bundle;
@@ -682,6 +747,9 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
           in Analytics now — removed from this report 2026-06 to avoid
           duplicating the same view in two places. */}
       <InProdSection in_prod={bundle.in_prod} nps={bundle.nps_this_quarter} />
+
+      {/* Row 7.5 — Portfolio overview waterfall (full universe of projects) */}
+      <PortfolioOverview p={bundle.portfolio} />
 
       <div className="text-[11px] text-[color:var(--muted-foreground)] text-center pt-1">
         Generated by DeliveryOps · {new Date(bundle.generated_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}

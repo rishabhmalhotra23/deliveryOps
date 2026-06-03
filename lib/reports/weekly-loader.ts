@@ -271,6 +271,19 @@ export interface WeeklyBundle {
    *  Monday column once Rishabh adds it to the Customers board. */
   v2_migrations: V2Migration[];
 
+  /** Full portfolio waterfall over every project card (see loader rules). */
+  portfolio: {
+    total_cards: number;
+    live: { v1: number; v2: number; total: number };
+    in_dev: { v1: number; v2: number; custom: number; total: number };
+    migrating: number;
+    upcoming: number;
+    on_hold: number;
+    backlog: number;
+    not_in_prod: { cancelled: number; churned: number; retired: number; pov: number; total: number };
+    enhancements: number;
+  };
+
   totals: {
     shipped_in_range: number;
     in_flight_active: number;
@@ -453,6 +466,55 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     else if (m.includes("upcoming")) v2Progress.upcoming++;
   }
 
+  // ── Portfolio overview — the full waterfall over every project card ───────
+  // Rules (signed off 2026-06): enhancements/CRs are pulled OUT of the project
+  // count and reported separately; v1 and v2 versions are counted as separate
+  // projects (a v2 migration is a new build); cancelled / churned / retired /
+  // lapsed POVs collapse into one "not in production" bucket.
+  const portfolio = {
+    total_cards: 0,                                   // excludes enhancements
+    live: { v1: 0, v2: 0, total: 0 },
+    in_dev: { v1: 0, v2: 0, custom: 0, total: 0 },
+    migrating: 0,
+    upcoming: 0,
+    on_hold: 0,
+    backlog: 0,
+    not_in_prod: { cancelled: 0, churned: 0, retired: 0, pov: 0, total: 0 },
+    enhancements: 0,                                  // shown separately
+  };
+  for (const p of projects) {
+    const nm = p.name.toLowerCase();
+    const ph = (p.phase ?? "").toLowerCase();
+    const mig = (p.migration ?? "").toLowerCase();
+    if (nm.includes("enhancement") || ph === "enhancement") { portfolio.enhancements++; continue; }
+    portfolio.total_cards++;
+    if (isDelivered(p.status, p.group_title)) {
+      if (platformBucket(p.platform) === "v2") portfolio.live.v2++; else portfolio.live.v1++;
+      portfolio.live.total++;
+      continue;
+    }
+    if (isActiveBoard({ fiscal_year: p.fiscal_year, status: p.status, group_title: p.group_title })) {
+      if (mig.includes("migrating")) { portfolio.migrating++; continue; }
+      if (mig.includes("upcoming")) { portfolio.upcoming++; continue; }
+      const fg = flightGroup(p.group_title);
+      if (fg === "in_progress") {
+        const pl = platformBucket(p.platform);
+        if (pl === "v2") portfolio.in_dev.v2++;
+        else if ((p.platform ?? "").toLowerCase().includes("custom")) portfolio.in_dev.custom++;
+        else portfolio.in_dev.v1++;
+        portfolio.in_dev.total++;
+      } else if (fg === "on_hold") portfolio.on_hold++;
+      else portfolio.backlog++;
+      continue;
+    }
+    // Not in production (discontinued)
+    portfolio.not_in_prod.total++;
+    if (ph.includes("churn")) portfolio.not_in_prod.churned++;
+    else if (ph.includes("cancel") || (p.status ?? "").toLowerCase() === "cancelled") portfolio.not_in_prod.cancelled++;
+    else if (ph.includes("pov")) portfolio.not_in_prod.pov++;
+    else portfolio.not_in_prod.retired++;
+  }
+
   // ── QoQ history ───────────────────────────────────────────────────────────
   // Build one entry per Kognitos FY quarter from the earliest go-live date
   // through the current quarter. Includes delivered count, avg TTV, and
@@ -614,6 +676,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       value: liveValue,
       v2_progress: v2Progress,
     },
+    portfolio,
     workload_fde,
     nps_this_quarter,
     v2_migrations: v2Migrations,
