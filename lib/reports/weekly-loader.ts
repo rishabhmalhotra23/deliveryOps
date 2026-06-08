@@ -487,16 +487,19 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     else if (m.includes("migrating")) v2Progress.migrating++;
     else if (m.includes("upcoming")) v2Progress.upcoming++;
   }
-  const v2MigrationFromMonday = allActiveBoardProjects
-    .filter((p) => (p.migration ?? "").toLowerCase().includes("migrating"))
-    .map((p) => ({ customer: p.customer_display_name, process: p.name, stage: migrationStage(p.phase), fde: p.fde }));
-  // Merge in manual rows (e.g. JBI, Ciena under Rishabh) not yet on Monday's
-  // Migration column — skip any whose customer is already present from Monday.
-  const v2ManualExtra = MANUAL_V2_MIGRATIONS.filter(
-    (m) => !v2MigrationFromMonday.some((x) => x.customer.toLowerCase() === m.customer.toLowerCase())
-  );
-  const v2_migration_list = [...v2MigrationFromMonday, ...v2ManualExtra]
-    .sort((a, b) => a.customer.localeCompare(b.customer));
+  // Migration tile is a curated, fixed list — deliberately NOT a live Monday
+  // pull (signed off 2026-06). Owners come from the curated delivery +
+  // engineering teams in lib/reports/v2-migrations.ts, plus the manual
+  // JBI/Ciena rows. Stage is set per entry there (all Development today).
+  const v2_migration_list = [
+    ...v2Migrations.map((m) => ({
+      customer: m.customer_display_name ?? m.customer_key,
+      process: m.processes.length > 0 ? m.processes.join(", ") : "All processes",
+      stage: m.stage as string,
+      fde: [...(m.delivery_team ?? []), ...(m.engineering_team ?? [])],
+    })),
+    ...MANUAL_V2_MIGRATIONS,
+  ].sort((a, b) => a.customer.localeCompare(b.customer));
 
   // ── Portfolio overview — the full waterfall over every project card ───────
   // Rules (signed off 2026-06): enhancements/CRs are pulled OUT of the project

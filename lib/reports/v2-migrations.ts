@@ -29,6 +29,9 @@ export interface V2Migration {
    *  this customer". Multiple entries render as separate pills. */
   processes: string[];
 
+  /** Migration stage pill shown in the weekly report. */
+  stage: "Discovery" | "Development" | "Testing";
+
   /** Owner chips — kept lightweight so they don't drift weekly.
    *  Both arrays are optional; renderer hides the row when empty. */
   delivery_team?: string[];
@@ -39,35 +42,41 @@ const MIGRATIONS: V2Migration[] = [
   {
     customer_key: "plunkett",
     processes: [],
+    stage: "Development",
     delivery_team: ["Arushi"],
     engineering_team: ["Sasha"],
   },
   {
     customer_key: "ttx",
     processes: ["Lease Invoicing"],
+    stage: "Development",
     delivery_team: ["Ayush", "Paige"],
   },
   {
     customer_key: "kort-payments",
     processes: [],
+    stage: "Development",
     delivery_team: ["Karthik", "Paige"],
     engineering_team: ["Sasha"],
   },
   {
     customer_key: "conectiv",
     processes: [],
+    stage: "Development",
     delivery_team: ["Ayush"],
     engineering_team: ["Sasha"],
   },
   {
     customer_key: "scan-health",
     processes: [],
+    stage: "Development",
     delivery_team: ["Ayush"],
     engineering_team: ["Sasha", "Vihang"],
   },
   {
     customer_key: "wipro-fss",
     processes: [],
+    stage: "Development",
     delivery_team: ["Sid"],
     engineering_team: ["Karthik"],
   },
@@ -94,11 +103,10 @@ export async function loadV2Migrations(): Promise<V2Migration[]> {
 }
 
 // ─── Manual migration rows ──────────────────────────────────────────────────
-// Rows we want in the weekly report's "Migrating to V2 — in progress" tile
-// before they're reflected in Monday's Migration column. The weekly loader
-// merges these into v2_migration_list (deduped by customer name), so they
-// render alongside the Monday-driven rows. Remove an entry once its Monday
-// card carries the Migration status and the right phase.
+// Extra curated rows for the weekly report's "Migrating to V2 — in progress"
+// tile, for customers that don't have a customer_key entry in MIGRATIONS above
+// (e.g. JBI, Ciena). The weekly loader appends these to the curated
+// v2_migration_list. The tile is a fixed curated list, not a live Monday pull.
 export interface ManualV2Migration {
   /** Display name shown in the tile. */
   customer: string;
