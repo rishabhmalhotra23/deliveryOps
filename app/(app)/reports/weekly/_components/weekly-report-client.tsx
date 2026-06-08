@@ -553,33 +553,32 @@ function shortProc(customer: string, process: string): string {
 function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_list"]; inDev: number }) {
   if (list.length === 0) return null;
   // Group by customer — one block per customer, processes named inline.
-  const grouped = new Map<string, { processes: string[]; stages: string[]; owners: string[] }>();
+  const grouped = new Map<string, { processes: string[]; stages: string[]; owners: string[]; count: number }>();
   for (const m of list) {
-    const g = grouped.get(m.customer) ?? { processes: [], stages: [], owners: [] };
+    const g = grouped.get(m.customer) ?? { processes: [], stages: [], owners: [], count: 0 };
     g.processes.push(shortProc(m.customer, m.process));
     if (!g.stages.includes(m.stage)) g.stages.push(m.stage);
     for (const o of m.fde) if (!g.owners.includes(o)) g.owners.push(o);
+    g.count += m.migrating_count;
     grouped.set(m.customer, g);
   }
   const customers = [...grouped.entries()].sort(
     (a, b) => Math.min(...a[1].stages.map(stageRank)) - Math.min(...b[1].stages.map(stageRank))
   );
-  const counts = ["Discovery", "Development", "Testing"]
-    .map((s) => ({ s, n: list.filter((x) => x.stage === s).length }))
-    .filter((x) => x.n > 0);
+  // The headline metric: total v1→v2 processes in flight (curated count).
+  const totalProcesses = list.reduce((s, m) => s + m.migrating_count, 0);
   return (
-    <Section title="Migrating to V2 — in progress" count={list.length}
+    <Section title="Migrating to V2 — in progress" count={totalProcesses}
       countCls="bg-amber-500/12 text-amber-700 dark:text-amber-400">
       <p className="text-xs text-[color:var(--muted-foreground)] mb-3">
-        The core focus. v1 keeps running until the customer signs off on v2.
-        {counts.length > 0 && <span className="ml-1 opacity-80">{counts.map((c) => `${c.n} ${c.s}`).join(" · ")}.</span>}
+        <span className="font-medium text-[color:var(--foreground)]">{totalProcesses} processes</span> migrating to v2 across {grouped.size} accounts. v1 keeps running until the customer signs off on v2.
       </p>
       {customers.map(([customer, g]) => (
         <div key={customer} className="flex items-start justify-between gap-3 py-2.5 border-b border-[var(--glass-border)] last:border-0">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-[color:var(--foreground)]">
               {customer}
-              {g.processes.length > 1 && <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">· {g.processes.length} processes</span>}
+              {g.count > 0 && <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">· {g.count} {g.count === 1 ? "process" : "processes"}</span>}
             </div>
             <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 break-words">{g.processes.join(", ")}</div>
             {g.owners.length > 0 && (

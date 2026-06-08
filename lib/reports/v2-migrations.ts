@@ -32,6 +32,11 @@ export interface V2Migration {
   /** Migration stage pill shown in the weekly report. */
   stage: "Discovery" | "Development" | "Testing";
 
+  /** Count of v1→v2 processes in active migration for this customer.
+   *  Curated — Monday line items under-represent the real count, so this is
+   *  the source of truth for the report's "processes migrating to v2" metric. */
+  migrating_count: number;
+
   /** Owner chips — kept lightweight so they don't drift weekly.
    *  Both arrays are optional; renderer hides the row when empty. */
   delivery_team?: string[];
@@ -43,6 +48,7 @@ const MIGRATIONS: V2Migration[] = [
     customer_key: "plunkett",
     processes: [],
     stage: "Development",
+    migrating_count: 4,
     delivery_team: ["Arushi"],
     engineering_team: ["Sasha"],
   },
@@ -50,12 +56,14 @@ const MIGRATIONS: V2Migration[] = [
     customer_key: "ttx",
     processes: ["Lease Invoicing"],
     stage: "Development",
+    migrating_count: 2,
     delivery_team: ["Ayush", "Paige"],
   },
   {
     customer_key: "kort-payments",
     processes: [],
     stage: "Development",
+    migrating_count: 4,
     delivery_team: ["Karthik", "Paige"],
     engineering_team: ["Sasha"],
   },
@@ -63,6 +71,7 @@ const MIGRATIONS: V2Migration[] = [
     customer_key: "conectiv",
     processes: [],
     stage: "Development",
+    migrating_count: 1,
     delivery_team: ["Ayush"],
     engineering_team: ["Sasha"],
   },
@@ -70,6 +79,7 @@ const MIGRATIONS: V2Migration[] = [
     customer_key: "scan-health",
     processes: [],
     stage: "Development",
+    migrating_count: 1,
     delivery_team: ["Ayush"],
     engineering_team: ["Sasha", "Vihang"],
   },
@@ -77,6 +87,7 @@ const MIGRATIONS: V2Migration[] = [
     customer_key: "wipro-fss",
     processes: [],
     stage: "Development",
+    migrating_count: 3,
     delivery_team: ["Sid"],
     engineering_team: ["Karthik"],
   },
@@ -116,11 +127,14 @@ export interface ManualV2Migration {
   stage: "Discovery" | "Development" | "Testing";
   /** Owner chips (FDE roster). */
   fde: string[];
+  /** Count of v1→v2 processes in active migration for this customer. */
+  migrating_count: number;
 }
 
 export const MANUAL_V2_MIGRATIONS: ManualV2Migration[] = [
-  { customer: "JBI", process: "All processes", stage: "Development", fde: ["Rishabh"] },
-  { customer: "Ciena", process: "All processes", stage: "Development", fde: ["Rishabh"] },
+  { customer: "JBI", process: "All processes", stage: "Development", fde: ["Rishabh"], migrating_count: 5 },
+  { customer: "Ciena", process: "All processes", stage: "Development", fde: ["Rishabh"], migrating_count: 1 },
+  { customer: "Century", process: "Accounting Ops", stage: "Development", fde: [], migrating_count: 1 },
 ];
 
 // ─── V2 Migration Program ───────────────────────────────────────────────────

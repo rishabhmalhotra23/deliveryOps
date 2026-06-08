@@ -284,8 +284,10 @@ export interface WeeklyBundle {
    *  Monday column once Rishabh adds it to the Customers board. */
   v2_migrations: V2Migration[];
 
-  /** Processes currently migrating v1 → v2 (the weekly report's focus list). */
-  v2_migration_list: Array<{ customer: string; process: string; stage: string; fde: string[] }>;
+  /** Processes currently migrating v1 → v2 (the weekly report's focus list).
+   *  migrating_count is the curated per-customer process count (Monday under-
+   *  counts), summed for the "processes migrating to v2" metric. */
+  v2_migration_list: Array<{ customer: string; process: string; stage: string; fde: string[]; migrating_count: number }>;
   /** Bulk-migration program update — workstreams running alongside the
    *  per-customer migrations. Curated copy (see lib/reports/v2-migrations.ts). */
   v2_program: V2ProgramWorkstream[];
@@ -497,6 +499,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       process: m.processes.length > 0 ? m.processes.join(", ") : "All processes",
       stage: m.stage as string,
       fde: [...(m.delivery_team ?? []), ...(m.engineering_team ?? [])],
+      migrating_count: m.migrating_count,
     })),
     ...MANUAL_V2_MIGRATIONS,
   ].sort((a, b) => a.customer.localeCompare(b.customer));
