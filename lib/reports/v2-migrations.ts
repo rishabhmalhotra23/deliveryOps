@@ -92,3 +92,55 @@ export async function loadV2Migrations(): Promise<V2Migration[]> {
   }
   return out;
 }
+
+// ─── Manual migration rows ──────────────────────────────────────────────────
+// Rows we want in the weekly report's "Migrating to V2 — in progress" tile
+// before they're reflected in Monday's Migration column. The weekly loader
+// merges these into v2_migration_list (deduped by customer name), so they
+// render alongside the Monday-driven rows. Remove an entry once its Monday
+// card carries the Migration status and the right phase.
+export interface ManualV2Migration {
+  /** Display name shown in the tile. */
+  customer: string;
+  /** Process label; "All processes" means the whole customer. */
+  process: string;
+  /** Migration stage pill — must match migrationStage() output. */
+  stage: "Discovery" | "Development" | "Testing";
+  /** Owner chips (FDE roster). */
+  fde: string[];
+}
+
+export const MANUAL_V2_MIGRATIONS: ManualV2Migration[] = [
+  { customer: "JBI", process: "All processes", stage: "Development", fde: ["Rishabh"] },
+  { customer: "Ciena", process: "All processes", stage: "Development", fde: ["Rishabh"] },
+];
+
+// ─── V2 Migration Program ───────────────────────────────────────────────────
+// The bulk-migration build-out running alongside the per-customer migrations:
+// a system to migrate all processes to v2. Free-form workstream updates, edited
+// by hand. Rendered as its own tile below the customer migration list.
+export interface V2ProgramWorkstream {
+  title: string;
+  owners: string[];
+  body: string;
+}
+
+export const V2_PROGRAM_WORKSTREAMS: V2ProgramWorkstream[] = [
+  {
+    title: "Data pipeline → Quill 2 build",
+    owners: ["Sid", "Sasha", "Rishabh"],
+    body:
+      "Pipeline for data collection and migration to v2 Quill 2 via the Kognitos Plugin is finalized. " +
+      "Full data dump for every v1 production process is captured (live and test runs, learnings, Klang, " +
+      "SOPs) and converted into a phased process-flow doc that drives the Quill2 v2 build. Building first " +
+      "with mock data for all third-party integrations, then moving to actual integrations and testing to " +
+      "cut UAT time later for each process.",
+  },
+  {
+    title: "Linear ticket consolidation & prioritization",
+    owners: ["Shyam"],
+    body:
+      "Consolidating all v2 Linear tickets, tagging them for Quill 1 vs Quill 2, and flagging high priority " +
+      "to identify which features are key blockers for v2 migration and prioritize accordingly.",
+  },
+];

@@ -19,7 +19,10 @@ import {
   peopleNames, ttvDays,
   kognitosFYQuarter, previousKognitosFYQuarter,
 } from "@/lib/delivery/taxonomy";
-import { loadV2Migrations, type V2Migration } from "@/lib/reports/v2-migrations";
+import {
+  loadV2Migrations, type V2Migration,
+  MANUAL_V2_MIGRATIONS, V2_PROGRAM_WORKSTREAMS, type V2ProgramWorkstream,
+} from "@/lib/reports/v2-migrations";
 
 function parseDate(iso: string | null): Date | null {
   if (!iso) return null;
@@ -283,6 +286,9 @@ export interface WeeklyBundle {
 
   /** Processes currently migrating v1 → v2 (the weekly report's focus list). */
   v2_migration_list: Array<{ customer: string; process: string; stage: string; fde: string[] }>;
+  /** Bulk-migration program update — workstreams running alongside the
+   *  per-customer migrations. Curated copy (see lib/reports/v2-migrations.ts). */
+  v2_program: V2ProgramWorkstream[];
   /** Full portfolio waterfall over every project card (see loader rules). */
   portfolio: {
     total_cards: number;
@@ -481,9 +487,15 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     else if (m.includes("migrating")) v2Progress.migrating++;
     else if (m.includes("upcoming")) v2Progress.upcoming++;
   }
-  const v2_migration_list = allActiveBoardProjects
+  const v2MigrationFromMonday = allActiveBoardProjects
     .filter((p) => (p.migration ?? "").toLowerCase().includes("migrating"))
-    .map((p) => ({ customer: p.customer_display_name, process: p.name, stage: migrationStage(p.phase), fde: p.fde }))
+    .map((p) => ({ customer: p.customer_display_name, process: p.name, stage: migrationStage(p.phase), fde: p.fde }));
+  // Merge in manual rows (e.g. JBI, Ciena under Rishabh) not yet on Monday's
+  // Migration column — skip any whose customer is already present from Monday.
+  const v2ManualExtra = MANUAL_V2_MIGRATIONS.filter(
+    (m) => !v2MigrationFromMonday.some((x) => x.customer.toLowerCase() === m.customer.toLowerCase())
+  );
+  const v2_migration_list = [...v2MigrationFromMonday, ...v2ManualExtra]
     .sort((a, b) => a.customer.localeCompare(b.customer));
 
   // ── Portfolio overview — the full waterfall over every project card ───────
@@ -697,6 +709,7 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       v2_progress: v2Progress,
     },
     v2_migration_list,
+    v2_program: V2_PROGRAM_WORKSTREAMS,
     portfolio,
     workload_fde,
     nps_this_quarter,

@@ -553,11 +553,12 @@ function shortProc(customer: string, process: string): string {
 function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_list"]; inDev: number }) {
   if (list.length === 0) return null;
   // Group by customer — one block per customer, processes named inline.
-  const grouped = new Map<string, { processes: string[]; stages: string[] }>();
+  const grouped = new Map<string, { processes: string[]; stages: string[]; owners: string[] }>();
   for (const m of list) {
-    const g = grouped.get(m.customer) ?? { processes: [], stages: [] };
+    const g = grouped.get(m.customer) ?? { processes: [], stages: [], owners: [] };
     g.processes.push(shortProc(m.customer, m.process));
     if (!g.stages.includes(m.stage)) g.stages.push(m.stage);
+    for (const o of m.fde) if (!g.owners.includes(o)) g.owners.push(o);
     grouped.set(m.customer, g);
   }
   const customers = [...grouped.entries()].sort(
@@ -581,6 +582,16 @@ function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_li
               {g.processes.length > 1 && <span className="text-[color:var(--muted-foreground)] font-normal ml-1.5">· {g.processes.length} processes</span>}
             </div>
             <div className="text-xs text-[color:var(--muted-foreground)] mt-0.5 break-words">{g.processes.join(", ")}</div>
+            {g.owners.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                {g.owners.map((o) => (
+                  <span key={o} className="inline-flex items-center gap-1 text-[11px] text-[color:var(--muted-foreground)]">
+                    <span className="w-4 h-4 rounded-full bg-[color:var(--foreground)] text-[var(--card)] text-[9px] font-medium flex items-center justify-center shrink-0">{o.charAt(0).toUpperCase()}</span>
+                    {o}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap justify-end gap-1 shrink-0 max-w-[40%]">
             {[...g.stages].sort((a, b) => stageRank(a) - stageRank(b)).map((s) => <span key={s}>{stagePill(s)}</span>)}
@@ -592,6 +603,32 @@ function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_li
           Plus {inDev} net-new builds on V2 in active development — full list in Analytics.
         </div>
       )}
+    </Section>
+  );
+}
+
+// ── V2 Migration Program — bulk-migration build-out ─────────────────────────────
+function V2ProgramSection({ workstreams }: { workstreams: WeeklyBundle["v2_program"] }) {
+  if (!workstreams || workstreams.length === 0) return null;
+  return (
+    <Section title="V2 Migration Program — bulk migration build-out" count={workstreams.length}
+      countCls="bg-violet-500/12 text-violet-700 dark:text-violet-400">
+      <p className="text-xs text-[color:var(--muted-foreground)] mb-3">
+        Building a system to bulk-migrate all processes to v2, alongside the per-customer work above.
+      </p>
+      {workstreams.map((w) => (
+        <div key={w.title} className="py-2.5 border-b border-[var(--glass-border)] last:border-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="text-sm font-semibold text-[color:var(--foreground)]">{w.title}</div>
+            <div className="flex flex-wrap justify-end gap-1 shrink-0">
+              {w.owners.map((o) => (
+                <span key={o} className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--glass-border)] text-[color:var(--muted-foreground)] font-medium">{o}</span>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-[color:var(--muted-foreground)] mt-1 leading-relaxed">{w.body}</p>
+        </div>
+      ))}
     </Section>
   );
 }
@@ -685,6 +722,9 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
 
       {/* Migrating to V2 — the strategic focus. */}
       <MigrationSection list={bundle.v2_migration_list} inDev={bundle.portfolio.in_dev.v2} />
+
+      {/* V2 Migration Program — the bulk-migration build-out. */}
+      <V2ProgramSection workstreams={bundle.v2_program} />
 
       {/* Momentum — go-lives over the trailing window. */}
       <div className="glass-card p-5">

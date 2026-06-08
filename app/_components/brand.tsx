@@ -299,7 +299,7 @@ export function formatMoney(n: number | null | undefined, opts: { compact?: bool
     if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
     if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
   }
-  return `$${n.toLocaleString()}`;
+  return `$${n.toLocaleString("en-US")}`;
 }
 
 export function formatTimeAgo(iso: string | null): string {
