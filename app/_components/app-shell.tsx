@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { UserPill } from "./user-pill";
 
 interface NavItem {
@@ -116,6 +117,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const syncStatus = useSyncStatus();
+  const reduce = useReducedMotion();
 
   return (
     <div className="min-h-screen flex bg-[color:var(--background)]">
@@ -144,13 +146,24 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block rounded-md px-3 py-2 text-sm tracking-tight transition-colors ${
+                className={`relative block rounded-md px-3 py-2 text-sm tracking-tight transition-colors ${
                   active
-                    ? "bg-[color:var(--brand-yellow)] text-[color:var(--brand-night)] font-semibold"
+                    ? "text-[color:var(--brand-night)] font-semibold"
                     : "text-[color:var(--brand-seasalt)] hover:bg-[rgba(255,255,255,0.06)]"
                 }`}
               >
-                {item.label}
+                {active ? (
+                  <motion.span
+                    layoutId="nav-active-pill"
+                    className="absolute inset-0 rounded-md bg-[color:var(--brand-yellow)]"
+                    transition={
+                      reduce
+                        ? { duration: 0 }
+                        : { type: "spring", stiffness: 380, damping: 32 }
+                    }
+                  />
+                ) : null}
+                <span className="relative z-10">{item.label}</span>
               </Link>
             );
           })}

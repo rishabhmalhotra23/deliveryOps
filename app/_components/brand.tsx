@@ -215,7 +215,7 @@ export function StatBlock({
   onClick,
 }: {
   label: ReactNode;
-  value: string;
+  value: ReactNode;
   hint?: ReactNode;
   emphasis?: boolean;
   /** When provided, the block renders as a button. Click → caller-decides

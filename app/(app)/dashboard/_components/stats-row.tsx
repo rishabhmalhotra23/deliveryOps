@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { DrillDownPanel } from "@/app/_components/drilldown-panel";
 import { StatBlock, formatMoney } from "@/app/_components/brand";
+import { RevealGroup, RevealItem, CountUp } from "@/app/_components/motion";
 import { formatPeopleList, formatPersonName } from "@/lib/delivery/taxonomy";
 import type {
   ArrBreakdownRow,
@@ -39,33 +40,41 @@ export function DashboardStatsRow({
 
   return (
     <>
-      <section className="grid gap-3 md:grid-cols-4">
-        <StatBlock
-          label="Confirmed ARR"
-          value={formatMoney(totalArr)}
-          hint="Closed-Won SF deals · click to see per-customer breakdown"
-          emphasis
-          onClick={() => setDrill("arr")}
-        />
-        <StatBlock
-          label="Need attention"
-          value={String(needAttention)}
-          hint="At Risk + Upcoming Renewals"
-          onClick={() => setDrill("attention")}
-        />
-        <StatBlock
-          label="Open opportunities"
-          value={String(openOpportunities)}
-          hint="Across all customers (cached)"
-          onClick={() => setDrill("opps")}
-        />
-        <StatBlock
-          label="Open cases"
-          value={String(openCases)}
-          hint="Across all customers (cached)"
-          onClick={() => setDrill("cases")}
-        />
-      </section>
+      <RevealGroup className="grid gap-3 md:grid-cols-4">
+        <RevealItem>
+          <StatBlock
+            label="Confirmed ARR"
+            value={<CountUp value={totalArr} format={(n) => formatMoney(n)} />}
+            hint="Closed-Won SF deals · click to see per-customer breakdown"
+            emphasis
+            onClick={() => setDrill("arr")}
+          />
+        </RevealItem>
+        <RevealItem>
+          <StatBlock
+            label="Need attention"
+            value={<CountUp value={needAttention} />}
+            hint="At Risk + Upcoming Renewals"
+            onClick={() => setDrill("attention")}
+          />
+        </RevealItem>
+        <RevealItem>
+          <StatBlock
+            label="Open opportunities"
+            value={<CountUp value={openOpportunities} />}
+            hint="Across all customers (cached)"
+            onClick={() => setDrill("opps")}
+          />
+        </RevealItem>
+        <RevealItem>
+          <StatBlock
+            label="Open cases"
+            value={<CountUp value={openCases} />}
+            hint="Across all customers (cached)"
+            onClick={() => setDrill("cases")}
+          />
+        </RevealItem>
+      </RevealGroup>
 
       {drill === "arr" ? (
         <DrillDownPanel

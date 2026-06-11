@@ -8,6 +8,7 @@ import { CustomerAvatar } from "@/app/_components/customer-avatar";
 import { deriveCustomerDomain } from "@/app/_components/customer-domain";
 import { PipelineList } from "./_components/pipeline-list";
 import { DashboardStatsRow } from "./_components/stats-row";
+import { RevealGroup, RevealItem } from "@/app/_components/motion";
 import {
   CategoryChip,
   PageHeader,
@@ -100,28 +101,30 @@ export default async function Dashboard() {
   const allCategories = [...CATEGORY_ORDER, ...extraCategories];
 
   return (
-    <div className="px-8 lg:px-12 py-10 max-w-7xl mx-auto space-y-12">
-      <PageHeader
-        eyebrow="Dashboard"
-        title="Every customer, every system, one view."
-        subtitle={`Salesforce ${
-          summary?.last_sync.salesforce
-            ? formatTimeAgo(summary.last_sync.salesforce)
-            : "never"
-        } · Monday ${
-          summary?.last_sync.monday
-            ? formatTimeAgo(summary.last_sync.monday)
-            : "never"
-        } · Kognitos live.`}
-        actions={
-          <Link
-            href="/operations"
-            className="btn-primary inline-flex items-center rounded-md px-3 py-1.5 text-sm"
-          >
-            Operations chat
-          </Link>
-        }
-      />
+    <RevealGroup className="px-8 lg:px-12 py-10 max-w-7xl mx-auto space-y-12">
+      <RevealItem>
+        <PageHeader
+          eyebrow="Dashboard"
+          title="Every customer, every system, one view."
+          subtitle={`Salesforce ${
+            summary?.last_sync.salesforce
+              ? formatTimeAgo(summary.last_sync.salesforce)
+              : "never"
+          } · Monday ${
+            summary?.last_sync.monday
+              ? formatTimeAgo(summary.last_sync.monday)
+              : "never"
+          } · Kognitos live.`}
+          actions={
+            <Link
+              href="/operations"
+              className="btn-primary inline-flex items-center rounded-md px-3 py-1.5 text-sm"
+            >
+              Operations chat
+            </Link>
+          }
+        />
+      </RevealItem>
 
       <DashboardStatsRow
         totalArr={totalArr}
@@ -135,6 +138,7 @@ export default async function Dashboard() {
         casesRows={casesRows}
       />
 
+      <RevealItem>
       <section>
         <SectionMark>Category distribution</SectionMark>
         <div className="rounded-lg border border-line bg-white dark:bg-white/6 dark:border-white/12 p-6">
@@ -154,12 +158,13 @@ export default async function Dashboard() {
           </div>
         </div>
       </section>
+      </RevealItem>
 
       {/* Pending approvals — surfaces the email drafts + gated actions that
           are waiting on an FDE click in Slack. Lives on the dashboard so the
           FDE doesn't have to context-switch to Slack to see what's queued. */}
       {approvals.length > 0 ? (
-        <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5">
+        <RevealItem className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5">
           <div className="flex items-center justify-between mb-3">
             <SectionMark>Pending approvals</SectionMark>
             <span className="text-xs text-[color:var(--brand-gray)] tabular-nums">
@@ -192,11 +197,12 @@ export default async function Dashboard() {
             Each one has a Block Kit card in the customer&apos;s Slack channel —
             click through there to approve, reject, or discuss in thread.
           </div>
-        </section>
+        </RevealItem>
       ) : null}
 
       {/* ── Upcoming pipeline · next 90 days (expandable list, show more) ── */}
       {pipeline && pipeline.count > 0 ? (
+        <RevealItem>
         <section>
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <SectionMark>
@@ -240,9 +246,11 @@ export default async function Dashboard() {
           </p>
           <PipelineList opportunities={pipeline.opportunities} />
         </section>
+        </RevealItem>
       ) : null}
 
       {overnightFilled ? (
+        <RevealItem>
         <section>
           <SectionMark>What changed overnight</SectionMark>
           <p className="text-xs text-[color:var(--brand-gray)] mb-4">
@@ -301,12 +309,14 @@ export default async function Dashboard() {
             })}
           </div>
         </section>
+        </RevealItem>
       ) : null}
 
       {/* Quiet customers — early-warning surface. The FDE hears from the
           loud customers; this surfaces the silent ones, who are the actual
           renewal risk. Replaces the old "Recently updated" tile. */}
       {quietCustomers.length > 0 ? (
+        <RevealItem>
         <section>
           <div className="flex items-center justify-between mb-3">
             <SectionMark>Quiet customers · 30+ days</SectionMark>
@@ -357,10 +367,11 @@ export default async function Dashboard() {
             })}
           </div>
         </section>
+        </RevealItem>
       ) : null}
 
       {!summary?.last_sync.salesforce ? (
-        <section className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5 text-sm">
+        <RevealItem className="rounded-lg border border-[color:var(--brand-yellow-line)] bg-[color:var(--brand-yellow-soft)] p-5 text-sm">
           <div className="font-display text-base mb-1">No data synced yet.</div>
           <p className="text-[color:var(--brand-night)] mb-3">
             DeliveryOps caches Salesforce + Monday weekly so the dashboard stays fast. Trigger the
@@ -369,9 +380,9 @@ export default async function Dashboard() {
           <Link href="/dev/sync" className="inline-flex btn-primary rounded-md px-4 py-1.5 text-sm">
             Run sync now
           </Link>
-        </section>
+        </RevealItem>
       ) : null}
-    </div>
+    </RevealGroup>
   );
 }
 
