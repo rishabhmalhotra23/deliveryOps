@@ -83,7 +83,7 @@ export function buildHeroProps(
   ).sort();
   const knownCategories = [
     "At Risk","Upcoming Renewals","Strategic Growth","Secondary Priority",
-    "Partner Managed","POV","To Drop","Churned","Dropped",
+    "Partner Managed","POV","Evaluation","To Drop","Churned","Dropped",
     ...Array.from(new Set(allCustomers.map((c) => c.custom_category).filter((v): v is string => !!v))),
   ].filter((v, i, a) => a.indexOf(v) === i);
 

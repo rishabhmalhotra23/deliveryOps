@@ -151,6 +151,18 @@ describe("categoryFromCustomer", () => {
         )
       ).toBe("Active");
     });
+
+    it("Evaluation stays put even with an imminent renewal (strategic review wins)", () => {
+      // Evaluation is set via custom_category, so it overrides the renewal
+      // rule — an account under review does not get yanked back into
+      // Upcoming Renewals just because its renewal is near.
+      expect(
+        categoryFromCustomer(
+          { custom_category: "Evaluation", lifecycle_group: null },
+          { renewal_date: isoDaysFromNow(30), annual_revenue: 100_000_000 }
+        )
+      ).toBe("Evaluation");
+    });
   });
 
   it("trims whitespace on custom_category", () => {
@@ -174,13 +186,16 @@ describe("categorySortIndex", () => {
     const sorted = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sorted);
   });
-  it("puts At Risk first, To Drop near the bottom, past states last", () => {
+  it("puts At Risk first, Evaluation before To Drop, past states last", () => {
     expect(categorySortIndex("At Risk")).toBe(0);
-    expect(categorySortIndex("To Drop")).toBe(6);
+    // Evaluation sits between POV (5) and To Drop — the decision is pending,
+    // not yet made.
+    expect(categorySortIndex("Evaluation")).toBe(6);
+    expect(categorySortIndex("To Drop")).toBe(7);
     // Past states sit at the end: Past (auto-class) → Churned → Dropped.
-    expect(categorySortIndex("Past")).toBe(7);
-    expect(categorySortIndex("Churned")).toBe(8);
-    expect(categorySortIndex("Dropped")).toBe(9);
+    expect(categorySortIndex("Past")).toBe(8);
+    expect(categorySortIndex("Churned")).toBe(9);
+    expect(categorySortIndex("Dropped")).toBe(10);
   });
   it("sends unknown categories to the bottom (99)", () => {
     expect(categorySortIndex("Strategic Logos")).toBe(99);

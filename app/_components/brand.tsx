@@ -34,6 +34,7 @@ export const CATEGORY_ORDER = [
   "Active", // legacy alias for "Secondary Priority"
   "Partner Managed",
   "POV",
+  "Evaluation",
   "To Drop",
   "Past",
   "Churned",
@@ -48,16 +49,56 @@ const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: num
   Active: { class: "tone-tier2", weight: 3 }, // same tone — legacy alias
   "Partner Managed": { class: "tone-partner", weight: 4 },
   POV: { class: "tone-pov", weight: 5 },
+  // "Evaluation" — accounts under strategic review (keep / drop / let lapse),
+  // driven by the AI-in-Finance focus. Sits before To Drop: the decision is
+  // pending, not made. Cool indigo tone, distinct from the warm To Drop and
+  // the gray closed states. Set via custom_category, so it overrides the
+  // dynamic renewal/revenue rules — an Evaluation account stays in the
+  // Evaluation zone even when its renewal is imminent.
+  Evaluation: { class: "tone-evaluation", weight: 6 },
   // "To Drop" — customers we've decided to drop at renewal. Distinct from
   // Churned (already gone) and At Risk (could still be saved). Visually
   // adjacent to Churned but with its own warmer-warning tone.
-  "To Drop": { class: "tone-todrop", weight: 6 },
+  "To Drop": { class: "tone-todrop", weight: 7 },
   // "Past" — the safe default for customers Monday flagged as
   // "Churned/Dropped". The FDE disambiguates per-customer.
-  Past: { class: "tone-churned", weight: 7 },
-  Churned: { class: "tone-churned", weight: 8 },
-  Dropped: { class: "tone-todrop", weight: 9 },
+  Past: { class: "tone-churned", weight: 8 },
+  Churned: { class: "tone-churned", weight: 9 },
+  Dropped: { class: "tone-todrop", weight: 10 },
 };
+
+// ─── Zones — coarse grouping over categories, for the Customers page ──────
+// One category always maps to exactly one zone. Zones give the long list a
+// scannable structure (Focus / Pipeline / Evaluation / Closed) without a
+// data-model change.
+export const ZONE_ORDER = ["Focus", "Pipeline", "Evaluation", "Closed"] as const;
+export type Zone = (typeof ZONE_ORDER)[number];
+
+export const ZONE_DESC: Record<Zone, string> = {
+  Focus: "the active book",
+  Pipeline: "proving value",
+  Evaluation: "under strategic review",
+  Closed: "no longer active",
+};
+
+const CATEGORY_TO_ZONE: Record<string, Zone> = {
+  "At Risk": "Focus",
+  "Upcoming Renewals": "Focus",
+  "Strategic Growth": "Focus",
+  "Secondary Priority": "Focus",
+  Active: "Focus",
+  "Partner Managed": "Focus",
+  POV: "Pipeline",
+  Evaluation: "Evaluation",
+  "To Drop": "Closed",
+  Past: "Closed",
+  Churned: "Closed",
+  Dropped: "Closed",
+};
+
+export function zoneForCategory(category: string): Zone {
+  return CATEGORY_TO_ZONE[category] ?? "Focus";
+}
 
 // Legacy lifecycle group → category mapping for any customer that still
 // hasn't been backfilled. Mirrors migration 0005 + the live Monday board.

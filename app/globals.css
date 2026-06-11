@@ -138,6 +138,7 @@
 .tone-tier2         { background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE; }
 .tone-partner       { background: #F5F3FF; color: #5B21B6; border-color: #DDD6FE; }
 .tone-pov           { background: var(--brand-yellow-soft); color: var(--brand-night); border-color: var(--brand-yellow-line); }
+.tone-evaluation    { background: #EEF2FF; color: #3730A3; border-color: #C7D2FE; }
 .tone-todrop        { background: #FEF2F2; color: #B91C1C; border-color: #FCA5A5; }
 .tone-churned       { background: #F5F5F5; color: #525252; border-color: #E5E5E5; }
 .tone-other         { background: var(--brand-seasalt); color: var(--brand-gray); border-color: var(--brand-metal-line); }
@@ -258,6 +259,7 @@
 .dark .tone-tier2       { background: rgba(59, 130, 246, 0.15); color: #93C5FD; border-color: rgba(59, 130, 246, 0.35); }
 .dark .tone-partner     { background: rgba(139, 92, 246, 0.15); color: #C4B5FD; border-color: rgba(139, 92, 246, 0.35); }
 .dark .tone-pov         { background: rgba(242, 255, 112, 0.15); color: #F2FF70; border-color: rgba(242, 255, 112, 0.40); }
+.dark .tone-evaluation  { background: rgba(99, 102, 241, 0.18); color: #C7D2FE; border-color: rgba(99, 102, 241, 0.40); }
 .dark .tone-todrop      { background: rgba(239, 68, 68, 0.15); color: #FCA5A5; border-color: rgba(239, 68, 68, 0.35); }
 .dark .tone-churned     { background: rgba(255, 255, 255, 0.06); color: #b4b4c4; border-color: rgba(255, 255, 255, 0.14); }
 .dark .tone-other       { background: rgba(255, 255, 255, 0.05); color: #b4b4c4; border-color: rgba(255, 255, 255, 0.12); }
