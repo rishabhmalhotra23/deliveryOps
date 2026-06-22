@@ -2,9 +2,10 @@
 
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import {
-  REPORT_DATE_LABEL, LINEAR_ISSUE, SNAPSHOT, MIGRATE_FUNNEL, ESTATE_SPLIT,
-  RETIRE_BREAKDOWN, ESTATE_INTRO, ESTATE_FINISH_NOTE, ESTATE_OPEN_DECISION,
-  ESTATE_SOURCE_NOTE, NET_NEW, NET_NEW_NOTE, RENEWALS_ACTIVE, RENEWALS_HEADLINE,
+  REPORT_DATE_LABEL, LINEAR_ISSUE, SNAPSHOT, MIGRATE_FUNNEL, MIGRATE_FINISH_HEADLINE,
+  ESTATE_SPLIT, RETIRE_BREAKDOWN, ESTATE_INTRO, ESTATE_FINISH_NOTE, ESTATE_OPEN_DECISION,
+  ESTATE_SOURCE_NOTE, PARITY_HEADLINE, PARITY_TIMELINE, PARITY_FOOTNOTE,
+  NET_NEW, NET_NEW_NOTE, RENEWALS_ACTIVE, RENEWALS_HEADLINE,
   RENEWALS_DROPPING, NOT_MIGRATING, BLOCKERS_RESOLVED, BLOCKERS_RESOLVED_NOTE,
   BLOCKERS_OPEN, DECISIONS, SOURCES_NOTE,
   type Tone, type BlockerRow,
@@ -159,7 +160,7 @@ export function V2MigrationClient() {
             <div className="grid gap-4 lg:grid-cols-5">
               <div className="lg:col-span-3 rounded-xl border border-[var(--brand-metal-line)] p-4">
                 <h3 className="text-sm font-semibold text-[color:var(--foreground)]"><span className="text-xl font-bold mr-1" style={{ color: "#185FA5" }}>47</span> Migrate to V2</h3>
-                <div className={`text-[11px] ${MUTED} mt-0.5 mb-2.5`}>11 at or near the finish line (complete, in UAT, or parity testing)</div>
+                <div className={`text-[11px] ${MUTED} mt-0.5 mb-2.5`}>{MIGRATE_FINISH_HEADLINE}</div>
                 <StackBar stages={MIGRATE_FUNNEL} total={migrateTotal} />
                 <Legend stages={MIGRATE_FUNNEL} />
                 <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed`}>{ESTATE_FINISH_NOTE}</p>
@@ -178,6 +179,32 @@ export function V2MigrationClient() {
               {ESTATE_OPEN_DECISION}
             </div>
             <p className={`text-[11px] ${MUTED} leading-relaxed`}>{ESTATE_SOURCE_NOTE}</p>
+          </div>
+        </section>
+
+        {/* What's next: parity targets */}
+        <section>
+          <SectionLabel>Path to v1 parity — all 47 by July 3</SectionLabel>
+          <div className="glass-card rounded-2xl p-5">
+            <p className="text-[12.5px] text-[color:var(--foreground)] leading-relaxed mb-3.5">{PARITY_HEADLINE}</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+              {PARITY_TIMELINE.map((d) => (
+                <div key={d.date} className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <span className="text-[12.5px] font-semibold text-[color:var(--foreground)]">{d.day} {d.date}</span>
+                    <span className="text-base font-bold" style={{ color: "#185FA5" }}>{d.count}</span>
+                  </div>
+                  <div className="text-[11px] leading-relaxed">
+                    {d.items.map((it) => (
+                      <div key={it.name} className={it.blocked ? "" : MUTED} style={it.blocked ? { color: "#B91C1C" } : undefined}>
+                        {it.name}{it.blocked ? " ⚠" : ""}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className={`text-[11px] ${MUTED} leading-relaxed mt-3 border-t border-[var(--brand-metal-line)] pt-3`}>{PARITY_FOOTNOTE}</p>
           </div>
         </section>
 

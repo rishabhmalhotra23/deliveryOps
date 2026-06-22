@@ -32,12 +32,11 @@ export const SNAPSHOT: SnapshotMetric[] = [
 export interface FunnelStage { label: string; count: number; color: string; }
 export const MIGRATE_FUNNEL: FunnelStage[] = [
   { label: "Complete", count: 1, color: "#1D9E75" },
-  { label: "Customer UAT", count: 1, color: "#5DCAA5" },
   { label: "Parity testing", count: 9, color: "#378ADD" },
   { label: "In build", count: 27, color: "#EF9F27" },
-  { label: "Blocked", count: 8, color: "#E24B4A" },
-  { label: "Not started", count: 1, color: "#888780" },
+  { label: "Blocked", count: 10, color: "#E24B4A" },
 ];
+export const MIGRATE_FINISH_HEADLINE = "10 at or near the finish line (complete or in parity testing)";
 
 export const ESTATE_SPLIT: FunnelStage[] = [
   { label: "Migrate to V2", count: 47, color: "#185FA5" },
@@ -55,7 +54,34 @@ export const RETIRE_BREAKDOWN: { label: string; count: number }[] = [
 export const ESTATE_INTRO =
   "V1 is being decommissioned, so every live V1 process follows one of two paths: rebuilt on V2, or retired alongside V1. We migrate processes in active use and worth retaining, and retire those tied to departing accounts, no longer running, or not warranting a rebuild.";
 export const ESTATE_FINISH_NOTE =
-  "In UAT: Norco Parts Reconciliation. Not started: Conectiv, a one-off not yet live on V1; it will migrate once built, with a renewal and commercial discussion in play. Two of the eight blocked items cleared this week and will move once the tracker updates.";
+  "Conectiv and Norco Parts Reconciliation moved into active build this week, so there is no longer a not-started or UAT item. Blocked is 10 in the tracker; JBI Merch and JBI AP are already cleared in Linear and will move as the tracker catches up.";
+
+// What's next — v1-parity target dates (from the migration tracker).
+export interface ParityDay { day: string; date: string; count: number; items: { name: string; blocked?: boolean }[]; }
+export const PARITY_HEADLINE =
+  "Every migration must reach v1 parity by July 3, the program deadline. One is already complete, 28 are dated this week (Jun 23–26), and the remaining 18 land by July 3. Items flagged ⚠ are engineering-blocked and must clear to hold the date; several blockers already cleared in Linear this week.";
+export const PARITY_TIMELINE: ParityDay[] = [
+  { day: "Tue", date: "Jun 23", count: 7, items: [
+    { name: "JBI · QSR" }, { name: "JBI · SBUX" }, { name: "Plunkett · Create Payments" },
+    { name: "Plunkett · Claim RA" }, { name: "TTX · Brake AR" },
+    { name: "Wipro · ITC", blocked: true }, { name: "Wipro · LCC", blocked: true } ] },
+  { day: "Wed", date: "Jun 24", count: 6, items: [
+    { name: "JBI · Design Mtg" }, { name: "JBI · PIR v2" }, { name: "Plunkett · Sales Order" },
+    { name: "Plunkett · Vendor Bill" }, { name: "Wipro · DSPF SEZ" }, { name: "Wipro · Tax Vouching" } ] },
+  { day: "Thu", date: "Jun 25", count: 7, items: [
+    { name: "Ciena · PO" }, { name: "TTX · AP", blocked: true }, { name: "TTX · COA", blocked: true },
+    { name: "TTX · Goods Receipt", blocked: true }, { name: "Wipro · Collection Acct" },
+    { name: "Wipro · GP Vendor" }, { name: "Wipro · BRS", blocked: true } ] },
+  { day: "Fri", date: "Jun 26", count: 8, items: [
+    { name: "iHeartRadio · Affidavits" }, { name: "JBI · Managing Onsite" }, { name: "JBI · AP", blocked: true },
+    { name: "Norco · AR" }, { name: "Norco · Parts Recon" }, { name: "Norco · Safety Audit" },
+    { name: "Norco · Solar Winds" }, { name: "Pepsi · ServiceNow" } ] },
+  { day: "Jul 3", date: "· deadline", count: 18, items: [
+    { name: "Kort Payments × 4" }, { name: "Mitie × 3" }, { name: "Century × 2" }, { name: "Conectiv" },
+    { name: "Scan Health × 2", blocked: true }, { name: "JBI Merch", blocked: true }, { name: "Wipro FSS extraction × 5" } ] },
+];
+export const PARITY_FOOTNOTE =
+  "TTX Lease is already complete. The six without an interim date (JBI Merch and five Wipro FSS extraction flows) and Scan Health's two slipped processes all roll into the July 3 deadline; Scan Health is held by its blocker (KOG-11762). Wipro FSS is the sharpest spot: seven targets across Jun 23–25, three engineering-blocked, against a Jun 30 renewal.";
 export const ESTATE_OPEN_DECISION =
   "Open decision: the 12 lower-priority processes need a final migrate-or-retire call once the V1 end-of-life date is confirmed. Any still in active use move into migration scope and raise the count above 47.";
 export const ESTATE_SOURCE_NOTE =
