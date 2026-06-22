@@ -37,6 +37,17 @@ const REPORT_CARDS: ReportCard[] = [
     href: "/reports/weekly",
   },
   {
+    id: "v2-migration",
+    title: "V2 Migration — All Hands",
+    subtitle: "Weekly migration & delivery update",
+    description:
+      "Company All-Hands view of the V1→V2 migration: the migrate-or-retire split across the V1 estate, net-new V2 builds, renewals due this quarter with migration readiness, live engineering blockers from Linear, and key decision points. Export as PNG for the deck.",
+    icon: "🚀",
+    status: "available",
+    needs: [],
+    href: "/reports/v2-migration",
+  },
+  {
     id: "monthly-digest",
     title: "Monthly Customer Digest",
     subtitle: "Customer-facing monthly summary",
