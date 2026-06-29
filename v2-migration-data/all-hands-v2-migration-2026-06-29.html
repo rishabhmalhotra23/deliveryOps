@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>All Hands — Delivery and V2 Migration · Week of June 29, 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --yellow:#F2FF70; --yellow-soft:rgba(242,255,112,.18); --yellow-line:rgba(242,255,112,.55);
+    --night:#171717; --night-soft:#262626; --gray:#737373; --metal-line:#E5E5E5;
+    --canvas:#F4F4F2; --seasalt:#FAFAFA;
+    --green:#1D9E75; --green-bg:#ECFDF5; --green-line:#A7F3D0;
+    --blue:#185FA5; --blue-bg:#EFF6FF; --blue-line:#BFDBFE;
+    --amber:#92400E; --amber-bg:#FFFBEB; --amber-line:#FDE68A;
+    --red:#B91C1C; --red-bg:#FEF2F2; --red-line:#FECACA;
+    --purple:#534AB7;
+    --disp:"Inter Tight",system-ui,sans-serif; --body:"Inter",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--night);font-family:var(--body);
+    background-image:radial-gradient(circle at 18% 12%,rgba(242,255,112,.05) 0%,transparent 45%),radial-gradient(circle at 85% 88%,rgba(23,23,23,.03) 0%,transparent 50%);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 28px 56px;}
+  h1,h2,h3{font-family:var(--disp);letter-spacing:-.02em;margin:0;}
+  .tnum{font-variant-numeric:tabular-nums;}
+  .eyebrow{font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--gray);}
+  .glass{background:rgba(255,255,255,.85);border:1px solid rgba(0,0,0,.07);border-radius:14px;
+    box-shadow:0 1px 4px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04),inset 0 0 0 1px rgba(255,255,255,.9);}
+  .head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:8px;}
+  .head h1{font-size:27px;line-height:1.1;}
+  .head .sub{font-size:13px;color:var(--gray);margin-top:6px;}
+  .tag{display:inline-flex;align-items:center;gap:6px;background:var(--yellow);color:var(--night);font-weight:600;font-size:12px;padding:6px 12px;border-radius:8px;border:1px solid var(--night);}
+  .rule{height:1px;background:var(--metal-line);margin:16px 0 22px;}
+  .sectlabel{font-family:var(--disp);font-weight:600;font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+  .sectlabel .dot{color:var(--night);font-size:11px;}
+  .section{margin-bottom:26px;}
+  .metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+  .metric{background:rgba(255,255,255,.85);border:1px solid rgba(0,0,0,.07);border-radius:12px;padding:14px 15px;}
+  .metric.hero{background:var(--night);border-color:var(--night);}
+  .metric .n{font-family:var(--disp);font-size:30px;font-weight:700;line-height:1;}
+  .metric.hero .n{color:var(--yellow);}
+  .metric .l{font-size:11.5px;color:var(--gray);margin-top:6px;line-height:1.3;}
+  .metric.hero .l{color:#D4D4D4;}
+  .metric .x{font-size:11px;color:var(--gray);margin-top:3px;}
+  .metric.hero .x{color:#A3A3A3;}
+  .story{padding:18px 20px;}
+  .story .rulein{font-size:13.5px;color:var(--night);line-height:1.55;margin-bottom:15px;}
+  .story .rulein strong{font-weight:600;}
+  .splitbar{display:flex;height:30px;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);font-size:11.5px;font-weight:600;}
+  .splitbar span{display:flex;align-items:center;justify-content:center;color:#fff;}
+  .splitlegend{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12px;color:var(--night-soft);}
+  .fate{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-top:16px;}
+  .fatecard{border:1px solid var(--metal-line);border-radius:12px;padding:14px 16px;}
+  .fatecard h3{font-size:13.5px;font-family:var(--disp);font-weight:600;display:flex;align-items:baseline;gap:8px;}
+  .fatecard h3 .c{font-size:22px;font-weight:700;}
+  .fatecard .sub{font-size:11px;color:var(--gray);margin:3px 0 11px;}
+  .bar{display:flex;height:20px;border-radius:7px;overflow:hidden;border:1px solid rgba(0,0,0,.08);}
+  .legend{display:flex;flex-wrap:wrap;gap:11px;margin-top:9px;font-size:11.5px;color:var(--night-soft);}
+  .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:1px;}
+  .retrow{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--metal-line);}
+  .retrow:last-child{border-bottom:none;}
+  .retrow .v{font-weight:600;font-family:var(--disp);}
+  .note{font-size:11.5px;color:var(--gray);line-height:1.55;margin-top:13px;border-top:1px dashed var(--metal-line);padding-top:11px;}
+  .callout{margin-top:11px;font-size:12px;color:var(--night-soft);background:var(--seasalt);border:1px solid var(--metal-line);border-left:3px solid var(--yellow);border-radius:0 9px 9px 0;padding:10px 13px;line-height:1.5;}
+  table.tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.tbl th{text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--gray);padding:0 10px 8px;border-bottom:1px solid var(--metal-line);}
+  table.tbl td{padding:9px 10px;border-bottom:1px solid var(--metal-line);vertical-align:top;}
+  table.tbl tr:last-child td{border-bottom:none;}
+  table.tbl .proc{font-weight:500;white-space:nowrap;}
+  .ph{font-size:11.5px;color:var(--night-soft);}
+  .pill{font-size:10px;font-weight:600;padding:3px 8px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p-ot{background:var(--green-bg);color:var(--green);border:1px solid var(--green-line);}
+  .p-done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-line);}
+  .p-prog{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-line);}
+  .p-open{background:var(--red-bg);color:var(--red);border:1px solid var(--red-line);}
+  .card{padding:15px 17px;}
+  .card h3{font-size:13.5px;font-family:var(--disp);font-weight:600;display:flex;align-items:center;gap:7px;}
+  .card .meta{font-size:11.5px;color:var(--gray);margin:2px 0 12px;line-height:1.5;}
+  .brow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--metal-line);font-size:12.5px;}
+  .brow:last-child{border-bottom:none;}
+  .bgrp{font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--gray);margin:11px 0 3px;}
+  .bgrp:first-of-type{margin-top:0;}
+  a.tik{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue-line);}
+  a.tik:hover{border-bottom-style:solid;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .dps{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .dp{border:1px solid var(--metal-line);border-radius:12px;padding:14px 16px;background:rgba(255,255,255,.85);}
+  .dp h3{font-size:13px;font-family:var(--disp);font-weight:600;margin-bottom:7px;}
+  .dp .ctx{font-size:12px;color:var(--night-soft);line-height:1.5;margin-bottom:8px;}
+  .dp .wa{font-size:11.5px;color:var(--gray);line-height:1.5;margin-bottom:9px;}
+  .dp .wa b{color:var(--night-soft);font-weight:600;}
+  .dp .decide{font-size:12px;color:var(--night);background:var(--seasalt);border-left:3px solid var(--yellow);border-radius:0 7px 7px 0;padding:8px 11px;line-height:1.45;}
+  .dp .decide b{font-weight:600;}
+  .dp .refs{font-size:11px;color:var(--gray);margin-top:8px;}
+  .foot{font-size:11px;color:var(--gray);margin-top:26px;line-height:1.6;border-top:1px solid var(--metal-line);padding-top:14px;}
+  @media(max-width:780px){.metrics{grid-template-columns:repeat(2,1fr);}.fate,.grid2,.dps{grid-template-columns:1fr;}.head h1{font-size:22px;}}
+</style>
+</head>
+<body>
+<style>
+  #toolbar{position:fixed;top:14px;right:16px;z-index:60;display:flex;gap:8px;font-family:var(--body);}
+  #toolbar button{cursor:pointer;border-radius:9px;padding:8px 13px;font-size:12.5px;font-weight:600;font-family:var(--body);border:1px solid var(--metal-line);background:rgba(255,255,255,.92);color:var(--night);box-shadow:0 1px 5px rgba(0,0,0,.12);transition:transform 100ms ease;}
+  #toolbar button.primary{background:var(--yellow);border-color:var(--night);}
+  #toolbar button:hover{transform:translateY(-1px);}
+  #toolbar button:disabled{opacity:.5;cursor:default;}
+  @media print{#toolbar{display:none!important;}}
+</style>
+<div id="toolbar">
+  <button id="btn-png" class="primary" onclick="dlPng()">Download PNG</button>
+  <button id="btn-copy" onclick="copyPng()">Copy PNG</button>
+  <button onclick="window.print()">Print / PDF</button>
+</div>
+<div class="wrap" id="report">
+
+  <div class="head">
+    <div>
+      <div class="eyebrow">Field Delivery · Company All Hands</div>
+      <h1>Delivery and V2 migration</h1>
+      <div class="sub">Week of June 29, 2026 · migration tracker, Monday, and Linear (live)</div>
+    </div>
+    <span class="tag">✴ Weekly</span>
+  </div>
+  <div class="rule"></div>
+
+  <!-- ── SNAPSHOT ─────────────────────────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>Delivery snapshot</div>
+    <div class="metrics">
+      <div class="metric"><div class="n tnum">58</div><div class="l">Live in production</div><div class="x">55 on V1 · 3 on V2</div></div>
+      <div class="metric"><div class="n tnum">24</div><div class="l">In active development</div><div class="x">16 migrations · 7 net-new · 1 custom</div></div>
+      <div class="metric hero"><div class="n tnum">102</div><div class="l">Live or in progress</div><div class="x">total delivered footprint</div></div>
+      <div class="metric"><div class="n tnum">9</div><div class="l">Enhancements delivered</div><div class="x">on existing live processes</div></div>
+      <div class="metric"><div class="n tnum">20</div><div class="l">Queued</div><div class="x">on hold or backlog</div></div>
+    </div>
+  </div>
+
+  <!-- ── V1 ESTATE: MIGRATE OR RETIRE ─────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>The V1 estate: migrate or retire</div>
+    <div class="glass story">
+      <div class="rulein"><strong>V1 is being decommissioned</strong>, so every live V1 process follows one of two paths: rebuilt on V2, or retired alongside V1. We migrate processes in active use and worth retaining, and retire those tied to departing accounts, no longer running, or not warranting a rebuild.</div>
+
+      <div class="splitbar">
+        <span style="width:60%;background:#185FA5;">45 migrate</span>
+        <span style="width:32%;background:#888780;">24 retire</span>
+        <span style="width:5.3%;background:#1D9E75;">4</span>
+        <span style="width:2.7%;background:#534AB7;">2</span>
+      </div>
+      <div class="splitlegend">
+        <span><span class="sw" style="background:#185FA5;"></span>Migrate to V2 — 45</span>
+        <span><span class="sw" style="background:#888780;"></span>Retire with V1 — 24</span>
+        <span><span class="sw" style="background:#1D9E75;"></span>Already on V2 — 4</span>
+        <span><span class="sw" style="background:#534AB7;"></span>Custom / off-platform — 2</span>
+        <span style="color:var(--gray)">= 75 processes tracked</span>
+      </div>
+
+      <div class="fate">
+        <div class="fatecard">
+          <h3><span class="c" style="color:var(--blue);">45</span> Migrate to V2</h3>
+          <div class="sub">19 at or near the finish line (complete, parity testing, or customer UAT)</div>
+          <div class="bar">
+            <span style="width:2.2%;background:#1D9E75;" title="Complete 1"></span>
+            <span style="width:15.6%;background:#5BC4A0;" title="Customer UAT 7"></span>
+            <span style="width:24.4%;background:#378ADD;" title="Parity testing 11"></span>
+            <span style="width:28.9%;background:#EF9F27;" title="In build 13"></span>
+            <span style="width:28.9%;background:#E24B4A;" title="Blocked 13"></span>
+          </div>
+          <div class="legend">
+            <span><span class="sw" style="background:#1D9E75;"></span>Complete 1</span>
+            <span><span class="sw" style="background:#5BC4A0;"></span>Customer UAT 7</span>
+            <span><span class="sw" style="background:#378ADD;"></span>Parity testing 11</span>
+            <span><span class="sw" style="background:#EF9F27;"></span>In build 13</span>
+            <span><span class="sw" style="background:#E24B4A;"></span>Blocked 13</span>
+          </div>
+          <div class="note" style="margin-top:11px;border-top:none;padding-top:0;">Mitie narrowed to PCard only this week, so Invoice Registration Log and WIP moved to retire; Pepsi Fuzzy Matching also dropped from scope. JBI AP and JBI Merch stay in the blocked column even though their Linear tickets cleared, because the Epicor book upgrade is not yet visible in production to verify.</div>
+        </div>
+        <div class="fatecard">
+          <h3><span class="c" style="color:var(--gray);">24</span> Retire with V1</h3>
+          <div class="sub">not migrating; switched off when V1 is retired</div>
+          <div class="retrow"><span>Lower priority or enhancement-only, not slated for rebuild</span><span class="v tnum">14</span></div>
+          <div class="retrow"><span>Account churned, dropped, or under commercial review</span><span class="v tnum">6</span></div>
+          <div class="retrow"><span>Retired, no recent activity</span><span class="v tnum">4</span></div>
+        </div>
+      </div>
+
+      <div class="callout"><strong>Open decision:</strong> the lower-priority processes need a final migrate-or-retire call once the V1 end-of-life date is confirmed. Any still in active use move into migration scope and raise the count above 45.</div>
+      <div class="note">These 75 processes are tracked in the migration tracker. The delivery board represents the same live V1 footprint as 55 cards because it groups sub-processes; the teams are consolidating to a single source.</div>
+    </div>
+  </div>
+
+  <!-- ── WHAT'S NEXT: PARITY TARGETS ──────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>Path to v1 parity — all 45 by July 3</div>
+    <div class="glass card">
+      <p style="margin:0 0 14px;font-size:12.5px;color:var(--night);line-height:1.5;"><strong>Every migration must reach v1 parity by July 3 — the program deadline, this Friday.</strong> The interim dates through June 26 have passed: as of June 29, of those 29 items, 1 is complete, 7 are in customer UAT and 10 in parity testing (on track), while 5 are still in build and 6 are engineering-blocked. The remaining dated work lands July 1 and July 3. Items flagged <span style="color:#B91C1C;font-weight:600;">⚠</span> are engineering-blocked and must clear to hold the date.</p>
+      <div style="display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:10px;">
+        <div style="border:1px solid var(--metal-line);border-radius:10px;padding:11px 13px;background:var(--seasalt);">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;"><span style="font-family:var(--disp);font-weight:600;font-size:12.5px;">Past due · in flight</span><span style="font-family:var(--disp);font-weight:700;font-size:15px;color:#185FA5;">29</span></div>
+          <div style="font-size:11.5px;color:var(--night-soft);line-height:1.7;">
+            <span style="color:#1D9E75;font-weight:600;">1 complete</span> · 7 customer UAT · 10 parity testing<br>
+            5 in build · <span style="color:#B91C1C;font-weight:600;">6 engineering-blocked ⚠</span>
+          </div>
+          <div style="font-size:10.5px;color:var(--gray);line-height:1.7;margin-top:8px;border-top:1px dashed var(--metal-line);padding-top:8px;">Blocked: <span style="color:#B91C1C;">JBI QSR, JBI SBUX, Wipro ITC, Scan Health Report</span>; <span style="color:#B91C1C;">JBI Merch, JBI AP</span> (tickets cleared, prod-verify pending).</div>
+        </div>
+        <div style="border:1px solid var(--metal-line);border-radius:10px;padding:11px 13px;background:var(--seasalt);">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;"><span style="font-family:var(--disp);font-weight:600;font-size:12.5px;">Jul 1</span><span style="font-family:var(--disp);font-weight:700;font-size:15px;color:#185FA5;">6</span></div>
+          <div style="font-size:11px;color:var(--night-soft);line-height:1.75;">Scan Health · Enrollment<br>Wipro · Collection Acct<br>Wipro · GP Vendor<br><span style="color:#B91C1C;">Wipro · BRS ⚠</span><br>Wipro · DSPF SEZ<br>Wipro · Tax Vouching</div>
+        </div>
+        <div style="border:1px solid var(--metal-line);border-left:3px solid var(--yellow-line);border-radius:10px;padding:11px 13px;background:var(--seasalt);">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;"><span style="font-family:var(--disp);font-weight:600;font-size:12.5px;">Jul 3 · deadline</span><span style="font-family:var(--disp);font-weight:700;font-size:15px;color:#185FA5;">10</span></div>
+          <div style="font-size:11px;color:var(--night-soft);line-height:1.75;">Century × 2<br>iHeartRadio · Affidavits<br>Pepsi · ServiceNow<br><span style="color:#B91C1C;">Conectiv ⚠</span><br><span style="color:#B91C1C;">Kort Payments × 4 ⚠</span><br><span style="color:#B91C1C;">Mitie · PCard ⚠</span></div>
+        </div>
+      </div>
+      <div class="note">Sharpest spots: Kort Payments, whose four processes are all engineering-blocked on browser automation and awaiting IP whitelisting from the customer against a Jul 10 renewal, and Wipro FSS, a large parity-testing cluster plus new large-file blockers against a Jun 30 renewal. Scan Health's download blocker (<a class="tik" href="https://linear.app/kognitos/issue/KOG-11762">KOG-11762</a>) and Wipro BRS (<a class="tik" href="https://linear.app/kognitos/issue/OC-1364">OC-1364</a>) both cleared this week.</div>
+    </div>
+  </div>
+
+  <!-- ── NET-NEW V2 DEVELOPMENT ───────────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>Net-new V2 development (not migration)</div>
+    <div class="glass card">
+      <div class="meta" style="margin-top:0;">Greenfield V2 processes in active build. Further V2 builds are queued in the Projects pipeline, on-hold, and backlog. Updates summarized from Monday (active Projects board).</div>
+      <table class="tbl">
+        <thead><tr><th>Process</th><th>Owner</th><th>Phase</th><th>Latest update</th></tr></thead>
+        <tbody>
+          <tr><td class="proc">Norco · Warranty</td><td class="ph">Karthik N.</td><td class="ph">M3 · UAT</td><td class="ph">On track; built on V2, awaiting customer support for QA.</td></tr>
+          <tr><td class="proc">Century · Accounting Ops</td><td class="ph">Rishabh M.</td><td class="ph">M3 · UAT</td><td class="ph">Off track; build complete but the browser-automation connection drops (<a class="tik" href="https://linear.app/kognitos/issue/KOG-11840">KOG-11840</a>) and a fuzzy-matching dependency (<a class="tik" href="https://linear.app/kognitos/issue/ENG-4302">ENG-4302</a>) is open; customer charge-code access pending before UAT.</td></tr>
+          <tr><td class="proc">JBI · Receiving Process</td><td class="ph">Arushi B.</td><td class="ph">M2 · Dev</td><td class="ph">On track; development wrapping up, moving into testing.</td></tr>
+          <tr><td class="proc">JBI · Compass Quote Update</td><td class="ph">Arushi B.</td><td class="ph">M2 · Dev</td><td class="ph">Advanced from discovery; building against the live system, validating MFA.</td></tr>
+          <tr><td class="proc">JBI · Material Allocation Import</td><td class="ph">Arushi B.</td><td class="ph">Waiting for customer</td><td class="ph">Third-party access pending; SQL-DB approach under feasibility review.</td></tr>
+          <tr><td class="proc">TTX · Property Tax Outline</td><td class="ph">Ayush G.</td><td class="ph">M2 · Dev</td><td class="ph">New greenfield V2 build this cycle.</td></tr>
+          <tr><td class="proc">Charleston CSD · Workflow POV</td><td class="ph">Karthik N.</td><td class="ph">Waiting for customer</td><td class="ph">Skeleton built; awaiting customer data for end-to-end testing.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── RENEWALS ─────────────────────────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>Renewals this quarter, and migration readiness</div>
+    <div class="glass card">
+      <div class="meta" style="margin-top:0;">Approximately <strong>$667K</strong> ARR is up for renewal this quarter across four active accounts. Migration progress de-risks the renewal where it lands. Renewal health is the account-level field from the Monday Customers board, distinct from per-process migration readiness.</div>
+      <table class="tbl">
+        <thead><tr><th>Account</th><th>Renewal</th><th>Renewal health</th><th>Migration readiness</th></tr></thead>
+        <tbody>
+          <tr><td class="proc">JBI</td><td class="ph">Jun 22</td><td><span class="pill p-ot">Strong</span></td><td class="ph">On track; many flows in parity or customer UAT. AP and Merch tickets cleared in Linear, pending prod-verify of the Epicor upgrade.</td></tr>
+          <tr><td class="proc">Kort Payments</td><td class="ph">Jul 10</td><td><span class="pill p-ot">Strong</span></td><td class="ph">Behind; all four processes still on V1, engineering-blocked on browser automation and awaiting IP whitelisting from the Kort team.</td></tr>
+          <tr><td class="proc">Wipro FSS</td><td class="ph">Jun 30</td><td><span class="pill p-ot">Strong</span></td><td class="ph">At risk operationally; large estate, parity-testing cluster plus new large-file blockers; tightest spot against the renewal date.</td></tr>
+          <tr><td class="proc">Pepsi</td><td class="ph">Jun 30</td><td><span class="pill p-prog">Moderate</span></td><td class="ph">In progress; ServiceNow rebuild in build, targeted for the Jul 3 deadline.</td></tr>
+        </tbody>
+      </table>
+      <div class="bgrp" style="margin-top:14px;">Accounts being dropped or under commercial review</div>
+      <table class="tbl">
+        <thead><tr><th>Account</th><th>Renewal</th><th>Renewal health</th><th>Status / decision</th></tr></thead>
+        <tbody>
+          <tr><td class="proc">Ozark River</td><td class="ph">Jun 30</td><td><span class="pill p-ot">Strong</span></td><td class="ph">Drop account; no migration, all V1 processes will be deactivated.</td></tr>
+          <tr><td class="proc">Builders Firstsource</td><td class="ph">Jul 30</td><td><span class="pill p-open">Critical</span></td><td class="ph">Drop account.</td></tr>
+          <tr><td class="proc">CSA Transport</td><td class="ph">Jul 30</td><td><span class="pill p-prog">Evaluating</span></td><td class="ph">Partner-managed but no active work; drop account.</td></tr>
+          <tr><td class="proc">Halemeyer</td><td class="ph">Jun 30</td><td><span class="pill p-ot">Strong</span></td><td class="ph">Drop account; no migration.</td></tr>
+          <tr><td class="proc">Bradley &amp; Beams</td><td class="ph">Oct 30</td><td><span class="pill p-ot">Strong</span></td><td class="ph">Potential drop; no migration. Customer on leave; will revisit if they accept V2 pricing, otherwise a small non-ICP account with no growth — drop.</td></tr>
+          <tr><td class="proc">Airborne</td><td class="ph">Nov 30</td><td><span class="pill p-ot">Strong</span></td><td class="ph">In commercial discussion; RAG POC complete, customer happy, proposal ready. Old V1 processes won't be migrated (no longer used); final confirmation pending.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── NOT MIGRATING: DECISIONS ─────────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>Not migrating: decisions and rationale</div>
+    <div class="glass card">
+      <div class="meta" style="margin-top:0;">Processes we have decided not to rebuild on V2, with the reason. Source: migration tracker and Monday.</div>
+      <table class="tbl">
+        <thead><tr><th>Account / Process</th><th>Decision</th><th>Rationale</th></tr></thead>
+        <tbody>
+          <tr><td class="proc">Mitie · Invoice Reg. Log, WIP</td><td class="ph">Retire</td><td class="ph">Scope narrowed to PCard only (confirmed by customer); other two not migrating</td></tr>
+          <tr><td class="proc">ET Global</td><td class="ph">Not migrating</td><td class="ph">POV landed but customer stopped using the solution; account churned</td></tr>
+          <tr><td class="proc">Halemeyer · Bill Pay (+ enhancements)</td><td class="ph">Not migrating</td><td class="ph">Low ARR; account being dropped, under commercial review</td></tr>
+          <tr><td class="proc">Salesbricks</td><td class="ph">Not migrating</td><td class="ph">Low ARR; account being dropped, under commercial review</td></tr>
+          <tr><td class="proc">Ozark River · 2 processes</td><td class="ph">Not migrating</td><td class="ph">Processes being dropped</td></tr>
+          <tr><td class="proc">Pepsi · Fuzzy Matching</td><td class="ph">Not migrating</td><td class="ph">Not required as a standalone process</td></tr>
+          <tr><td class="proc">Bradley &amp; Beams · tax recon, eng. letters</td><td class="ph">Defer / potential drop</td><td class="ph">Customer on leave; will discuss V2 pricing, otherwise small non-ICP account — drop</td></tr>
+          <tr><td class="proc">Wipro FSS · WTSL, GBL Zcop</td><td class="ph">Retire</td><td class="ph">No usage since 2024 / mid-2025</td></tr>
+          <tr><td class="proc">Airborne · Invoice Processing</td><td class="ph">Retire</td><td class="ph">No recent V1 usage; RAG POC complete, in commercial discussion, final confirmation pending</td></tr>
+          <tr><td class="proc">JBI · Project Initiation Request (v1)</td><td class="ph">Retire</td><td class="ph">Superseded by the v2 rebuild</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── MIGRATION BLOCKERS (LIVE) ────────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>Migration blockers (live)</div>
+    <div class="grid2">
+      <div class="glass card">
+        <h3 style="color:var(--green);">Resolved since last update (4)</h3>
+        <div class="meta">Closed this week, each unblocking a named migration.</div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11762">KOG-11762</a> Scan Health — run-item download</span><span class="pill p-done">Done Jun 25</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/OC-1364">OC-1364</a> Wipro BRS — build error</span><span class="pill p-done">Done Jun 26</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11812">KOG-11812</a> Century — browser pod connection</span><span class="pill p-done">Done Jun 25</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11820">KOG-11820</a> JBI — input too long in UI</span><span class="pill p-done">Done Jun 25</span></div>
+        <div class="note">JBI AP (<a class="tik" href="https://linear.app/kognitos/issue/KOG-11810">KOG-11810</a>) and JBI Merch (<a class="tik" href="https://linear.app/kognitos/issue/INT-1476">INT-1476</a>) closed earlier, but stay listed as blocked until the Epicor book upgrade is visible in production to verify.</div>
+      </div>
+      <div class="glass card">
+        <h3 style="color:var(--red);">Open — migration-critical (14)</h3>
+        <div class="meta">Selected from the live Linear label: <a class="tik" href="https://linear.app/kognitos/issue-label/v2%20migration%20blockers">v2 Migration Blockers</a></div>
+        <div class="bgrp">Scale &amp; large files</div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11815">KOG-11815</a> Large-IDP processing gaps (JBI)</span><span class="pill p-open">Backlog</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11824">KOG-11824</a> JBI — parallel-IDP timeouts</span><span class="pill p-open">Backlog · P1</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/INT-1482">INT-1482</a> Wipro ITC — large-file transient errors</span><span class="pill p-prog">Validation</span></div>
+        <div class="bgrp">Complex-process build</div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/OC-1365">OC-1365</a> Wipro LCC — build iteration error</span><span class="pill p-open">Triage</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/ENG-4297">ENG-4297</a> Wipro — Quill2 stuck on run</span><span class="pill p-prog">Validation</span></div>
+        <div class="bgrp">Platform &amp; integrations</div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11844">KOG-11844</a> Conectiv — chat thread 500 errors</span><span class="pill p-open">Backlog · P1</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11845">KOG-11845</a> Conectiv — file upload over 50MB</span><span class="pill p-open">Backlog · P1</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/KOG-11840">KOG-11840</a> Century — browser connection dropped</span><span class="pill p-prog">In Review</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/ENG-4201">ENG-4201</a> Native email send</span><span class="pill p-open">Backlog</span></div>
+        <div class="bgrp">Account integrations</div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/OC-1391">OC-1391</a> JBI — SFTP server connection</span><span class="pill p-open">Triage</span></div>
+        <div class="brow"><span><a class="tik" href="https://linear.app/kognitos/issue/OC-1395">OC-1395</a> iHeart — prompt too long</span><span class="pill p-open">Triage</span></div>
+        <div class="brow"><span>Mitie PCard — Coupa, Maximo, BCI (<a class="tik" href="https://linear.app/kognitos/issue/OC-1359">OC-1359</a> +2)</span><span class="pill p-open">Triage</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DECISION POINTS ──────────────────────────────── -->
+  <div class="section">
+    <div class="sectlabel"><span class="dot">✴</span>Key decision points</div>
+    <div class="dps">
+      <div class="dp">
+        <h3>1 · Subprocess and parallel execution</h3>
+        <div class="ctx">Complex and high-volume processes (Wipro FSS, JBI batch IDP, Scan Health) need subprocess calls and parallel execution. V2 now supports parallel IDP extraction; broader subprocess calls and parallel execution are not yet native.</div>
+        <div class="wa"><b>Interim workaround:</b> invoke a second draft over HTTP to emulate a subprocess or parallel branch. We should validate whether this reliably unblocks current work.</div>
+        <div class="decide"><b>Decide:</b> adopt the HTTP workaround as the interim standard, or prioritize native subprocess and parallel support now.</div>
+      </div>
+      <div class="dp">
+        <h3>2 · IDP at scale: formats and fields</h3>
+        <div class="ctx">Several processes need a distinct prompt per document type or format (Ciena PO, 200–300 formats; JBI AP), and some extract 400+ fields (Scan Health). Authoring and maintaining prompt libraries at this scale is unproven.</div>
+        <div class="wa"><b>Today:</b> works for small prompt sets; effort grows with every new format. The Assets / Collections feature lands this week.</div>
+        <div class="decide"><b>Next:</b> assess how Assets / Collections changes the IDP build, maintain, and scale experience, then scope which gaps remain for migration.</div>
+        <div class="refs">Reference: <a class="tik" href="https://linear.app/kognitos/issue/KOG-11815">KOG-11815</a> (v2 IDP gaps), <a class="tik" href="https://linear.app/kognitos/issue/KOG-11824">KOG-11824</a> (parallel-IDP timeouts), <a class="tik" href="https://linear.app/kognitos/issue/ENG-4139">ENG-4139</a> (IDP one-hour limit, in review).</div>
+      </div>
+      <div class="dp">
+        <h3>3 · Large-file throughput and reliability</h3>
+        <div class="ctx">Large PDFs and Excel files (25MB+, up to 100–150MB and 120 pages) cause timeouts and transient errors; processing is sequential with no per-file isolation. Conectiv also hits a hard 50MB upload limit.</div>
+        <div class="wa"><b>Now supported:</b> parallel IDP extraction. Exploring extending it to parallel-file, then parallel-page extraction inside the Book, as an alternative to subprocess calls. Open: <a class="tik" href="https://linear.app/kognitos/issue/KOG-11815">KOG-11815</a>, <a class="tik" href="https://linear.app/kognitos/issue/INT-1482">INT-1482</a>, <a class="tik" href="https://linear.app/kognitos/issue/KOG-11824">KOG-11824</a>, <a class="tik" href="https://linear.app/kognitos/issue/KOG-11845">KOG-11845</a>.</div>
+        <div class="decide"><b>Decide:</b> confirm the more scalable approach (parallel-file / parallel-page vs subprocess) from the testing now underway; tickets pending.</div>
+      </div>
+      <div class="dp">
+        <h3>4 · Integration gaps: email and platform connectors</h3>
+        <div class="ctx">Department box is unblocked via Collections. The email approach is decided. Account-specific connectors (JBI SFTP, Conectiv chat) are the remaining gaps.</div>
+        <div class="wa"><b>Decided:</b> a dedicated automation email account in production (a personal mailbox for testing). Remaining connector gaps have tickets in progress.</div>
+        <div class="decide"><b>Status:</b> email resolved via the dedicated-mailbox standard; remaining connector work is ticketed and in progress, no further decision needed for now.</div>
+        <div class="refs">Reference: <a class="tik" href="https://linear.app/kognitos/issue/ENG-4201">ENG-4201</a> (native email), <a class="tik" href="https://linear.app/kognitos/issue/OC-1391">OC-1391</a> (JBI SFTP).</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Sources: migration tracker (75 processes) · Linear label <a class="tik" href="https://linear.app/kognitos/issue-label/v2%20migration%20blockers">v2 Migration Blockers</a> (live, June 29) · Monday Customers board (renewals and health, June 29). Migrate/retire split and parity dates are from the migration tracker as of June 29, 2026. Delivery footprint of 102 = 58 live + 24 in active development + 20 queued is carried from the June 22 Monday delivery-board pull. The migration scope of 45 is confirmed against a V1 end-of-life date still to be set.
+  </div>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js"></script>
+<script>
+  var REPORT = document.getElementById('report');
+  var BG = '#F4F4F2';
+  function opts(){ return { pixelRatio: 2, backgroundColor: BG, style: { maxWidth: 'none' } }; }
+  function flash(btn, txt){ var o = btn.dataset.label; btn.textContent = txt; setTimeout(function(){ btn.textContent = o; btn.disabled = false; }, 2500); }
+  async function dlPng(){
+    var b = document.getElementById('btn-png'); b.dataset.label = 'Download PNG'; b.textContent = 'Rendering…'; b.disabled = true;
+    try {
+      var url = await window.htmlToImage.toPng(REPORT, opts());
+      var a = document.createElement('a'); a.href = url; a.download = 'all-hands-v2-migration-2026-06-29.png'; a.click();
+      flash(b, 'Saved ✓');
+    } catch (e) { console.error(e); flash(b, 'Failed — use Print'); }
+  }
+  async function copyPng(){
+    var b = document.getElementById('btn-copy'); b.dataset.label = 'Copy PNG'; b.textContent = 'Rendering…'; b.disabled = true;
+    try {
+      var blob = await window.htmlToImage.toBlob(REPORT, opts());
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      flash(b, 'Copied ✓');
+    } catch (e) { console.error(e); flash(b, 'Copy failed'); }
+  }
+</script>
+</body>
+</html>

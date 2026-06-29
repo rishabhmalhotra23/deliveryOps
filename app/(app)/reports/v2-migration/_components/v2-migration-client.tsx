@@ -4,10 +4,10 @@ import { useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   REPORT_DATE_LABEL, LINEAR_ISSUE, SNAPSHOT, MIGRATE_FUNNEL, MIGRATE_FINISH_HEADLINE,
   ESTATE_SPLIT, RETIRE_BREAKDOWN, ESTATE_INTRO, ESTATE_FINISH_NOTE, ESTATE_OPEN_DECISION,
-  ESTATE_SOURCE_NOTE, PARITY_HEADLINE, PARITY_TIMELINE, PARITY_FOOTNOTE,
+  ESTATE_SOURCE_NOTE, PARITY_HEADLINE, PARITY_PASTDUE, PARITY_UPCOMING, PARITY_FOOTNOTE,
   NET_NEW, NET_NEW_NOTE, RENEWALS_ACTIVE, RENEWALS_HEADLINE,
   RENEWALS_DROPPING, NOT_MIGRATING, BLOCKERS_RESOLVED, BLOCKERS_RESOLVED_NOTE,
-  BLOCKERS_OPEN, DECISIONS, SOURCES_NOTE,
+  BLOCKERS_RESOLVED_FOOTNOTE, BLOCKERS_OPEN, DECISIONS, SOURCES_NOTE,
   type Tone, type BlockerRow,
 } from "@/lib/reports/v2-migration-allhands";
 
@@ -28,7 +28,7 @@ function ExportButtons({ reportRef }: { reportRef: RefObject<HTMLDivElement | nu
       });
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = "deliveryops-v2-migration-2026-06-22.png";
+      a.download = "deliveryops-v2-migration-2026-06-29.png";
       a.click();
       setState("done");
     } catch (err) {
@@ -109,6 +109,7 @@ export function V2MigrationClient() {
   const reportRef = useRef<HTMLDivElement>(null);
   const estateTotal = ESTATE_SPLIT.reduce((s, x) => s + x.count, 0);
   const migrateTotal = MIGRATE_FUNNEL.reduce((s, x) => s + x.count, 0);
+  const retireTotal = ESTATE_SPLIT.find((s) => s.label.toLowerCase().includes("retire"))?.count ?? 0;
 
   return (
     <div className="space-y-4">
@@ -124,7 +125,7 @@ export function V2MigrationClient() {
         <div className="rounded-2xl px-7 py-6" style={{ background: "var(--brand-night)" }}>
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "#A3A3A3" }}>Field Delivery · Company All Hands</div>
           <h1 className="text-2xl font-bold tracking-tight mt-1" style={{ color: "#FFFFFF" }}>Delivery and V2 migration</h1>
-          <div className="text-sm mt-1.5" style={{ color: "#D4D4D4" }}>{REPORT_DATE_LABEL} · figures live from Monday and Linear</div>
+          <div className="text-sm mt-1.5" style={{ color: "#D4D4D4" }}>{REPORT_DATE_LABEL} · migration tracker, Monday, and Linear (live)</div>
         </div>
 
         {/* Snapshot */}
@@ -159,14 +160,14 @@ export function V2MigrationClient() {
             </div>
             <div className="grid gap-4 lg:grid-cols-5">
               <div className="lg:col-span-3 rounded-xl border border-[var(--brand-metal-line)] p-4">
-                <h3 className="text-sm font-semibold text-[color:var(--foreground)]"><span className="text-xl font-bold mr-1" style={{ color: "#185FA5" }}>47</span> Migrate to V2</h3>
+                <h3 className="text-sm font-semibold text-[color:var(--foreground)]"><span className="text-xl font-bold mr-1" style={{ color: "#185FA5" }}>{migrateTotal}</span> Migrate to V2</h3>
                 <div className={`text-[11px] ${MUTED} mt-0.5 mb-2.5`}>{MIGRATE_FINISH_HEADLINE}</div>
                 <StackBar stages={MIGRATE_FUNNEL} total={migrateTotal} />
                 <Legend stages={MIGRATE_FUNNEL} />
                 <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed`}>{ESTATE_FINISH_NOTE}</p>
               </div>
               <div className="lg:col-span-2 rounded-xl border border-[var(--brand-metal-line)] p-4">
-                <h3 className="text-sm font-semibold text-[color:var(--foreground)]"><span className="text-xl font-bold mr-1" style={{ color: "#737373" }}>21</span> Retire with V1</h3>
+                <h3 className="text-sm font-semibold text-[color:var(--foreground)]"><span className="text-xl font-bold mr-1" style={{ color: "#737373" }}>{retireTotal}</span> Retire with V1</h3>
                 <div className={`text-[11px] ${MUTED} mt-0.5 mb-2.5`}>not migrating; switched off when V1 is retired</div>
                 {RETIRE_BREAKDOWN.map((r) => (
                   <div key={r.label} className="flex items-center justify-between py-1.5 border-b border-[var(--brand-metal-line)] last:border-b-0 text-[12.5px] text-[color:var(--foreground)]">
@@ -184,18 +185,36 @@ export function V2MigrationClient() {
 
         {/* What's next: parity targets */}
         <section>
-          <SectionLabel>Path to v1 parity — all 47 by July 3</SectionLabel>
+          <SectionLabel>Path to v1 parity — all {migrateTotal} by July 3</SectionLabel>
           <div className="glass-card rounded-2xl p-5">
             <p className="text-[12.5px] text-[color:var(--foreground)] leading-relaxed mb-3.5">{PARITY_HEADLINE}</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
-              {PARITY_TIMELINE.map((d) => (
-                <div key={d.date} className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              {/* Past due — in flight */}
+              <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <span className="text-[12.5px] font-semibold text-[color:var(--foreground)]">{PARITY_PASTDUE.label}</span>
+                  <span className="text-base font-bold" style={{ color: "#185FA5" }}>{PARITY_PASTDUE.count}</span>
+                </div>
+                <div className="text-[11.5px] leading-relaxed text-[color:var(--foreground)]">
+                  {PARITY_PASTDUE.lines.map((line, i) => (
+                    <div key={i}>
+                      {line.map((seg, j) => (
+                        <span key={j} style={seg.c ? { color: seg.c, fontWeight: 600 } : undefined}>{seg.t}</span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className={`text-[10.5px] ${MUTED} leading-relaxed mt-2 border-t border-[var(--brand-metal-line)] pt-2`}>{PARITY_PASTDUE.blocked}</div>
+              </div>
+              {/* Upcoming cohorts */}
+              {PARITY_UPCOMING.map((c) => (
+                <div key={c.label} className={`rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3 ${c.deadline ? "border-l-[3px] border-l-[var(--brand-yellow)]" : ""}`}>
                   <div className="flex items-baseline justify-between mb-1.5">
-                    <span className="text-[12.5px] font-semibold text-[color:var(--foreground)]">{d.day} {d.date}</span>
-                    <span className="text-base font-bold" style={{ color: "#185FA5" }}>{d.count}</span>
+                    <span className="text-[12.5px] font-semibold text-[color:var(--foreground)]">{c.label}</span>
+                    <span className="text-base font-bold" style={{ color: "#185FA5" }}>{c.count}</span>
                   </div>
                   <div className="text-[11px] leading-relaxed">
-                    {d.items.map((it) => (
+                    {c.items.map((it) => (
                       <div key={it.name} className={it.blocked ? "" : MUTED} style={it.blocked ? { color: "#B91C1C" } : undefined}>
                         {it.name}{it.blocked ? " ⚠" : ""}
                       </div>
@@ -233,38 +252,36 @@ export function V2MigrationClient() {
 
         {/* Renewals */}
         <section>
-          <SectionLabel>Renewals due by July 31 (Q2 end), and migration readiness</SectionLabel>
+          <SectionLabel>Renewals this quarter, and migration readiness</SectionLabel>
           <div className="glass-card rounded-2xl p-5">
             <p className="text-[12.5px] font-medium text-[color:var(--foreground)] mb-3">{RENEWALS_HEADLINE}</p>
             <table className="w-full text-[12.5px]">
               <thead><tr className="text-left text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] border-b border-[var(--brand-metal-line)]">
-                <th className="py-2 pr-3 font-semibold">Account</th><th className="py-2 pr-3 font-semibold">Renewal</th><th className="py-2 pr-3 font-semibold">ARR</th><th className="py-2 pr-3 font-semibold">Health</th><th className="py-2 font-semibold">Migration readiness</th>
+                <th className="py-2 pr-3 font-semibold">Account</th><th className="py-2 pr-3 font-semibold">Renewal</th><th className="py-2 pr-3 font-semibold">Renewal health</th><th className="py-2 font-semibold">Migration readiness</th>
               </tr></thead>
               <tbody>
                 {RENEWALS_ACTIVE.map((r) => (
                   <tr key={r.account} className="border-b border-[var(--brand-metal-line)] last:border-b-0 align-top">
                     <td className="py-2 pr-3 font-medium text-[color:var(--foreground)] whitespace-nowrap">{r.account}</td>
                     <td className={`py-2 pr-3 ${MUTED} whitespace-nowrap`}>{r.renewal}</td>
-                    <td className="py-2 pr-3 text-[color:var(--foreground)] whitespace-nowrap">{r.arr}</td>
                     <td className="py-2 pr-3"><Pill tone={r.tone as Tone}>{r.health}</Pill></td>
                     <td className="py-2 text-[color:var(--foreground)]">{r.readiness}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] font-semibold mt-4 mb-1">Renewals on accounts being dropped or undecided</div>
+            <div className="text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] font-semibold mt-4 mb-1">Accounts being dropped or under commercial review</div>
             <table className="w-full text-[12.5px]">
               <thead><tr className="text-left text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] border-b border-[var(--brand-metal-line)]">
-                <th className="py-2 pr-3 font-semibold">Account</th><th className="py-2 pr-3 font-semibold">Renewal</th><th className="py-2 pr-3 font-semibold">ARR</th><th className="py-2 pr-3 font-semibold">Status</th><th className="py-2 font-semibold">Decision</th>
+                <th className="py-2 pr-3 font-semibold">Account</th><th className="py-2 pr-3 font-semibold">Renewal</th><th className="py-2 pr-3 font-semibold">Renewal health</th><th className="py-2 font-semibold">Status / decision</th>
               </tr></thead>
               <tbody>
                 {RENEWALS_DROPPING.map((r) => (
                   <tr key={r.account} className="border-b border-[var(--brand-metal-line)] last:border-b-0 align-top">
                     <td className="py-2 pr-3 font-medium text-[color:var(--foreground)] whitespace-nowrap">{r.account}</td>
                     <td className={`py-2 pr-3 ${MUTED} whitespace-nowrap`}>{r.renewal}</td>
-                    <td className="py-2 pr-3 text-[color:var(--foreground)] whitespace-nowrap">{r.arr}</td>
-                    <td className={`py-2 pr-3 ${MUTED}`}>{r.status}</td>
-                    <td className={`py-2 ${MUTED}`}>{r.decision}</td>
+                    <td className="py-2 pr-3"><Pill tone={r.tone as Tone}>{r.health}</Pill></td>
+                    <td className={`py-2 ${MUTED}`}>{r.note}</td>
                   </tr>
                 ))}
               </tbody>
@@ -298,16 +315,17 @@ export function V2MigrationClient() {
           <SectionLabel>Migration blockers (live)</SectionLabel>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="glass-card rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Resolved recently (4)</h3>
+              <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Resolved since last update (4)</h3>
               <p className={`text-[11px] ${MUTED} mt-0.5 mb-3`}>{BLOCKERS_RESOLVED_NOTE}</p>
               {BLOCKERS_RESOLVED.map((b) => (
                 <div key={b.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--brand-metal-line)] last:border-b-0 text-[12.5px] text-[color:var(--foreground)]">
                   <span><Tik id={b.id} /> {b.item}</span><Pill tone="done">{b.status}</Pill>
                 </div>
               ))}
+              <p className={`text-[11px] ${MUTED} leading-relaxed mt-3 border-t border-[var(--brand-metal-line)] pt-3`}>{BLOCKERS_RESOLVED_FOOTNOTE}</p>
             </div>
             <div className="glass-card rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Open (9)</h3>
+              <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Open — migration-critical (14)</h3>
               <p className={`text-[11px] ${MUTED} mt-0.5 mb-2`}>
                 Linear label: <a href="https://linear.app/kognitos/issue-label/v2%20migration%20blockers" target="_blank" rel="noreferrer" className="font-mono text-blue-700 dark:text-blue-400 border-b border-dotted border-blue-300 hover:border-solid">v2 Migration Blockers</a>
               </p>
@@ -326,7 +344,7 @@ export function V2MigrationClient() {
                 <p className="text-[12px] text-[color:var(--foreground)] leading-relaxed mb-2">{d.context}</p>
                 <p className={`text-[11.5px] ${MUTED} leading-relaxed mb-2.5`}>{d.workaround}</p>
                 <div className="text-[12px] text-[color:var(--foreground)] bg-[var(--brand-seasalt)] border-l-[3px] border-l-[var(--brand-yellow)] rounded-r-lg px-3 py-2 leading-snug">
-                  <span className="font-semibold">Decide:</span> {d.decide}
+                  <span className="font-semibold">{d.verb ?? "Decide"}:</span> {d.decide}
                 </div>
                 {d.refs.length > 0 && (
                   <div className={`text-[11px] ${MUTED} mt-2`}>Reference: {d.refs.map((id, i) => (<span key={id}>{i > 0 ? ", " : ""}<Tik id={id} /></span>))}</div>

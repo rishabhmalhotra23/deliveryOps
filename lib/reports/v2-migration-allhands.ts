@@ -1,16 +1,16 @@
 // V2 Migration — All Hands report data.
 //
-// CURATED SNAPSHOT (signed off 2026-06-22). These figures are a point-in-time
-// pull from Monday (delivery + Customers boards) + Linear (label "v2 Migration
-// Blockers") + the migration tracker sheet, hand-assembled for the All Hands
-// update. This is deliberately NOT yet a live pull — the live wiring (Linear
-// sync, renewal/ARR fields, a home for the 74-process tracker) is follow-on
-// work. To refresh weekly, update the constants below.
+// CURATED SNAPSHOT (signed off 2026-06-29). These figures are a point-in-time
+// pull from the migration tracker (the 75-process Excel) + Linear (label "v2
+// Migration Blockers", live) + Monday (Customers board for renewals/health).
+// This is deliberately NOT yet a live pull — the live wiring (Linear sync,
+// renewal/ARR fields, a home for the tracker) is follow-on work. To refresh
+// weekly, update the constants below.
 //
 // Keep colours as literal hexes: these encode migration stages and are the
 // same in light/dark mode by design.
 
-export const REPORT_DATE_LABEL = "Week of June 22, 2026";
+export const REPORT_DATE_LABEL = "Week of June 29, 2026";
 export const LINEAR_ISSUE = (id: string) => `https://linear.app/kognitos/issue/${id}`;
 export const LINEAR_BLOCKER_LABEL =
   "https://linear.app/kognitos/issue-label/v2%20migration%20blockers";
@@ -32,154 +32,166 @@ export const SNAPSHOT: SnapshotMetric[] = [
 export interface FunnelStage { label: string; count: number; color: string; }
 export const MIGRATE_FUNNEL: FunnelStage[] = [
   { label: "Complete", count: 1, color: "#1D9E75" },
-  { label: "Parity testing", count: 9, color: "#378ADD" },
-  { label: "In build", count: 27, color: "#EF9F27" },
-  { label: "Blocked", count: 10, color: "#E24B4A" },
+  { label: "Customer UAT", count: 7, color: "#5BC4A0" },
+  { label: "Parity testing", count: 11, color: "#378ADD" },
+  { label: "In build", count: 13, color: "#EF9F27" },
+  { label: "Blocked", count: 13, color: "#E24B4A" },
 ];
-export const MIGRATE_FINISH_HEADLINE = "10 at or near the finish line (complete or in parity testing)";
+export const MIGRATE_FINISH_HEADLINE = "19 at or near the finish line (complete, parity testing, or customer UAT)";
 
 export const ESTATE_SPLIT: FunnelStage[] = [
-  { label: "Migrate to V2", count: 47, color: "#185FA5" },
-  { label: "Retire with V1", count: 21, color: "#888780" },
+  { label: "Migrate to V2", count: 45, color: "#185FA5" },
+  { label: "Retire with V1", count: 24, color: "#888780" },
   { label: "Already on V2", count: 4, color: "#1D9E75" },
   { label: "Custom / off-platform", count: 2, color: "#534AB7" },
 ];
 
 export const RETIRE_BREAKDOWN: { label: string; count: number }[] = [
-  { label: "Lower priority, not slated for rebuild", count: 12 },
-  { label: "Account churned or under commercial review", count: 6 },
-  { label: "Retired, no recent activity", count: 3 },
+  { label: "Lower priority or enhancement-only, not slated for rebuild", count: 14 },
+  { label: "Account churned, dropped, or under commercial review", count: 6 },
+  { label: "Retired, no recent activity", count: 4 },
 ];
 
 export const ESTATE_INTRO =
   "V1 is being decommissioned, so every live V1 process follows one of two paths: rebuilt on V2, or retired alongside V1. We migrate processes in active use and worth retaining, and retire those tied to departing accounts, no longer running, or not warranting a rebuild.";
 export const ESTATE_FINISH_NOTE =
-  "Conectiv and Norco Parts Reconciliation moved into active build this week, so there is no longer a not-started or UAT item. Blocked is 10 in the tracker; JBI Merch and JBI AP are already cleared in Linear and will move as the tracker catches up.";
+  "Mitie narrowed to PCard only this week, so Invoice Registration Log and WIP moved to retire; Pepsi Fuzzy Matching also dropped from scope. JBI AP and JBI Merch stay in the blocked column even though their Linear tickets cleared, because the Epicor book upgrade is not yet visible in production to verify.";
+export const ESTATE_OPEN_DECISION =
+  "Open decision: the lower-priority processes need a final migrate-or-retire call once the V1 end-of-life date is confirmed. Any still in active use move into migration scope and raise the count above 45.";
+export const ESTATE_SOURCE_NOTE =
+  "These 75 processes are tracked in the migration tracker. The delivery board represents the same live V1 footprint as 55 cards because it groups sub-processes; the teams are consolidating to a single source.";
 
-// What's next — v1-parity target dates (from the migration tracker).
-export interface ParityDay { day: string; date: string; count: number; items: { name: string; blocked?: boolean }[]; }
+// What's next — v1-parity runway as of June 29 (interim dates Jun 16–26 have passed).
 export const PARITY_HEADLINE =
-  "Every migration must reach v1 parity by July 3, the program deadline. One is already complete, 28 are dated this week (Jun 23–26), and the remaining 18 land by July 3. Items flagged ⚠ are engineering-blocked and must clear to hold the date; several blockers already cleared in Linear this week.";
-export const PARITY_TIMELINE: ParityDay[] = [
-  { day: "Tue", date: "Jun 23", count: 7, items: [
-    { name: "JBI · QSR" }, { name: "JBI · SBUX" }, { name: "Plunkett · Create Payments" },
-    { name: "Plunkett · Claim RA" }, { name: "TTX · Brake AR" },
-    { name: "Wipro · ITC", blocked: true }, { name: "Wipro · LCC", blocked: true } ] },
-  { day: "Wed", date: "Jun 24", count: 6, items: [
-    { name: "JBI · Design Mtg" }, { name: "JBI · PIR v2" }, { name: "Plunkett · Sales Order" },
-    { name: "Plunkett · Vendor Bill" }, { name: "Wipro · DSPF SEZ" }, { name: "Wipro · Tax Vouching" } ] },
-  { day: "Thu", date: "Jun 25", count: 7, items: [
-    { name: "Ciena · PO" }, { name: "TTX · AP", blocked: true }, { name: "TTX · COA", blocked: true },
-    { name: "TTX · Goods Receipt", blocked: true }, { name: "Wipro · Collection Acct" },
-    { name: "Wipro · GP Vendor" }, { name: "Wipro · BRS", blocked: true } ] },
-  { day: "Fri", date: "Jun 26", count: 8, items: [
-    { name: "iHeartRadio · Affidavits" }, { name: "JBI · Managing Onsite" }, { name: "JBI · AP", blocked: true },
-    { name: "Norco · AR" }, { name: "Norco · Parts Recon" }, { name: "Norco · Safety Audit" },
-    { name: "Norco · Solar Winds" }, { name: "Pepsi · ServiceNow" } ] },
-  { day: "Jul 3", date: "· deadline", count: 18, items: [
-    { name: "Kort Payments × 4" }, { name: "Mitie × 3" }, { name: "Century × 2" }, { name: "Conectiv" },
-    { name: "Scan Health × 2", blocked: true }, { name: "JBI Merch", blocked: true }, { name: "Wipro FSS extraction × 5" } ] },
+  "Every migration must reach v1 parity by July 3, the program deadline, this Friday. The interim dates through June 26 have passed: as of June 29, of those 29 items, 1 is complete, 7 are in customer UAT and 10 in parity testing (on track), while 5 are still in build and 6 are engineering-blocked. The remaining dated work lands July 1 and July 3. Items flagged ⚠ are engineering-blocked and must clear to hold the date.";
+
+export interface ParitySeg { t: string; c?: string; }
+export const PARITY_PASTDUE: { label: string; count: number; lines: ParitySeg[][]; blocked: string } = {
+  label: "Past due · in flight",
+  count: 29,
+  lines: [
+    [{ t: "1 complete", c: "#1D9E75" }, { t: " · 7 customer UAT · 10 parity testing" }],
+    [{ t: "5 in build · " }, { t: "6 engineering-blocked ⚠", c: "#B91C1C" }],
+  ],
+  blocked: "Blocked: JBI QSR, JBI SBUX, Wipro ITC, Scan Health Report; JBI Merch, JBI AP (tickets cleared, prod-verify pending).",
+};
+
+export interface ParityCohort { label: string; count: number; deadline?: boolean; items: { name: string; blocked?: boolean }[]; }
+export const PARITY_UPCOMING: ParityCohort[] = [
+  { label: "Jul 1", count: 6, items: [
+    { name: "Scan Health · Enrollment" }, { name: "Wipro · Collection Acct" }, { name: "Wipro · GP Vendor" },
+    { name: "Wipro · BRS", blocked: true }, { name: "Wipro · DSPF SEZ" }, { name: "Wipro · Tax Vouching" } ] },
+  { label: "Jul 3 · deadline", count: 10, deadline: true, items: [
+    { name: "Century × 2" }, { name: "iHeartRadio · Affidavits" }, { name: "Pepsi · ServiceNow" },
+    { name: "Conectiv", blocked: true }, { name: "Kort Payments × 4", blocked: true }, { name: "Mitie · PCard", blocked: true } ] },
 ];
 export const PARITY_FOOTNOTE =
-  "TTX Lease is already complete. The six without an interim date (JBI Merch and five Wipro FSS extraction flows) and Scan Health's two slipped processes all roll into the July 3 deadline; Scan Health is held by its blocker (KOG-11762). Wipro FSS is the sharpest spot: seven targets across Jun 23–25, three engineering-blocked, against a Jun 30 renewal.";
-export const ESTATE_OPEN_DECISION =
-  "Open decision: the 12 lower-priority processes need a final migrate-or-retire call once the V1 end-of-life date is confirmed. Any still in active use move into migration scope and raise the count above 47.";
-export const ESTATE_SOURCE_NOTE =
-  "These 74 processes are tracked in the migration tracker. The delivery board represents the same live V1 footprint as 55 cards because it groups sub-processes; the teams are consolidating to a single source.";
+  "Sharpest spots: Kort Payments, whose four processes are all engineering-blocked on browser automation and awaiting IP whitelisting from the customer against a Jul 10 renewal, and Wipro FSS, a large parity-testing cluster plus new large-file blockers against a Jun 30 renewal. Scan Health's download blocker (KOG-11762) and Wipro BRS (OC-1364) both cleared this week.";
 
 export interface DevRow { process: string; owner: string; phase: string; update: string; }
 export const NET_NEW: DevRow[] = [
-  { process: "Norco · Warranty", owner: "Karthik N.", phase: "M3 · UAT", update: "Built on V2; awaiting customer support for QA." },
-  { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M2 · Dev", update: "Build effectively complete; blocked this week by a browser-automation issue, plus customer-side charge-code access before UAT." },
-  { process: "JBI · Receiving Process", owner: "Arushi B.", phase: "M2 · Dev", update: "Development wrapping up; moving into testing." },
-  { process: "Dish · Lease Terminations", owner: "Arushi B.", phase: "M2 · Dev", update: "Access and SSO resolved; data extraction progressing, build nearing completion." },
-  { process: "JBI · Compass Quote Update", owner: "Arushi B.", phase: "M1 · Discovery", update: "System access secured; testing against the live system and validating MFA." },
-  { process: "JBI · Material Allocation Import", owner: "Arushi B.", phase: "M1 · Discovery", update: "In discovery; third-party access pending; open feasibility call on a SQL-DB approach (desktop automation not on roadmap)." },
-  { process: "Charleston CSD · Workflow POV", owner: "Karthik N.", phase: "Waiting for customer", update: "Skeleton process built; awaiting customer data for end-to-end testing." },
+  { process: "Norco · Warranty", owner: "Karthik N.", phase: "M3 · UAT", update: "On track; built on V2, awaiting customer support for QA." },
+  { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M3 · UAT", update: "Off track; build complete but the browser-automation connection drops (KOG-11840) and a fuzzy-matching dependency (ENG-4302) is open; customer charge-code access pending before UAT." },
+  { process: "JBI · Receiving Process", owner: "Arushi B.", phase: "M2 · Dev", update: "On track; development wrapping up, moving into testing." },
+  { process: "JBI · Compass Quote Update", owner: "Arushi B.", phase: "M2 · Dev", update: "Advanced from discovery; building against the live system, validating MFA." },
+  { process: "JBI · Material Allocation Import", owner: "Arushi B.", phase: "Waiting for customer", update: "Third-party access pending; SQL-DB approach under feasibility review." },
+  { process: "TTX · Property Tax Outline", owner: "Ayush G.", phase: "M2 · Dev", update: "New greenfield V2 build this cycle." },
+  { process: "Charleston CSD · Workflow POV", owner: "Karthik N.", phase: "Waiting for customer", update: "Skeleton built; awaiting customer data for end-to-end testing." },
 ];
-export const NET_NEW_NOTE = "Greenfield V2 processes in active build this week. 20 further V2 builds are queued. Updates summarized from Monday.";
+export const NET_NEW_NOTE = "Greenfield V2 processes in active build. Further V2 builds are queued in the Projects pipeline, on-hold, and backlog. Updates summarized from Monday (active Projects board).";
 
 export type Tone = "strong" | "watch" | "risk";
-export interface RenewalRow { account: string; renewal: string; arr: string; health: string; tone: Tone; readiness: string; }
+export interface RenewalRow { account: string; renewal: string; health: string; tone: Tone; readiness: string; }
 export const RENEWALS_ACTIVE: RenewalRow[] = [
-  { account: "JBI", renewal: "Jun 22", arr: "$384K", health: "Strong", tone: "strong", readiness: "On track; several processes in parity or build, AP and Merch unblocked this week." },
-  { account: "Kort Payments", renewal: "Jul 10", arr: "$141K", health: "Watch", tone: "watch", readiness: "Behind; still on V1 and in development, with a browser-automation dependency." },
-  { account: "Wipro FSS", renewal: "Jun 30", arr: "$110K", health: "Strong", tone: "strong", readiness: "At risk; large estate in build, three build and large-file blockers opened this week." },
-  { account: "Pepsi", renewal: "Jun 30", arr: "$32K", health: "At risk", tone: "risk", readiness: "In progress; ServiceNow migration underway, customer health at risk." },
+  { account: "JBI", renewal: "Jun 22", health: "Strong", tone: "strong", readiness: "On track; many flows in parity or customer UAT. AP and Merch tickets cleared in Linear, pending prod-verify of the Epicor upgrade." },
+  { account: "Kort Payments", renewal: "Jul 10", health: "Strong", tone: "strong", readiness: "Behind; all four processes still on V1, engineering-blocked on browser automation and awaiting IP whitelisting from the Kort team." },
+  { account: "Wipro FSS", renewal: "Jun 30", health: "Strong", tone: "strong", readiness: "At risk operationally; large estate, parity-testing cluster plus new large-file blockers; tightest spot against the renewal date." },
+  { account: "Pepsi", renewal: "Jun 30", health: "Moderate", tone: "watch", readiness: "In progress; ServiceNow rebuild in build, targeted for the Jul 3 deadline." },
 ];
-export const RENEWALS_HEADLINE = "Approximately $667K ARR up for renewal this quarter across four active accounts. Migration progress de-risks the renewal where it lands.";
+export const RENEWALS_HEADLINE = "Approximately $667K ARR is up for renewal this quarter across four active accounts. Migration progress de-risks the renewal where it lands. Renewal health is the account-level field from the Monday Customers board, distinct from per-process migration readiness.";
 
-export interface DropRow { account: string; renewal: string; arr: string; status: string; decision: string; }
+export interface DropRow { account: string; renewal: string; health: string; tone: Tone; note: string; }
 export const RENEWALS_DROPPING: DropRow[] = [
-  { account: "Ozark River", renewal: "Jun 30", arr: "$23K", status: "Processes being dropped", decision: "Confirm whether to pursue renewal" },
-  { account: "Builders Firstsource", renewal: "Jul 30", arr: "$16K", status: "Account dropped; renewal health critical", decision: "Likely lapse; confirm" },
-  { account: "CSA Transport", renewal: "Jul 30", arr: "$10K", status: "Process cancelled; evaluating", decision: "Pursue or let lapse" },
-  { account: "Halemeyer", renewal: "Jun 30", arr: "$4K", status: "Under commercial review", decision: "Pursue or let lapse" },
+  { account: "Ozark River", renewal: "Jun 30", health: "Strong", tone: "strong", note: "Drop account; no migration, all V1 processes will be deactivated." },
+  { account: "Builders Firstsource", renewal: "Jul 30", health: "Critical", tone: "risk", note: "Drop account." },
+  { account: "CSA Transport", renewal: "Jul 30", health: "Evaluating", tone: "watch", note: "Partner-managed but no active work; drop account." },
+  { account: "Halemeyer", renewal: "Jun 30", health: "Strong", tone: "strong", note: "Drop account; no migration." },
+  { account: "Bradley & Beams", renewal: "Oct 30", health: "Strong", tone: "strong", note: "Potential drop; no migration. Customer on leave; will revisit if they accept V2 pricing, otherwise a small non-ICP account with no growth — drop." },
+  { account: "Airborne", renewal: "Nov 30", health: "Strong", tone: "strong", note: "In commercial discussion; RAG POC complete, customer happy, proposal ready. Old V1 processes won't be migrated (no longer used); final confirmation pending." },
 ];
 
 export interface NotMigratingRow { item: string; decision: string; rationale: string; }
 export const NOT_MIGRATING: NotMigratingRow[] = [
-  { item: "ET Global", decision: "Not migrating", rationale: "POV did not convert; account churned" },
-  { item: "Halemeyer · Bill Pay (+ enhancements)", decision: "Not migrating", rationale: "~$4K ARR; continued support under review" },
-  { item: "Salesbricks", decision: "Not migrating", rationale: "Low ARR; account under commercial review" },
+  { item: "Mitie · Invoice Reg. Log, WIP", decision: "Retire", rationale: "Scope narrowed to PCard only (confirmed by customer); other two not migrating" },
+  { item: "ET Global", decision: "Not migrating", rationale: "POV landed but customer stopped using the solution; account churned" },
+  { item: "Halemeyer · Bill Pay (+ enhancements)", decision: "Not migrating", rationale: "Low ARR; account being dropped, under commercial review" },
+  { item: "Salesbricks", decision: "Not migrating", rationale: "Low ARR; account being dropped, under commercial review" },
   { item: "Ozark River · 2 processes", decision: "Not migrating", rationale: "Processes being dropped" },
-  { item: "Bradley & Beams · tax recon, eng. letters", decision: "Defer / self-serve", rationale: "Small account; if retained, customer maintains post-migration" },
+  { item: "Pepsi · Fuzzy Matching", decision: "Not migrating", rationale: "Not required as a standalone process" },
+  { item: "Bradley & Beams · tax recon, eng. letters", decision: "Defer / potential drop", rationale: "Customer on leave; will discuss V2 pricing, otherwise small non-ICP account — drop" },
   { item: "Wipro FSS · WTSL, GBL Zcop", decision: "Retire", rationale: "No usage since 2024 / mid-2025" },
-  { item: "Airborne · Invoice Processing", decision: "Retire", rationale: "No runs since November 2025" },
+  { item: "Airborne · Invoice Processing", decision: "Retire", rationale: "No recent V1 usage; RAG POC complete, in commercial discussion, final confirmation pending" },
   { item: "JBI · Project Initiation Request (v1)", decision: "Retire", rationale: "Superseded by the v2 rebuild" },
 ];
 
 export interface BlockerRow { id: string; item: string; status: string; theme?: string; tone?: "done" | "prog" | "open"; }
 export const BLOCKERS_RESOLVED: BlockerRow[] = [
-  { id: "KOG-11810", item: "JBI AP — Epicor AP services", status: "Done Jun 22" },
-  { id: "INT-1476", item: "JBI Merch — Epicor decimal fix", status: "Done Jun 18" },
-  { id: "ENG-4183", item: "Draft run stuck", status: "Done Jun 15" },
-  { id: "ENG-4215", item: "Quill2 stuck on Excel", status: "Done Jun 15" },
+  { id: "KOG-11762", item: "Scan Health — run-item download", status: "Done Jun 25" },
+  { id: "OC-1364", item: "Wipro BRS — build error", status: "Done Jun 26" },
+  { id: "KOG-11812", item: "Century — browser pod connection", status: "Done Jun 25" },
+  { id: "KOG-11820", item: "JBI — input too long in UI", status: "Done Jun 25" },
 ];
-export const BLOCKERS_RESOLVED_NOTE = "Closed since the last update. JBI Merch and JBI AP migrations are now unblocked.";
+export const BLOCKERS_RESOLVED_NOTE = "Closed this week, each unblocking a named migration.";
+export const BLOCKERS_RESOLVED_FOOTNOTE =
+  "JBI AP (KOG-11810) and JBI Merch (INT-1476) closed earlier but stay listed as blocked until the Epicor book upgrade is visible in production to verify.";
 export const BLOCKERS_OPEN: BlockerRow[] = [
   { id: "KOG-11815", item: "Large-IDP processing gaps (JBI)", theme: "Scale & large files", status: "Backlog", tone: "open" },
-  { id: "OC-1366", item: "Wipro ITC — large-file errors", theme: "Scale & large files", status: "Triage", tone: "open" },
-  { id: "KOG-11820", item: "JBI — input too long in UI", theme: "Scale & large files", status: "Backlog", tone: "open" },
-  { id: "OC-1349", item: "Wipro — Quill2 stuck on run", theme: "Scale & large files", status: "Triage", tone: "open" },
+  { id: "KOG-11824", item: "JBI — parallel-IDP timeouts", theme: "Scale & large files", status: "Backlog · P1", tone: "open" },
+  { id: "INT-1482", item: "Wipro ITC — large-file transient errors", theme: "Scale & large files", status: "Validation", tone: "prog" },
   { id: "OC-1365", item: "Wipro LCC — build iteration error", theme: "Complex-process build", status: "Triage", tone: "open" },
-  { id: "OC-1364", item: "Wipro BRS — build error", theme: "Complex-process build", status: "Triage", tone: "open" },
-  { id: "KOG-11762", item: "Run item download (Scan Health)", theme: "Platform & integrations", status: "In Progress · SLA breached", tone: "prog" },
-  { id: "ENG-4201", item: "Native email send", theme: "Platform & integrations", status: "Triage", tone: "open" },
-  { id: "KOG-11812", item: "Century — browser pod connection", theme: "Platform & integrations", status: "Backlog", tone: "open" },
+  { id: "ENG-4297", item: "Wipro — Quill2 stuck on run", theme: "Complex-process build", status: "Validation", tone: "prog" },
+  { id: "KOG-11844", item: "Conectiv — chat thread 500 errors", theme: "Platform & integrations", status: "Backlog · P1", tone: "open" },
+  { id: "KOG-11845", item: "Conectiv — file upload over 50MB", theme: "Platform & integrations", status: "Backlog · P1", tone: "open" },
+  { id: "KOG-11840", item: "Century — browser connection dropped", theme: "Platform & integrations", status: "In Review", tone: "prog" },
+  { id: "ENG-4201", item: "Native email send", theme: "Platform & integrations", status: "Backlog", tone: "open" },
+  { id: "OC-1391", item: "JBI — SFTP server connection", theme: "Account integrations", status: "Triage", tone: "open" },
+  { id: "OC-1395", item: "iHeart — prompt too long", theme: "Account integrations", status: "Triage", tone: "open" },
+  { id: "OC-1359", item: "Mitie PCard — Coupa, Maximo, BCI (+2)", theme: "Account integrations", status: "Triage", tone: "open" },
 ];
 
-export interface DecisionPoint { title: string; context: string; workaround: string; decide: string; refs: string[]; }
+export interface DecisionPoint { title: string; context: string; workaround: string; decide: string; verb?: string; refs: string[]; }
 export const DECISIONS: DecisionPoint[] = [
   {
     title: "1 · Subprocess and parallel execution",
-    context: "Complex and high-volume processes (Wipro FSS, batch runs) need subprocess calls and parallel execution, which V2 does not yet support natively.",
+    context: "Complex and high-volume processes (Wipro FSS, JBI batch IDP, Scan Health) need subprocess calls and parallel execution. V2 now supports parallel IDP extraction; broader subprocess calls and parallel execution are not yet native.",
     workaround: "Interim workaround: invoke a second draft over HTTP to emulate a subprocess or parallel branch; we should validate whether this reliably unblocks current work.",
-    decide: "Adopt the HTTP workaround as the interim standard, or prioritize native subprocess and parallel support now.",
+    decide: "adopt the HTTP workaround as the interim standard, or prioritize native subprocess and parallel support now.",
     refs: [],
   },
   {
     title: "2 · IDP at scale: formats and fields",
     context: "Several processes need a distinct prompt per document type or format (Ciena PO, 200–300 formats; JBI AP), and some extract 400+ fields (Scan Health). Authoring and maintaining prompt libraries at this scale is unproven.",
-    workaround: "Today: works for small prompt sets; effort grows with every new format.",
-    decide: "Agree an approach for authoring and maintaining large prompt sets and high-field extractions (templates, tooling, or product investment).",
-    refs: ["KOG-11815", "ENG-4139"],
+    workaround: "Today: works for small prompt sets; effort grows with every new format. The Assets / Collections feature lands this week.",
+    decide: "assess how Assets / Collections changes the IDP build, maintain, and scale experience, then scope which gaps remain for migration.",
+    verb: "Next",
+    refs: ["KOG-11815", "KOG-11824", "ENG-4139"],
   },
   {
     title: "3 · Large-file throughput and reliability",
-    context: "Large PDFs and Excel files (25MB+, up to 100–150MB and 120 pages) cause timeouts and transient errors; processing is sequential with no per-file isolation.",
-    workaround: "Open: KOG-11815, OC-1366, OC-1364, OC-1365.",
-    decide: "Prioritize large-file and parallel-IDP engineering, or constrain which processes migrate until it is resolved.",
-    refs: ["KOG-11815", "OC-1366", "OC-1364", "OC-1365"],
+    context: "Large PDFs and Excel files (25MB+, up to 100–150MB and 120 pages) cause timeouts and transient errors; processing is sequential with no per-file isolation. Conectiv also hits a hard 50MB upload limit.",
+    workaround: "Now supported: parallel IDP extraction. Exploring extending it to parallel-file, then parallel-page extraction inside the Book, as an alternative to subprocess calls.",
+    decide: "confirm the more scalable approach (parallel-file / parallel-page vs subprocess) from the testing now underway; tickets pending.",
+    refs: ["KOG-11815", "INT-1482", "KOG-11824", "KOG-11845"],
   },
   {
-    title: "4 · Integration gaps: email and department box",
-    context: "Department box is now unblocked via Collections. Native email send is not available.",
-    workaround: "Interim workaround: a personal mailbox for testing, then a customer mailbox or a dedicated automation email account in production.",
-    decide: "Standardize the dedicated-mailbox approach, or prioritize native email.",
-    refs: ["ENG-4201"],
+    title: "4 · Integration gaps: email and platform connectors",
+    context: "Department box is unblocked via Collections. The email approach is decided. Account-specific connectors (JBI SFTP, Conectiv chat) are the remaining gaps.",
+    workaround: "Decided: a dedicated automation email account in production (a personal mailbox for testing). Remaining connector gaps have tickets in progress.",
+    decide: "email resolved via the dedicated-mailbox standard; remaining connector work is ticketed and in progress, no further decision needed for now.",
+    verb: "Status",
+    refs: ["ENG-4201", "OC-1391"],
   },
 ];
 
 export const SOURCES_NOTE =
-  "Sources: Monday delivery boards and Customers board (pulled June 22) · migration tracker (74 processes) · Linear label v2 Migration Blockers (live, June 22). Figures current as of June 22, 2026. Reported footprint of 102 = 58 live + 24 in active development + 20 queued. The migration scope of 47 is confirmed against a V1 end-of-life date still to be set.";
+  "Sources: migration tracker (75 processes) · Linear label v2 Migration Blockers (live, June 29) · Monday Customers board (renewals and health, June 29). Migrate/retire split and parity dates are from the migration tracker as of June 29, 2026. Delivery footprint of 102 = 58 live + 24 in active development + 20 queued is carried from the June 22 Monday delivery-board pull. The migration scope of 45 is confirmed against a V1 end-of-life date still to be set.";
