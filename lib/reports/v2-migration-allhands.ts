@@ -91,7 +91,7 @@ export const PARITY_FOOTNOTE =
 export interface DevRow { process: string; owner: string; phase: string; update: string; }
 export const NET_NEW: DevRow[] = [
   { process: "Norco · Warranty", owner: "Karthik N.", phase: "M3 · UAT", update: "On track; built on V2, awaiting customer support for QA." },
-  { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M3 · UAT", update: "Off track; build complete but the browser-automation connection drops (KOG-11840) and a fuzzy-matching dependency (ENG-4302) is open; customer charge-code access pending before UAT." },
+  { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M3 · UAT", update: "Off track; development is complete and UAT is stuck due to a browser-automation connection drop (KOG-11840) and slowness issues. Tickets are in progress. Once resolved we'll continue with UAT." },
   { process: "JBI · Receiving Process", owner: "Arushi B.", phase: "M2 · Dev", update: "On track; development wrapping up, moving into testing." },
   { process: "JBI · Compass Quote Update", owner: "Arushi B.", phase: "M2 · Dev", update: "Advanced from discovery; building against the live system, validating MFA." },
   { process: "JBI · Material Allocation Import", owner: "Arushi B.", phase: "Waiting for customer", update: "Third-party access pending; SQL-DB approach under feasibility review." },
