@@ -86,7 +86,7 @@ export const PARITY_UPCOMING: ParityCohort[] = [
     { name: "Conectiv", blocked: true }, { name: "Kort Payments × 4", blocked: true }, { name: "Mitie · PCard", blocked: true } ] },
 ];
 export const PARITY_FOOTNOTE =
-  "Sharpest spots: Kort Payments, whose four processes are all engineering-blocked on browser automation and awaiting IP whitelisting from the customer against a Jul 10 renewal, and Wipro FSS, a large parity-testing cluster plus new large-file blockers against a Jun 30 renewal. Scan Health's download blocker (KOG-11762) and Wipro BRS (OC-1364) both cleared this week.";
+  "Sharpest spots: Kort Payments, whose four processes are all engineering-blocked on browser automation and awaiting IP whitelisting from the customer against a Jul 10 renewal, and Wipro FSS, a large parity-testing cluster plus new large-file blockers against a Jun 30 renewal. Wipro BRS (OC-1364) cleared this week; Scan Health's download blocker (KOG-11762) is still in review, not yet closed.";
 
 export interface DevRow { process: string; owner: string; phase: string; update: string; }
 export const NET_NEW: DevRow[] = [
@@ -136,7 +136,6 @@ export const NOT_MIGRATING: NotMigratingRow[] = [
 
 export interface BlockerRow { id: string; item: string; status: string; theme?: string; tone?: "done" | "prog" | "open"; }
 export const BLOCKERS_RESOLVED: BlockerRow[] = [
-  { id: "KOG-11762", item: "Scan Health — run-item download", status: "Done Jun 25" },
   { id: "OC-1364", item: "Wipro BRS — build error", status: "Done Jun 26" },
   { id: "KOG-11812", item: "Century — browser pod connection", status: "Done Jun 25" },
   { id: "KOG-11820", item: "JBI — input too long in UI", status: "Done Jun 25" },
@@ -150,13 +149,22 @@ export const BLOCKERS_OPEN: BlockerRow[] = [
   { id: "INT-1482", item: "Wipro ITC — large-file transient errors", theme: "Scale & large files", status: "Validation", tone: "prog" },
   { id: "OC-1365", item: "Wipro LCC — build iteration error", theme: "Complex-process build", status: "Triage", tone: "open" },
   { id: "ENG-4297", item: "Wipro — Quill2 stuck on run", theme: "Complex-process build", status: "Validation", tone: "prog" },
+  { id: "ENG-3827", item: "Ciena PO — Python migration strategy decision", theme: "Complex-process build", status: "Backlog", tone: "open" },
+  { id: "MAN-3712", item: "MCP agent-build feedback (internal tooling, non-customer)", theme: "Complex-process build", status: "Validation", tone: "prog" },
   { id: "KOG-11844", item: "Conectiv — chat thread 500 errors", theme: "Platform & integrations", status: "Backlog · P1", tone: "open" },
   { id: "KOG-11845", item: "Conectiv — file upload over 50MB", theme: "Platform & integrations", status: "Backlog · P1", tone: "open" },
   { id: "KOG-11840", item: "Century — browser connection dropped", theme: "Platform & integrations", status: "In Review", tone: "prog" },
   { id: "ENG-4201", item: "Native email send", theme: "Platform & integrations", status: "Backlog", tone: "open" },
+  { id: "ENG-4302", item: "Century — fuzzy matching for collections (due Jul 1)", theme: "Platform & integrations", status: "In Review", tone: "prog" },
+  { id: "KOG-11828", item: "TTX — V2 internal error on draft", theme: "Platform & integrations", status: "In Review", tone: "prog" },
+  { id: "OC-1370", item: "TTX — Collections prod availability timeline", theme: "Platform & integrations", status: "Triage", tone: "open" },
   { id: "OC-1391", item: "JBI — SFTP server connection", theme: "Account integrations", status: "Triage", tone: "open" },
   { id: "OC-1395", item: "iHeart — prompt too long", theme: "Account integrations", status: "Triage", tone: "open" },
   { id: "OC-1359", item: "Mitie PCard — Coupa, Maximo, BCI (+2)", theme: "Account integrations", status: "Triage", tone: "open" },
+  { id: "KOG-11842", item: "Mitie — needs UK instance of V2", theme: "Account integrations", status: "Backlog", tone: "open" },
+  { id: "KOG-11832", item: "JBI — can't preview run output", theme: "UI & run experience", status: "In Progress", tone: "prog" },
+  { id: "KOG-11762", item: "Scan Health — can't download all run items", theme: "UI & run experience", status: "In Review", tone: "prog" },
+  { id: "KOG-11838", item: "Century — no browser action/video on exception", theme: "UI & run experience", status: "Backlog", tone: "open" },
 ];
 
 export interface DecisionPoint { title: string; context: string; workaround: string; decide: string; verb?: string; refs: string[]; }

@@ -315,7 +315,7 @@ export function V2MigrationClient() {
           <SectionLabel>Migration blockers (live)</SectionLabel>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="glass-card rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Resolved since last update (4)</h3>
+              <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Resolved since last update ({BLOCKERS_RESOLVED.length})</h3>
               <p className={`text-[11px] ${MUTED} mt-0.5 mb-3`}>{BLOCKERS_RESOLVED_NOTE}</p>
               {BLOCKERS_RESOLVED.map((b) => (
                 <div key={b.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--brand-metal-line)] last:border-b-0 text-[12.5px] text-[color:var(--foreground)]">
@@ -325,7 +325,7 @@ export function V2MigrationClient() {
               <p className={`text-[11px] ${MUTED} leading-relaxed mt-3 border-t border-[var(--brand-metal-line)] pt-3`}>{BLOCKERS_RESOLVED_FOOTNOTE}</p>
             </div>
             <div className="glass-card rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Open — migration-critical (14)</h3>
+              <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Open — migration-critical ({BLOCKERS_OPEN.length})</h3>
               <p className={`text-[11px] ${MUTED} mt-0.5 mb-2`}>
                 Linear label: <a href="https://linear.app/kognitos/issue-label/v2%20migration%20blockers" target="_blank" rel="noreferrer" className="font-mono text-blue-700 dark:text-blue-400 border-b border-dotted border-blue-300 hover:border-solid">v2 Migration Blockers</a>
               </p>
