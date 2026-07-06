@@ -5,11 +5,6 @@ import {
   WEEKS, LINEAR_ISSUE, LINEAR_BLOCKER_LABEL,
   type V2Week, type JourneyData, type BoardChip,
 } from "@/lib/reports/v2-allhands-weeks";
-import { V2MigrationLegacy } from "./v2-migration-legacy";
-
-// Weeks published before the current template render via the archived legacy
-// layout, exactly as presented. New weeks go in the WEEKS registry.
-const LEGACY_WEEKS = [{ key: "2026-06-29", dateLabel: "Week of June 29, 2026" }];
 
 // ── Export (mirrors the weekly report's html-to-image pattern) ────────────────
 function ExportButtons({ reportRef, weekKey }: { reportRef: RefObject<HTMLDivElement | null>; weekKey: string }) {
@@ -191,19 +186,17 @@ function JourneyChart({ j }: { j: JourneyData }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export function V2MigrationClient() {
+export function V2MigrationLegacy() {
   const reportRef = useRef<HTMLDivElement>(null);
   const [weekKey, setWeekKey] = useState(WEEKS[0].key);
   const week: V2Week = WEEKS.find((w) => w.key === weekKey) ?? WEEKS[0];
-  const isLegacy = LEGACY_WEEKS.some((w) => w.key === weekKey);
-  const options = [...WEEKS.map((w) => ({ key: w.key, dateLabel: w.dateLabel })), ...LEGACY_WEEKS];
 
   return (
     <div className="space-y-4">
       {/* Controls (not captured) */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          {options.map((w) => (
+        <div className="flex items-center gap-2">
+          {WEEKS.map((w) => (
             <button key={w.key} onClick={() => setWeekKey(w.key)}
               className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${
                 w.key === weekKey
@@ -216,10 +209,10 @@ export function V2MigrationClient() {
           ))}
           <span className={`text-xs ${MUTED}`}>weekly snapshots · export as PNG for the All Hands deck</span>
         </div>
-        {!isLegacy && <ExportButtons reportRef={reportRef} weekKey={week.key} />}
+        <ExportButtons reportRef={reportRef} weekKey={week.key} />
       </div>
 
-      {isLegacy ? <V2MigrationLegacy /> : (
+      {/* Captured report */}
       <div ref={reportRef} className="space-y-7">
         {/* Header */}
         <div className="rounded-2xl px-7 py-6" style={{ background: "var(--brand-night)" }}>
@@ -412,7 +405,6 @@ export function V2MigrationClient() {
 
         <p className={`text-[11px] ${MUTED} leading-relaxed border-t border-[var(--brand-metal-line)] pt-3.5`}>{week.sources}</p>
       </div>
-      )}
     </div>
   );
 }
