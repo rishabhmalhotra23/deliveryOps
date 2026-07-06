@@ -86,7 +86,7 @@ const WEEK_2026_07_06: V2Week = {
   key: "2026-07-06",
   dateLabel: "Week of July 6, 2026",
   lede:
-    "The strongest week of the migration program: JBI renewed at $162K, five blocked migrations cleared, and 25 of 46 are at or near the finish line. Twelve blocker fixes shipped this week, and two new V2 builds kicked off.",
+    "The strongest week of the migration program: JBI renewed at $162K, five blocked migrations cleared, and 25 of 46 are at or near the finish line. Eighteen blocker tickets closed since Jun 29, two new V2 builds kicked off, and a systematic browser-automation gap review (13 tickets) was filed Jul 6 from validation testing.",
 
   snapshot: [
     { value: "66", label: "Live in production", sub: "61 V1 · 3 V2 · 2 other" },
@@ -101,7 +101,7 @@ const WEEK_2026_07_06: V2Week = {
   netNewDelta: "vs Jun 29: two new kickoffs (Conectiv SONY, JBI Material Allocation Export)",
   netNew: [
     { process: "Norco · Warranty", owner: "Karthik N.", phase: "M3 · UAT", update: "On track; awaiting customer QA support." },
-    { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M3 · UAT", update: "Off track — browser automation; retesting engineering fixes, then continue customer UAT.", tone: "off" },
+    { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M3 · UAT", update: "Off track — browser automation; retest of landed fixes surfaced gaps, filed as a 13-ticket review (ENG-4444) on Jul 6. UAT continues as fixes land.", tone: "off" },
     { process: "JBI · Receiving Process", owner: "Arushi B.", phase: "M2 · Dev", update: "On track; development wrapping up, moving into testing." },
     { process: "JBI · Compass Quote Update", owner: "Arushi B.", phase: "M2 · Dev", update: "Building against the live system; validating MFA." },
     { process: "JBI · Material Allocation Import", owner: "Arushi B.", phase: "Waiting", update: "Third-party access pending." },
@@ -137,7 +137,7 @@ const WEEK_2026_07_06: V2Week = {
   journey: {
     goalLabel: "Goal: all 46 migrations at V1 parity",
     procMax: 46,
-    ticketMax: 52,
+    ticketMax: 68,
     dates: ["Jun 1", "Jun 8", "Jun 15", "Jun 22", "Jun 29", "Jul 6"],
     milestones: [
       { text: "kickoff" },
@@ -145,13 +145,13 @@ const WEEK_2026_07_06: V2Week = {
       { text: "migrated · parity begins" },
       { text: "first snapshot" },
       { text: "inflow peaks" },
-      { text: "" },
+      { text: "browser gap review filed" },
     ],
     finish: [null, null, 0, 11, 19, 25],
     blocked: [null, null, null, 8, 13, 9],
-    ticketsCreated: [2, 3, 4, 16, 40, 52],
-    ticketsOpen: [2, 3, 4, 12, 24, 23],
-    finalLabels: { finish: "25", toGo: "21 to go", blocked: "9", created: "52 created", open: "23 still open", resolvedGap: "29 resolved" },
+    ticketsCreated: [2, 3, 4, 16, 40, 68],
+    ticketsOpen: [2, 3, 4, 12, 24, 33],
+    finalLabels: { finish: "25", toGo: "21 to go", blocked: "9", created: "68 created", open: "33 still open", resolvedGap: "35 resolved" },
   },
 
   boardDelta: "vs Jun 29: blocked 13 → 9 · customer UAT 7 → 11 · complete 1 → 3",
@@ -208,7 +208,7 @@ const WEEK_2026_07_06: V2Week = {
     {
       stage: "Blocked", count: 9, color: "#E24B4A",
       chips: [
-        { name: "Kort Payments ×4", note: "browser automation, fixes in validation" },
+        { name: "Kort Payments ×4", note: "browser automation — gap review filed Jul 6" },
         { name: "JBI QSR", note: "IDP timeouts, UAT starts anyway" },
         { name: "Conectiv", note: "400MB / 1M-row files" },
         { name: "Mitie PCard", note: "UK instance + credentials" },
@@ -224,7 +224,7 @@ const WEEK_2026_07_06: V2Week = {
   push: [
     { title: "Move UAT to live", color: "#0F6E56", body: "11 in customer UAT. JBI starts Merch, Design, QSR (max 5 workstreams per customer). Plunkett pends their NetSuite fix. TTX needs collections + native email." },
     { title: "Start customer UAT from parity", color: "#185FA5", body: "11 in parity. JBI PIR v2 queued next; Wipro cluster validated vs V1 runs, scale answer feeds the subprocess benchmark." },
-    { title: "Unblock engineering", color: "#A32D2D", body: "Kort browser validation vs the Jul 10 renewal is most time-critical. UK instance gates Mitie. Ciena waits on Assets / Collections." },
+    { title: "Unblock engineering", color: "#A32D2D", body: "Kort browser validation vs the Jul 10 renewal is most time-critical; the Jul 6 browser gap review (ENG-4444, 13 tickets) needs prioritization. UK instance gates Mitie. Ciena waits on Assets / Collections." },
     { title: "Keep builds and live processes healthy", color: "#534AB7", body: "9 net-new V2 builds active; support live V1 and V2 production processes — open platform issues below." },
   ],
   platformIssuesTitle: "Live platform issues needing attention (outside the migration label)",
@@ -237,12 +237,32 @@ const WEEK_2026_07_06: V2Week = {
     { id: "KOG-11857", title: "V2 | Pepsico | Credits exhausted - org id - 1", sev: "High", sevTone: "high", state: "Todo", note: "quick ops fix, filed today" },
   ],
 
-  ticketsDelta: "vs Jun 29: 12 opened · 12 resolved · open 24 → 23. Open ticket = still blocked.",
+  ticketsDelta: "vs Jun 29: open 24 → 33. Jul 6 alone: 13-ticket browser-automation gap review filed from validation testing, 3 further issues reported, and 6 tickets closed. Open ticket = still blocked.",
   ticketGroups: [
+    {
+      theme: "Browser automation — gap review filed Jul 6 (ENG-4444)",
+      rows: [
+        { id: "KOG-11840", title: "Century - Browser Connection being dropped", state: "In review", tone: "prog" },
+        { id: "KOG-11838", title: "Century - Can't see Browser action/video when there's an exception", state: "In progress", tone: "prog" },
+        { id: "ENG-4444", title: "Gaps/Feedback for v2 Browser automation", state: "Triage", tone: "open" },
+        { id: "ENG-4445", title: "Add browser JavaScript evaluation for page-context actions", state: "Triage", tone: "open" },
+        { id: "ENG-4446", title: "Add DOM-presence waiting with selector timeouts", state: "Triage", tone: "open" },
+        { id: "ENG-4447", title: "Add atomic input clearing and fill for inline editors", state: "Triage", tone: "open" },
+        { id: "ENG-4448", title: "Standardize browser procedure return shapes and surface schemas", state: "Triage", tone: "open" },
+        { id: "ENG-4449", title: "Make browser teardown failures non-fatal or safely swallowed", state: "Triage", tone: "open" },
+        { id: "ENG-4450", title: "Add network response waiting for XHR-backed browser flows", state: "Triage", tone: "open" },
+        { id: "ENG-4451", title: "Add semantic ag-Grid verbs for content-addressed editing", state: "Triage", tone: "open" },
+        { id: "ENG-4452", title: "Document selector visibility behavior changes and add visible-match fallback", state: "Triage", tone: "open" },
+        { id: "ENG-4453", title: "Make browser book version binding and upgrades visible in UX", state: "Triage", tone: "open" },
+        { id: "ENG-4454", title: "Honor transport error contracts or add recovery for browser invoker failures", state: "Triage", tone: "open" },
+        { id: "ENG-4456", title: "Fix `save_automation` reporting success when edits are not persisted", state: "Triage", tone: "open" },
+      ],
+    },
     {
       theme: "IDP and Excel at scale",
       rows: [
         { id: "KOG-11824", title: "JBI - Parallel IDP extraction getting timeouts", state: "In progress", tone: "prog" },
+        { id: "KOG-11859", title: "JBI - Document Processing service unresponsive in Prod, Astral didn't try to auto-resolve or retry", state: "In review", tone: "prog" },
         { id: "KOG-11815", title: "Gaps in v2 for executing large IDP processes", state: "Backlog", tone: "open" },
         { id: "ENG-4375", title: "Increase file upload limit for Connectiv V2 migration", state: "Todo", tone: "open" },
         { id: "ENG-4429", title: "Increase BDK Excel pod memory for Connectiv V2 migration", state: "Todo", tone: "open" },
@@ -253,14 +273,6 @@ const WEEK_2026_07_06: V2Week = {
       rows: [
         { id: "ENG-3827", title: "PO digitization: decide Python migration strategy per stage (1, 4, 5)", state: "Backlog", tone: "open" },
         { id: "OC-1357", title: "Mitie V2 Migration — PCard Python BCI procedures need V2 equivalent", state: "Triage", tone: "open" },
-        { id: "RL-2172", title: "Expose current run ID to SPy automation code", state: "Backlog", tone: "open" },
-      ],
-    },
-    {
-      theme: "Browser automation",
-      rows: [
-        { id: "KOG-11840", title: "Century - Browser Connection being dropped", state: "In review", tone: "prog" },
-        { id: "KOG-11838", title: "Century - Can't see Browser action/video when there's an exception", state: "In progress", tone: "prog" },
       ],
     },
     {
@@ -278,23 +290,21 @@ const WEEK_2026_07_06: V2Week = {
       theme: "Collections and fuzzy matching",
       rows: [
         { id: "ENG-4431", title: "PostGres DB for Century for V2 Fuzzy match", state: "Todo", tone: "open" },
-        { id: "ENG-4302", title: "Fuzzy matching needed for collections", state: "Todo · reopened", tone: "open" },
-        { id: "OC-1370", title: "Collections in Prod Operational Timeline?", state: "Triage", tone: "open" },
+        { id: "ENG-4442", title: "[jarvis] fuzzy_match predicate in collection filter expressions (SPy surface)", state: "In review", tone: "prog" },
       ],
     },
     {
       theme: "Build and run reliability",
       rows: [
-        { id: "KOG-11832", title: "JBI - Not able to preview output from outputs screen", state: "In progress", tone: "prog" },
-        { id: "ENG-4297", title: "Quill2 seems to be stuck on a run", state: "Validation", tone: "prog" },
+        { id: "ENG-4441", title: "JBI - Quill2 unable to execute the command, error message pop-up in UI", state: "Backlog", tone: "open" },
+        { id: "ENG-4455", title: "Improve run observability for paused and failed automation diagnosis", state: "Triage", tone: "open" },
         { id: "MAN-3769", title: "WIPRO LCC automation build fails at the limited tool iterations error", state: "Triage", tone: "open" },
         { id: "KOG-11853", title: "V2 | TTX | Flaky save button in add inputs", state: "Backlog", tone: "open" },
-        { id: "ENG-4436", title: "V2 | Pepsico | Quill2 not updating the automation inputs - incorrect callouts in the quill2 response", state: "Todo", tone: "open" },
       ],
     },
   ],
   ticketsFootnote:
-    "Resolved this cycle: Wipro ITC large-file errors · Conectiv 50MB rejection · iHeart prompt limit · IDP one-hour limit · Pepsico duplicates consolidated into ENG-4436. Fuzzy matching shipped Jun 29, reopened Jul 6 for follow-up. IDP/Excel and browser fixes landed, in validation.",
+    "Closed since Jun 29 (18): Wipro ITC large-file errors · Conectiv 50MB rejection · iHeart prompt limit · IDP one-hour limit · fuzzy matching for collections (ENG-4302; SPy follow-up ENG-4442 in review) · collections prod timeline (OC-1370) · JBI run-output preview (KOG-11832) · Quill2 stuck-run (ENG-4297) · SPy run ID (ENG-4440) · Pepsico Quill2 callouts (ENG-4436), among others. The Jul 6 browser review (ENG-4444) converts validation findings into 12 actionable tickets.",
 
   decisions: [
     {
@@ -315,7 +325,7 @@ const WEEK_2026_07_06: V2Week = {
   ],
 
   sources:
-    "Sources: migration tracker (75 processes, Jul 6) · Linear label v2 Migration Blockers (live Jul 6: 52 tickets, 23 open) and open Urgent/High production issues · Monday Projects, Customers, and Deliverables boards (live Jul 6). JBI renewal per Delivery; the Monday Customers row predates the renewal and is pending update. Journey milestones per program records; ticket history from Linear creation and completion dates.",
+    "Sources: migration tracker (75 processes, Jul 6) · Linear label v2 Migration Blockers (live Jul 6: 68 tickets, 33 open) and open Urgent/High production issues · Monday Projects, Customers, and Deliverables boards (live Jul 6). JBI renewal per Delivery; the Monday Customers row predates the renewal and is pending update. Journey milestones per program records; ticket history from Linear creation and completion dates.",
 };
 
 // Latest first. Append new weeks at the top.
