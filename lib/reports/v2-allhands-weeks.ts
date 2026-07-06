@@ -86,7 +86,7 @@ const WEEK_2026_07_06: V2Week = {
   key: "2026-07-06",
   dateLabel: "Week of July 6, 2026",
   lede:
-    "The strongest week of the migration program: JBI renewed at $162K, five blocked migrations cleared, and 25 of 46 are at or near the finish line. Engineering matched blocker inflow with resolutions for the first time; two new V2 builds kicked off.",
+    "The strongest week of the migration program: JBI renewed at $162K, five blocked migrations cleared, and 25 of 46 are at or near the finish line. Twelve blocker fixes shipped this week, and two new V2 builds kicked off.",
 
   snapshot: [
     { value: "66", label: "Live in production", sub: "61 V1 · 3 V2 · 2 other" },
