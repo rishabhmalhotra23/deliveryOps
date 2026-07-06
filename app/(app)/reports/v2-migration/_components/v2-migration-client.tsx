@@ -121,13 +121,13 @@ function JourneyChart({ j }: { j: JourneyData }) {
   const li = n - 1;
   const lastX = xs[li];
   const lastFinish = j.finish[li] ?? 0;
-  const gapMidY = (yTick(j.ticketsCreated[li - 1]) + yTick(j.ticketsOpen[li - 1])) / 2;
+  const gapMidY = (yTick(j.ticketsCreated[li]) + yTick(j.ticketsOpen[li])) / 2 + 4;
 
   const areaPath = `M${finishPts.join(" L")} L${lastX},${CHART.procBase} Z`;
   const gapPath = `M${createdPts.join(" L")} L${[...openPts].reverse().join(" L")} Z`;
 
   return (
-    <svg viewBox="0 0 640 322" className="w-full h-auto block" role="img" aria-label="Migration journey: progress toward all 46 migrations at V1 parity, and cumulative blocker tickets">
+    <svg viewBox="0 0 640 336" className="w-full h-auto block" role="img" aria-label="Migration journey: progress toward the goal of all migrations at V1 parity, and cumulative blocker tickets">
       {/* goal line */}
       <line x1={CHART.x0} y1={CHART.procTop} x2={CHART.x1} y2={CHART.procTop} stroke="#1D9E75" strokeWidth={1.5} strokeDasharray="6 5" opacity={0.55} />
       <text x={CHART.x0} y={22} fontSize={10.5} fill="#0F6E56">{j.goalLabel}</text>
@@ -172,9 +172,9 @@ function JourneyChart({ j }: { j: JourneyData }) {
       <polyline points={openPts.join(" ")} fill="none" stroke="#EF9F27" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={CHART.x1} cy={yTick(j.ticketsCreated[li])} r={3.5} fill="#854F0B" />
       <circle cx={CHART.x1} cy={yTick(j.ticketsOpen[li])} r={3.5} fill="#EF9F27" />
-      <text x={CHART.x1 - 8} y={yTick(j.ticketsCreated[li]) - 5} textAnchor="end" fontSize={11} fontWeight={500} fill="#854F0B">{j.finalLabels.created}</text>
-      <text x={CHART.x1 - 8} y={yTick(j.ticketsOpen[li]) + 14} textAnchor="end" fontSize={11} fill="#BA7517">{j.finalLabels.open}</text>
-      <text x={xs[li - 1] + (xs[li] - xs[li - 1]) * 0.45} y={gapMidY} textAnchor="middle" fontSize={9.5} fill="#0F6E56">{j.finalLabels.resolvedGap}</text>
+      <text x={CHART.x1 - 8} y={yTick(j.ticketsCreated[li]) - 6} textAnchor="end" fontSize={11} fontWeight={500} fill="#854F0B">{j.finalLabels.created}</text>
+      <text x={CHART.x1 - 8} y={yTick(j.ticketsOpen[li]) + 16} textAnchor="end" fontSize={11} fill="#BA7517">{j.finalLabels.open}</text>
+      <text x={CHART.x1 - 8} y={gapMidY} textAnchor="end" fontSize={9.5} fill="#0F6E56">{j.finalLabels.resolvedGap}</text>
       {/* shared x-axis */}
       {xs.map((x) => <line key={x} x1={x} y1={CHART.tickBase} x2={x} y2={CHART.tickBase + 5} stroke="var(--muted-foreground)" />)}
       {j.dates.map((d, i) => (
@@ -182,7 +182,7 @@ function JourneyChart({ j }: { j: JourneyData }) {
       ))}
       {j.milestones.map((m, i) =>
         m.text ? (
-          <text key={i} x={xs[i]} y={308}
+          <text key={i} x={xs[i]} y={i % 2 === 0 ? 308 : 322}
             textAnchor={i === 0 ? "start" : i === j.milestones.length - 1 ? "end" : "middle"}
             fontSize={10} fill={m.good ? "#0F6E56" : "var(--muted-foreground)"}>{m.text}</text>
         ) : null)}
@@ -383,7 +383,10 @@ export function V2MigrationClient() {
           <div className="glass-card rounded-2xl p-5 mb-6">
             {week.ticketGroups.map((g) => (
               <div key={g.theme}>
-                <div className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted-foreground)] mt-3 mb-1 first:mt-0">{g.theme}</div>
+                <div className="flex items-center justify-between gap-2 bg-[var(--brand-seasalt)] border border-[var(--brand-metal-line)] rounded-lg px-3 py-1.5 mt-4 mb-1.5 first:mt-0">
+                  <span className="text-[11px] uppercase tracking-wide font-bold text-[color:var(--foreground)]">{g.theme}</span>
+                  <span className="text-[10px] font-semibold text-[color:var(--muted-foreground)] whitespace-nowrap">{g.rows.length} open</span>
+                </div>
                 {g.rows.map((t) => (
                   <div key={t.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--brand-metal-line)] last:border-b-0 text-[12.5px] text-[color:var(--foreground)]">
                     <span className="leading-snug"><Tik id={t.id} /> {t.title}</span>
