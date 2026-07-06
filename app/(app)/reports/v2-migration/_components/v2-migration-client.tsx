@@ -97,13 +97,15 @@ function Chip({ chip, stageColor }: { chip: BoardChip; stageColor: string }) {
 }
 
 // ── Journey chart (two panels, shared timeline) ───────────────────────────────
-const CHART = { xs: [60, 160, 260, 360, 460, 560], procBase: 150, procTop: 30, tickBase: 275, tickTop: 218 };
+const CHART = { x0: 60, x1: 560, procBase: 150, procTop: 30, tickBase: 275, tickTop: 218 };
 
 function JourneyChart({ j }: { j: JourneyData }) {
+  const n = j.dates.length;
+  const xs = j.dates.map((_, i) => CHART.x0 + (i * (CHART.x1 - CHART.x0)) / (n - 1));
   const yProc = (v: number) => CHART.procBase - (v / j.procMax) * (CHART.procBase - CHART.procTop);
   const yTick = (v: number) => CHART.tickBase - (v / j.ticketMax) * (CHART.tickBase - CHART.tickTop);
   const pts = (vals: (number | null)[], y: (v: number) => number) =>
-    vals.map((v, i) => (v === null ? null : `${CHART.xs[i]},${Math.round(y(v) * 10) / 10}`)).filter(Boolean) as string[];
+    vals.map((v, i) => (v === null ? null : `${xs[i]},${Math.round(y(v) * 10) / 10}`)).filter(Boolean) as string[];
 
   const finishPts = pts(j.finish, yProc);
   const blockedPts = pts(j.blocked, yProc);
@@ -111,10 +113,10 @@ function JourneyChart({ j }: { j: JourneyData }) {
   const openPts = pts(j.ticketsOpen, yTick);
   const finishSolid = finishPts.slice(1); // first finish point is the dotted lead-in origin
   const firstFinishIdx = j.finish.findIndex((v) => v !== null);
-  const lastX = CHART.xs[CHART.xs.length - 1];
-  const lastFinish = j.finish[j.finish.length - 1] ?? 0;
-  const lastBlocked = j.blocked[j.blocked.length - 1] ?? 0;
-  const gapMidY = (yTick(j.ticketsCreated[4]) + yTick(j.ticketsOpen[4])) / 2;
+  const li = n - 1;
+  const lastX = xs[li];
+  const lastFinish = j.finish[li] ?? 0;
+  const gapMidY = (yTick(j.ticketsCreated[li - 1]) + yTick(j.ticketsOpen[li - 1])) / 2;
 
   const areaPath = `M${finishPts.join(" L")} L${lastX},${CHART.procBase} Z`;
   const gapPath = `M${createdPts.join(" L")} L${[...openPts].reverse().join(" L")} Z`;
@@ -122,15 +124,15 @@ function JourneyChart({ j }: { j: JourneyData }) {
   return (
     <svg viewBox="0 0 640 322" className="w-full h-auto block" role="img" aria-label="Migration journey: progress toward all 46 migrations at V1 parity, and cumulative blocker tickets">
       {/* goal line */}
-      <line x1={60} y1={CHART.procTop} x2={560} y2={CHART.procTop} stroke="#1D9E75" strokeWidth={1.5} strokeDasharray="6 5" opacity={0.55} />
-      <text x={60} y={22} fontSize={10.5} fill="#0F6E56">{j.goalLabel}</text>
+      <line x1={CHART.x0} y1={CHART.procTop} x2={CHART.x1} y2={CHART.procTop} stroke="#1D9E75" strokeWidth={1.5} strokeDasharray="6 5" opacity={0.55} />
+      <text x={CHART.x0} y={22} fontSize={10.5} fill="#0F6E56">{j.goalLabel}</text>
       {/* process axis */}
-      <line x1={60} y1={CHART.procBase} x2={560} y2={CHART.procBase} stroke="var(--brand-metal-line)" strokeWidth={1} />
+      <line x1={CHART.x0} y1={CHART.procBase} x2={CHART.x1} y2={CHART.procBase} stroke="var(--brand-metal-line)" strokeWidth={1} />
       <text x={54} y={CHART.procBase + 3} textAnchor="end" fontSize={10} fill="var(--muted-foreground)">0</text>
       <text x={54} y={CHART.procTop + 3} textAnchor="end" fontSize={10} fill="var(--muted-foreground)">{j.procMax}</text>
       {/* finish area + lines */}
       <path d={areaPath} fill="#1D9E75" opacity={0.09} />
-      <line x1={CHART.xs[firstFinishIdx]} y1={yProc(j.finish[firstFinishIdx] ?? 0)} x2={CHART.xs[firstFinishIdx + 1]} y2={yProc(j.finish[firstFinishIdx + 1] ?? 0)}
+      <line x1={xs[firstFinishIdx]} y1={yProc(j.finish[firstFinishIdx] ?? 0)} x2={xs[firstFinishIdx + 1]} y2={yProc(j.finish[firstFinishIdx + 1] ?? 0)}
         stroke="#1D9E75" strokeWidth={2} strokeDasharray="3 4" strokeLinecap="round" />
       <polyline points={finishSolid.join(" ")} fill="none" stroke="#1D9E75" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
       <polyline points={blockedPts.join(" ")} fill="none" stroke="#E24B4A" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -138,46 +140,47 @@ function JourneyChart({ j }: { j: JourneyData }) {
       {j.finish.map((v, i) =>
         v === null || i <= firstFinishIdx ? null : (
           <g key={`f${i}`}>
-            <circle cx={CHART.xs[i]} cy={yProc(v)} r={i === j.finish.length - 1 ? 5 : 4} fill="#1D9E75" />
-            <text x={i === j.finish.length - 1 ? CHART.xs[i] - 8 : CHART.xs[i]} y={yProc(v) - 10}
-              textAnchor={i === j.finish.length - 1 ? "end" : "middle"} fontSize={i === j.finish.length - 1 ? 13 : 12} fontWeight={500} fill="#0F6E56">{v}</text>
+            <circle cx={xs[i]} cy={yProc(v)} r={i === li ? 5 : 4} fill="#1D9E75" />
+            <text x={i === li ? xs[i] - 8 : xs[i]} y={yProc(v) - 10}
+              textAnchor={i === li ? "end" : "middle"} fontSize={i === li ? 13 : 12} fontWeight={500} fill="#0F6E56">{v}</text>
           </g>
         ))}
-      <text x={552} y={yProc(lastFinish) - 24} textAnchor="end" fontSize={10} fill="var(--muted-foreground)">{j.finalLabels.toGo}</text>
+      <text x={CHART.x1 - 8} y={yProc(lastFinish) - 24} textAnchor="end" fontSize={10} fill="var(--muted-foreground)">{j.finalLabels.toGo}</text>
       {j.blocked.map((v, i) =>
         v === null ? null : (
           <g key={`b${i}`}>
-            <circle cx={CHART.xs[i]} cy={yProc(v)} r={3} fill="#E24B4A" />
-            <text x={i === j.blocked.length - 1 ? CHART.xs[i] - 8 : CHART.xs[i]} y={yProc(v) + (v <= (j.finish[i] ?? 99) ? 15 : -8)}
-              textAnchor={i === j.blocked.length - 1 ? "end" : "middle"} fontSize={10.5} fill="#A32D2D">{v}</text>
+            <circle cx={xs[i]} cy={yProc(v)} r={3} fill="#E24B4A" />
+            <text x={i === li ? xs[i] - 8 : xs[i]} y={yProc(v) + (v <= (j.finish[i] ?? 99) ? 15 : -8)}
+              textAnchor={i === li ? "end" : "middle"} fontSize={10.5} fill="#A32D2D">{v}</text>
           </g>
         ))}
       {/* legend */}
       <circle cx={360} cy={170} r={3} fill="#1D9E75" /><text x={368} y={174} fontSize={10.5} fill="var(--foreground)">at or near finish</text>
       <circle cx={474} cy={170} r={3} fill="#E24B4A" /><text x={482} y={174} fontSize={10.5} fill="var(--foreground)">blocked processes</text>
       {/* ticket band */}
-      <text x={60} y={205} fontSize={10} fill="var(--muted-foreground)" fontWeight={600} letterSpacing="0.05em">BLOCKER TICKETS · CUMULATIVE</text>
-      <line x1={60} y1={CHART.tickBase} x2={560} y2={CHART.tickBase} stroke="var(--brand-metal-line)" strokeWidth={1} />
+      <text x={CHART.x0} y={205} fontSize={10} fill="var(--muted-foreground)" fontWeight={600} letterSpacing="0.05em">BLOCKER TICKETS · CUMULATIVE</text>
+      <line x1={CHART.x0} y1={CHART.tickBase} x2={CHART.x1} y2={CHART.tickBase} stroke="var(--brand-metal-line)" strokeWidth={1} />
       <text x={54} y={CHART.tickBase + 3} textAnchor="end" fontSize={10} fill="var(--muted-foreground)">0</text>
       <text x={54} y={CHART.tickTop + 3} textAnchor="end" fontSize={10} fill="var(--muted-foreground)">{j.ticketMax}</text>
       <path d={gapPath} fill="#1D9E75" opacity={0.08} />
       <polyline points={createdPts.join(" ")} fill="none" stroke="#854F0B" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       <polyline points={openPts.join(" ")} fill="none" stroke="#EF9F27" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={560} cy={yTick(j.ticketsCreated[5])} r={3.5} fill="#854F0B" />
-      <circle cx={560} cy={yTick(j.ticketsOpen[5])} r={3.5} fill="#EF9F27" />
-      <text x={552} y={yTick(j.ticketsCreated[5]) - 5} textAnchor="end" fontSize={11} fontWeight={500} fill="#854F0B">{j.finalLabels.created}</text>
-      <text x={552} y={yTick(j.ticketsOpen[5]) + 14} textAnchor="end" fontSize={11} fill="#BA7517">{j.finalLabels.open}</text>
-      <text x={505} y={gapMidY} textAnchor="middle" fontSize={9.5} fill="#0F6E56">{j.finalLabels.resolvedGap}</text>
+      <circle cx={CHART.x1} cy={yTick(j.ticketsCreated[li])} r={3.5} fill="#854F0B" />
+      <circle cx={CHART.x1} cy={yTick(j.ticketsOpen[li])} r={3.5} fill="#EF9F27" />
+      <text x={CHART.x1 - 8} y={yTick(j.ticketsCreated[li]) - 5} textAnchor="end" fontSize={11} fontWeight={500} fill="#854F0B">{j.finalLabels.created}</text>
+      <text x={CHART.x1 - 8} y={yTick(j.ticketsOpen[li]) + 14} textAnchor="end" fontSize={11} fill="#BA7517">{j.finalLabels.open}</text>
+      <text x={xs[li - 1] + (xs[li] - xs[li - 1]) * 0.45} y={gapMidY} textAnchor="middle" fontSize={9.5} fill="#0F6E56">{j.finalLabels.resolvedGap}</text>
       {/* shared x-axis */}
-      {CHART.xs.map((x) => <line key={x} x1={x} y1={CHART.tickBase} x2={x} y2={CHART.tickBase + 5} stroke="var(--muted-foreground)" />)}
+      {xs.map((x) => <line key={x} x1={x} y1={CHART.tickBase} x2={x} y2={CHART.tickBase + 5} stroke="var(--muted-foreground)" />)}
       {j.dates.map((d, i) => (
-        <text key={d} x={CHART.xs[i]} y={292} textAnchor="middle" fontSize={10.5} fill="var(--foreground)">{d}</text>
+        <text key={d} x={xs[i]} y={292} textAnchor="middle" fontSize={10.5} fill="var(--foreground)">{d}</text>
       ))}
-      {j.milestones.map((m, i) => (
-        <text key={i} x={CHART.xs[i]} y={308}
-          textAnchor={i === 0 ? "start" : i === j.milestones.length - 1 ? "end" : "middle"}
-          fontSize={10} fill={m.good ? "#0F6E56" : "var(--muted-foreground)"}>{m.text}</text>
-      ))}
+      {j.milestones.map((m, i) =>
+        m.text ? (
+          <text key={i} x={xs[i]} y={308}
+            textAnchor={i === 0 ? "start" : i === j.milestones.length - 1 ? "end" : "middle"}
+            fontSize={10} fill={m.good ? "#0F6E56" : "var(--muted-foreground)"}>{m.text}</text>
+        ) : null)}
     </svg>
   );
 }
@@ -309,11 +312,13 @@ export function V2MigrationClient() {
           {/* Journey */}
           <SectionLabel>The journey so far</SectionLabel>
           <div className="glass-card rounded-2xl p-5 mb-6 mt-2">
-            <JourneyChart j={week.journey} />
+            <div className="max-w-[780px] mx-auto">
+              <JourneyChart j={week.journey} />
+            </div>
           </div>
 
           {/* Board */}
-          <SectionLabel>Where all 46 stand · ▲ moved this week</SectionLabel>
+          <SectionLabel>Where all {week.board.reduce((s, r) => s + r.count, 0)} stand · ▲ moved this week</SectionLabel>
           <DeltaLine>{week.boardDelta}</DeltaLine>
           <div className="glass-card rounded-2xl p-5 mb-6">
             {week.board.map((row, i) => (
@@ -321,36 +326,46 @@ export function V2MigrationClient() {
                 <span className="flex-none w-[130px] text-[12px] font-semibold pt-0.5" style={{ color: row.color === "#5BC4A0" ? "#1D9E75" : row.color === "#EF9F27" ? "#BA7517" : row.color === "#E24B4A" ? "#A32D2D" : row.color === "#378ADD" ? "#185FA5" : row.color === "#1D9E75" ? "#0F6E56" : row.color }}>
                   {row.stage} · {row.count}
                 </span>
-                <span className="flex flex-wrap gap-1.5">
-                  {row.chips.map((c) => <Chip key={c.name} chip={c} stageColor={row.color} />)}
-                </span>
+                {row.chips && row.chips.length > 0 ? (
+                  <span className="flex flex-wrap gap-1.5">
+                    {row.chips.map((c) => <Chip key={c.name} chip={c} stageColor={row.color} />)}
+                  </span>
+                ) : (
+                  <span className={`text-[11.5px] ${MUTED} pt-0.5 leading-relaxed`}>{row.summary}</span>
+                )}
               </div>
             ))}
             <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed`}>{week.boardFootnote}</p>
           </div>
 
           {/* Push lanes */}
-          <SectionLabel>{week.pushTitle}</SectionLabel>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 mb-3 mt-2">
-            {week.push.map((p) => (
-              <div key={p.title} className="glass-card rounded-2xl p-4">
-                <div className="text-[12.5px] font-semibold mb-1.5" style={{ color: p.color }}>{p.title}</div>
-                <div className="text-[11.5px] text-[color:var(--foreground)] leading-relaxed">{p.body}</div>
+          {week.push.length > 0 && (
+            <>
+              <SectionLabel>{week.pushTitle}</SectionLabel>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 mb-3 mt-2">
+                {week.push.map((p) => (
+                  <div key={p.title} className="glass-card rounded-2xl p-4">
+                    <div className="text-[12.5px] font-semibold mb-1.5" style={{ color: p.color }}>{p.title}</div>
+                    <div className="text-[11.5px] text-[color:var(--foreground)] leading-relaxed">{p.body}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="glass-card rounded-2xl p-4 mb-6" style={{ borderColor: "rgba(226,75,74,0.35)" }}>
-            <div className="text-[12px] font-semibold mb-2" style={{ color: "#A32D2D" }}>{week.platformIssuesTitle}</div>
-            <div className="space-y-1.5">
-              {week.platformIssues.map((p) => (
-                <div key={p.id} className="flex items-baseline gap-2 text-[12px] text-[color:var(--foreground)]">
-                  <Tik id={p.id} />
-                  <span className="leading-snug">{p.title}{p.note ? <span className={`${MUTED}`}> — {p.note}</span> : null}</span>
-                  <span className="ml-auto flex-none"><Pill tone={p.sevTone}>{p.sev} · {p.state}</Pill></span>
-                </div>
-              ))}
+            </>
+          )}
+          {week.platformIssues.length > 0 && (
+            <div className="glass-card rounded-2xl p-4 mb-6" style={{ borderColor: "rgba(226,75,74,0.35)" }}>
+              <div className="text-[12px] font-semibold mb-2" style={{ color: "#A32D2D" }}>{week.platformIssuesTitle}</div>
+              <div className="space-y-1.5">
+                {week.platformIssues.map((p) => (
+                  <div key={p.id} className="flex items-baseline gap-2 text-[12px] text-[color:var(--foreground)]">
+                    <Tik id={p.id} />
+                    <span className="leading-snug">{p.title}{p.note ? <span className={`${MUTED}`}> — {p.note}</span> : null}</span>
+                    <span className="ml-auto flex-none"><Pill tone={p.sevTone}>{p.sev} · {p.state}</Pill></span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Open tickets */}
           <SectionLabel>Open engineering tickets</SectionLabel>
@@ -381,7 +396,7 @@ export function V2MigrationClient() {
                 <h3 className="text-[13px] font-semibold text-[color:var(--foreground)] mb-1.5">{d.title}</h3>
                 <p className="text-[11.5px] text-[color:var(--foreground)] leading-relaxed mb-2.5">{d.body}</p>
                 <div className="text-[11.5px] text-[color:var(--foreground)] bg-[var(--brand-seasalt)] border-l-[3px] border-l-[var(--brand-yellow)] rounded-r-lg px-3 py-2 leading-snug">
-                  <span className="font-semibold">Decide:</span> {d.decide}
+                  <span className="font-semibold">{d.verb ?? "Decide"}:</span> {d.decide}
                 </div>
               </div>
             ))}
