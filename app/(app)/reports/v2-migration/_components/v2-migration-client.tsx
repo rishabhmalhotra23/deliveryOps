@@ -307,22 +307,6 @@ export function V2MigrationClient() {
                 ))}
               </tbody>
             </table>
-            <div className="text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] font-semibold mt-4 mb-1">Accounts being dropped or under commercial review — no renewal expected</div>
-            <table className="w-full text-[12.5px]">
-              <thead><tr className="text-left text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] border-b border-[var(--brand-metal-line)]">
-                <th className="py-2 pr-3 font-semibold">Account</th><th className="py-2 pr-3 font-semibold">Renewal</th><th className="py-2 pr-3 font-semibold">Health</th><th className="py-2 font-semibold">Status / decision</th>
-              </tr></thead>
-              <tbody>
-                {week.dropping.map((r) => (
-                  <tr key={r.account} className="border-b border-[var(--brand-metal-line)] last:border-b-0 align-top">
-                    <td className="py-2 pr-3 font-medium text-[color:var(--foreground)] whitespace-nowrap">{r.account}</td>
-                    <td className={`py-2 pr-3 ${MUTED} whitespace-nowrap`}>{r.renewal}</td>
-                    <td className="py-2 pr-3"><Pill tone={r.healthTone}>{r.health}</Pill></td>
-                    <td className="py-2 text-[color:var(--foreground)]">{r.readiness}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
             <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed border-t border-[var(--brand-metal-line)] pt-3`}>{week.renewalsFootnote}</p>
           </div>
         </section>
