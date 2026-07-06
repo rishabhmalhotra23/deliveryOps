@@ -63,6 +63,7 @@ export interface V2Week {
   renewalsDelta: string;
   renewalBanner: { title: string; sub: string; stats: { value: string; label: string }[] } | null;
   renewals: RenewalRow[];
+  dropping: RenewalRow[]; // accounts being dropped or under commercial review — no renewal expected
   renewalsFootnote: string;
   migrationIntro: string;
   journey: JourneyData;
@@ -128,8 +129,16 @@ const WEEK_2026_07_06: V2Week = {
     { account: "Wipro FSS", renewal: "Jun 30 · passed", health: "Strong", healthTone: "strong", readiness: "Outcome not yet recorded on Monday; largest parity cluster, validated vs V1 runs." },
     { account: "Pepsi", renewal: "Jun 30 · passed", health: "At Risk · Moderate", healthTone: "risk", readiness: "Outcome not yet recorded; ServiceNow rebuild in parity testing." },
   ],
+  dropping: [
+    { account: "Ozark River", renewal: "Jun 30 · passed", health: "Strong", healthTone: "strong", readiness: "Drop account; renewal not pursued. No migration — all V1 processes will be deactivated." },
+    { account: "Halemeyer", renewal: "Jun 30 · passed", health: "Strong", healthTone: "strong", readiness: "Drop account; renewal not pursued. No migration." },
+    { account: "Builders Firstsource", renewal: "Jul 30", health: "Critical", healthTone: "risk", readiness: "Drop account; expected to lapse." },
+    { account: "CSA Transport", renewal: "Jul 30", health: "Evaluating", healthTone: "watch", readiness: "Partner-managed but no active work; drop account." },
+    { account: "Bradley & Beams", renewal: "Oct 30", health: "Strong", healthTone: "strong", readiness: "Potential drop; revisit if the customer accepts V2 pricing, otherwise a small non-ICP account with no growth — drop." },
+    { account: "Airborne", renewal: "Nov 30", health: "Strong", healthTone: "strong", readiness: "In commercial discussion; RAG POC complete, proposal ready. Old V1 processes retire (no longer used); final confirmation pending." },
+  ],
   renewalsFootnote:
-    "~$667K ARR renews this quarter; JBI closed-won. Dropping or under commercial review, unchanged from Jun 29: Ozark River · Builders Firstsource (Critical) · CSA Transport · Halemeyer · Bradley & Beams (V2 pricing pending) · Airborne (RAG proposal in discussion). Not-migrating decisions unchanged from June 29 (10 processes).",
+    "~$667K ARR renews this quarter across the four active accounts; JBI closed-won. Not-migrating decisions unchanged from June 29 (10 processes).",
 
   migrationIntro:
     "Of 75 tracked V1 processes: 46 migrate to V2, 24 retire with V1, 3 are already on V2, and 2 are custom / off-platform. Everything below is the migration program.",
