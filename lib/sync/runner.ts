@@ -12,11 +12,12 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { syncSalesforce, type SalesforceSyncResult } from "./salesforce";
 import { syncMonday, type MondaySyncResult } from "./monday";
 import { syncKognitosV2, type KognitosV2SyncResult } from "./kognitos-v2";
+import { syncLinearTickets, type LinearTicketsSyncResult } from "./linear-tickets";
 import { logger, errorCtx } from "@/lib/logger";
 
 const log = logger("sync/runner");
 
-export type SyncSource = "salesforce" | "monday" | "kognitos-v2";
+export type SyncSource = "salesforce" | "monday" | "kognitos-v2" | "linear-tickets";
 
 export interface CombinedSyncResult {
   ok: boolean;
@@ -24,6 +25,7 @@ export interface CombinedSyncResult {
   salesforce?: SalesforceSyncResult;
   monday?: MondaySyncResult;
   kognitos_v2?: KognitosV2SyncResult;
+  linear_tickets?: LinearTicketsSyncResult;
   errors: string[];
 }
 
@@ -32,7 +34,7 @@ interface SyncOptions {
   customerKey?: string;
 }
 
-const DEFAULT_SOURCES: SyncSource[] = ["salesforce", "monday", "kognitos-v2"];
+const DEFAULT_SOURCES: SyncSource[] = ["salesforce", "monday", "kognitos-v2", "linear-tickets"];
 
 export async function runFullSync(opts: SyncOptions = {}): Promise<CombinedSyncResult> {
   const start = Date.now();
@@ -78,6 +80,19 @@ export async function runFullSync(opts: SyncOptions = {}): Promise<CombinedSyncR
       return { rows, details: r as unknown as Record<string, unknown> };
     }).catch((err) => {
       result.errors.push(`kognitos-v2: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
+
+  if (sources.includes("linear-tickets")) {
+    await runOne("linear-tickets", "all", async () => {
+      const r = await syncLinearTickets();
+      result.linear_tickets = r;
+      if (r.errors.length > 0) {
+        for (const e of r.errors) result.errors.push(`linear-tickets/${e.stage}: ${e.error}`);
+      }
+      return { rows: r.upserted, details: r as unknown as Record<string, unknown> };
+    }).catch((err) => {
+      result.errors.push(`linear-tickets: ${err instanceof Error ? err.message : String(err)}`);
     });
   }
 

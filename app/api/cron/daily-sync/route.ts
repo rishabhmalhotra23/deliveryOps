@@ -6,8 +6,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 min — covers ~40 customers across SF + Monday + K2.
 
 // Daily sync entrypoint — pulls the latest from every Phase 2 integration
-// (Salesforce + Monday + Kognitos v2) into the *_cache tables. Wired to
-// Vercel Cron at 02:30 UTC = 08:00 IST every day (see vercel.json).
+// (Salesforce + Monday + Kognitos v2 + Linear tickets) into the *_cache
+// tables. Wired to Vercel Cron at 02:30 UTC = 08:00 IST every day (see
+// vercel.json).
 //
 // Auth model (mirrors /api/cron/run-tasks):
 //   - In production, Vercel sets `Authorization: Bearer <CRON_SECRET>`. We
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 
   const startedAt = new Date().toISOString();
   const result = await runFullSync({
-    sources: ["salesforce", "monday", "kognitos-v2"],
+    sources: ["salesforce", "monday", "kognitos-v2", "linear-tickets"],
   });
 
   return NextResponse.json(
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
       salesforce: result.salesforce ?? null,
       monday: result.monday ?? null,
       kognitos_v2: result.kognitos_v2 ?? null,
+      linear_tickets: result.linear_tickets ?? null,
       errors: result.errors,
     },
     { status: result.ok ? 200 : 207 }

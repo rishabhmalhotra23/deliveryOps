@@ -68,6 +68,33 @@ export const ManualUpdateSchema = z.object({
 });
 export type ManualUpdateInput = z.infer<typeof ManualUpdateSchema>;
 
+// ── Team asks (Linear ticket tracker — deliveryOps-only, never written
+// back to Linear) ────────────────────────────────────────────────────────────
+
+export const TeamAskCreateSchema = z.object({
+  ask_text: z.string().min(1).max(2000),
+  requester: z.string().min(1).max(120),
+  priority_tier: z.enum(["now", "soon", "later"]).optional(),
+  status: z.enum(["open", "in_progress", "done"]).optional(),
+  notes: z.string().max(4000).optional().nullable(),
+  ticket_ids: z.array(z.string().min(1)).optional(),
+});
+export type TeamAskCreateInput = z.infer<typeof TeamAskCreateSchema>;
+
+export const TeamAskUpdateSchema = z.object({
+  ask_text: z.string().min(1).max(2000).optional(),
+  requester: z.string().min(1).max(120).optional(),
+  priority_tier: z.enum(["now", "soon", "later"]).optional(),
+  status: z.enum(["open", "in_progress", "done"]).optional(),
+  notes: z.string().max(4000).optional().nullable(),
+});
+export type TeamAskUpdateInput = z.infer<typeof TeamAskUpdateSchema>;
+
+export const TeamAskLinkTicketSchema = z.object({
+  ticket_id: z.string().min(1),
+});
+export type TeamAskLinkTicketInput = z.infer<typeof TeamAskLinkTicketSchema>;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server";
