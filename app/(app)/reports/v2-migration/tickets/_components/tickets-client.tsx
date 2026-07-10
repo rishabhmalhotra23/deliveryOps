@@ -435,6 +435,12 @@ export function TicketsClient({ bundle }: { bundle: TicketsBundle }) {
         </div>
       </div>
 
+      {bundle.data_error && (
+        <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "rgba(226,75,74,0.35)", background: "rgba(226,75,74,0.06)", color: "#A32D2D" }}>
+          Couldn&apos;t load ticket data: {bundle.data_error}
+        </div>
+      )}
+
       <div ref={reportRef} className="space-y-7">
         {/* Header */}
         <div className="rounded-2xl px-7 py-6" style={{ background: "var(--brand-night)" }}>

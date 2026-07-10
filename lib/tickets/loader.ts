@@ -59,6 +59,11 @@ export interface TicketsBundle {
   last_synced_at: string | null;
   /** Whether out-of-scope tickets (in_scope = false) were included. */
   in_scope_only: boolean;
+  /** Set when the underlying tables couldn't be read (e.g. migrations
+   *  0017/0018 not yet applied) — the report renders with empty data
+   *  instead of failing, so the UI surfaces this instead of silently
+   *  showing "no tickets". */
+  data_error: string | null;
 
   open_tickets: TicketRow[];
   closed_tickets: TicketRow[];
@@ -96,6 +101,13 @@ export async function loadTicketsBundle(opts: { inScopeOnly?: boolean } = {}): P
       .limit(1)
       .maybeSingle(),
   ]);
+
+  // Surface read failures instead of quietly rendering an empty report —
+  // the most common cause is migrations 0017/0018 not yet applied.
+  const firstError = ticketsRes.error ?? asksRes.error ?? linksRes.error ?? null;
+  const data_error = firstError
+    ? `${firstError.message} — have migrations 0017_linear_tickets.sql and 0018_linear_tickets_seed.sql been applied to this Supabase project?`
+    : null;
 
   const allTickets = (ticketsRes.data as TicketRow[] | null) ?? [];
   const ticketsById = new Map(allTickets.map((t) => [t.id, t]));
@@ -188,6 +200,7 @@ export async function loadTicketsBundle(opts: { inScopeOnly?: boolean } = {}): P
     generated_at: now.toISOString(),
     last_synced_at: (lastSyncRes.data as { finished_at: string } | null)?.finished_at ?? null,
     in_scope_only: inScopeOnly,
+    data_error,
     open_tickets: openTickets,
     closed_tickets: closedTickets,
     classification_breakdown,
