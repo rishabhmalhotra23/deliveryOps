@@ -65,9 +65,10 @@ export interface TicketTrendRow {
 }
 export interface TicketTrend {
   intro: string;
+  // Standing backlog: tickets open right now, by class (classified today).
+  openNow?: { hardBlocker: number; workaround: number; bug: number; total: number; asOf: string };
   rows: TicketTrendRow[];
   note: string;
-  read: string;        // the honest one-line direction read
 }
 
 export interface DecisionCard { title: string; body: string; decide: string; verb?: string; }
@@ -357,8 +358,7 @@ const WEEK_2026_07_06: V2Week = {
 const WEEK_2026_07_13: V2Week = {
   key: "2026-07-13",
   dateLabel: "Week of July 13, 2026",
-  lede:
-    "Ticket burn-down finally matched inflow this week: 18 new migration blockers filed and 17 closed, holding open blockers flat at 34 even as the cumulative total reached 90. The migration program stands at 46 of 75 tracked processes — 3 complete, 10 in customer UAT, 16 in parity testing, 9 in build, 8 blocked — with the Wipro FSS cluster and JBI Merch / PIR / AP moving into parity and the blocked count easing 9 → 8. Hard blockers concentrate in browser automation and Quill2 build reliability; severity labeling only began mid-June, so the trend below is explicit about what predates tracking.",
+  lede: "",
 
   snapshot: [
     { value: "66", label: "Live in production", sub: "61 V1 · 3 V2 · 2 other" },
@@ -404,16 +404,16 @@ const WEEK_2026_07_13: V2Week = {
       { text: "first snapshot" },
       { text: "inflow peaks" },
       { text: "browser gap review" },
-      { text: "resolution catches inflow", good: true },
+      { text: "Wipro cluster → UAT", good: true },
     ],
-    finish: [null, null, 0, 11, 19, 25, 25],
-    blocked: [null, null, null, 8, 13, 9, 9],
+    finish: [null, null, 0, 11, 19, 25, 39],
+    blocked: [null, null, null, 8, 13, 9, 7],
     ticketsCreated: [4, 5, 7, 25, 45, 72, 90],
     ticketsOpen: [4, 5, 5, 19, 27, 35, 34],
-    finalLabels: { finish: "25", toGo: "21 to go", blocked: "9", created: "90 created", open: "34 still open", resolvedGap: "56 resolved" },
+    finalLabels: { finish: "39", toGo: "7 to go", blocked: "7", created: "90 created", open: "34 still open", resolvedGap: "56 resolved" },
   },
 
-  boardDelta: "Migration tracker, Jul 13. vs Jul 6: parity testing 11 → 16 (Wipro FSS cluster + JBI Merch / PIR / AP advanced), in build 12 → 9, blocked 9 → 8.",
+  boardDelta: "Staged from tracker parity / handover / validation dates (Jul 13), not just the status field. 39 of 46 are at or near finish (up from 25) — the full Wipro FSS cluster hands to customer UAT this week; blocked eased to 7.",
   board: [
     {
       stage: "Complete", count: 3, color: "#1D9E75",
@@ -424,52 +424,47 @@ const WEEK_2026_07_13: V2Week = {
       ],
     },
     {
-      stage: "Customer UAT", count: 10, color: "#5BC4A0",
+      stage: "In customer UAT", count: 21, color: "#5BC4A0",
       chips: [
-        { name: "JBI QSR" },
-        { name: "Norco Parts Recon" },
-        { name: "Plunkett ×4", note: "payments, claim RA, SO, vendor bill" },
+        { name: "JBI ×5", note: "Merch, QSR, Design Mtg, Onsite, PIR v2", mover: "up" },
         { name: "TTX ×4", note: "AP, brake AR, COA, goods receipt" },
+        { name: "Plunkett ×4" },
+        { name: "Scan Health ×2", note: "enrollment + report" },
+        { name: "Wipro GP Vendor + DSPF SEZ", mover: "up" },
+        { name: "Ciena PO", note: "handed over Jul 13", mover: "up" },
+        { name: "Pepsi ServiceNow", mover: "up" },
+        { name: "Norco Parts Recon" },
+        { name: "iHeart Affidavits", mover: "up" },
       ],
     },
     {
-      stage: "Parity testing", count: 16, color: "#378ADD",
+      stage: "Handing over this week", count: 9, color: "#0E8C6A",
       chips: [
-        { name: "Wipro FSS ×10", note: "largest cluster, validated vs V1", mover: "up" },
-        { name: "JBI Merch PO", mover: "up" },
-        { name: "JBI PIR v2", mover: "up" },
-        { name: "JBI AP", mover: "up" },
-        { name: "Pepsi ServiceNow" },
-        { name: "Scan Health Enrollment" },
+        { name: "Wipro FSS ×9", note: "full cluster to customer UAT — handover Jul 15", mover: "up" },
+      ],
+    },
+    {
+      stage: "Parity testing", count: 6, color: "#378ADD",
+      chips: [
+        { name: "JBI AP", note: "enhancement scope" },
         { name: "Norco Solar Winds" },
-      ],
-    },
-    {
-      stage: "In build", count: 9, color: "#EF9F27",
-      chips: [
-        { name: "JBI Design Meeting" },
-        { name: "JBI Onsite Date Change" },
-        { name: "Norco AR" },
         { name: "Norco Safety Culture" },
-        { name: "Wipro Collection Acct" },
-        { name: "Wipro BRS" },
-        { name: "Scan Health Report" },
+        { name: "Norco AR", note: "parity Jul 17" },
+        { name: "Wipro Indirect Tax" },
         { name: "Mitie PCard" },
-        { name: "iHeart Affidavits" },
       ],
     },
     {
-      stage: "Blocked", count: 8, color: "#E24B4A",
+      stage: "Blocked", count: 7, color: "#E24B4A",
       chips: [
         { name: "Kort Payments ×4", note: "browser automation — IP whitelisting" },
         { name: "Century BOL + Carrier Booking", note: "collections fuzzy match" },
-        { name: "Ciena PO", note: "base64 encoding in API calls" },
         { name: "Conectiv POV", note: "parallel processing / large files" },
       ],
     },
   ],
   boardFootnote:
-    "Stages from the migration tracker's per-process status (Jul 13); Blocked = processes with an open engineering blocker. These 46 are the migration program (46 of 75 tracked V1 processes). The delivery snapshot above is the Monday portfolio view and groups work differently, so its counts don't line up one-to-one with these.",
+    "Stage is derived from the tracker's parity-test, customer-handover and validation dates — not just the status field, which lags: several processes still marked 'engg pending' or 'parity' have customer-handover dates this week. Blocked = open engineering blocker with no customer date yet. Earlier weeks were staged from Monday status, so part of the 25 → 39 step up is this fuller date-based measure. These 46 are the migration program (46 of 75 tracked V1 processes).",
 
   pushTitle: WEEK_2026_07_06.pushTitle,
   push: WEEK_2026_07_06.push,
@@ -481,7 +476,8 @@ const WEEK_2026_07_13: V2Week = {
 
   ticketTrend: {
     intro:
-      "New tickets by created date across the tracked v2 set — the v2 Migration Blockers label, Voyager v2 feedback, ux-quality, and the migration-labelled Integrations / On-Call items. We began severity-labeling (hard blocker / workaround / bug) in mid-June — the blocker label jumped 7 → 25 the week of Jun 15 — so the 90-day class split is shown as not tracked, not zero. The 30-day window holds 84 of the 90 migration blockers, so it is effectively 'since we started tracking'; the 7- and 15-day columns show the recent flow.",
+      "Two views of the tracked v2 Linear set (v2 Migration Blockers label, Voyager v2 feedback, ux-quality, and migration-labelled Integrations / On-Call items): the open backlog right now, and how new tickets have flowed in. Severity labeling (hard blocker / workaround / bug) began mid-June — the blocker label jumped 7 → 25 the week of Jun 15 — so the 90-day inflow split shows as not tracked, not zero.",
+    openNow: { hardBlocker: 26, workaround: 23, bug: 78, total: 127, asOf: "Still open, from the migration-tracked Linear tickets of the last 90 days. This is the current backlog, not the recent inflow below." },
     rows: [
       { window: "Last 7 days", created: 21, hardBlocker: 10, workaround: 4, bug: 7, resolved: 5, open: 16 },
       { window: "Last 15 days", created: 54, hardBlocker: 22, workaround: 8, bug: 16, resolved: 13, open: 34 },
@@ -489,9 +485,7 @@ const WEEK_2026_07_13: V2Week = {
       { window: "Last 90 days", created: 227, hardBlocker: null, workaround: null, bug: null, resolved: 69, open: 127 },
     ],
     note:
-      "Not tracked ≠ zero: blockers existed before mid-June but were not severity-labeled, so we do not assert a class split for the older span. Created / resolved / open use creation and completion dates, which are reliable across the full 90 days. Within the tracked window, Bug is inflated because ux-quality and Voyager feedback map to Bug by the tracker's convention; cancelled / duplicate items are excluded from the class columns.",
-    read:
-      "The honest signal is burn-down, not inflow: this week 18 blockers were filed and 17 closed, so open blockers held flat at 34 (35 → 34) — the first week resolution matched inflow. We only began severity-labeling in mid-June, so we can't claim blockers 'spiked' recently; what we can say is that since tracking began (~30 days) 26 hard blockers have surfaced and about a third of tracked tickets are resolved. Direction: converging, but hard-blocker burn-down still needs to accelerate — browser automation (ENG-4444 family) and Quill2 build reliability are where it is stuck.",
+      "Open now = tickets still open regardless of when filed (current backlog, classified today); the windows are new tickets by created date (inflow). Not tracked ≠ zero: severity wasn't labeled before mid-June, so no inflow class split over 90 days. Created / resolved / open use creation and completion dates and are reliable across the span. Bug is inflated because ux-quality and Voyager feedback map to Bug by the tracker's convention; cancelled / duplicate excluded from class columns.",
   },
 
   ticketGroups: [

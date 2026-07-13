@@ -226,7 +226,7 @@ export function V2MigrationClient() {
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "#A3A3A3" }}>Field Delivery · Company All Hands</div>
           <h1 className="text-2xl font-bold tracking-tight mt-1" style={{ color: "#FFFFFF" }}>Delivery and V2 migration</h1>
           <div className="text-sm mt-1.5" style={{ color: "#D4D4D4" }}>{week.dateLabel} · migration tracker, Monday, and Linear (live)</div>
-          <p className="text-[13px] mt-3 leading-relaxed max-w-[820px]" style={{ color: "#E5E5E5" }}>{week.lede}</p>
+          {week.lede && <p className="text-[13px] mt-3 leading-relaxed max-w-[820px]" style={{ color: "#E5E5E5" }}>{week.lede}</p>}
         </div>
 
         {/* Delivery snapshot */}
@@ -379,9 +379,34 @@ export function V2MigrationClient() {
           {/* Ticket velocity — created-in-window trend */}
           {week.ticketTrend && (
             <>
-              <SectionLabel>Ticket velocity · created in the last 7 / 15 / 30 / 90 days</SectionLabel>
+              <SectionLabel>Ticket health · open backlog and recent inflow</SectionLabel>
               <DeltaLine>{week.ticketTrend.intro}</DeltaLine>
               <div className="glass-card rounded-2xl p-5 mb-6">
+                {week.ticketTrend.openNow && (
+                  <div className="mb-5">
+                    <div className="text-[11px] uppercase tracking-wide font-bold text-[color:var(--foreground)] mb-2">Open right now</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                        <div className="text-2xl font-bold leading-none" style={{ color: "#A32D2D" }}>{week.ticketTrend.openNow.hardBlocker}</div>
+                        <div className={`text-[11px] mt-1 ${MUTED}`}>Hard blockers</div>
+                      </div>
+                      <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                        <div className="text-2xl font-bold leading-none" style={{ color: "#BA7517" }}>{week.ticketTrend.openNow.workaround}</div>
+                        <div className={`text-[11px] mt-1 ${MUTED}`}>Workaround exists</div>
+                      </div>
+                      <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                        <div className="text-2xl font-bold leading-none text-[color:var(--foreground)]">{week.ticketTrend.openNow.bug}</div>
+                        <div className={`text-[11px] mt-1 ${MUTED}`}>Bugs</div>
+                      </div>
+                      <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                        <div className="text-2xl font-bold leading-none text-[color:var(--foreground)]">{week.ticketTrend.openNow.total}</div>
+                        <div className={`text-[11px] mt-1 ${MUTED}`}>Total open</div>
+                      </div>
+                    </div>
+                    <p className={`text-[10.5px] ${MUTED} mt-1.5 leading-relaxed`}>{week.ticketTrend.openNow.asOf}</p>
+                  </div>
+                )}
+                <div className="text-[11px] uppercase tracking-wide font-bold text-[color:var(--foreground)] mb-2">New tickets by created date</div>
                 <table className="w-full text-[12.5px]">
                   <thead>
                     <tr className="text-left text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] border-b border-[var(--brand-metal-line)]">
@@ -408,9 +433,6 @@ export function V2MigrationClient() {
                     ))}
                   </tbody>
                 </table>
-                <div className="text-[11.5px] text-[color:var(--foreground)] bg-[var(--brand-seasalt)] border-l-[3px] border-l-[var(--brand-yellow)] rounded-r-lg px-3 py-2 leading-snug mt-3">
-                  <span className="font-semibold">Read:</span> {week.ticketTrend.read}
-                </div>
                 <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed`}>{week.ticketTrend.note}</p>
               </div>
             </>
