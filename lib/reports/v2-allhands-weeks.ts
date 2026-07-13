@@ -55,9 +55,11 @@ export interface TicketGroup { theme: string; rows: TicketRow[]; }
 export interface TicketTrendRow {
   window: string;      // "Last 7 days"
   created: number;     // tickets created in the window
-  hardBlocker: number;
-  workaround: number;
-  bug: number;
+  // null = severity not tracked over this span (labeling began mid-June),
+  // rendered as "n/t" rather than 0 so we never imply zero blockers.
+  hardBlocker: number | null;
+  workaround: number | null;
+  bug: number | null;
   resolved: number;    // of those created, how many are already closed-done
   open: number;        // of those created, how many still open
 }
@@ -356,19 +358,35 @@ const WEEK_2026_07_13: V2Week = {
   key: "2026-07-13",
   dateLabel: "Week of July 13, 2026",
   lede:
-    "Ticket inflow and burn-down are converging: 18 new blocker tickets and 17 closed this week held the open blocker count flat at 34, even as cumulative blockers reached 90. The tracked estate is steady at 75 processes — 46 migrating, 24 retiring with V1, 3 already on V2, 2 custom. Hard blockers stay concentrated in browser automation and Quill2 build reliability: 22 of the 26 open blockers were filed in the last two weeks as validation surfaced them. Delivery snapshot, renewals, net-new, and the stage board below are carried from the Jul 6 Monday pull, pending this week's refresh.",
+    "Ticket burn-down finally matched inflow this week: 18 new migration blockers filed and 17 closed, holding open blockers flat at 34 even as the cumulative total reached 90. The migration program stands at 46 of 75 tracked processes — 3 complete, 10 in customer UAT, 16 in parity testing, 9 in build, 8 blocked — with the Wipro FSS cluster and JBI Merch / PIR / AP moving into parity and the blocked count easing 9 → 8. Hard blockers concentrate in browser automation and Quill2 build reliability; severity labeling only began mid-June, so the trend below is explicit about what predates tracking.",
 
-  snapshot: WEEK_2026_07_06.snapshot,
+  snapshot: [
+    { value: "66", label: "Live in production", sub: "61 V1 · 3 V2 · 2 other" },
+    { value: "12", label: "In active development", sub: "5 migrations · 7 net-new" },
+    { value: "94", label: "Live or in progress", sub: "total delivered footprint", hero: true },
+    { value: "9", label: "Enhancements delivered", sub: "on existing live processes" },
+    { value: "16", label: "Queued", sub: "4 on hold · 12 backlog" },
+  ],
   snapshotNote:
-    "Carried from the Jul 6 Monday pull — Monday boards were not re-pulled this session. The estate below (75 tracked processes) is refreshed from the migration tracker; these delivery-footprint counts update on the next Monday sync.",
+    "Two sources. Live-in-production, footprint, and enhancements are the delivery portfolio estate (migration tracker + delivered history) — stable week to week, not a Monday-refreshable count. In-active-development (12) and queued (16) are the live Monday Projects board, Jul 13. The migration program's own stage board is below.",
 
-  netNewDelta: "Carried from Jul 6 — Monday not re-pulled this session.",
-  netNew: WEEK_2026_07_06.netNew,
+  netNewDelta: "Live Monday pull, Jul 13. vs Jul 6: TTX Property Tax advanced to UAT; JBI Receiving moved to Waiting (VPN access); Conectiv SONY in discovery.",
+  netNew: [
+    { process: "Norco · Warranty", owner: "Karthik N.", phase: "M3 · UAT", update: "Completed in V2; waiting on customer QA support." },
+    { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M3 · UAT", update: "Browser-automation fixes landed; dev complete but unstable in live end-to-end — testing before customer UAT.", tone: "off" },
+    { process: "TTX · Property Tax Outline", owner: "Ayush G.", phase: "M3 · UAT", update: "UAT + parity testing started; go-live on customer sign-off." },
+    { process: "JBI · Compass Quote Update", owner: "Arushi B.", phase: "M2 · Dev", update: "Building against the live system; awaiting VPN access." },
+    { process: "JBI · Receiving Process", owner: "Arushi B.", phase: "Waiting", update: "Awaiting VPN setup." },
+    { process: "JBI · Material Allocation Import", owner: "Arushi B.", phase: "Waiting", update: "Awaiting VPN setup / third-party access." },
+    { process: "Charleston CSD · Workflow POV", owner: "Karthik N.", phase: "Waiting", update: "Skeleton built; awaiting customer data for end-to-end." },
+    { process: "Conectiv · SONY Billing", owner: "Ayush G.", phase: "M1 · Discovery", update: "Discovery call 1 done; call 2 held Jul 10." },
+    { process: "JBI · Material Allocation Export", owner: "Arushi B.", phase: "Pre-kickoff", update: "Queued behind Import; no update posted yet." },
+  ],
 
   renewalsDelta:
     "Carried from Jul 6 — Monday not re-pulled this session. JBI renewal ($162K) closed the week of Jul 6; Kort's Jul 10 date has now passed and needs a status update.",
   renewalBanner: null,
-  renewals: WEEK_2026_07_06.renewals,
+  renewals: [], // hidden this week per Rishabh — renewals section not shown Jul 13
   renewalsFootnote: WEEK_2026_07_06.renewalsFootnote,
 
   migrationIntro:
@@ -395,9 +413,63 @@ const WEEK_2026_07_13: V2Week = {
     finalLabels: { finish: "25", toGo: "21 to go", blocked: "9", created: "90 created", open: "34 still open", resolvedGap: "56 resolved" },
   },
 
-  boardDelta: "Carried from Jul 6 — delivery board not re-pulled this session.",
-  board: WEEK_2026_07_06.board,
-  boardFootnote: WEEK_2026_07_06.boardFootnote,
+  boardDelta: "Migration tracker, Jul 13. vs Jul 6: parity testing 11 → 16 (Wipro FSS cluster + JBI Merch / PIR / AP advanced), in build 12 → 9, blocked 9 → 8.",
+  board: [
+    {
+      stage: "Complete", count: 3, color: "#1D9E75",
+      chips: [
+        { name: "JBI SBUX", note: "parked on V2" },
+        { name: "Norco Packslip Sorting" },
+        { name: "TTX Lease Invoicing" },
+      ],
+    },
+    {
+      stage: "Customer UAT", count: 10, color: "#5BC4A0",
+      chips: [
+        { name: "JBI QSR" },
+        { name: "Norco Parts Recon" },
+        { name: "Plunkett ×4", note: "payments, claim RA, SO, vendor bill" },
+        { name: "TTX ×4", note: "AP, brake AR, COA, goods receipt" },
+      ],
+    },
+    {
+      stage: "Parity testing", count: 16, color: "#378ADD",
+      chips: [
+        { name: "Wipro FSS ×10", note: "largest cluster, validated vs V1", mover: "up" },
+        { name: "JBI Merch PO", mover: "up" },
+        { name: "JBI PIR v2", mover: "up" },
+        { name: "JBI AP", mover: "up" },
+        { name: "Pepsi ServiceNow" },
+        { name: "Scan Health Enrollment" },
+        { name: "Norco Solar Winds" },
+      ],
+    },
+    {
+      stage: "In build", count: 9, color: "#EF9F27",
+      chips: [
+        { name: "JBI Design Meeting" },
+        { name: "JBI Onsite Date Change" },
+        { name: "Norco AR" },
+        { name: "Norco Safety Culture" },
+        { name: "Wipro Collection Acct" },
+        { name: "Wipro BRS" },
+        { name: "Scan Health Report" },
+        { name: "Mitie PCard" },
+        { name: "iHeart Affidavits" },
+      ],
+    },
+    {
+      stage: "Blocked", count: 8, color: "#E24B4A",
+      chips: [
+        { name: "Kort Payments ×4", note: "browser automation — IP whitelisting" },
+        { name: "Century BOL + Carrier Booking", note: "collections fuzzy match" },
+        { name: "Ciena PO", note: "base64 encoding in API calls" },
+        { name: "Conectiv POV", note: "parallel processing / large files" },
+      ],
+    },
+  ],
+  boardFootnote:
+    "Stages from the migration tracker's per-process status (Jul 13); Blocked = processes with an open engineering blocker. These 46 are the migration program (46 of 75 tracked V1 processes). The delivery snapshot above is the Monday portfolio view and groups work differently, so its counts don't line up one-to-one with these.",
 
   pushTitle: WEEK_2026_07_06.pushTitle,
   push: WEEK_2026_07_06.push,
@@ -409,17 +481,17 @@ const WEEK_2026_07_13: V2Week = {
 
   ticketTrend: {
     intro:
-      "New tickets by created date across the tracked v2 set — the v2 Migration Blockers label, Voyager v2 feedback, ux-quality, and the migration-labelled Integrations / On-Call items. Internal engineering backlog on the full Integrations and On-Call teams is excluded. Shows inflow, class mix, and how much is already resolved.",
+      "New tickets by created date across the tracked v2 set — the v2 Migration Blockers label, Voyager v2 feedback, ux-quality, and the migration-labelled Integrations / On-Call items. We began severity-labeling (hard blocker / workaround / bug) in mid-June — the blocker label jumped 7 → 25 the week of Jun 15 — so the 90-day class split is shown as not tracked, not zero. The 30-day window holds 84 of the 90 migration blockers, so it is effectively 'since we started tracking'; the 7- and 15-day columns show the recent flow.",
     rows: [
       { window: "Last 7 days", created: 21, hardBlocker: 10, workaround: 4, bug: 7, resolved: 5, open: 16 },
       { window: "Last 15 days", created: 54, hardBlocker: 22, workaround: 8, bug: 16, resolved: 13, open: 34 },
-      { window: "Last 30 days", created: 101, hardBlocker: 26, workaround: 11, bug: 45, resolved: 39, open: 45 },
-      { window: "Last 90 days", created: 227, hardBlocker: 26, workaround: 31, bug: 137, resolved: 69, open: 127 },
+      { window: "Last 30 days · since tracking began", created: 101, hardBlocker: 26, workaround: 11, bug: 45, resolved: 39, open: 45 },
+      { window: "Last 90 days", created: 227, hardBlocker: null, workaround: null, bug: null, resolved: 69, open: 127 },
     ],
     note:
-      "Class columns exclude cancelled / duplicate and a few transient-retry items, so they need not sum to Created. Resolved = closed as done; Open excludes cancelled. Bug is inflated because ux-quality and Voyager feedback map to Bug by the tracker's convention.",
+      "Not tracked ≠ zero: blockers existed before mid-June but were not severity-labeled, so we do not assert a class split for the older span. Created / resolved / open use creation and completion dates, which are reliable across the full 90 days. Within the tracked window, Bug is inflated because ux-quality and Voyager feedback map to Bug by the tracker's convention; cancelled / duplicate items are excluded from the class columns.",
     read:
-      "Hard-blocker inflow is concentrated in the last two weeks — 22 of the 26 filed in 90 days landed since Jun 28, as browser-automation and Quill2 build gaps were surfaced systematically. Over 90 days ~30% is resolved; the migration-blocker open count has now plateaued (35 → 34 against +18 created this week), the first sign inflow and burn-down are converging.",
+      "The honest signal is burn-down, not inflow: this week 18 blockers were filed and 17 closed, so open blockers held flat at 34 (35 → 34) — the first week resolution matched inflow. We only began severity-labeling in mid-June, so we can't claim blockers 'spiked' recently; what we can say is that since tracking began (~30 days) 26 hard blockers have surfaced and about a third of tracked tickets are resolved. Direction: converging, but hard-blocker burn-down still needs to accelerate — browser automation (ENG-4444 family) and Quill2 build reliability are where it is stuck.",
   },
 
   ticketGroups: [
@@ -489,7 +561,7 @@ const WEEK_2026_07_13: V2Week = {
   decisions: WEEK_2026_07_06.decisions,
 
   sources:
-    "Sources: migration tracker (75 processes, refreshed Jul 13) · Linear (live Jul 13) — v2 Migration Blockers label at 90 created / 34 open cumulative, plus the tracked-set velocity table (created-date windows across v2 Migration Blockers, Voyager v2 feedback, ux-quality, and migration-labelled Integrations / On-Call). Delivery snapshot, net-new, renewals, and the stage board are carried from the Jul 6 Monday pull and were not re-pulled this session. Blocker burnup is restated on a single Linear-derived basis (creation / completion dates), so prior weeks differ slightly from earlier decks.",
+    "Sources: migration tracker (75 processes / 46 migrating, refreshed Jul 13) drives the estate and the stage board; the live Monday Projects board (Jul 13) drives net-new development and the active-development / queued counts; Linear (live Jul 13) drives the blocker burnup (90 created / 34 open) and the velocity table. Severity labeling on the blocker set began mid-June, so the 90-day class split is shown as not tracked. Live-production and footprint totals are the delivery portfolio estate (tracker + delivered history), stable week to week. Push lanes and the platform-issues list are carried from Jul 6. Blocker burnup is on a single Linear-derived basis (creation / completion dates), so prior weeks differ slightly from earlier decks.",
 };
 
 // Latest first. Append new weeks at the top.

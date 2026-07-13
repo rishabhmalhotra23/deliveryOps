@@ -268,7 +268,8 @@ export function V2MigrationClient() {
           </div>
         </section>
 
-        {/* Renewals */}
+        {/* Renewals (hidden when the week has no renewals) */}
+        {week.renewals.length > 0 && (
         <section>
           <SectionLabel>Renewals this quarter</SectionLabel>
           <DeltaLine>{week.renewalsDelta}</DeltaLine>
@@ -310,6 +311,7 @@ export function V2MigrationClient() {
             <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed border-t border-[var(--brand-metal-line)] pt-3`}>{week.renewalsFootnote}</p>
           </div>
         </section>
+        )}
 
         {/* ── V2 migration block ── */}
         <section className="border-t-2 border-[var(--brand-metal-line)] pt-5">
@@ -397,9 +399,9 @@ export function V2MigrationClient() {
                       <tr key={r.window} className="border-b border-[var(--brand-metal-line)] last:border-b-0">
                         <td className="py-2 pr-3 font-medium text-[color:var(--foreground)] whitespace-nowrap">{r.window}</td>
                         <td className="py-2 pr-3 text-right font-semibold text-[color:var(--foreground)]">{r.created}</td>
-                        <td className="py-2 pr-3 text-right font-semibold" style={{ color: "#A32D2D" }}>{r.hardBlocker}</td>
-                        <td className="py-2 pr-3 text-right" style={{ color: "#BA7517" }}>{r.workaround}</td>
-                        <td className="py-2 pr-3 text-right text-[color:var(--muted-foreground)]">{r.bug}</td>
+                        <td className="py-2 pr-3 text-right font-semibold" style={r.hardBlocker === null ? undefined : { color: "#A32D2D" }}>{r.hardBlocker === null ? <span className={`${MUTED} font-normal italic`}>not tracked</span> : r.hardBlocker}</td>
+                        <td className="py-2 pr-3 text-right" style={r.workaround === null ? undefined : { color: "#BA7517" }}>{r.workaround === null ? <span className={`${MUTED} italic`}>—</span> : r.workaround}</td>
+                        <td className="py-2 pr-3 text-right text-[color:var(--muted-foreground)]">{r.bug === null ? <span className="italic">—</span> : r.bug}</td>
                         <td className="py-2 pr-3 text-right" style={{ color: "#0F6E56" }}>{r.resolved}</td>
                         <td className="py-2 text-right font-medium text-[color:var(--foreground)]">{r.open}</td>
                       </tr>
