@@ -374,6 +374,46 @@ export function V2MigrationClient() {
             </div>
           )}
 
+          {/* Ticket velocity — created-in-window trend */}
+          {week.ticketTrend && (
+            <>
+              <SectionLabel>Ticket velocity · created in the last 7 / 15 / 30 / 90 days</SectionLabel>
+              <DeltaLine>{week.ticketTrend.intro}</DeltaLine>
+              <div className="glass-card rounded-2xl p-5 mb-6">
+                <table className="w-full text-[12.5px]">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] border-b border-[var(--brand-metal-line)]">
+                      <th className="py-2 pr-3 font-semibold">Window</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Created</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Hard blocker</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Workaround</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Bug</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Resolved</th>
+                      <th className="py-2 font-semibold text-right">Still open</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {week.ticketTrend.rows.map((r) => (
+                      <tr key={r.window} className="border-b border-[var(--brand-metal-line)] last:border-b-0">
+                        <td className="py-2 pr-3 font-medium text-[color:var(--foreground)] whitespace-nowrap">{r.window}</td>
+                        <td className="py-2 pr-3 text-right font-semibold text-[color:var(--foreground)]">{r.created}</td>
+                        <td className="py-2 pr-3 text-right font-semibold" style={{ color: "#A32D2D" }}>{r.hardBlocker}</td>
+                        <td className="py-2 pr-3 text-right" style={{ color: "#BA7517" }}>{r.workaround}</td>
+                        <td className="py-2 pr-3 text-right text-[color:var(--muted-foreground)]">{r.bug}</td>
+                        <td className="py-2 pr-3 text-right" style={{ color: "#0F6E56" }}>{r.resolved}</td>
+                        <td className="py-2 text-right font-medium text-[color:var(--foreground)]">{r.open}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="text-[11.5px] text-[color:var(--foreground)] bg-[var(--brand-seasalt)] border-l-[3px] border-l-[var(--brand-yellow)] rounded-r-lg px-3 py-2 leading-snug mt-3">
+                  <span className="font-semibold">Read:</span> {week.ticketTrend.read}
+                </div>
+                <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed`}>{week.ticketTrend.note}</p>
+              </div>
+            </>
+          )}
+
           {/* Open tickets */}
           <SectionLabel>Open engineering tickets</SectionLabel>
           <DeltaLine>

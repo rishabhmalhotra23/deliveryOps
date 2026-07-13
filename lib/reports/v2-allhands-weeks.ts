@@ -50,6 +50,24 @@ export interface PlatformIssue { id: string; title: string; sev: string; sevTone
 export interface TicketRow { id: string; title: string; state: string; tone: "prog" | "open"; }
 export interface TicketGroup { theme: string; rows: TicketRow[]; }
 
+// Created-in-window velocity: are new tickets trending down, and are they
+// blockers or lower-severity? One row per look-back window.
+export interface TicketTrendRow {
+  window: string;      // "Last 7 days"
+  created: number;     // tickets created in the window
+  hardBlocker: number;
+  workaround: number;
+  bug: number;
+  resolved: number;    // of those created, how many are already closed-done
+  open: number;        // of those created, how many still open
+}
+export interface TicketTrend {
+  intro: string;
+  rows: TicketTrendRow[];
+  note: string;
+  read: string;        // the honest one-line direction read
+}
+
 export interface DecisionCard { title: string; body: string; decide: string; verb?: string; }
 
 export interface V2Week {
@@ -74,6 +92,7 @@ export interface V2Week {
   platformIssuesTitle: string;
   platformIssues: PlatformIssue[];
   ticketsDelta: string;
+  ticketTrend?: TicketTrend;   // created-in-window velocity (optional; added Jul 13)
   ticketGroups: TicketGroup[];
   ticketsFootnote: string;
   decisions: DecisionCard[];
@@ -328,5 +347,150 @@ const WEEK_2026_07_06: V2Week = {
     "Sources: migration tracker (75 processes, Jul 6) · Linear label v2 Migration Blockers (live Jul 6: 68 tickets, 33 open) and open Urgent/High production issues · Monday Projects, Customers, and Deliverables boards (live Jul 6). JBI renewal per Delivery; the Monday Customers row predates the renewal and is pending update. Journey milestones per program records; ticket history from Linear creation and completion dates.",
 };
 
+// ── Week of July 13, 2026 ──────────────────────────────────────────────────────
+// Fresh this week: estate (migration tracker), the blocker-ticket burnup, the
+// created-in-window velocity table, open-ticket groups, and sources — from the
+// Jul 13 tracker + live Linear. Delivery snapshot, net-new, renewals, and the
+// stage board are carried from the Jul 6 Monday pull (not re-pulled this session).
+const WEEK_2026_07_13: V2Week = {
+  key: "2026-07-13",
+  dateLabel: "Week of July 13, 2026",
+  lede:
+    "Ticket inflow and burn-down are converging: 18 new blocker tickets and 17 closed this week held the open blocker count flat at 34, even as cumulative blockers reached 90. The tracked estate is steady at 75 processes — 46 migrating, 24 retiring with V1, 3 already on V2, 2 custom. Hard blockers stay concentrated in browser automation and Quill2 build reliability: 22 of the 26 open blockers were filed in the last two weeks as validation surfaced them. Delivery snapshot, renewals, net-new, and the stage board below are carried from the Jul 6 Monday pull, pending this week's refresh.",
+
+  snapshot: WEEK_2026_07_06.snapshot,
+  snapshotNote:
+    "Carried from the Jul 6 Monday pull — Monday boards were not re-pulled this session. The estate below (75 tracked processes) is refreshed from the migration tracker; these delivery-footprint counts update on the next Monday sync.",
+
+  netNewDelta: "Carried from Jul 6 — Monday not re-pulled this session.",
+  netNew: WEEK_2026_07_06.netNew,
+
+  renewalsDelta:
+    "Carried from Jul 6 — Monday not re-pulled this session. JBI renewal ($162K) closed the week of Jul 6; Kort's Jul 10 date has now passed and needs a status update.",
+  renewalBanner: null,
+  renewals: WEEK_2026_07_06.renewals,
+  renewalsFootnote: WEEK_2026_07_06.renewalsFootnote,
+
+  migrationIntro:
+    "Of 75 tracked V1 processes: 46 migrate to V2, 24 retire with V1, 3 are already on V2, and 2 are custom / off-platform. Unchanged from Jul 6. Everything below is the migration program.",
+
+  journey: {
+    goalLabel: "Goal: all 46 migrations at V1 parity",
+    procMax: 46,
+    ticketMax: 95,
+    dates: ["Jun 1", "Jun 8", "Jun 15", "Jun 22", "Jun 29", "Jul 6", "Jul 13"],
+    milestones: [
+      { text: "kickoff" },
+      { text: "pipeline built" },
+      { text: "migrated · parity begins" },
+      { text: "first snapshot" },
+      { text: "inflow peaks" },
+      { text: "browser gap review" },
+      { text: "resolution catches inflow", good: true },
+    ],
+    finish: [null, null, 0, 11, 19, 25, 25],
+    blocked: [null, null, null, 8, 13, 9, 9],
+    ticketsCreated: [4, 5, 7, 25, 45, 72, 90],
+    ticketsOpen: [4, 5, 5, 19, 27, 35, 34],
+    finalLabels: { finish: "25", toGo: "21 to go", blocked: "9", created: "90 created", open: "34 still open", resolvedGap: "56 resolved" },
+  },
+
+  boardDelta: "Carried from Jul 6 — delivery board not re-pulled this session.",
+  board: WEEK_2026_07_06.board,
+  boardFootnote: WEEK_2026_07_06.boardFootnote,
+
+  pushTitle: WEEK_2026_07_06.pushTitle,
+  push: WEEK_2026_07_06.push,
+  platformIssuesTitle: "Live platform issues needing attention (outside the migration label · carried from Jul 6)",
+  platformIssues: WEEK_2026_07_06.platformIssues,
+
+  ticketsDelta:
+    "vs Jul 6: cumulative blockers 72 → 90 (+18 created) and 17 closed this week, so open held at 34. Open = still blocked. New inflow is dominated by the browser-automation family (ENG-4444…) and a new Quill2 build-experience cluster (ENG-4480, 4494–4498).",
+
+  ticketTrend: {
+    intro:
+      "New tickets by created date across the tracked v2 set — the v2 Migration Blockers label, Voyager v2 feedback, ux-quality, and the migration-labelled Integrations / On-Call items. Internal engineering backlog on the full Integrations and On-Call teams is excluded. Shows inflow, class mix, and how much is already resolved.",
+    rows: [
+      { window: "Last 7 days", created: 21, hardBlocker: 10, workaround: 4, bug: 7, resolved: 5, open: 16 },
+      { window: "Last 15 days", created: 54, hardBlocker: 22, workaround: 8, bug: 16, resolved: 13, open: 34 },
+      { window: "Last 30 days", created: 101, hardBlocker: 26, workaround: 11, bug: 45, resolved: 39, open: 45 },
+      { window: "Last 90 days", created: 227, hardBlocker: 26, workaround: 31, bug: 137, resolved: 69, open: 127 },
+    ],
+    note:
+      "Class columns exclude cancelled / duplicate and a few transient-retry items, so they need not sum to Created. Resolved = closed as done; Open excludes cancelled. Bug is inflated because ux-quality and Voyager feedback map to Bug by the tracker's convention.",
+    read:
+      "Hard-blocker inflow is concentrated in the last two weeks — 22 of the 26 filed in 90 days landed since Jun 28, as browser-automation and Quill2 build gaps were surfaced systematically. Over 90 days ~30% is resolved; the migration-blocker open count has now plateaued (35 → 34 against +18 created this week), the first sign inflow and burn-down are converging.",
+  },
+
+  ticketGroups: [
+    {
+      theme: "Browser automation — production-readiness gaps (ENG-4444 family)",
+      rows: [
+        { id: "KOG-11838", title: "Century — can't see browser action/video when there's an exception", state: "In review", tone: "prog" },
+        { id: "ENG-4444", title: "v2 Browser Book: production-readiness gaps (missing primitives, resilience)", state: "Triage", tone: "open" },
+        { id: "ENG-4445", title: "Add browser JavaScript evaluation (page-context execution)", state: "Triage", tone: "open" },
+        { id: "ENG-4446", title: "Add DOM-presence waiting with selector timeouts", state: "Triage", tone: "open" },
+        { id: "ENG-4448", title: "Standardize browser procedure return shapes and output schemas", state: "Triage", tone: "open" },
+        { id: "ENG-4449", title: "Make browser teardown failures non-fatal and non-masking", state: "Triage", tone: "open" },
+        { id: "ENG-4450", title: "Add network response waiting for XHR-backed browser flows", state: "Triage", tone: "open" },
+        { id: "ENG-4452", title: "Prefer visible candidate on multi/hidden selector matches", state: "Triage", tone: "open" },
+        { id: "ENG-4454", title: "Honor transport-error contract or add browser session recovery", state: "Triage", tone: "open" },
+      ],
+    },
+    {
+      theme: "Quill2 build & run reliability",
+      rows: [
+        { id: "KOG-11862", title: "V2 | Pepsico | run stuck — taking too long, sometimes unrecoverable", state: "Backlog", tone: "open" },
+        { id: "ENG-4441", title: "JBI — Quill2 unable to execute the command, error pop-up in UI", state: "Backlog", tone: "open" },
+        { id: "ENG-4480", title: "Quill2 build experience: agent stability across long build sessions", state: "Triage", tone: "open" },
+        { id: "ENG-4494", title: "Quill2 agent behavior: regressions, unauthorized changes, memory loss", state: "Triage", tone: "open" },
+        { id: "ENG-4495", title: "SPy codegen robustness: language traps that fail silently", state: "Triage", tone: "open" },
+        { id: "ENG-4498", title: "Quill2 gives garbled English in responses", state: "Triage", tone: "open" },
+        { id: "ENG-4455", title: "Improve run observability for paused and failed automation diagnosis", state: "Triage", tone: "open" },
+        { id: "MAN-3769", title: "Wipro LCC automation build fails at the limited-tool-iterations error", state: "Triage", tone: "open" },
+      ],
+    },
+    {
+      theme: "IDP & Excel at scale",
+      rows: [
+        { id: "KOG-11815", title: "Gaps in v2 for executing large IDP processes", state: "In progress", tone: "prog" },
+        { id: "KOG-11859", title: "JBI — Document Processing service unresponsive in prod; no auto-retry", state: "Todo", tone: "open" },
+        { id: "KOG-11865", title: "V2 | TTX | IDP failure — unable to extract correct data from upload", state: "Backlog", tone: "open" },
+        { id: "ENG-4429", title: "Increase BDK Excel pod memory for Conectiv V2 migration", state: "Todo", tone: "open" },
+        { id: "ENG-4496", title: "IDP reliability and determinism in Quill2 builds", state: "Triage", tone: "open" },
+        { id: "ENG-4497", title: "Excel book and API surface friction in Quill2 builds", state: "Triage", tone: "open" },
+      ],
+    },
+    {
+      theme: "Connections & environments",
+      rows: [
+        { id: "ENG-4369", title: "JBI SFTP server connection", state: "Validation", tone: "prog" },
+        { id: "INT-1509", title: "[Epicor Book] support BAQ parameter passing for parameterized BAQs", state: "Triage", tone: "open" },
+        { id: "INT-1511", title: "JBI | V2 — Epicor is not discovering BAQs", state: "Triage", tone: "open" },
+        { id: "KOG-11842", title: "Mitie — UK instance of v2 for v1 process migration", state: "Backlog", tone: "open" },
+      ],
+    },
+    {
+      theme: "Grid, inputs & product feedback",
+      rows: [
+        { id: "ENG-4461", title: "V2 | TTX | Quill repeatedly posting the same message to the thread", state: "Validation", tone: "prog" },
+        { id: "INT-1510", title: "TTX | V2 — autoforwarding being blocked", state: "Validation", tone: "prog" },
+        { id: "ENG-4447", title: "Add atomic input clear-and-fill for inline and standard inputs", state: "Todo", tone: "open" },
+        { id: "ENG-4451", title: "Add semantic, content-addressed grid and element verbs", state: "Triage", tone: "open" },
+        { id: "ENG-4500", title: "V2 feedback — live automations: requirement of parallel runs", state: "Triage", tone: "open" },
+        { id: "ENG-3626", title: "V2 feedback — guidance: TSG learning only applied to first exception", state: "Triage", tone: "open" },
+        { id: "ENG-3711", title: "V2 feedback — drafts: exception not raised when required field missing", state: "Triage", tone: "open" },
+      ],
+    },
+  ],
+  ticketsFootnote:
+    "Closed since Jul 6 (17 on the blocker label): ENG-3827 PO Python strategy · ENG-4297 Quill2 stuck-run · ENG-4302 collections fuzzy match · OC-1370 collections prod timeline · KOG-11832 JBI run-output preview · KOG-11840 Century browser connection · ENG-4375 Conectiv file-upload limit · ENG-4440 SPy run ID · ENG-4436 Pepsico Quill2 callouts · ENG-4442 fuzzy_match predicate · ENG-4476 · KOG-11864 · INT-1507 · MAN-3775 · OC-1419 / 1423 / 1426. The velocity table above is the tracked-set view; this open list is the v2 Migration Blockers label only (34 open).",
+
+  decisions: WEEK_2026_07_06.decisions,
+
+  sources:
+    "Sources: migration tracker (75 processes, refreshed Jul 13) · Linear (live Jul 13) — v2 Migration Blockers label at 90 created / 34 open cumulative, plus the tracked-set velocity table (created-date windows across v2 Migration Blockers, Voyager v2 feedback, ux-quality, and migration-labelled Integrations / On-Call). Delivery snapshot, net-new, renewals, and the stage board are carried from the Jul 6 Monday pull and were not re-pulled this session. Blocker burnup is restated on a single Linear-derived basis (creation / completion dates), so prior weeks differ slightly from earlier decks.",
+};
+
 // Latest first. Append new weeks at the top.
-export const WEEKS: V2Week[] = [WEEK_2026_07_06];
+export const WEEKS: V2Week[] = [WEEK_2026_07_13, WEEK_2026_07_06];
