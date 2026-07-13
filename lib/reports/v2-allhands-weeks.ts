@@ -469,8 +469,16 @@ const WEEK_2026_07_13: V2Week = {
 
   pushTitle: WEEK_2026_07_06.pushTitle,
   push: WEEK_2026_07_06.push,
-  platformIssuesTitle: "Live platform issues needing attention (outside the migration label · carried from Jul 6)",
-  platformIssues: WEEK_2026_07_06.platformIssues,
+  platformIssuesTitle: "Live production issues needing attention · V1 + platform (outside the migration label)",
+  platformIssues: [
+    { id: "KOG-11848", title: "Conectiv · V1 — SharePoint download renames files, breaks downstream segregation", sev: "Urgent", sevTone: "urgent", state: "In Review" },
+    { id: "ENG-4426", title: "Indium · V1 — GPEH skips Gemini extraction, wrong enrollment field values", sev: "High", sevTone: "high", state: "Validation" },
+    { id: "KOG-11801", title: "Wipro · V1 — DynamoDB lock loses brain context on large PDFs, run fails", sev: "High", sevTone: "high", state: "In Review", note: "fix PR open — lock lease 60s → 180s" },
+    { id: "RL-2161", title: "Pepsico · V1 — ServiceNow tagging process crashing", sev: "High", sevTone: "high", state: "Information Required" },
+    { id: "INT-1082", title: "Mitie UK · V1 — production email via O365 failing", sev: "High", sevTone: "high", state: "Information Required" },
+    { id: "RL-2041", title: "Mitie UK · V1 — daily P-Card run producing incomplete records", sev: "High", sevTone: "high", state: "Triage", note: "part of the Mitie WIP / P-Card prod cluster (DOP-97/98/105/109)" },
+    { id: "OC-1412", title: "Platform — OOMKills on browser-pool pods in prod", sev: "High", sevTone: "high", state: "Todo", note: "same infra behind Kort / Century browser work" },
+  ],
 
   ticketsDelta:
     "vs Jul 6: cumulative blockers 72 → 90 (+18 created) and 17 closed this week, so open held at 34. Open = still blocked. New inflow is dominated by the browser-automation family (ENG-4444…) and a new Quill2 build-experience cluster (ENG-4480, 4494–4498).",

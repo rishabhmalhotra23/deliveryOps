@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "build:v2-week": "node scripts/v2-week/build-week.mjs",
     "prepare": "husky",
     "db:start": "bin/safe-supabase start",
     "db:stop": "bin/safe-supabase stop",
@@ -40,6 +41,7 @@
     "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
     "ws": "^8.20.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
