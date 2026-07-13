@@ -406,14 +406,14 @@ const WEEK_2026_07_13: V2Week = {
       { text: "browser gap review" },
       { text: "Wipro cluster → UAT", good: true },
     ],
-    finish: [null, null, 0, 11, 19, 25, 39],
-    blocked: [null, null, null, 8, 13, 9, 7],
+    finish: [null, null, 0, 11, 19, 25, 38],
+    blocked: [null, null, null, 8, 13, 9, 8],
     ticketsCreated: [4, 5, 7, 25, 45, 72, 90],
     ticketsOpen: [4, 5, 5, 19, 27, 35, 34],
-    finalLabels: { finish: "39", toGo: "7 to go", blocked: "7", created: "90 created", open: "34 still open", resolvedGap: "56 resolved" },
+    finalLabels: { finish: "38", toGo: "8 to go", blocked: "8", created: "90 created", open: "34 still open", resolvedGap: "56 resolved" },
   },
 
-  boardDelta: "Staged from tracker parity / handover / validation dates (Jul 13), not just the status field. 39 of 46 are at or near finish (up from 25) — the full Wipro FSS cluster hands to customer UAT this week; blocked eased to 7.",
+  boardDelta: "Staged from tracker handover / parity / validation dates (Jul 13), not just the status field. 38 of 46 at or near finish, up from 25 — 13 start customer UAT this week (the full Wipro FSS cluster plus JBI Merch and Onsite). Mitie PCard moved to blocked (needs v2 UK instance); blocked now 8.",
   board: [
     {
       stage: "Complete", count: 3, color: "#1D9E75",
@@ -424,13 +424,12 @@ const WEEK_2026_07_13: V2Week = {
       ],
     },
     {
-      stage: "In customer UAT", count: 21, color: "#5BC4A0",
+      stage: "In customer UAT", count: 17, color: "#5BC4A0",
       chips: [
-        { name: "JBI ×5", note: "Merch, QSR, Design Mtg, Onsite, PIR v2", mover: "up" },
+        { name: "JBI ×3", note: "QSR, Design Mtg, PIR v2", mover: "up" },
         { name: "TTX ×4", note: "AP, brake AR, COA, goods receipt" },
         { name: "Plunkett ×4" },
         { name: "Scan Health ×2", note: "enrollment + report" },
-        { name: "Wipro GP Vendor + DSPF SEZ", mover: "up" },
         { name: "Ciena PO", note: "handed over Jul 13", mover: "up" },
         { name: "Pepsi ServiceNow", mover: "up" },
         { name: "Norco Parts Recon" },
@@ -438,33 +437,35 @@ const WEEK_2026_07_13: V2Week = {
       ],
     },
     {
-      stage: "Handing over this week", count: 9, color: "#0E8C6A",
+      stage: "Starting customer UAT this week", count: 13, color: "#0E8C6A",
       chips: [
-        { name: "Wipro FSS ×9", note: "full cluster to customer UAT — handover Jul 15", mover: "up" },
+        { name: "Wipro FSS ×11", note: "full cluster to customer UAT — handover Jul 10–15", mover: "up" },
+        { name: "JBI Merch PO", note: "Jul 14", mover: "up" },
+        { name: "JBI Onsite Date Change", note: "Jul 17", mover: "up" },
       ],
     },
     {
-      stage: "Parity testing", count: 6, color: "#378ADD",
+      stage: "Parity testing", count: 5, color: "#378ADD",
       chips: [
         { name: "JBI AP", note: "enhancement scope" },
         { name: "Norco Solar Winds" },
         { name: "Norco Safety Culture" },
         { name: "Norco AR", note: "parity Jul 17" },
         { name: "Wipro Indirect Tax" },
-        { name: "Mitie PCard" },
       ],
     },
     {
-      stage: "Blocked", count: 7, color: "#E24B4A",
+      stage: "Blocked", count: 8, color: "#E24B4A",
       chips: [
         { name: "Kort Payments ×4", note: "browser automation — IP whitelisting" },
         { name: "Century BOL + Carrier Booking", note: "collections fuzzy match" },
         { name: "Conectiv POV", note: "parallel processing / large files" },
+        { name: "Mitie PCard", note: "needs v2 UK instance" },
       ],
     },
   ],
   boardFootnote:
-    "Stage is derived from the tracker's parity-test, customer-handover and validation dates — not just the status field, which lags: several processes still marked 'engg pending' or 'parity' have customer-handover dates this week. Blocked = open engineering blocker with no customer date yet. Earlier weeks were staged from Monday status, so part of the 25 → 39 step up is this fuller date-based measure. These 46 are the migration program (46 of 75 tracked V1 processes).",
+    "Stage is derived from the tracker's parity-test, customer-handover and validation dates — not just the status field, which lags: several processes still marked 'engg pending' or 'parity' have customer-handover dates this week. Blocked = open engineering blocker with no customer date yet (Mitie PCard needs a v2 UK instance). Earlier weeks were staged from Monday status, so part of the 25 → 38 step up is this fuller date-based measure. These 46 are the migration program (46 of 75 tracked V1 processes).",
 
   pushTitle: WEEK_2026_07_06.pushTitle,
   push: WEEK_2026_07_06.push,
