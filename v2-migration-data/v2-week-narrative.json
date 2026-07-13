@@ -1,7 +1,7 @@
 {
   "_README": "Editable narrative + Monday-sourced bits for the weekly V2 report. The tracker Excel drives estate/board/journey; Linear drives tickets. Everything here is hand-maintained: update the snapshot, net-new, push, decisions, platform issues, and the journey history/labels each week, then run npm run build:v2-week. ticketFallback is used only if the Linear/Supabase read fails.",
   "dateLabel": "Week of July 13, 2026",
-  "lede": "",
+  "lede": "We've moved most of the estate to the doorstep of done: 38 of 46 migrations are at or near the finish line, the entire Wipro FSS cluster enters customer UAT this week, and blocker inflow has finally caught up with burn-down. What's left is a short, known list — a handful of engineering blockers (browser automation, Mitie's UK instance, a few connections) between here and finishing the migration.",
   "snapshot": [
     { "value": "66", "label": "Live in production", "sub": "61 V1 · 3 V2 · 2 other" },
     { "value": "12", "label": "In active development", "sub": "5 migrations · 7 net-new" },
@@ -58,8 +58,6 @@
     { "id": "ENG-4426", "title": "Indium · V1 — GPEH skips Gemini extraction, wrong enrollment field values", "sev": "High", "sevTone": "high", "state": "Validation" },
     { "id": "KOG-11801", "title": "Wipro · V1 — DynamoDB lock loses brain context on large PDFs, run fails", "sev": "High", "sevTone": "high", "state": "In Review", "note": "fix PR open — lock lease 60s → 180s" },
     { "id": "RL-2161", "title": "Pepsico · V1 — ServiceNow tagging process crashing", "sev": "High", "sevTone": "high", "state": "Information Required" },
-    { "id": "INT-1082", "title": "Mitie UK · V1 — production email via O365 failing", "sev": "High", "sevTone": "high", "state": "Information Required" },
-    { "id": "RL-2041", "title": "Mitie UK · V1 — daily P-Card run producing incomplete records", "sev": "High", "sevTone": "high", "state": "Triage", "note": "part of the Mitie WIP / P-Card prod cluster (DOP-97/98/105/109)" },
     { "id": "OC-1412", "title": "Platform — OOMKills on browser-pool pods in prod", "sev": "High", "sevTone": "high", "state": "Todo", "note": "same infra behind Kort / Century browser work" }
   ],
   "ticketTrend": {
