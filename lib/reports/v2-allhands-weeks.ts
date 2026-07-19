@@ -73,6 +73,23 @@ export interface TicketTrend {
 
 export interface DecisionCard { title: string; body: string; decide: string; verb?: string; }
 
+// Live ticket health from a single Linear label (added Jul 20). Distinct from
+// ticketTrend, which needs the Supabase classifier; labelHealth needs only the
+// live Linear label, so it can be refreshed from Linear alone.
+export interface LabelHealthFlow { window: string; filed: number; closed: number; }
+export interface LabelHealth {
+  label: string;       // "v2 Migration Blockers"
+  asOf: string;        // "live Jul 20"
+  openNow: number;
+  prevOpen?: number;   // prior comparison point, e.g. 34
+  prevLabel?: string;  // e.g. "Jun 29"
+  urgentHigh: number;
+  filed7: number;
+  closed7: number;
+  flow: LabelHealthFlow[];
+  note: string;
+}
+
 export interface V2Week {
   key: string;        // used in filenames, e.g. "2026-07-06"
   dateLabel: string;  // "Week of July 6, 2026"
@@ -96,6 +113,7 @@ export interface V2Week {
   platformIssues: PlatformIssue[];
   ticketsDelta: string;
   ticketTrend?: TicketTrend;   // created-in-window velocity (optional; added Jul 13)
+  labelHealth?: LabelHealth;   // live single-label health (optional; added Jul 20)
   ticketGroups: TicketGroup[];
   ticketsFootnote: string;
   decisions: DecisionCard[];
@@ -566,5 +584,225 @@ const WEEK_2026_07_13: V2Week = {
     "Sources: migration tracker (75 processes / 46 migrating, refreshed Jul 13) drives the estate and the stage board; the live Monday Projects board (Jul 13) drives net-new development and the active-development / queued counts; Linear (live Jul 13) drives the blocker burnup (90 created / 34 open) and the velocity table. Severity labeling on the blocker set began mid-June, so the 90-day class split is shown as not tracked. Live-production and footprint totals are the delivery portfolio estate (tracker + delivered history), stable week to week. Push lanes and the platform-issues list are carried from Jul 6. Blocker burnup is on a single Linear-derived basis (creation / completion dates), so prior weeks differ slightly from earlier decks.",
 };
 
+// ── Week of July 20, 2026 ──────────────────────────────────────────────────────
+// Live sources this week: migration tracker Working Sheet (estate, stage board,
+// journey endpoints), live Monday Projects board (snapshot dev/queued + net-new),
+// and live Linear via the v2 Migration Blockers label (open list, ticket-health
+// tiles) plus a live open Urgent/High sweep for platform issues. Delivery-portfolio
+// tiles (live-in-prod, footprint, enhancements) and decisions are carried.
+const WEEK_2026_07_20: V2Week = {
+  key: "2026-07-20",
+  dateLabel: "Week of July 20, 2026",
+  lede:
+    "The blocker list keeps shrinking: open v2 Migration Blockers fell to 19, with 17 closed in the last 7 days against 8 filed, and the collections fuzzy-match dependency is now done, clearing Century into parity. 39 of 45 migrations are at or near the finish line, and the full Wipro FSS cluster plus iHeart start customer UAT this week. What's left is short and mostly known: IDP at scale, a Quill2 build-stability cluster, Kort's customer whitelisting, and Mitie's commercial sign-off.",
+
+  snapshot: [
+    { value: "66", label: "Live in production", sub: "61 V1 · 3 V2 · 2 other" },
+    { value: "7", label: "In active development", sub: "net-new V2 builds" },
+    { value: "94", label: "Live or in progress", sub: "total delivered footprint", hero: true },
+    { value: "9", label: "Enhancements delivered", sub: "on existing live processes" },
+    { value: "16", label: "Queued", sub: "4 on hold · 10 backlog · 2 upcoming" },
+  ],
+  snapshotNote:
+    "In-active-development counts the seven net-new V2 builds on the live Monday Projects board (Jul 20); queued (16) is the same board. Every live V1 process is migrating, so the 45-process migration program is the stage board below rather than a separate count here. Live-in-production, footprint, and enhancements are the delivery-portfolio estate, stable week to week.",
+
+  netNewDelta:
+    "Live Monday pull, Jul 20. Phases steady vs Jul 13; the three JBI builds wait on VPN / customer access and Conectiv SONY is in discovery.",
+  netNew: [
+    { process: "Norco · Warranty", owner: "Karthik N.", phase: "M3 · UAT", update: "Completed in V2; waiting on customer QA support." },
+    { process: "Century · Accounting Ops", owner: "Rishabh M.", phase: "M3 · UAT", update: "Browser-automation fixes landed; stabilizing live end-to-end before customer UAT.", tone: "off" },
+    { process: "TTX · Property Tax Outline", owner: "Ayush G.", phase: "M3 · UAT", update: "UAT + parity testing; go-live on customer sign-off." },
+    { process: "JBI · Compass Quote Update", owner: "Arushi B.", phase: "M2 · Dev", update: "Building against the live system; awaiting VPN access." },
+    { process: "JBI · Receiving Process", owner: "Arushi B.", phase: "Waiting", update: "Awaiting VPN setup." },
+    { process: "JBI · Material Allocation Import", owner: "Arushi B.", phase: "Waiting", update: "Awaiting VPN setup / third-party access." },
+    { process: "Charleston CSD · Workflow POV", owner: "Karthik N.", phase: "Waiting", update: "Skeleton built; awaiting customer data for end-to-end." },
+    { process: "Conectiv · SONY Billing", owner: "Ayush G.", phase: "M1 · Discovery", update: "Discovery ongoing." },
+    { process: "JBI · Material Allocation Export", owner: "Arushi B.", phase: "Pre-kickoff", update: "Queued behind Import.", tone: "new" },
+  ],
+
+  renewalsDelta:
+    "Carried from Jul 6 — Monday renewals not re-pulled. JBI renewed ($162K) the week of Jul 6; Kort's Jul 10 date has passed and needs a status update.",
+  renewalBanner: null,
+  renewals: [], // hidden per Rishabh — renewals section not shown since Jul 13
+  renewalsFootnote: WEEK_2026_07_13.renewalsFootnote,
+
+  migrationIntro:
+    "Of 75 tracked V1 processes: 45 migrate to V2, 25 retire with V1, 3 are already on V2, and 2 are custom / off-platform. One process moved from migrate to retire since Jul 13 (46 → 45). Everything below is the migration program.",
+
+  journey: {
+    goalLabel: "Goal: all 45 migrations at V1 parity",
+    procMax: 45,
+    ticketMax: 100,
+    dates: ["Jun 1", "Jun 8", "Jun 15", "Jun 22", "Jun 29", "Jul 6", "Jul 13", "Jul 20"],
+    milestones: [
+      { text: "kickoff" },
+      { text: "pipeline built" },
+      { text: "migrated · parity begins" },
+      { text: "first snapshot" },
+      { text: "inflow peaks" },
+      { text: "browser gap review" },
+      { text: "Wipro cluster → UAT", good: true },
+      { text: "Century cleared · blockers fall", good: true },
+    ],
+    finish: [null, null, 0, 11, 19, 25, 38, 39],
+    blocked: [null, null, null, 8, 13, 9, 8, 6],
+    ticketsCreated: [4, 5, 7, 25, 45, 72, 90, 98],
+    ticketsOpen: [4, 5, 5, 19, 27, 35, 34, 19],
+    finalLabels: { finish: "39", toGo: "6 to go", blocked: "6", created: "≈98 created", open: "19 open", resolvedGap: "79 resolved" },
+  },
+
+  boardDelta:
+    "Fresh from the Jul 20 tracker, with field corrections. vs Jul 13: near-finish 38 → 39 and blocked 8 → 6 as the collections fuzzy-match dependency closed and Century moved into parity; scope 46 → 45 (one process moved to retire); the full Wipro FSS cluster plus iHeart start customer UAT this week. Mitie PCard stays blocked — now on a commercial decision and live API access, not the UK instance.",
+  board: [
+    {
+      stage: "Complete", count: 3, color: "#1D9E75",
+      chips: [
+        { name: "JBI SBUX", note: "parked on V2" },
+        { name: "Norco Packslip Sorting" },
+        { name: "TTX Lease Invoicing" },
+      ],
+    },
+    {
+      stage: "In customer UAT", count: 17, color: "#5BC4A0",
+      chips: [
+        { name: "JBI ×5" },
+        { name: "Plunkett ×4" },
+        { name: "TTX ×4" },
+        { name: "Ciena PO" },
+        { name: "Norco Parts Recon" },
+        { name: "Pepsi ServiceNow" },
+        { name: "Scan Health Enrollment" },
+      ],
+    },
+    {
+      stage: "Starting customer UAT this week", count: 12, color: "#0E8C6A",
+      chips: [
+        { name: "Wipro FSS ×11", note: "handover Jul 10–15", mover: "up" },
+        { name: "iHeart Affidavits", mover: "up" },
+      ],
+    },
+    {
+      stage: "Parity testing", count: 7, color: "#378ADD",
+      chips: [
+        { name: "Century ×2", note: "fuzzy-match done; parity dates this week", mover: "up" },
+        { name: "JBI AP", note: "final enhancement scope in review this week; UAT after sign-off" },
+        { name: "Norco ×3" },
+        { name: "Wipro Indirect Tax" },
+      ],
+    },
+    {
+      stage: "Blocked", count: 6, color: "#E24B4A",
+      chips: [
+        { name: "Kort Payments ×4", note: "customer IP whitelisting" },
+        { name: "Conectiv POV", note: "large files; dedicated engineer being assigned" },
+        { name: "Mitie PCard", note: "internal testing on mock data; awaiting commercial + live API / whitelisting" },
+      ],
+    },
+  ],
+  boardFootnote:
+    "Stage reflects the tracker's parity-test, customer-handover and validation dates plus field corrections this week: Century cleared once the collections fuzzy-match landed, and Mitie PCard is held for a commercial decision and live API access (internal testing on mock data, no UAT date). Blocked = an open dependency with no customer date yet. These 45 are the migration program (45 of 75 tracked V1 processes).",
+
+  pushTitle: "This week's push · field team (SE · FDE · CSM)",
+  push: [
+    { title: "Move UAT to live", color: "#0F6E56", body: "Wipro FSS ×11 and iHeart enter customer UAT this week; drive sign-offs (max 5 workstreams per customer). Plunkett pends their NetSuite fix; TTX needs collections + native email." },
+    { title: "Start customer UAT from parity", color: "#185FA5", body: "Century cleared into parity (parity dates this week); Norco ×3 and Wipro Indirect Tax follow. JBI AP starts UAT once its final enhancement scope is signed off this week." },
+    { title: "Waiting on engineering", color: "#A32D2D", body: "Conectiv large-file / parallel processing is the live engineering blocker (a dedicated engineer is being assigned); IDP-at-scale and the Quill2 build-stability cluster dominate ticket inflow. Kort (×4) and Mitie are customer / commercial holds, not engineering: Kort needs IP whitelisting from the customer, Mitie awaits a commercial decision and live API access." },
+    { title: "Keep builds and live processes healthy", color: "#534AB7", body: "Seven net-new V2 builds active; support live V1 and V2 production — open platform issues below." },
+  ],
+  platformIssuesTitle: "Live production issues needing attention · V1 + platform (outside the migration label)",
+  platformIssues: [
+    { id: "MAN-3794", title: "Century · V1 — Carrier Booking subprocess returns a 503 in the UI", sev: "Urgent", sevTone: "urgent", state: "Triage" },
+    { id: "KOG-11848", title: "Conectiv · V1 — SharePoint download files error", sev: "Urgent", sevTone: "urgent", state: "In Review" },
+    { id: "KOG-11801", title: "Wipro · V1 — DynamoDB lock loses brain context on large PDFs, run fails", sev: "High", sevTone: "high", state: "In Review", note: "fix PR open — lock lease 60s → 180s" },
+    { id: "OC-1412", title: "Platform — OOMKills on browser-pool pods in prod", sev: "High", sevTone: "high", state: "Todo", note: "same infra behind Kort / Century browser work" },
+    { id: "MAN-3802", title: "TTX · V2 — \"Generation was lost\" error", sev: "High", sevTone: "high", state: "Todo" },
+    { id: "KOG-11870", title: "V2 — \"Something went wrong\" when clicking the location tag icon", sev: "High", sevTone: "high", state: "In Review", note: "customer-reported" },
+  ],
+
+  ticketsDelta:
+    "Live Linear, Jul 20. Open fell to 19 (from 34 on Jun 29): 17 closed in the last 7 days against 8 filed. 2 Urgent, 11 High. This list is the blocker label only; broader product feedback and ux-quality are not re-pulled here.",
+  labelHealth: {
+    label: "v2 Migration Blockers",
+    asOf: "Jul 20",
+    openNow: 19,
+    prevOpen: 34,
+    prevLabel: "Jun 29",
+    urgentHigh: 13,
+    filed7: 8,
+    closed7: 17,
+    flow: [
+      { window: "Last 7 days", filed: 8, closed: 17 },
+      { window: "Last 15 days", filed: 30, closed: 40 },
+      { window: "Last 30 days", filed: 67, closed: 64 },
+    ],
+    note:
+      "Open = still open on the v2 Migration Blockers label (triage / backlog / unstarted / started). 68 of 87 non-archived tickets on the label are now closed. Filed and closed use Linear creation and completion dates.",
+  },
+  ticketGroups: [
+    {
+      theme: "Quill2 build & drafts UX",
+      rows: [
+        { id: "KOG-11874", title: "JBI — Run Assistant can't add a mechanism to email on a business exception", state: "In Progress", tone: "prog" },
+        { id: "MAN-3769", title: "Wipro LCC automation build fails at the limited-tool-iterations error", state: "In Progress", tone: "prog" },
+        { id: "ENG-3711", title: "V2 feedback — drafts: exception not raised when a required field is missing", state: "Information Required", tone: "open" },
+        { id: "ENG-4337", title: "Support managing triggers from Quill2", state: "Backlog", tone: "open" },
+        { id: "ENG-4480", title: "Quill2 build experience: agent stability across long build sessions", state: "Backlog", tone: "open" },
+        { id: "ENG-4494", title: "Quill2 agent behavior: regressions, unauthorized changes, memory loss", state: "Backlog", tone: "open" },
+        { id: "ENG-4495", title: "SPy codegen robustness: language traps that fail silently", state: "Backlog", tone: "open" },
+        { id: "ENG-4496", title: "IDP reliability and determinism in Quill2 builds", state: "Backlog", tone: "open" },
+        { id: "ENG-4497", title: "Excel book and API surface friction in Quill2 builds", state: "Backlog", tone: "open" },
+      ],
+    },
+    {
+      theme: "IDP & Excel at scale",
+      rows: [
+        { id: "ENG-4429", title: "Increase BDK Excel pod memory for Conectiv V2 migration", state: "Validation", tone: "prog" },
+        { id: "KOG-11815", title: "Gaps in v2 for executing large IDP processes", state: "In Progress", tone: "prog" },
+        { id: "KOG-11859", title: "JBI — Document Processing service unresponsive in prod; no auto-retry", state: "Todo", tone: "open" },
+        { id: "KOG-11865", title: "V2 | TTX | IDP failure — can't extract correct data from uploaded invoices", state: "Backlog", tone: "open" },
+        { id: "KOG-11879", title: "JBI — timeout for IDP", state: "Backlog", tone: "open" },
+      ],
+    },
+    {
+      theme: "Connections & environments",
+      rows: [
+        { id: "INT-1521", title: "SFTP connection failing with no indicator why", state: "Validation", tone: "prog" },
+        { id: "INT-1511", title: "JBI | V2 — Epicor is not discovering BAQs", state: "Information Required", tone: "open" },
+        { id: "ENG-4604", title: "Singular Collection is down", state: "Triage", tone: "open" },
+        { id: "KOG-11842", title: "Mitie — UK instance of v2 for v1 process migration", state: "Backlog", tone: "open" },
+      ],
+    },
+    {
+      theme: "Live automations & runtime",
+      rows: [
+        { id: "ENG-4476", title: "Live automations — Urgent: the expand button for outputs has disappeared", state: "In Progress", tone: "prog" },
+      ],
+    },
+  ],
+  ticketsFootnote:
+    "The 19 open are grouped by theme above with verbatim Linear titles; the ticket-health tiles summarize the same label. Closed on the label in the last 30 days: 64.",
+
+  decisions: [
+    {
+      title: "1 · Subprocess and parallel execution",
+      body: "Building sequential and benchmarking runtime against V1. HTTP-draft workaround exists, not in use. Alternative: parallelize inside Books — parallel IDP shipped, parallel file processing next candidate.",
+      decide: "Prioritize native subprocess based on how many processes stall or run materially slower than V1.",
+    },
+    {
+      title: "2 · V1 Python and integration code",
+      body: "Full rebuild in SPy is viable for BCI procedures; Coupa and Maximo can run over direct HTTP calls for testing.",
+      decide: "Keep as-is through go-live and handover, or package as a product feature.",
+    },
+    {
+      title: "3 · Mitie PCard — commercial and access",
+      body: "Internal testing is proceeding on mock data for Maximo and Coupa. Live rollout is gated on a commercial discussion and customer API access / whitelisting; no UAT date yet.",
+      decide: "Prioritize the commercial conversation to unlock live API access, or hold at mock-data validation until commercials close.",
+    },
+  ],
+
+  sources:
+    "Sources: migration tracker Working Sheet (75 processes / 45 migrating, Jul 20) drives the estate and journey endpoints; the live Monday Projects board (Jul 20) drives net-new and the queued count; live Linear (Jul 20) drives the open v2 Migration Blockers list (19 open of 87 non-archived), the ticket-health tiles, and the refreshed platform-issues list. Stage placements apply field corrections: Century cleared by the completed collections fuzzy-match, Mitie held on a commercial decision and live API access. Live-in-production, footprint, and enhancements are the delivery-portfolio estate. Decisions are hand-maintained. The journey blocker burn-up is on the live label basis, so the cumulative-created endpoint (≈98) is approximate; 19 open is exact.",
+};
+
 // Latest first. Append new weeks at the top.
-export const WEEKS: V2Week[] = [WEEK_2026_07_13, WEEK_2026_07_06];
+export const WEEKS: V2Week[] = [WEEK_2026_07_20, WEEK_2026_07_13, WEEK_2026_07_06];

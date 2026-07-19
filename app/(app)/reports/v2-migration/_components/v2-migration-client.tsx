@@ -438,6 +438,58 @@ export function V2MigrationClient() {
             </>
           )}
 
+          {/* Ticket health — single Linear label, live (added Jul 20) */}
+          {week.labelHealth && (
+            <>
+              <SectionLabel>Ticket health · {week.labelHealth.label}</SectionLabel>
+              <DeltaLine>Live Linear, {week.labelHealth.asOf}.</DeltaLine>
+              <div className="glass-card rounded-2xl p-5 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                  <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                    <div className="text-2xl font-bold leading-none" style={{ color: "#BA7517" }}>{week.labelHealth.openNow}</div>
+                    <div className={`text-[11px] mt-1 ${MUTED}`}>Open now{week.labelHealth.prevOpen != null ? ` · was ${week.labelHealth.prevOpen}${week.labelHealth.prevLabel ? ` (${week.labelHealth.prevLabel})` : ""}` : ""}</div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                    <div className="text-2xl font-bold leading-none" style={{ color: "#A32D2D" }}>{week.labelHealth.urgentHigh}</div>
+                    <div className={`text-[11px] mt-1 ${MUTED}`}>Urgent + High</div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                    <div className="text-2xl font-bold leading-none text-[color:var(--foreground)]">{week.labelHealth.filed7}</div>
+                    <div className={`text-[11px] mt-1 ${MUTED}`}>Filed last 7d</div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--brand-metal-line)] bg-[var(--brand-seasalt)] p-3">
+                    <div className="text-2xl font-bold leading-none" style={{ color: "#0F6E56" }}>{week.labelHealth.closed7}</div>
+                    <div className={`text-[11px] mt-1 ${MUTED}`}>Closed last 7d</div>
+                  </div>
+                </div>
+                <table className="w-full text-[12.5px]">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] border-b border-[var(--brand-metal-line)]">
+                      <th className="py-2 pr-3 font-semibold">Window</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Filed</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Closed</th>
+                      <th className="py-2 font-semibold text-right">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {week.labelHealth.flow.map((r) => {
+                      const net = r.filed - r.closed;
+                      return (
+                        <tr key={r.window} className="border-b border-[var(--brand-metal-line)] last:border-b-0">
+                          <td className="py-2 pr-3 font-medium text-[color:var(--foreground)] whitespace-nowrap">{r.window}</td>
+                          <td className="py-2 pr-3 text-right text-[color:var(--foreground)]">{r.filed}</td>
+                          <td className="py-2 pr-3 text-right" style={{ color: "#0F6E56" }}>{r.closed}</td>
+                          <td className="py-2 text-right font-semibold" style={{ color: net <= 0 ? "#0F6E56" : "#A32D2D" }}>{net <= 0 ? String(net) : `+${net}`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed`}>{week.labelHealth.note}</p>
+              </div>
+            </>
+          )}
+
           {/* Open tickets */}
           <SectionLabel>Open engineering tickets</SectionLabel>
           <DeltaLine>
