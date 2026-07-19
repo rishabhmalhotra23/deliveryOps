@@ -636,13 +636,13 @@ const WEEK_2026_07_20: V2Week = {
     dates: ["Jun 1", "Jun 8", "Jun 15", "Jun 22", "Jun 29", "Jul 6", "Jul 13", "Jul 20"],
     milestones: [
       { text: "kickoff" },
-      { text: "pipeline built" },
-      { text: "migrated · parity begins" },
-      { text: "first snapshot" },
+      { text: "pipeline" },
+      { text: "parity begins" },
+      { text: "snapshot" },
       { text: "inflow peaks" },
-      { text: "browser gap review" },
-      { text: "Wipro cluster → UAT", good: true },
-      { text: "Century cleared · blockers fall", good: true },
+      { text: "browser review" },
+      { text: "Wipro → UAT", good: true },
+      { text: "blockers fall", good: true },
     ],
     finish: [null, null, 0, 11, 19, 25, 38, 39],
     blocked: [null, null, null, 8, 13, 9, 8, 6],
@@ -782,26 +782,10 @@ const WEEK_2026_07_20: V2Week = {
   ticketsFootnote:
     "The 19 open are grouped by theme above with verbatim Linear titles; the ticket-health tiles summarize the same label. Closed on the label in the last 30 days: 64.",
 
-  decisions: [
-    {
-      title: "1 · Subprocess and parallel execution",
-      body: "Building sequential and benchmarking runtime against V1. HTTP-draft workaround exists, not in use. Alternative: parallelize inside Books — parallel IDP shipped, parallel file processing next candidate.",
-      decide: "Prioritize native subprocess based on how many processes stall or run materially slower than V1.",
-    },
-    {
-      title: "2 · V1 Python and integration code",
-      body: "Full rebuild in SPy is viable for BCI procedures; Coupa and Maximo can run over direct HTTP calls for testing.",
-      decide: "Keep as-is through go-live and handover, or package as a product feature.",
-    },
-    {
-      title: "3 · Mitie PCard — commercial and access",
-      body: "Internal testing is proceeding on mock data for Maximo and Coupa. Live rollout is gated on a commercial discussion and customer API access / whitelisting; no UAT date yet.",
-      decide: "Prioritize the commercial conversation to unlock live API access, or hold at mock-data validation until commercials close.",
-    },
-  ],
+  decisions: [], // hidden this week per Rishabh — nothing conclusive to decide
 
   sources:
-    "Sources: migration tracker Working Sheet (75 processes / 45 migrating, Jul 20) drives the estate and journey endpoints; the live Monday Projects board (Jul 20) drives net-new and the queued count; live Linear (Jul 20) drives the open v2 Migration Blockers list (19 open of 87 non-archived), the ticket-health tiles, and the refreshed platform-issues list. Stage placements apply field corrections: Century cleared by the completed collections fuzzy-match, Mitie held on a commercial decision and live API access. Live-in-production, footprint, and enhancements are the delivery-portfolio estate. Decisions are hand-maintained. The journey blocker burn-up is on the live label basis, so the cumulative-created endpoint (≈98) is approximate; 19 open is exact.",
+    "Sources: migration tracker Working Sheet (75 processes / 45 migrating, Jul 20) drives the estate and journey endpoints; the live Monday Projects board (Jul 20) drives net-new and the queued count; live Linear (Jul 20) drives the open v2 Migration Blockers list (19 open of 87 non-archived), the ticket-health tiles, and the refreshed platform-issues list. Stage placements apply field corrections: Century cleared by the completed collections fuzzy-match, Mitie held on a commercial decision and live API access. Live-in-production, footprint, and enhancements are the delivery-portfolio estate. The journey blocker burn-up is on the live label basis, so the cumulative-created endpoint (≈98) is approximate; 19 open is exact.",
 };
 
 // Latest first. Append new weeks at the top.

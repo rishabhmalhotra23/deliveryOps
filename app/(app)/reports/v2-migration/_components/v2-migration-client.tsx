@@ -514,7 +514,9 @@ export function V2MigrationClient() {
             <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed border-t border-[var(--brand-metal-line)] pt-3`}>{week.ticketsFootnote}</p>
           </div>
 
-          {/* Decisions */}
+          {/* Decisions (hidden when a week has none) */}
+          {week.decisions.length > 0 && (
+          <>
           <SectionLabel>Decisions needed</SectionLabel>
           <div className="grid gap-3 lg:grid-cols-3 mt-2">
             {week.decisions.map((d) => (
@@ -527,6 +529,8 @@ export function V2MigrationClient() {
               </div>
             ))}
           </div>
+          </>
+          )}
         </section>
 
         <p className={`text-[11px] ${MUTED} leading-relaxed border-t border-[var(--brand-metal-line)] pt-3.5`}>{week.sources}</p>
