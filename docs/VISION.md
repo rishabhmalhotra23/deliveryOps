@@ -2,6 +2,8 @@
 
 The product, the principle behind it, and what the world looks like when it's done.
 
+> Update 2026-07-22: for current state and the active plan (retire Monday, finish the native process table, drive adoption, then agents) see [DELIVERYOPS-CONSOLIDATION-PLAN.md](./DELIVERYOPS-CONSOLIDATION-PLAN.md) and [STATUS.md](./STATUS.md). This vision doc is the long-form why and remains accurate in intent.
+
 This is the long-form why. If you only have 30 seconds, [TL;DR](#tldr) is at the top. If you want the wiring, see [`README.md`](../README.md). If you want the architecture, see [`.cursor/plans/curator_full_vercel_rewrite_4412b274.plan.md`](../.cursor/plans/curator_full_vercel_rewrite_4412b274.plan.md). If you want to set up an integration, see [`docs/CREDENTIALS.md`](./CREDENTIALS.md).
 
 ## TL;DR

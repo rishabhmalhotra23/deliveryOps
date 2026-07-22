@@ -17,3 +17,6 @@ supabase/.temp/
 # publish logs). These are local-only — committing them leaks state.
 scripts/.*.json
 .env.cloud
+
+# Monday data backup snapshots (real customer data — keep local, do not commit)
+monday-backup/
