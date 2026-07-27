@@ -480,6 +480,7 @@ export function V2MigrationClient() {
                     <div className={`text-[11px] mt-1 ${MUTED}`}>Closed last 7d</div>
                   </div>
                 </div>
+                {week.labelHealth.flow.length > 0 && (
                 <table className="w-full text-[12.5px]">
                   <thead>
                     <tr className="text-left text-[10px] uppercase tracking-wide text-[color:var(--muted-foreground)] border-b border-[var(--brand-metal-line)]">
@@ -503,6 +504,7 @@ export function V2MigrationClient() {
                     })}
                   </tbody>
                 </table>
+                )}
                 <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed`}>{week.labelHealth.note}</p>
               </div>
             </>
@@ -521,12 +523,20 @@ export function V2MigrationClient() {
                   <span className="text-[11px] uppercase tracking-wide font-bold text-[color:var(--foreground)]">{g.theme}</span>
                   <span className="text-[10px] font-semibold text-[color:var(--muted-foreground)] whitespace-nowrap">{g.rows.length} open</span>
                 </div>
-                {g.rows.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--brand-metal-line)] last:border-b-0 text-[12.5px] text-[color:var(--foreground)]">
-                    <span className="leading-snug"><Tik id={t.id} /> {t.title}</span>
-                    <Pill tone={t.tone}>{t.state}</Pill>
+                {week.compactTickets ? (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 py-1.5">
+                    {g.rows.map((t) => (
+                      <span key={t.id} title={t.title}><Tik id={t.id} /></span>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  g.rows.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--brand-metal-line)] last:border-b-0 text-[12.5px] text-[color:var(--foreground)]">
+                      <span className="leading-snug"><Tik id={t.id} /> {t.title}</span>
+                      <Pill tone={t.tone}>{t.state}</Pill>
+                    </div>
+                  ))
+                )}
               </div>
             ))}
             <p className={`text-[11px] ${MUTED} mt-3 leading-relaxed border-t border-[var(--brand-metal-line)] pt-3`}>{week.ticketsFootnote}</p>

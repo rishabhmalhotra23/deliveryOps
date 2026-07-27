@@ -99,6 +99,9 @@ export interface V2Week {
   /** Optional second tile row (added Jul 27): keeps the V2 build-up on its own
    *  line so V1 and V2 numbers don't crowd one row. Renders after the snapshot. */
   v2Footprint?: { items: SnapshotMetric[]; note: string };
+  /** When true (added Jul 27), the open-tickets section renders compact:
+   *  category + ticket numbers only, no per-ticket title/state rows. */
+  compactTickets?: boolean;
   netNewDelta: string;
   netNew: DevRow[];
   renewalsDelta: string;
@@ -848,7 +851,7 @@ const WEEK_2026_07_27: V2Week = {
   journey: {
     goalLabel: "Goal: all 45 migrations at V1 parity",
     procMax: 45,
-    ticketMax: 110,
+    ticketMax: 115,
     dates: ["Jun 1", "Jun 8", "Jun 15", "Jun 22", "Jun 29", "Jul 6", "Jul 13", "Jul 20", "Jul 27"],
     milestones: [
       { text: "kickoff" },
@@ -863,9 +866,9 @@ const WEEK_2026_07_27: V2Week = {
     ],
     finish: [null, null, 0, 11, 19, 25, 38, 39, 39],
     blocked: [null, null, null, 8, 13, 9, 8, 6, 6],
-    ticketsCreated: [4, 5, 7, 25, 45, 72, 90, 98, 110],
-    ticketsOpen: [4, 5, 5, 19, 27, 35, 34, 19, 22],
-    finalLabels: { finish: "39", toGo: "6 to go", blocked: "6", created: "110 created", open: "22 open", resolvedGap: "66 resolved" },
+    ticketsCreated: [4, 5, 7, 25, 45, 72, 90, 98, 112],
+    ticketsOpen: [4, 5, 5, 19, 27, 35, 34, 19, 24],
+    finalLabels: { finish: "39", toGo: "6 to go", blocked: "6", created: "112 created", open: "24 open", resolvedGap: "88 resolved" },
   },
 
   boardDelta: "Stage follows the tracker's Migration Status: Live on V2 = live, Customer pending = customer UAT, v1 Parity Testing = testing. 39 of 45 at or near the finish line; 6 blocked.",
@@ -920,93 +923,105 @@ const WEEK_2026_07_27: V2Week = {
     { title: "Customer and commercial holds", color: "#185FA5", body: "Kort ×4 wait on customer IP whitelisting; Mitie PCard needs a v2 UK instance plus commercial sign-off." },
     { title: "Keep builds and live processes healthy", color: "#534AB7", body: "Nine net-new V2 builds active; support live V1 and V2 production. Browser automation stays hot on the Century VIV build (ENG-4444 cluster; KOG-11908 502 filed today)." },
   ],
-  platformIssuesTitle: WEEK_2026_07_20.platformIssuesTitle,
-  platformIssues: WEEK_2026_07_20.platformIssues,
+  platformIssuesTitle: "Live production issues needing attention · V1 + platform (outside the migration label)",
+  platformIssues: [
+    { id: "MAN-3818", title: "Platform · V2 — Grimoire throwing 500s in prod", sev: "High", sevTone: "high", state: "In Progress", note: "filed today" },
+    { id: "MAN-3813", title: "Platform · V2 — vigil-consumer AllBrokersDown, audit log not ingesting", sev: "High", sevTone: "high", state: "In Progress", note: "filed this week" },
+    { id: "MAN-3802", title: "TTX · V2 — \"Generation was lost\" error", sev: "High", sevTone: "high", state: "Todo" },
+    { id: "OC-1412", title: "Platform — OOMKills on browser-pool pods in prod", sev: "High", sevTone: "high", state: "Todo", note: "same infra behind Kort / Century browser work" },
+    { id: "ENG-4691", title: "Platform · V2 — audit actor forgeable via guide RPC request body (security)", sev: "High", sevTone: "high", state: "Backlog", note: "filed today" },
+  ],
 
   ticketsDelta:
-    "Live Linear, Jul 27. Open on the v2 Migration Blockers label rose 19 → 22: 19 filed against 16 closed in the last 7 days. Open = still blocked. Browser automation is a separate live cluster (7 open, one filed today) and is listed first below.",
+    "Live Linear, Jul 27. Open on the v2 Migration Blockers label rose 19 → 24 (INT-1511 and others closed; new inflow on Conectiv and Quill2). Shown by category with ticket numbers below. Browser automation is a separate live cluster (6 open, one filed today).",
   labelHealth: {
     label: "v2 Migration Blockers",
     asOf: "Jul 27",
-    openNow: 22,
+    openNow: 24,
     prevOpen: 19,
     prevLabel: "Jul 20",
-    urgentHigh: 15,
-    filed7: 19,
+    urgentHigh: 16,
+    filed7: 21,
     closed7: 16,
-    flow: [
-      { window: "Last 7 days", filed: 19, closed: 16 },
-      { window: "Last 15 days", filed: 30, closed: 26 },
-      { window: "Last 30 days", filed: 64, closed: 52 },
-    ],
+    flow: [],
     note:
-      "Open = still open on the v2 Migration Blockers label. 66 of 110 non-archived tickets on the label are now closed. Filed and closed use Linear creation and completion dates. Browser-automation tickets sit on the browser-automation-v2 / on-call tracks and are additional to these.",
+      "Open = still open on the v2 Migration Blockers label (24 of 112 non-archived; the rest are closed, canceled, or duplicate). Browser-automation tickets sit on the browser-automation-v2 / on-call tracks and are additional to these.",
   },
+  compactTickets: true,
   ticketGroups: [
     {
-      theme: "Browser automation (Century VIV, Kort)",
+      theme: "Browser automation",
       rows: [
         { id: "KOG-11908", title: "Century — 502 Bad Gateway from Browser (filed today)", state: "Todo", tone: "open" },
-        { id: "ENG-4444", title: "v2 Browser Book: production-readiness gaps (missing primitives, resilience)", state: "In review", tone: "prog" },
-        { id: "ENG-4445", title: "Add browser JavaScript evaluation (page-context execution)", state: "In progress", tone: "prog" },
-        { id: "ENG-4451", title: "Add semantic, content-addressed grid and element verbs", state: "In progress", tone: "prog" },
-        { id: "ENG-4454", title: "Honor transport-error contract or add browser session recovery", state: "In progress", tone: "prog" },
-        { id: "ENG-4450", title: "Add network interception / response waiting for XHR-backed flows", state: "Backlog", tone: "open" },
-        { id: "OC-1412", title: "OOMKills on browser-pool pods in prod", state: "Todo", tone: "open" },
+        { id: "ENG-4444", title: "v2 Browser Book: production-readiness gaps", state: "In review", tone: "prog" },
+        { id: "ENG-4445", title: "Browser JavaScript evaluation", state: "In progress", tone: "prog" },
+        { id: "ENG-4450", title: "Network interception for XHR-backed flows", state: "Backlog", tone: "open" },
+        { id: "ENG-4451", title: "Semantic grid and element verbs", state: "In progress", tone: "prog" },
+        { id: "ENG-4454", title: "Browser session recovery on transport error", state: "In progress", tone: "prog" },
       ],
     },
     {
       theme: "Conectiv, large files",
       rows: [
-        { id: "KOG-11905", title: "Conectiv — Bishop 503, cannot handle 100MB+ file", state: "In review", tone: "prog" },
-        { id: "KOG-11907", title: "Conectiv — Jarvis large-file write fails on gRPC message-size limits", state: "Backlog", tone: "open" },
-        { id: "KOG-11890", title: "Conectiv — stream error, Bedrock stream produced no data", state: "Backlog", tone: "open" },
-        { id: "KOG-11901", title: "Conectiv — Quill fails to follow instructions, thread drifts from TODO list", state: "Backlog", tone: "open" },
-        { id: "MAN-3816", title: "Conectiv — Quill posts the same message repeatedly in loops", state: "Todo", tone: "open" },
+        { id: "KOG-11905", title: "Bishop 503, cannot handle 100MB+ file", state: "In review", tone: "prog" },
+        { id: "KOG-11907", title: "Jarvis large-file write, gRPC limits", state: "Backlog", tone: "open" },
+        { id: "KOG-11890", title: "Bedrock stream produced no data", state: "Backlog", tone: "open" },
+        { id: "KOG-11901", title: "Quill drifts from the TODO list", state: "Backlog", tone: "open" },
+        { id: "MAN-3816", title: "Quill posts the same message in loops", state: "Todo", tone: "open" },
       ],
     },
     {
       theme: "Quill2 build stability",
       rows: [
-        { id: "ENG-4480", title: "Quill2 build experience: agent stability across long build sessions", state: "Backlog", tone: "open" },
-        { id: "ENG-4494", title: "Quill2 agent behavior: regressions, unauthorized changes, memory loss", state: "Backlog", tone: "open" },
-        { id: "ENG-4495", title: "SPy codegen robustness: language traps that fail silently", state: "Backlog", tone: "open" },
-        { id: "ENG-4496", title: "IDP reliability and determinism in Quill2 builds", state: "Backlog", tone: "open" },
-        { id: "ENG-4497", title: "Excel book and API surface friction in Quill2 builds", state: "Backlog", tone: "open" },
+        { id: "ENG-4480", title: "Agent stability across long build sessions", state: "Backlog", tone: "open" },
+        { id: "ENG-4494", title: "Regressions, unauthorized changes, memory loss", state: "Backlog", tone: "open" },
+        { id: "ENG-4495", title: "SPy codegen robustness", state: "Backlog", tone: "open" },
+        { id: "ENG-4496", title: "IDP reliability and determinism", state: "Backlog", tone: "open" },
+        { id: "ENG-4497", title: "Excel book and API surface friction", state: "Backlog", tone: "open" },
+      ],
+    },
+    {
+      theme: "IDP & Excel at scale",
+      rows: [
+        { id: "KOG-11879", title: "JBI — timeout for IDP", state: "Backlog", tone: "open" },
+        { id: "ENG-4429", title: "Increase BDK Excel pod memory (Conectiv)", state: "Validation", tone: "prog" },
+        { id: "ENG-4672", title: "Quill flags a 12-page doc as a large file", state: "Todo", tone: "open" },
       ],
     },
     {
       theme: "Connections and environments",
       rows: [
-        { id: "INT-1521", title: "SFTP connection failing with no indicator why", state: "Validation", tone: "prog" },
-        { id: "INT-1511", title: "JBI | V2 — Epicor is not discovering BAQs", state: "Information Required", tone: "open" },
-        { id: "KOG-11842", title: "Mitie — UK instance of v2 for v1 process migration", state: "Backlog", tone: "open" },
+        { id: "INT-1521", title: "SFTP connection failing with no indicator", state: "Validation", tone: "prog" },
+        { id: "KOG-11842", title: "Mitie — v2 UK instance", state: "Backlog", tone: "open" },
       ],
     },
     {
-      theme: "IDP timeouts",
+      theme: "Run assistant, live automations & ops",
       rows: [
-        { id: "KOG-11879", title: "JBI — timeout for IDP", state: "Backlog", tone: "open" },
-        { id: "ENG-4672", title: "V2 — Quill struggles to read a 12-page doc, flags it as a large file", state: "Todo", tone: "open" },
-      ],
-    },
-    {
-      theme: "Run assistant and ops",
-      rows: [
-        { id: "KOG-11874", title: "JBI — Run Assistant can't add a mechanism to email on a business exception", state: "In progress", tone: "prog" },
-        { id: "ENG-4337", title: "Support managing triggers from Quill2", state: "Backlog", tone: "open" },
-        { id: "ENG-4669", title: "V2 feedback — live automations (from Rishabh)", state: "Backlog", tone: "open" },
+        { id: "KOG-11874", title: "Run Assistant — email on business exception", state: "In progress", tone: "prog" },
+        { id: "OC-1437", title: "Support more parallel runs", state: "Validation", tone: "prog" },
+        { id: "ENG-4504", title: "Conectiv on V2 — parallel runs", state: "Triage", tone: "open" },
+        { id: "ENG-4337", title: "Manage triggers from Quill2", state: "Backlog", tone: "open" },
+        { id: "ENG-4669", title: "V2 feedback — live automations", state: "Backlog", tone: "open" },
         { id: "OC-1448", title: "Claude service overloaded", state: "Triage", tone: "open" },
+      ],
+    },
+    {
+      theme: "Other / product feedback",
+      rows: [
+        { id: "ENG-3711", title: "Exception not raised when required field missing", state: "Information Required", tone: "open" },
+        { id: "KOG-11889", title: "Quill needs better Epicor book understanding", state: "Backlog", tone: "open" },
+        { id: "OC-1452", title: "On-call intake", state: "Triage", tone: "open" },
       ],
     },
   ],
   ticketsFootnote:
-    "Verbatim Linear titles. The Browser automation group (7 open: KOG-11908 filed today, ENG-4444/4445/4450/4451/4454, OC-1412) sits on the browser-automation-v2 / century / on-call tracks, so it is additional to the 22 open on the v2 Migration Blockers label. Closed on the label in the last 30 days: 52.",
+    "24 open on the v2 Migration Blockers label, by category. Browser automation (6: KOG-11908 filed today, ENG-4444/4445/4450/4451/4454) is a separate label, additional to the 24. Hover a ticket number for its title; full detail lives in Linear.",
 
   decisions: [], // hidden per Rishabh
 
   sources:
-    "Sources: migration tracker Working Sheet (75 processes, Jul 27) drives the estate, stage board, and journey endpoints; live Linear (Jul 27: 110 on the v2 Migration Blockers label, 22 open, 66 closed, plus the browser-automation and on-call tickets) drives the blocker burn-up and open lists. Net-new, push lanes, and the platform-issues list carry from the Jul 20 pull. Stage placements apply field corrections this week.",
+    "Sources: migration tracker Working Sheet (75 processes, Jul 27) drives the estate, stage board, and journey endpoints; live Linear (Jul 27: 112 on the v2 Migration Blockers label, 24 open, plus 6 browser-automation and the on-call tickets) drives the blocker burn-up and open lists. Net-new and push lanes carry from the Jul 20 pull; the platform-issues list was refreshed live on Jul 27 (four of the prior six issues have since closed). Stage placements apply field corrections this week.",
 };
 
 // Latest first. Append new weeks at the top.
