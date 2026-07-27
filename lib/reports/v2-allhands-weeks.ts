@@ -933,7 +933,7 @@ const WEEK_2026_07_27: V2Week = {
   ],
 
   ticketsDelta:
-    "Live Linear, Jul 27. Open on the v2 Migration Blockers label rose 19 → 24 (INT-1511 and others closed; new inflow on Conectiv and Quill2). Shown by category with ticket numbers below. Browser automation is a separate live cluster (6 open, one filed today).",
+    "Live Linear, Jul 27. Live production issues first, then the 24 open v2 Migration Blockers by category, then the browser-automation cluster (6, one filed today). Hover a ticket number for its title.",
   labelHealth: {
     label: "v2 Migration Blockers",
     asOf: "Jul 27",

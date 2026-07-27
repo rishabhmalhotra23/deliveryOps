@@ -379,7 +379,7 @@ export function V2MigrationClient() {
               </div>
             </>
           )}
-          {week.platformIssues.length > 0 && (
+          {!week.compactTickets && week.platformIssues.length > 0 && (
             <div className="glass-card rounded-2xl p-4 mb-6" style={{ borderColor: "rgba(226,75,74,0.35)" }}>
               <div className="text-[12px] font-semibold mb-2" style={{ color: "#A32D2D" }}>{week.platformIssuesTitle}</div>
               <div className="space-y-1.5">
@@ -456,8 +456,8 @@ export function V2MigrationClient() {
             </>
           )}
 
-          {/* Ticket health — single Linear label, live (added Jul 20) */}
-          {week.labelHealth && (
+          {/* Ticket health — single Linear label, live (added Jul 20); hidden when compact */}
+          {!week.compactTickets && week.labelHealth && (
             <>
               <SectionLabel>Ticket health · {week.labelHealth.label}</SectionLabel>
               <DeltaLine>Live Linear, {week.labelHealth.asOf}.</DeltaLine>
@@ -510,13 +510,28 @@ export function V2MigrationClient() {
             </>
           )}
 
-          {/* Open tickets */}
-          <SectionLabel>Open engineering tickets</SectionLabel>
+          {/* Tickets needing attention (compact) / Open engineering tickets */}
+          <SectionLabel>{week.compactTickets ? "Tickets needing attention" : "Open engineering tickets"}</SectionLabel>
           <DeltaLine>
             {week.ticketsDelta}{" "}
             <a href={LINEAR_BLOCKER_LABEL} target="_blank" rel="noreferrer" className="text-blue-700 dark:text-blue-400 border-b border-dotted border-blue-300 hover:border-solid">Linear label: v2 Migration Blockers</a>
           </DeltaLine>
           <div className="glass-card rounded-2xl p-5 mb-6">
+            {week.compactTickets && week.platformIssues.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between gap-2 bg-[var(--brand-seasalt)] border rounded-lg px-3 py-1.5 mb-1.5" style={{ borderColor: "rgba(226,75,74,0.35)" }}>
+                  <span className="text-[11px] uppercase tracking-wide font-bold" style={{ color: "#A32D2D" }}>Live production issues · V1 + platform</span>
+                  <span className="text-[10px] font-semibold text-[color:var(--muted-foreground)] whitespace-nowrap">{week.platformIssues.length} open</span>
+                </div>
+                {week.platformIssues.map((p) => (
+                  <div key={p.id} className="flex items-baseline gap-2 py-1.5 border-b border-[var(--brand-metal-line)] last:border-b-0 text-[12.5px] text-[color:var(--foreground)]">
+                    <Tik id={p.id} />
+                    <span className="leading-snug">{p.title}{p.note ? <span className={`${MUTED}`}> — {p.note}</span> : null}</span>
+                    <span className="ml-auto flex-none"><Pill tone={p.sevTone}>{p.sev} · {p.state}</Pill></span>
+                  </div>
+                ))}
+              </div>
+            )}
             {week.ticketGroups.map((g) => (
               <div key={g.theme}>
                 <div className="flex items-center justify-between gap-2 bg-[var(--brand-seasalt)] border border-[var(--brand-metal-line)] rounded-lg px-3 py-1.5 mt-4 mb-1.5 first:mt-0">
