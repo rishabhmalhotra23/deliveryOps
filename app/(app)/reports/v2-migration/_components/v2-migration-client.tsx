@@ -245,6 +245,24 @@ export function V2MigrationClient() {
           <p className={`text-[11px] ${MUTED} mt-2 leading-relaxed`}>{week.snapshotNote}</p>
         </section>
 
+        {/* V2 footprint — separate line so V1 and V2 numbers don't crowd one row */}
+        {week.v2Footprint && (
+        <section>
+          <SectionLabel>On or moving to V2</SectionLabel>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-2">
+            {week.v2Footprint.items.map((m) => (
+              <div key={m.label} className={m.hero ? "rounded-xl p-4" : "glass-card rounded-xl p-4"}
+                style={m.hero ? { background: "var(--brand-night)" } : undefined}>
+                <div className="text-3xl font-bold leading-none" style={{ color: m.hero ? "var(--brand-yellow)" : "var(--foreground)" }}>{m.value}</div>
+                <div className="text-xs font-semibold mt-2" style={{ color: m.hero ? "#D4D4D4" : "var(--foreground)" }}>{m.label}</div>
+                <div className="text-[11px] mt-0.5" style={{ color: m.hero ? "#A3A3A3" : "var(--muted-foreground)" }}>{m.sub}</div>
+              </div>
+            ))}
+          </div>
+          <p className={`text-[11px] ${MUTED} mt-2 leading-relaxed`}>{week.v2Footprint.note}</p>
+        </section>
+        )}
+
         {/* Net-new development */}
         <section>
           <SectionLabel>Net-new V2 development</SectionLabel>

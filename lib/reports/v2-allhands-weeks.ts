@@ -96,6 +96,9 @@ export interface V2Week {
   lede: string;
   snapshot: SnapshotMetric[];
   snapshotNote: string;
+  /** Optional second tile row (added Jul 27): keeps the V2 build-up on its own
+   *  line so V1 and V2 numbers don't crowd one row. Renders after the snapshot. */
+  v2Footprint?: { items: SnapshotMetric[]; note: string };
   netNewDelta: string;
   netNew: DevRow[];
   renewalsDelta: string;
@@ -801,14 +804,25 @@ const WEEK_2026_07_27: V2Week = {
     "75 processes have run on V1. As migration completes, 45 carry over to V2 and the rest retire with V1, many already retired. Of the 45, 39 are at or near the finish line (8 complete, 12 in customer UAT, 19 in parity testing) and 6 are blocked. Open blocker tickets ticked up from 19 to 22, the first uptick in the program, driven by Conectiv large-file handling and Quill2 build stability.",
 
   snapshot: [
-    { value: "75", label: "Built on V1", sub: "every process that ran on V1" },
-    { value: "56", label: "Live on V1", sub: "still production of record" },
-    { value: "20", label: "On V2 or in UAT", sub: "8 on V2 · 12 in customer UAT", hero: true },
-    { value: "45", label: "Carry over to V2", sub: "once migration completes" },
+    { value: "75", label: "Built on V1", sub: "every process that ran on V1", hero: true },
+    { value: "56", label: "Live on V1 today", sub: "still production of record" },
+    { value: "45", label: "Migrating to V2", sub: "V1 → V2 rebuilds" },
     { value: "25", label: "Retiring with V1", sub: "many already retired" },
+    { value: "5", label: "Already on V2 or custom", sub: "3 on V2 · 2 custom" },
   ],
   snapshotNote:
-    "The 75 are every process that ran on V1. As migration completes, 45 carry over to V2 and 25 retire with V1 (3 are already on V2, 2 are custom). Source: migration tracker, Jul 27.",
+    "The 75 V1-era processes: 45 migrate to V2, 25 retire with V1, 3 are already on V2, 2 are custom. Source: migration tracker (Excel), Jul 27.",
+  v2Footprint: {
+    items: [
+      { value: "11", label: "Live on V2", sub: "8 live · 3 pending commercial", hero: true },
+      { value: "15", label: "In customer UAT", sub: "with the customer" },
+      { value: "19", label: "In parity testing", sub: "validating vs V1" },
+      { value: "6", label: "In development", sub: "building on V2" },
+      { value: "6", label: "Blocked", sub: "engineering dependency" },
+    ],
+    note:
+      "57 processes are on or moving to V2 (45 V1→V2 migrations + 9 new builds + 3 already on V2), shown here by status. These run slightly above the 45-migration stage board below because they include the 9 new builds and the 3 already on V2. New builds are from the Projects board; the rest from the tracker (Excel).",
+  },
 
   netNewDelta: "Net-new V2 builds, not V1 migrations. Phases steady vs Jul 20.",
   netNew: [
