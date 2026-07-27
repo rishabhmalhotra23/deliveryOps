@@ -216,7 +216,7 @@ export function V2MigrationClient() {
           ))}
           <span className={`text-xs ${MUTED}`}>weekly snapshots · export as PNG for the All Hands deck</span>
         </div>
-        {!isLegacy && <ExportButtons reportRef={reportRef} weekKey={week.key} />}
+        {!isLegacy && <ExportButtons reportRef={reportRef} weekKey={weekKey} />}
       </div>
 
       {isLegacy ? <V2MigrationLegacy /> : (
