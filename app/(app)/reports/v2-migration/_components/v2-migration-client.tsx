@@ -3,7 +3,7 @@
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   WEEKS, LINEAR_ISSUE, LINEAR_BLOCKER_LABEL,
-  type V2Week, type JourneyData, type BoardChip,
+  type V2Week, type JourneyData, type BoardChip, type MetricDelta,
 } from "@/lib/reports/v2-allhands-weeks";
 import { V2MigrationLegacy } from "./v2-migration-legacy";
 
@@ -64,6 +64,28 @@ function SectionLabel({ children }: { children: ReactNode }) {
       <span style={{ color: "#A8B400" }}>✴</span>{children}
     </h2>
   );
+}
+/** Week-over-week movement badge. Tone comes from the data, not the sign of the
+ *  number: parity testing dropping by one is good when the process moved up a
+ *  stage, while blocked rising by one is bad. Literal hexes so the badge reads
+ *  the same in light mode, dark mode, and the PNG export. */
+function DeltaBadge({ delta, onDark = false }: { delta: MetricDelta; onDark?: boolean }) {
+  const tone =
+    delta.tone === "good"
+      ? { bg: onDark ? "rgba(29,158,117,0.22)" : "rgba(29,158,117,0.13)", fg: onDark ? "#5BC4A0" : "#177C5C" }
+      : delta.tone === "bad"
+      ? { bg: onDark ? "rgba(226,75,74,0.22)" : "rgba(226,75,74,0.13)", fg: onDark ? "#F08C8B" : "#B93A39" }
+      : { bg: onDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.05)", fg: onDark ? "#A3A3A3" : "var(--muted-foreground)" };
+  return (
+    <span className="inline-block text-[11px] font-semibold rounded-full px-[7px] py-[2px] align-middle whitespace-nowrap"
+      style={{ background: tone.bg, color: tone.fg }}>
+      {delta.text}
+    </span>
+  );
+}
+function SinceNote({ since }: { since?: string }) {
+  if (!since) return null;
+  return <span className={`text-[11px] font-normal ${MUTED}`}>· vs {since}</span>;
 }
 function DeltaLine({ children }: { children: ReactNode }) {
   return <p className={`text-[11px] ${MUTED} mb-3`}>{children}</p>;
@@ -231,12 +253,15 @@ export function V2MigrationClient() {
 
         {/* Delivery snapshot */}
         <section>
-          <SectionLabel>Delivery snapshot</SectionLabel>
+          <SectionLabel>Delivery snapshot <SinceNote since={week.snapshot.some((m) => m.delta) ? week.deltaSince : undefined} /></SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-2">
             {week.snapshot.map((m) => (
               <div key={m.label} className={m.hero ? "rounded-xl p-4" : "glass-card rounded-xl p-4"}
                 style={m.hero ? { background: "var(--brand-night)" } : undefined}>
-                <div className="text-3xl font-bold leading-none" style={{ color: m.hero ? "var(--brand-yellow)" : "var(--foreground)" }}>{m.value}</div>
+                <div className="text-3xl font-bold leading-none flex items-baseline gap-2" style={{ color: m.hero ? "var(--brand-yellow)" : "var(--foreground)" }}>
+                  {m.value}
+                  {m.delta && <DeltaBadge delta={m.delta} onDark={m.hero} />}
+                </div>
                 <div className="text-xs font-semibold mt-2" style={{ color: m.hero ? "#D4D4D4" : "var(--foreground)" }}>{m.label}</div>
                 <div className="text-[11px] mt-0.5" style={{ color: m.hero ? "#A3A3A3" : "var(--muted-foreground)" }}>{m.sub}</div>
               </div>
@@ -248,12 +273,15 @@ export function V2MigrationClient() {
         {/* V2 footprint — separate line so V1 and V2 numbers don't crowd one row */}
         {week.v2Footprint && (
         <section>
-          <SectionLabel>On or moving to V2</SectionLabel>
+          <SectionLabel>On or moving to V2 <SinceNote since={week.v2Footprint.items.some((m) => m.delta) ? week.deltaSince : undefined} /></SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-2">
             {week.v2Footprint.items.map((m) => (
               <div key={m.label} className={m.hero ? "rounded-xl p-4" : "glass-card rounded-xl p-4"}
                 style={m.hero ? { background: "var(--brand-night)" } : undefined}>
-                <div className="text-3xl font-bold leading-none" style={{ color: m.hero ? "var(--brand-yellow)" : "var(--foreground)" }}>{m.value}</div>
+                <div className="text-3xl font-bold leading-none flex items-baseline gap-2" style={{ color: m.hero ? "var(--brand-yellow)" : "var(--foreground)" }}>
+                  {m.value}
+                  {m.delta && <DeltaBadge delta={m.delta} onDark={m.hero} />}
+                </div>
                 <div className="text-xs font-semibold mt-2" style={{ color: m.hero ? "#D4D4D4" : "var(--foreground)" }}>{m.label}</div>
                 <div className="text-[11px] mt-0.5" style={{ color: m.hero ? "#A3A3A3" : "var(--muted-foreground)" }}>{m.sub}</div>
               </div>
@@ -345,13 +373,17 @@ export function V2MigrationClient() {
           </div>
 
           {/* Board */}
-          <SectionLabel>Where all {week.board.reduce((s, r) => s + r.count, 0)} stand · ▲ moved this week</SectionLabel>
+          <SectionLabel>
+            Where all {week.board.reduce((s, r) => s + r.count, 0)} stand · ▲ moved this week
+            <SinceNote since={week.board.some((r) => r.delta) ? week.deltaSince : undefined} />
+          </SectionLabel>
           <DeltaLine>{week.boardDelta}</DeltaLine>
           <div className="glass-card rounded-2xl p-5 mb-6">
             {week.board.map((row, i) => (
               <div key={row.stage} className={`flex gap-3 py-2.5 items-start ${i < week.board.length - 1 ? "border-b border-[var(--brand-metal-line)]" : ""}`}>
-                <span className="flex-none w-[130px] text-[12px] font-semibold pt-0.5" style={{ color: row.color === "#5BC4A0" ? "#1D9E75" : row.color === "#EF9F27" ? "#BA7517" : row.color === "#E24B4A" ? "#A32D2D" : row.color === "#378ADD" ? "#185FA5" : row.color === "#1D9E75" ? "#0F6E56" : row.color }}>
+                <span className="flex-none w-[168px] text-[12px] font-semibold pt-0.5" style={{ color: row.color === "#5BC4A0" ? "#1D9E75" : row.color === "#EF9F27" ? "#BA7517" : row.color === "#E24B4A" ? "#A32D2D" : row.color === "#378ADD" ? "#185FA5" : row.color === "#1D9E75" ? "#0F6E56" : row.color }}>
                   {row.stage} · {row.count}
+                  {row.delta && <> <DeltaBadge delta={row.delta} /></>}
                 </span>
                 {row.chips && row.chips.length > 0 ? (
                   <span className="flex flex-wrap gap-1.5">

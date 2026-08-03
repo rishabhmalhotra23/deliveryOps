@@ -15,7 +15,14 @@ export const LINEAR_BLOCKER_LABEL =
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export interface SnapshotMetric { value: string; label: string; sub: string; hero?: boolean; }
+/** Week-over-week movement badge (added Aug 3). `tone` is an editorial
+ *  judgement, not derived from the sign: parity testing dropping by one is
+ *  good when the process moved up a stage, while blocked rising by one is bad.
+ *  Omit `delta` entirely when a figure did not move — a row of "=" badges is
+ *  noise. `since` is set once per row, not per tile. */
+export interface MetricDelta { text: string; tone: "good" | "bad" | "flat"; }
+
+export interface SnapshotMetric { value: string; label: string; sub: string; hero?: boolean; delta?: MetricDelta; }
 
 export interface DevRow { process: string; owner: string; phase: string; update: string; tone?: "off" | "new"; }
 
@@ -42,7 +49,7 @@ export interface JourneyData {
 }
 
 export interface BoardChip { name: string; note?: string; mover?: "up" | "down"; }
-export interface BoardRow { stage: string; count: number; color: string; chips?: BoardChip[]; summary?: string; }
+export interface BoardRow { stage: string; count: number; color: string; chips?: BoardChip[]; summary?: string; delta?: MetricDelta; }
 
 export interface PushCard { title: string; color: string; body: string; }
 export interface PlatformIssue { id: string; title: string; sev: string; sevTone: "urgent" | "high"; state: string; note?: string; }
@@ -99,6 +106,9 @@ export interface V2Week {
   /** Optional second tile row (added Jul 27): keeps the V2 build-up on its own
    *  line so V1 and V2 numbers don't crowd one row. Renders after the snapshot. */
   v2Footprint?: { items: SnapshotMetric[]; note: string };
+  /** Comparison point for every `MetricDelta` in this week, e.g. "Jul 27"
+   *  (added Aug 3). Rendered once per row so a badge is never ambiguous. */
+  deltaSince?: string;
   /** When true (added Jul 27), the open-tickets section renders compact:
    *  category + ticket numbers only, no per-ticket title/state rows. */
   compactTickets?: boolean;
@@ -1037,20 +1047,21 @@ const WEEK_2026_08_03: V2Week = {
     { value: "56", label: "Live on V1 today", sub: "still production of record" },
     { value: "45", label: "Migrating to V2", sub: "V1 → V2 rebuilds" },
     { value: "25", label: "Retiring with V1", sub: "many already retired" },
-    { value: "5", label: "Already on V2 or custom", sub: "3 on V2 · 2 custom" },
+    { value: "5", label: "Outside the program", sub: "never a V1 migration" },
   ],
   snapshotNote:
-    "The 75 V1-era processes: 45 migrate to V2, 25 retire with V1, 3 are already on V2, 2 are custom. Estate unchanged from Jul 27. Source: migration tracker (Excel), Aug 3.",
+    "This row is the V1 estate only: of the 75, 45 migrate and 25 retire with V1, and 5 were never V1 migrations (3 built on V2 from the start, 2 custom off-platform). 45 + 25 + 5 = 75. All V2 counting lives on the next row, so nothing here should be read as a V2 total. No tile moved this week — the estate is fixed and the movement is inside it. Source: migration tracker (Excel), Aug 3.",
+  deltaSince: "Jul 27",
   v2Footprint: {
     items: [
-      { value: "13", label: "Live on V2", sub: "9 live · 4 pending commercial", hero: true },
-      { value: "14", label: "In customer UAT", sub: "with the customer" },
-      { value: "18", label: "In parity testing", sub: "validating vs V1" },
+      { value: "13", label: "Live on V2", sub: "9 live · 4 pending commercial", hero: true, delta: { text: "+2", tone: "good" } },
+      { value: "14", label: "In customer UAT", sub: "2 moved up to live", delta: { text: "−1 ↑", tone: "good" } },
+      { value: "18", label: "In parity testing", sub: "1 moved up to UAT", delta: { text: "−1 ↑", tone: "good" } },
       { value: "6", label: "In development", sub: "building on V2" },
       { value: "6", label: "Blocked", sub: "customer or engineering dependency" },
     ],
     note:
-      "57 processes are on or moving to V2 (45 V1→V2 migrations + 9 new builds + 3 already on V2), shown here by status. Live on V2 rose 11 → 13 as Plunkett Payments cut over and Scan Health Enrollment finished build. These run above the 45-migration stage board below because they include the 9 new builds and the 3 already on V2. New builds are from the Projects board; the rest from the tracker (Excel).",
+      "This row is the whole V2 estate: 57 processes are on or moving to V2 — 45 V1→V2 migrations, 9 net-new V2 builds, and the 3 built on V2 from the start. Live on V2 rose 11 → 13 as Plunkett Payments cut over and Scan Health Enrollment finished build; the 13 is 6 migrations cut over + 4 build-complete pending commercial + the 3 always on V2. These totals run above the 45-process stage board below, which covers the migrations only. New builds are from the Projects board; the rest from the tracker (Excel).",
   },
 
   netNewDelta: "Net-new V2 builds, not V1 migrations. Phases carry from the Jul 27 pull.",
@@ -1093,6 +1104,7 @@ const WEEK_2026_08_03: V2Week = {
   board: [
     {
       stage: "Live on V2", count: 10, color: "#1D9E75",
+      delta: { text: "+2", tone: "good" },
       chips: [
         { name: "Norco Packslip" },
         { name: "Plunkett ×3", note: "payments cut over this week", mover: "up" },
@@ -1105,6 +1117,7 @@ const WEEK_2026_08_03: V2Week = {
     },
     {
       stage: "In customer UAT", count: 11, color: "#5BC4A0",
+      delta: { text: "−1 ↑", tone: "good" },
       chips: [
         { name: "JBI ×5", note: "Merch, Design, QSR, PIR v2, Onsite", mover: "up" },
         { name: "TTX ×3", note: "AP, brake AR, goods receipt" },
@@ -1115,6 +1128,7 @@ const WEEK_2026_08_03: V2Week = {
     },
     {
       stage: "Parity testing", count: 18, color: "#378ADD",
+      delta: { text: "−1 ↑", tone: "good" },
       chips: [
         { name: "Wipro FSS ×12", note: "testing now" },
         { name: "Norco ×3", note: "AR, Safety, Solar Winds" },
