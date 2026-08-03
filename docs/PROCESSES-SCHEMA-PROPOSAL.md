@@ -13,6 +13,12 @@ Tracker: [MONDAY-DECOMMISSION-LOG.md](./MONDAY-DECOMMISSION-LOG.md) step 1.1.
 | TTV | Derived from kickoff to go-live, never stored as a Monday formula | 2026-08-03 |
 | Value | Manual per-process entry in DeliveryOps | 2026-08-03 |
 | V2 migration | First-class, because the V2 migration sheet driving the all-hands deck is the next deliverable | 2026-08-03 |
+| Edit surface | A drawer, one process at a time. No editable grid. | 2026-08-03 (step 1.5) |
+| Freshness | `reviewed_at` / `reviewed_by`, so confirming a row is still accurate counts without being an edit | 2026-08-03 (step 1.5) |
+| Inbound signal | Slack / Linear / mail never write directly. They propose, via `process_suggestions`. | 2026-08-03 (step 1.5) |
+
+IA and layout decisions live in [MONDAY-DECOMMISSION-LOG.md](./MONDAY-DECOMMISSION-LOG.md) and the
+mockup at [mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html).
 
 ## What the archive actually says
 
@@ -88,7 +94,7 @@ Monday `Current Phase` -> `phase` + `blocked_on` + `work_mode`:
 | Churned | 12 | – | none | – (lifecycle `churned`) |
 | Customer Handling exceptions | 11 | `m5_exception_handling` | `customer` | `exception_handling` |
 | M3 - Testing/UAT | 10 | `m3_testing_uat` | none | – |
-| Waiting for Customer | 9 | unchanged | `customer` | – |
+| Waiting for Customer | 9 | **null, not "unchanged"** — see below | `customer` | – |
 | Support | 8 | – | none | `support` |
 | Enhancement | 6 | – | none | `enhancement` |
 | Live in v2 | 4 | – | none | `steady_state` (+ `migration_stage = live_on_v2`) |
@@ -106,6 +112,42 @@ current report's health mix meaningless.
 
 The raw Monday strings are preserved in `source_raw jsonb` for reconciliation.
 They are never read by the UI.
+
+> **Correction, 2026-08-03 (step 1.5): "phase unchanged" is not achievable.** Monday's `Current Phase`
+> is a single status column, so a row set to "Waiting for Customer" has had its milestone **overwritten**.
+> There is no prior phase to keep. Import must write `phase = null`, `blocked_on = customer`, and flag
+> the row for a human pass. This matters more than the row count suggests: 7 of the 18 currently-active
+> rows are in this state, so a third of the live board needs its milestone re-entered by hand.
+
+### The three views, exact
+
+Rishabh, 2026-08-03: **three layouts, not four.** Everything the team is actively doing sits on one
+screen, including V2 migration effort. `Project Status` partitions the 146 rows cleanly:
+
+| View | Monday `Project Status` | n |
+|---|---|---|
+| **Active work** (default; the weekly review screen) | Backlog 10 + Upcoming 2 + In Progress 14 + On Hold 4 | **30** |
+| **Delivered** | Live | **71** |
+| **Archive** | Inactive | **45** |
+| | | 146 |
+
+Lane mix inside Active work (30): Pipeline 12, Testing/UAT 10, Waiting for Customer 7, Development 1,
+and **Discovery 0**. Health across the 18 non-pipeline rows is On Track 13, On Hold 4, Off Track 1, with
+"at risk" never used — so health carries almost no signal on active work and card colour is better
+derived from staleness plus blocked-state.
+
+Phase mix inside Delivered (71): Exception Handling 37 + Customer Handling exceptions 11 = 48,
+Support 8 + Enhancement 6 = 14, Live in v2 4 + Migrated to v2 1 = 5.
+
+**Two data defects found while deriving these, both affecting headline numbers:**
+
+- **4 rows marked `Live` are not live.** Their phase reads Pre-Kickoff (1), POV complete (1) or
+  Waiting for Customer (2). The delivered count is overstated by 4 today.
+- **4 rows marked `Inactive` are "POV complete, Waiting for next steps".** A POV awaiting a decision is
+  live pipeline, not archive. Corrected, Active work is **34** and Archive is **41**.
+
+Import should not silently reclassify these 8. Flag them and let a human decide, consistent with the
+"surface both values" rule.
 
 ## DDL
 
@@ -180,7 +222,17 @@ create table processes (
   -- audit
   updated_by               text,
   created_at               timestamptz not null default now(),
-  updated_at               timestamptz not null default now()
+  updated_at               timestamptz not null default now(),
+
+  -- freshness (step 1.5). Confirming a row is still accurate is NOT an edit;
+  -- without this an unchanged row can never look fresh.
+  reviewed_at              timestamptz,
+  reviewed_by              text,
+
+  -- per-field provenance (step 1.5). Needed the moment a human edit and an
+  -- inbound Slack/Linear suggestion can disagree; this is what lets the human win.
+  -- shape: { "<column>": { "by": "rishabh|slack|linear|import", "at": "<ts>" } }
+  field_provenance         jsonb not null default '{}'::jsonb
 );
 
 create unique index processes_source_item_idx on processes (source_item_id)
@@ -192,8 +244,47 @@ create index processes_stage_idx     on processes (migration_stage);
 create index processes_k2_idx        on processes (k2_process_id);
 create index processes_blocked_idx   on processes (is_blocked) where is_blocked;
 
+create index processes_review_idx on processes (reviewed_at nulls first);
+
 alter table processes enable row level security;   -- service-role only, matches 0016
 ```
+
+### Companion table: `process_suggestions` (step 1.5)
+
+Rishabh's plan is to feed process updates from Slack, Linear and email. Those sources must not write
+into `processes` directly — a wrong auto-update is worse than a stale row, because a stale row is at
+least visibly stale. They propose; a human accepts.
+
+```sql
+create type suggestion_status as enum ('open', 'accepted', 'rejected', 'superseded');
+
+create table process_suggestions (
+  id              uuid primary key default gen_random_uuid(),
+  process_id      uuid not null references processes(id) on delete cascade,
+  field           text not null,                 -- column name on processes
+  current_value   text,                          -- as rendered at proposal time
+  suggested_value text,
+  source          text not null,                 -- 'slack' | 'linear' | 'gmail' | 'k2' | 'agent'
+  source_ref      text,                          -- permalink / issue id / message ts
+  rationale       text,                          -- why the source thinks this
+  confidence      numeric(3,2),
+  status          suggestion_status not null default 'open',
+  resolved_by     text,
+  resolved_at     timestamptz,
+  created_at      timestamptz not null default now()
+);
+
+create index process_suggestions_open_idx
+  on process_suggestions (process_id) where status = 'open';
+
+alter table process_suggestions enable row level security;
+```
+
+Accepting a suggestion writes the field, stamps `field_provenance`, and sets `reviewed_at`. Open
+suggestions surface as a count badge on the board card and a strip above the lanes.
+
+**Open question, needs Rishabh:** when a suggestion arrives for a field a human set recently, drop it
+silently or surface both values? Recommendation is surface both — the human may be out of date.
 
 ### Auto vs human
 
@@ -250,9 +341,99 @@ Monday `Timeline` (redundant), `Delivered Value` (empty), `TTV (Days)` formula
 (empty via API, now generated), and Monday's blended `Current Phase` string as a
 user-facing value.
 
+## The rest of migration 0021 — NPS and the Customers board
+
+Settled at step 1.5 so 0021 is one migration rather than three. Activity Log is **archived, not
+migrated**: nothing was ever closed on it (43/43 Open, 0/43 resolved dates, 0/43 owners), so 0021 drops
+`monday_activities` and the customer 360 Activity tab.
+
+Correction to the 2026-08-03 relation finding that this depends on: `board_relation` cells carry an empty
+`text` field but a populated `linked_items` array. NPS is **87/87** linked to the Customers board and
+Activity Log was **43/43**. There is no name-matching pass to write.
+
+### `nps_responses` — 87 rows
+
+```sql
+create table nps_responses (
+  id                   uuid primary key default gen_random_uuid(),
+  customer_id          uuid not null references customers(id) on delete cascade,
+  respondent_name      text not null,            -- Monday item name, 87/87
+  respondent_type      text,                     -- 77/87
+  quarter              text not null,            -- 87/87, Q2'24 .. Q4'25
+  response_date        date not null,            -- 87/87
+  score                smallint not null check (score between 0 and 10),
+  product_satisfaction text,                     -- 83/87
+  feedback             text,                     -- 30/87
+  source_item_id       text unique,              -- idempotent re-import
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now()
+);
+create index nps_responses_customer_idx on nps_responses (customer_id);
+create index nps_responses_quarter_idx  on nps_responses (quarter);
+alter table nps_responses enable row level security;
+```
+
+`NPS Category` (Promoter / Passive / Detractor) is **derived from `score`**, not stored.
+`internal_profiles.nps_score` becomes derived from this table and stops being hand-set. Entry is manual —
+there is no survey integration — so the customer 360 NPS tab needs an "Add response" form.
+
+### Customers board — the 9 new columns
+
+```sql
+-- the four-axis scorecard. 41/41 filled in Monday. "Evaluating" (15-17 rows
+-- each, mostly churned/dropped/POV accounts) imports as NULL = not assessed.
+alter table internal_profiles
+  add column renewal_health       smallint check (renewal_health       between 1 and 3),
+  add column pipeline_health      smallint check (pipeline_health      between 1 and 3),
+  add column champion_health      smallint check (champion_health      between 1 and 3),
+  add column exec_sponsor_health  smallint check (exec_sponsor_health  between 1 and 3),
+  add column v2_demo_completed_at date;          -- a date, not the yes/no dropdown
+
+-- Monday's single "Account Type" column conflated two orthogonal axes.
+-- Rishabh, 2026-08-03: account type is Direct or Partner managed; deal type is
+-- Long term or POV. They are separate fields and neither overlaps custom_category.
+create type account_type as enum ('direct', 'partner_managed');
+create type deal_type    as enum ('long_term', 'pov');
+
+alter table customers
+  add column account_type account_type,
+  add column deal_type    deal_type;
+
+alter table profiles
+  add column company_revenue    text not null default '',   -- 41/41, e.g. "~$3.8B"
+  add column company_focus      text not null default '',   -- 41/41
+  add column company_priorities text not null default '';   -- 41/41
+```
+
+Dropped rather than migrated, with reasons:
+
+**Import consequence of the account/deal split.** Monday's one column holds Partner 9, Long Term 25,
+POV 7. Those are values from two different axes, so no row carries both. Import can only set:
+`Partner` → `account_type = partner_managed` (deal type unknown), `Long Term` → `deal_type = long_term`
+(account type unknown), `POV` → `deal_type = pov` (account type unknown). **Every one of the 41 rows will
+be missing one of the two fields**, and the `Partner` dropdown (11/41 filled) only partly disambiguates.
+This needs a one-time human pass over 41 rows, which is cheap, but it must be planned rather than
+discovered.
+
+| Field | Why |
+|---|---|
+| Monday `Customer Health` | Blended, same defect as process `Health` — Churned and Dropped are lifecycle, not health. Rishabh's direction is that customer health becomes **auto-derived** from signals across systems with rules set later; the four manual axes remain as inputs, because champion and exec-sponsor strength are not derivable from any system. |
+| Monday `NPS Score` (17/41) | Stale copy. Derive from `nps_responses`. |
+| Monday board group | Already mirrored in `customers.lifecycle_group`, which 0005 backfilled into `custom_category`. **0021 should drop `lifecycle_group`** — it is Monday's field and becomes dead on cutover. |
+| `internal_profiles.health_score int` 0-100 | Not from Monday, but superseded. A 0-100 number nobody can defend. |
+
+Already native, do not re-add: ARR (`profiles.arr`), Industry, Employees, Renewal Date, AE
+(`customers.ae_owner`), Partner, TAM/FDE. Derived from `processes`, never stored: completed project
+count, in-progress count, last delivery date, and the AI "Summarize updates" text.
+
 ## Open, not yet decided
 
 - Does a `project` grouping ever get added above `processes`? Deferred; the
   option is preserved because `processes` has no parent FK to unwind.
 - De-dup rule when a seeded V2 row and a Monday row disagree on `go_live_date`.
 - Whether `retired` processes stay visible in the customer 360 by default.
+- `account_type` (Partner / Long Term / POV) overlaps `custom_category` at two values,
+  "Partner Managed" and "POV". Either it is contract shape and category is lifecycle and both stay, or
+  one is redundant. Not resolvable from the archive.
+- Suggestion conflict rule: when an inbound suggestion targets a field a human set recently, drop it
+  silently or surface both values? Recommendation is surface both.

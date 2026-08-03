@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeliveryOps — the whole platform</title>
+<style>
+:root{
+  --brand-yellow:#F2FF70; --brand-yellow-soft:rgba(242,255,112,.18); --brand-yellow-line:rgba(242,255,112,.55);
+  --brand-metal:#A3A3A3; --brand-metal-line:#E5E5E5; --brand-gray:#737373;
+  --brand-night:#171717; --brand-seasalt:#FAFAFA; --brand-canvas:#F4F4F2;
+  --glass-bg:rgba(255,255,255,.75); --glass-border:rgba(0,0,0,.08);
+  --glass-inner-glow:inset 0 0 0 1px rgba(255,255,255,.90);
+  --font-display:"Inter Tight",system-ui,sans-serif;
+  --font-body:Inter,system-ui,-apple-system,sans-serif;
+  --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--brand-canvas);color:var(--brand-night);font-family:var(--font-body);
+  font-size:14px;line-height:1.5;
+  background-image:radial-gradient(60rem 60rem at 20% 20%,rgba(242,255,112,.045),transparent),
+                   radial-gradient(60rem 60rem at 80% 80%,rgba(23,23,23,.03),transparent)}
+.wrap{max-width:1280px;margin:0 auto;padding:30px 26px 90px}
+.glass{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;
+  box-shadow:var(--glass-inner-glow),0 1px 2px rgba(0,0,0,.04);backdrop-filter:blur(8px)}
+.pad{padding:18px}
+.eyebrow{font-family:var(--font-display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-gray)}
+.mark::before{content:"✴";color:var(--brand-yellow);margin-right:7px;font-size:11px;-webkit-text-stroke:.4px var(--brand-night)}
+h1{font-family:var(--font-display);font-size:33px;line-height:1.08;margin:6px 0 8px;letter-spacing:-.02em}
+h2{font-family:var(--font-display);font-size:19px;margin:0 0 5px;letter-spacing:-.01em}
+h3{font-family:var(--font-display);font-size:13.5px;margin:0 0 9px}
+.sub{color:var(--brand-gray);max-width:80ch}
+.data-label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brand-gray);font-weight:600}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:999px;
+  border:1px solid var(--brand-metal-line);background:#fff;white-space:nowrap}
+.chip.dark{background:var(--brand-night);color:var(--brand-seasalt);border-color:var(--brand-night)}
+.chip.y{background:var(--brand-yellow);border-color:var(--brand-night);font-weight:600}
+.chip.soft{background:var(--brand-yellow-soft);border-color:var(--brand-yellow-line)}
+.chip.ok{color:var(--ok);border-color:#bbf7d0;background:#f0fdf4}
+.chip.warn{color:var(--warn);border-color:#fde68a;background:#fffbeb}
+.chip.bad{color:var(--bad);border-color:#fecaca;background:#fef2f2}
+.chip.later{border-style:dashed;color:var(--brand-gray)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--brand-gray);
+  font-weight:600;padding:7px 9px;border-bottom:1px solid var(--brand-metal-line)}
+td{padding:8px 9px;border-bottom:1px solid rgba(0,0,0,.05);vertical-align:top}
+.tabs{display:flex;gap:6px;margin:24px 0 20px;flex-wrap:wrap;position:sticky;top:0;z-index:40;
+  padding:10px 0;background:linear-gradient(var(--brand-canvas) 72%,transparent)}
+.tabs button{font-family:var(--font-display);font-size:12.5px;border:1px solid var(--glass-border);
+  background:var(--glass-bg);padding:8px 15px;border-radius:999px;cursor:pointer;color:var(--brand-night)}
+.tabs button[aria-selected=true]{background:var(--brand-night);color:var(--brand-seasalt);border-color:var(--brand-night)}
+.panel{display:none}.panel.on{display:block}
+.note{border-left:2px solid var(--brand-yellow-line);background:var(--brand-yellow-soft);
+  padding:11px 14px;border-radius:0 10px 10px 0;font-size:12.5px;margin:13px 0}
+.kill{border-left:2px solid #fecaca;background:#fef2f2;padding:11px 14px;border-radius:0 10px 10px 0;font-size:12.5px;margin:13px 0}
+ul.tight{margin:6px 0 0;padding-left:18px}ul.tight li{margin:3px 0}
+/* ── map ── */
+.tier{display:grid;gap:11px;margin-bottom:11px}
+.tierlab{display:flex;align-items:center;gap:10px;margin:20px 0 9px}
+.tierlab .ln{flex:1;height:1px;background:var(--brand-metal-line)}
+.box{border:1px solid var(--glass-border);border-radius:13px;background:#fff;padding:13px 15px}
+.box .t{font-family:var(--font-display);font-size:14px;margin-bottom:3px}
+.box .d{font-size:11.5px;color:var(--brand-gray);line-height:1.45}
+.box.src{background:var(--brand-seasalt);border-style:dashed}
+.box.core{background:var(--brand-night);color:var(--brand-seasalt);border-color:var(--brand-night)}
+.box.core .d{color:#b4b4c4}
+.box.surf{background:#fff;border-top:2px solid var(--brand-yellow)}
+.box.later{background:transparent;border-style:dashed;opacity:.72}
+.arrows{text-align:center;color:var(--brand-metal);font-size:15px;letter-spacing:.5em;margin:2px 0 4px}
+.g5{grid-template-columns:repeat(5,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
+/* ── flow ── */
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:9px}
+.viewcard{border-radius:14px;padding:15px;border:1px solid var(--glass-border);background:#fff}
+.viewcard.a{border-top:3px solid var(--brand-night)}
+.viewcard.b{border-top:3px solid var(--ok)}
+.viewcard.c{border-top:3px solid var(--brand-metal)}
+.viewcard .n{font-family:var(--font-display);font-size:30px;letter-spacing:-.02em;line-height:1}
+.gate{display:grid;place-items:center;font-size:11px;color:var(--brand-gray);text-align:center;padding:0 4px;min-width:96px}
+.gate .ar{font-size:19px;color:var(--brand-night)}
+.lane{background:var(--brand-seasalt);border-radius:9px;padding:8px 10px;margin-top:7px;font-size:11.5px;
+  display:flex;justify-content:space-between;gap:8px}
+.lane b{font-weight:600}
+/* ── journey ── */
+.step{display:grid;grid-template-columns:38px 1fr;gap:13px;padding:13px 0;border-bottom:1px solid rgba(0,0,0,.06)}
+.step:last-child{border-bottom:0}
+.step .num{width:30px;height:30px;border-radius:50%;background:var(--brand-night);color:var(--brand-yellow);
+  display:grid;place-items:center;font-family:var(--font-display);font-size:13px}
+.step .h{font-family:var(--font-display);font-size:14px;margin-bottom:3px}
+.step .b{font-size:12.5px;color:var(--brand-gray)}
+.step .b b{color:var(--brand-night);font-weight:600}
+/* ── decisions ── */
+.dec{display:grid;grid-template-columns:26px 1fr 128px;gap:12px;align-items:start;padding:11px 0;
+  border-bottom:1px solid rgba(0,0,0,.06)}
+.dec:last-child{border-bottom:0}
+.dec .ico{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:12px;
+  background:var(--brand-yellow-soft);border:1px solid var(--brand-yellow-line)}
+.dec.done .ico{background:#f0fdf4;border-color:#bbf7d0;color:var(--ok)}
+.dec .q{font-size:12.5px}
+.dec .q b{font-family:var(--font-display);font-weight:600}
+footer.f{margin-top:32px;color:var(--brand-gray);font-size:12px}
+@media(max-width:1050px){.g5,.g4,.g3,.g2{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.gate{min-height:44px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="eyebrow mark">Monday decommission · step 1.5 · platform walkthrough</div>
+<h1>DeliveryOps, end to end</h1>
+<p class="sub">Five short views. Read the tabs in order and you have the whole thing. Detail and evidence
+live in <span class="mono">docs/mockups/ia-step-1.5.html</span>; this is the version to approve or push
+back on.</p>
+
+<div class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-t="v1">1 · The one-liner</button>
+  <button role="tab" aria-selected="false" data-t="v2">2 · Platform map</button>
+  <button role="tab" aria-selected="false" data-t="v3">3 · How a process moves</button>
+  <button role="tab" aria-selected="false" data-t="v4">4 · Your Monday morning</button>
+  <button role="tab" aria-selected="false" data-t="v5">5 · Decisions & sequence</button>
+</div>
+
+<!-- ═══════════ 1 ═══════════ -->
+<section class="panel on" id="v1">
+  <div class="glass pad">
+    <h2>What DeliveryOps is, in one sentence</h2>
+    <p style="font-family:var(--font-display);font-size:23px;line-height:1.35;letter-spacing:-.01em;margin:10px 0 4px;max-width:44ch">
+      One row per process. Every surface is a view of those rows.</p>
+    <p class="sub" style="margin:0">That is the whole design. Today the app has five separate read paths
+    into <span class="mono">monday_projects</span>, two hand-transcribed literal files, and a report that
+    labels itself "live" while reading neither. The fix is not more pages — it is one owned table and
+    views over it.</p>
+  </div>
+
+  <div class="g3 tier" style="margin-top:16px">
+    <div class="glass pad">
+      <div class="data-label">Today</div>
+      <h3 style="margin-top:6px">Monday is the pen, DeliveryOps is the photocopy</h3>
+      <p style="font-size:12.5px;color:var(--brand-gray);margin:0">Every write path in the repo points
+      outward. <span class="mono">lib/agent/prompts.ts</span> literally tells the agent "FDE assignments
+      are not writable, update Monday." A photocopy goes stale the first time someone edits the original.</p>
+    </div>
+    <div class="glass pad">
+      <div class="data-label">After</div>
+      <h3 style="margin-top:6px">DeliveryOps is the pen</h3>
+      <p style="font-size:12.5px;color:var(--brand-gray);margin:0">A process is created, edited and closed
+      here. Slack, Linear, mail and Kognitos <b>propose</b> changes; a human accepts them. Monday is
+      switched off, not mirrored.</p>
+    </div>
+    <div class="glass pad">
+      <div class="data-label">The test it has to pass</div>
+      <h3 style="margin-top:6px">Nobody reopens Monday</h3>
+      <p style="font-size:12.5px;color:var(--brand-gray);margin:0">Not "the report renders". If a single
+      person still edits a board because DeliveryOps cannot express something, the migration failed and
+      the data forks. That is why the edit surface came before the schema was finalised.</p>
+    </div>
+  </div>
+
+  <div class="glass pad" style="margin-top:16px">
+    <h3>Vocabulary, fixed this session</h3>
+    <table>
+      <tr><th style="width:180px">Say</th><th>Not</th><th>Because</th></tr>
+      <tr><td><b>process</b></td><td>project, deliverable, automation</td><td>Your call. One word across schema, code and UI. <span class="mono">monday_projects</span> → <span class="mono">processes</span>, <span class="mono">ProjectDetailPanel</span> → <span class="mono">ProcessDrawer</span>, <span class="mono">loadActiveProjects</span> → <span class="mono">loadActiveProcesses</span>.</td></tr>
+      <tr><td><b>account type</b></td><td rowspan="2">"Account Type" as one field</td><td>Direct or Partner managed.</td></tr>
+      <tr><td><b>deal type</b></td><td>Long term or POV. Monday conflated these into one column; the import must split it.</td></tr>
+      <tr><td><b>active work</b></td><td>in-flight</td><td>Includes Pipeline and On&nbsp;Hold, per your layout. "In-flight" excluded them and that is how I miscounted earlier.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════ 2 ═══════════ -->
+<section class="panel" id="v2">
+  <div class="glass pad" style="margin-bottom:6px">
+    <h2>Platform map</h2>
+    <p class="sub" style="margin:0">Three tiers. Signals come in at the top, one table in the middle,
+    surfaces at the bottom. Nothing at the bottom owns data.</p>
+  </div>
+
+  <div class="tierlab"><span class="data-label">Signals in — propose, never write</span><div class="ln"></div></div>
+  <div class="tier g5">
+    <div class="box src"><div class="t">Slack</div><div class="d">channel chatter, go-live mentions</div></div>
+    <div class="box src"><div class="t">Linear</div><div class="d">ticket closed, blocked, moved</div></div>
+    <div class="box src"><div class="t">Gmail</div><div class="d">UAT sign-off, customer replies</div></div>
+    <div class="box src"><div class="t">Kognitos</div><div class="d">real runs, exceptions <span class="chip bad" style="font-size:9px;padding:1px 5px">PAT blocked</span></div></div>
+    <div class="box src"><div class="t">Salesforce</div><div class="d">ARR, renewals, pipeline</div></div>
+  </div>
+  <div class="arrows">↓ ↓ ↓ ↓ ↓</div>
+  <div class="tier" style="grid-template-columns:1fr">
+    <div class="box" style="background:var(--brand-yellow-soft);border-color:var(--brand-yellow-line)">
+      <div class="t">Suggestion queue &nbsp;<span class="mono" style="font-weight:400">process_suggestions</span></div>
+      <div class="d" style="color:var(--brand-night)">Field, current value, suggested value, source, link, confidence. Accepting writes the field and stamps who or what set it. <b>Conflicts always show both values</b> — your call, applied everywhere: inbound suggestions, sync-vs-manual, and duplicates at import.</div>
+    </div>
+  </div>
+  <div class="arrows">↓</div>
+
+  <div class="tierlab"><span class="data-label">The record — one table, one grain</span><div class="ln"></div></div>
+  <div class="tier g3">
+    <div class="box core"><div class="t">processes</div><div class="d">146 rows. One process for one customer. State, dates, owners, effort, value, V2 migration stage, freshness, per-field provenance.</div></div>
+    <div class="box core"><div class="t">customers + profiles</div><div class="d">Roster, commercials, contacts, company context, the four human health axes.</div></div>
+    <div class="box core"><div class="t">nps_responses</div><div class="d">87 rows. Lands now so data has a home; the surface comes later.</div></div>
+  </div>
+  <div class="arrows">↓ ↓ ↓</div>
+
+  <div class="tierlab"><span class="data-label">Surfaces — all read-through, none own data</span><div class="ln"></div></div>
+  <div class="tier g3">
+    <div class="box surf"><div class="t">Work &nbsp;<span class="chip y" style="font-size:9px;padding:1px 6px">primary</span></div>
+      <div class="d">Three views of the same rows: <b>Active&nbsp;30</b>, <b>Delivered&nbsp;71</b>,
+      <b>Archive&nbsp;45</b>. Active is the weekly review screen. Cards read-only, drawer for edits.</div></div>
+    <div class="box surf"><div class="t">Customers</div>
+      <div class="d">Roster and the 360. That customer's processes, commercials, health, contacts, docs, rules.</div></div>
+    <div class="box surf"><div class="t">V2 Migration</div>
+      <div class="d">Its own page, per your call. Program rollup over the same rows — retires the
+      hand-transcribed literals in <span class="mono">v2-allhands-weeks.ts</span>.</div></div>
+  </div>
+  <div class="tier g3" style="margin-top:11px">
+    <div class="box surf"><div class="t">Reports</div><div class="d">Weekly update + all-hands, generated from the rows the team just reviewed. No second version of the truth.</div></div>
+    <div class="box surf"><div class="t">Insights</div><div class="d">Trends only: ARR, TTV, workload, delivery rate. Merge of today's dashboard + analytics, where ARR is currently computed three times.</div></div>
+    <div class="box surf"><div class="t">Agent</div><div class="d">Ask and edit conversationally. Gains <span class="mono">update_process</span>. Merges <span class="mono">/chat</span> and <span class="mono">/operations</span>, which are two surfaces doing one job.</div></div>
+  </div>
+  <div class="tier g3" style="margin-top:11px">
+    <div class="box later"><div class="t">NPS <span class="chip later" style="font-size:9px;padding:1px 6px">later</span></div><div class="d">Own page + survey-send form. Deferred by you. Table lands in 0021 regardless.</div></div>
+    <div class="box later"><div class="t">Derived customer health <span class="chip later" style="font-size:9px;padding:1px 6px">later</span></div><div class="d">Rules over all signals. The four manual axes stay as inputs — champion and exec-sponsor strength are not derivable from any system.</div></div>
+    <div class="box later"><div class="t">Auto-movement rules <span class="chip later" style="font-size:9px;padding:1px 6px">later</span></div><div class="d">"Linear closed → move to UAT". Needs the suggestion queue first, which is why it is in 0021.</div></div>
+  </div>
+
+  <div class="glass pad" style="margin-top:18px">
+    <h3>Nav: six entries</h3>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;padding:11px 14px;border-radius:12px;background:var(--brand-night);margin:4px 0 12px">
+      <span style="font-family:var(--font-display);font-size:11.5px;background:var(--brand-yellow);color:var(--brand-night);padding:5px 11px;border-radius:999px;font-weight:600">Work</span>
+      <span style="font-family:var(--font-display);font-size:11.5px;color:#a3a3a3;padding:5px 11px">Customers</span>
+      <span style="font-family:var(--font-display);font-size:11.5px;color:#a3a3a3;padding:5px 11px">V2 Migration</span>
+      <span style="font-family:var(--font-display);font-size:11.5px;color:#a3a3a3;padding:5px 11px">Reports</span>
+      <span style="font-family:var(--font-display);font-size:11.5px;color:#a3a3a3;padding:5px 11px">Insights</span>
+      <span style="font-family:var(--font-display);font-size:11.5px;color:#a3a3a3;padding:5px 11px">Agent</span>
+    </div>
+    <table>
+      <tr><th style="width:150px">Today</th><th>Becomes</th></tr>
+      <tr><td><span class="mono">/delivery</span></td><td><b>Work</b>, with the three-view switcher. Its 914-line client is replaced, not extended.</td></tr>
+      <tr><td><span class="mono">/dashboard</span> + <span class="mono">/analytics</span></td><td><b>Insights</b>. One loader per concept. ARR stops rendering from the same loader in three places and "active processes" stops having three values.</td></tr>
+      <tr><td><span class="mono">/reports</span></td><td><b>Reports</b>, minus the three dead catalog cards (QBR, monthly digest, health report — coming-soon or needs-access).</td></tr>
+      <tr><td><span class="mono">/reports/v2-migration</span></td><td><b>V2 Migration</b>, promoted to top-level per your call, now reading real rows.</td></tr>
+      <tr><td><span class="mono">/operations</span> + <span class="mono">/chat</span></td><td><b>Agent</b>. One conversational surface.</td></tr>
+      <tr><td><span class="mono">/customers</span></td><td>Unchanged in shape. Gains the health scorecard, loses the Activity tab.</td></tr>
+    </table>
+    <div class="note" style="margin-bottom:0"><b>Sequencing, unchanged from my earlier recommendation.</b>
+    Build the board, drawer and 0021 <i>inside today's nav</i>, prove the report matches row-for-row
+    (your step 1.9 gate), then do this rename-and-merge as its own diff. If the IA moves in the same
+    commit as the data model, a number that shifts cannot be attributed to either. This is the one place
+    I would resist doing it all at once.</div>
+  </div>
+</section>
+
+<!-- ═══════════ 3 ═══════════ -->
+<section class="panel" id="v3">
+  <div class="glass pad" style="margin-bottom:16px">
+    <h2>How a process moves</h2>
+    <p class="sub" style="margin:0">Your three layouts. Counts are exact, from the archive's
+    <span class="mono">Project Status</span> across all 146 rows, and they sum to 146.</p>
+  </div>
+
+  <div class="flow">
+    <div class="viewcard a">
+      <div class="data-label">View 1</div>
+      <div style="font-family:var(--font-display);font-size:17px;margin:3px 0 6px">Active work</div>
+      <div class="n">30</div>
+      <div style="font-size:11.5px;color:var(--brand-gray);margin:6px 0 4px">Everything the team is doing, one screen. Includes V2 migration effort.</div>
+      <div class="lane"><span>Pipeline <span style="color:var(--brand-gray)">backlog + upcoming</span></span><b>12</b></div>
+      <div class="lane"><span>Discovery <span style="color:var(--brand-gray)">M1</span></span><b>0</b></div>
+      <div class="lane"><span>Development <span style="color:var(--brand-gray)">M2</span></span><b>1</b></div>
+      <div class="lane"><span>Testing / UAT <span style="color:var(--brand-gray)">M3</span></span><b>10</b></div>
+      <div class="lane"><span>Blocked / waiting</span><b>7</b></div>
+      <div class="lane" style="background:var(--brand-yellow-soft)"><span>On hold</span><b>4</b></div>
+    </div>
+    <div class="gate"><div><div class="ar">→</div><div style="margin-top:5px"><b>go-live date set</b><br>lifecycle → live</div></div></div>
+    <div class="viewcard b">
+      <div class="data-label">View 2</div>
+      <div style="font-family:var(--font-display);font-size:17px;margin:3px 0 6px">Delivered</div>
+      <div class="n">71</div>
+      <div style="font-size:11.5px;color:var(--brand-gray);margin:6px 0 4px">Live in production. The value and time-to-value story lives here.</div>
+      <div class="lane"><span>Exception handling</span><b>48</b></div>
+      <div class="lane"><span>Enhancement / support</span><b>14</b></div>
+      <div class="lane"><span>Live on V2</span><b>5</b></div>
+      <div class="lane" style="background:#fef2f2"><span style="color:var(--bad)">Marked live but is not</span><b style="color:var(--bad)">4</b></div>
+      <div style="font-size:11px;color:var(--brand-gray);margin-top:8px;border-top:1px solid var(--brand-metal-line);padding-top:7px">
+        Exact, from <span class="mono">Current&nbsp;Phase</span> within the 71. Sums to 71.
+        <b style="color:var(--bad)">Those last 4 are a real data defect</b> — rows with
+        <span class="mono">Project&nbsp;Status&nbsp;=&nbsp;Live</span> whose phase says Pre-Kickoff (1),
+        POV complete (1) or Waiting for Customer (2). Your delivered count is overstated by 4 today.</div>
+    </div>
+    <div class="gate"><div><div class="ar">→</div><div style="margin-top:5px"><b>cancelled, churned<br>or retired</b></div></div></div>
+    <div class="viewcard c">
+      <div class="data-label">View 3</div>
+      <div style="font-family:var(--font-display);font-size:17px;margin:3px 0 6px">Archive</div>
+      <div class="n">45</div>
+      <div style="font-size:11.5px;color:var(--brand-gray);margin:6px 0 4px">Rarely opened, needed for history and for honest denominators.</div>
+      <div class="lane"><span>Cancelled</span><b>29</b></div>
+      <div class="lane"><span>Churned</span><b>12</b></div>
+      <div class="lane" style="background:#fffbeb"><span style="color:var(--warn)">POV complete, awaiting next steps</span><b style="color:var(--warn)">4</b></div>
+      <div style="font-size:11px;color:var(--brand-gray);margin-top:8px;border-top:1px solid var(--brand-metal-line);padding-top:7px">
+        Exact, sums to 45. Excluded from headline metrics but never deleted — a delivery rate computed
+        without these is not a delivery rate. <b style="color:var(--warn)">Those 4 are misfiled</b>: a POV
+        awaiting a decision is live pipeline, not archive. They belong in Active work, which would make it
+        <b>34</b> once corrected.</div>
+    </div>
+  </div>
+
+  <div class="g2 tier" style="margin-top:18px">
+    <div class="glass pad">
+      <h3>Two honest problems with this shape</h3>
+      <p style="margin:0;font-size:13px"><b>Active work at 30 rows with 6 lanes averages 5 cards a lane,
+      and one lane is empty.</b> Discovery is genuinely 0 — the active phase mix is Testing/UAT 10,
+      Waiting for Customer 7, Development 1, plus 12 in pipeline and 4 on hold. A six-lane board that is
+      mostly air reads as broken when projected. {Likely} Either collapse to four lanes
+      (Pipeline · Building · Validating · Stuck) or let empty lanes hide themselves. I lean to
+      four lanes, because your milestone taxonomy has five values and the board does not need to mirror it.</p>
+      <p style="margin:9px 0 0;font-size:13px"><b>7 of the 30 have no recoverable milestone.</b> Monday's
+      <span class="mono">Current Phase</span> is one status column, so rows set to "Waiting for Customer"
+      had their milestone overwritten. Import writes <span class="mono">phase = null</span> and those 7
+      need a human pass. They will land in the Blocked lane on day one with nothing behind them.</p>
+    </div>
+    <div class="glass pad">
+      <h3>What "one layout" buys you that Monday's boards did not</h3>
+      <table>
+        <tr><th>Monday today</th><th>Work · Active</th></tr>
+        <tr><td>6 boards by fiscal year, so active work is spread across FY-2025, FY-2026 and Projects</td><td>One screen. Fiscal year is a filter, not a location.</td></tr>
+        <tr><td>All 146 rows visible by default</td><td>30 by default. The 116 you are not working on are one click away.</td></tr>
+        <tr><td>Status changes without asking for the date or reason, which is why 7 blocked rows have no reason recorded</td><td>Lane change opens the drawer and asks for what that lane requires.</td></tr>
+        <tr><td>V2 migration tracked in a separate sheet, hand-transcribed into the deck each week</td><td>Same rows. The V2 page and the all-hands report are views, not copies.</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 4 ═══════════ -->
+<section class="panel" id="v4">
+  <div class="glass pad" style="margin-bottom:16px">
+    <h2>Your Monday morning, and the team's Friday</h2>
+    <p class="sub" style="margin:0">The design is only right if these two journeys are short. Everything
+    else is decoration.</p>
+  </div>
+
+  <div class="g2 tier">
+    <div class="glass pad">
+      <div class="eyebrow mark">Journey A</div>
+      <h3 style="margin-top:5px">An FDE updates one process after a call</h3>
+      <div class="step"><div class="num">1</div><div><div class="h">Opens the customer, or the board</div>
+        <div class="b">Both work. From <b>Customers → Norco → Processes</b>, or from <b>Work → Active</b>. Same drawer either way, so there is nothing to learn twice.</div></div></div>
+      <div class="step"><div class="num">2</div><div><div class="h">Clicks the card</div>
+        <div class="b">Drawer opens. Everything editable in one place — state, dates, owners, blockers, value. <b>No Save button</b>; each field saves as it changes.</div></div></div>
+      <div class="step"><div class="num">3</div><div><div class="h">Sets phase to UAT</div>
+        <div class="b">Drawer asks for the date that lane requires. Card moves to the Validating lane. <b>Freshness stamp updates.</b></div></div></div>
+      <div class="step"><div class="num">4</div><div><div class="h">Done. Never opened Monday.</div>
+        <div class="b">That is the whole test.</div></div></div>
+      <div class="note" style="margin-bottom:0">Roughly <b>15 to 25 of these a month</b>, measured from the
+      archive. That is the entire write load the system has to carry.</div>
+    </div>
+
+    <div class="glass pad">
+      <div class="eyebrow mark">Journey B</div>
+      <h3 style="margin-top:5px">The team reviews on Friday, and the report writes itself</h3>
+      <div class="step"><div class="num">1</div><div><div class="h">Project <b>Work → Active</b></div>
+        <div class="b">30 cards, lanes, big type, no chrome. This is why cards are read-only — an editable grid is unreadable at 3 metres.</div></div></div>
+      <div class="step"><div class="num">2</div><div><div class="h">Suggestion strip at the top</div>
+        <div class="b">"Linear LIN-482 closed on Norco Warranty." Accept or dismiss live in the meeting. <b>Conflicts show both values</b>, so nobody has to guess which is current.</div></div></div>
+      <div class="step"><div class="num">3</div><div><div class="h">Walk the lanes, open what needs it</div>
+        <div class="b">Stale cards are visibly stale. Blocked cards with no reason are visibly wrong. Editing happens in the meeting, not after it.</div></div></div>
+      <div class="step"><div class="num">4</div><div><div class="h">Reports reads the same rows</div>
+        <div class="b">Weekly update and all-hands generate from what was just reviewed. <b>No transcription step</b>, which is what <span class="mono">v2-allhands-weeks.ts</span> is today — 1,246 lines of hand-typed literals behind a UI labelled "live".</div></div></div>
+      <div class="kill" style="margin-bottom:0"><b>Where this breaks.</b> {Likely} If the report keeps being
+      hand-assembled after the review, the board becomes ceremony and rots the way the Monday board did —
+      median row age 174 days. The board earns its place only if skipping it visibly degrades the deck you
+      have to present.</div>
+    </div>
+  </div>
+
+  <div class="glass pad" style="margin-top:18px">
+    <h3>Journey C — what the agent is for, once the record is owned</h3>
+    <p style="margin:0 0 9px;font-size:13px">Worth stating because the agent gets more useful the moment
+    DeliveryOps owns the data rather than mirroring it. Today its prompt says FDE assignments are not
+    writable and tells you to update Monday.</p>
+    <div class="g3 tier">
+      <div class="box"><div class="t">"Set Norco Warranty to UAT"</div><div class="d">Writes it, stamps provenance as agent, logs an event. Faster than the drawer for a single known change.</div></div>
+      <div class="box"><div class="t">"What's stuck and on whom?"</div><div class="d">Reads <span class="mono">blocked_on</span> across active work. Currently impossible — the field does not exist and Monday blends it into phase.</div></div>
+      <div class="box"><div class="t">"Draft the weekly update"</div><div class="d">Same rows as the report. The agent and the report cannot disagree, because there is one source.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 5 ═══════════ -->
+<section class="panel" id="v5">
+  <div class="glass pad">
+    <h2>What is settled, and what I still need</h2>
+    <div class="dec done"><div class="ico">✓</div><div class="q"><b>Vocabulary.</b> Process, not project. Account type and deal type are two fields.</div><div><span class="chip ok">yours, settled</span></div></div>
+    <div class="dec done"><div class="ico">✓</div><div class="q"><b>Three views</b> of one table: Active 30, Delivered 71, Archive 45.</div><div><span class="chip ok">yours, settled</span></div></div>
+    <div class="dec done"><div class="ico">✓</div><div class="q"><b>Editing</b> in a drawer, one process at a time. Cards read-only. No drag and drop.</div><div><span class="chip ok">settled</span></div></div>
+    <div class="dec done"><div class="ico">✓</div><div class="q"><b>Conflicts surface both values</b>, everywhere.</div><div><span class="chip ok">yours, settled</span></div></div>
+    <div class="dec done"><div class="ico">✓</div><div class="q"><b>Activity Log archived.</b> V2 Migration keeps its own page. NPS deferred, table lands anyway.</div><div><span class="chip ok">yours, settled</span></div></div>
+    <div class="dec done"><div class="ico">✓</div><div class="q"><b>Customer health auto-derived later</b>; the four manual axes stay as inputs.</div><div><span class="chip ok">yours, settled</span></div></div>
+    <div class="dec"><div class="ico">?</div><div class="q"><b>Lane count on Active work.</b> Six lanes over 30 rows leaves one empty and averages 5 cards. I would collapse to four: Pipeline · Building · Validating · Stuck. Your board, your call.</div><div><span class="chip y">need you</span></div></div>
+    <div class="dec"><div class="ico">?</div><div class="q"><b>Nav rename now or after cutover.</b> I recommend after, so step 1.9 can attribute any moved number. Saying so plainly because it is the one place I am arguing for slower.</div><div><span class="chip y">need you</span></div></div>
+    <div class="dec"><div class="ico">?</div><div class="q"><b>The 7 rows with no recoverable milestone.</b> Someone has to re-enter them by hand after import. You, or the owning FDE?</div><div><span class="chip y">need you</span></div></div>
+  </div>
+
+  <div class="glass pad" style="margin-top:16px">
+    <h3>Sequence from here</h3>
+    <table>
+      <tr><th style="width:58px">Step</th><th>What</th><th style="width:190px">Gate</th></tr>
+      <tr><td><b>1.5</b></td><td>This. IA and layout approved.</td><td><span class="chip y">you are here</span></td></tr>
+      <tr><td><b>0021</b></td><td>One migration: <span class="mono">processes</span> (extend <span class="mono">migration_processes</span>), <span class="mono">nps_responses</span>, the 9 customer fields, <span class="mono">process_suggestions</span> + <span class="mono">field_provenance</span>, drop <span class="mono">monday_activities</span> and <span class="mono">lifecycle_group</span>.</td><td>Approval of this page</td></tr>
+      <tr><td><b>1.3</b></td><td>Importer for 146 rows. Customer join is solved (140 via relation, 3 via dropdown, 3 Srinar flagged). Idempotent on <span class="mono">source_item_id</span>.</td><td>0021 applied</td></tr>
+      <tr><td><b>—</b></td><td>The drawer and the Active board. First real write surface in the app.</td><td>Import verified</td></tr>
+      <tr><td><b>1.6–1.7</b></td><td>Rewire all five <span class="mono">monday_projects</span> read paths, not just the report. Rewiring one leaves four surfaces to break the day the sync stops.</td><td></td></tr>
+      <tr><td><b>1.8</b></td><td>Delete <span class="mono">/api/monday/item-updates</span>.</td><td><span class="chip bad">do now, unconditional</span></td></tr>
+      <tr><td><b>1.9</b></td><td>Report matches row-for-row.</td><td>Hard gate</td></tr>
+      <tr><td><b>1.10</b></td><td>Monday sync off in <span class="mono">vercel.json</span>.</td><td>1.9 passed</td></tr>
+      <tr><td><b>then</b></td><td>The nav merge from view 2.</td><td>separate diff</td></tr>
+    </table>
+    <div class="kill" style="margin-bottom:0"><b>The blocker that is not on this list because it is not
+    mine to fix.</b> <span class="mono">lib/sync/kognitos-v2.ts</span> reads a single
+    <span class="mono">KOGNITOS_V2_WORKSPACE_ID</span> and the PAT is single-workspace, so
+    <span class="mono">k2_runs</span> covers roughly 1 customer of 40. Every "value delivered" and "real
+    usage" number stays blank until that changes, and it likely has procurement lead time. Nothing above
+    is blocked by it — but the value story is.</div>
+  </div>
+</section>
+
+<footer class="f">
+  <span class="mono">docs/mockups/platform-vision.html</span> · companion to
+  <span class="mono">docs/mockups/ia-step-1.5.html</span> · counts from
+  <span class="mono">monday-backup-2026-08-03</span>, 146 rows across the 6 report boards ·
+  tokens from <span class="mono">app/globals.css</span>
+</footer>
+</div>
+<script>
+const t=[...document.querySelectorAll('.tabs button')];
+t.forEach(b=>b.addEventListener('click',()=>{
+  t.forEach(x=>x.setAttribute('aria-selected',String(x===b)));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===b.dataset.t));
+  window.scrollTo({top:0,behavior:'smooth'});
+}));
+</script>
+</body>
+</html>

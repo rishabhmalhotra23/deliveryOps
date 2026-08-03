@@ -75,10 +75,11 @@ Status values: `done` / `in progress` / `blocked` / `not started`.
 | # | Step | Status | Notes |
 |---|---|---|---|
 | 1.1 | Design the native schema from the real backup | **proposed 2026-08-03, awaiting approval** | [PROCESSES-SCHEMA-PROPOSAL.md](./PROCESSES-SCHEMA-PROPOSAL.md). Grain = one row per process, soft-linked to `k2_processes`. Clean orthogonal taxonomy replacing Monday's blended fields. `ttv_days` generated. Value = manual minutes-saved input x `k2_runs`. |
-| 1.2 | Generalize `migration_processes` into `processes` (or a sibling) | not started | Must cover all ~140 portfolio rows, not just the 75 V2 ones. |
+| 1.2 | Generalize `migration_processes` into `processes` | **written 2026-08-03, awaiting apply** | `supabase/migrations/0021_processes_native.sql`. Renames the table and adds 36 columns + 9 enum types + `process_suggestions` + `nps_responses` + the 9 Customers-board fields. **Additive only — nothing dropped**, see 1.2b. `tsc --noEmit` clean, vitest 111/111. |
+| 1.2b | Drops: `monday_activities`, `customers.lifecycle_group`, `internal_profiles.health_score` | not started, **deliberately** | These were planned for 0021 and pulled out. Both still have live read sites (`lifecycle_group` 19, incl. a `.eq()` filter in `lib/customers.ts:93` and `ALLOWED_FIELDS` in the manual-update route; `monday_activities` 5, incl. `lib/sync/monday.ts:512`). Dropping a column the code still selects is a runtime 500, not a build error, so `npm run build` would have passed and the failure would have landed on customers. Becomes 0022, after the rewire. |
 | 1.3 | Write the importer from the backup into Supabase | not started | Nothing like this exists today. Must include the customer-key matching pass that 0020 skipped. |
 | 1.4 | Populate auto-derived columns from `k2_processes` / `k2_runs` | not started | Real usage data currently unused. |
-| 1.5 | Mockup the UI for approval | not started | Required before any UI code (per CLAUDE.md). Covers customer 360, report, analytics. |
+| 1.5 | Mockup the UI + decide the IA | **mockup delivered 2026-08-03, awaiting approval** | [docs/mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html). 5 panels: IA options A/B, field homes for 0021, the process edit drawer, the segmented board, customer 360. Editing model, permissions, Activity Log and the suggestion queue all decided. **The A-vs-B IA choice is still open and is Rishabh's.** |
 | 1.6 | Rewire `weekly-loader.ts` off `monday_projects` | not started | |
 | 1.7 | Rewire the other four read paths | not started | analytics, delivery, cache/integrations, dashboard drilldowns. |
 | 1.8 | Authenticate or delete `/api/monday/item-updates` | not started | Currently public + unauthenticated. |
@@ -100,6 +101,21 @@ Not started. See the consolidation plan.
 | 2026-07-30 | File attachments: metadata only, no binaries | Small and fast; binaries are least likely to matter for reporting. Accepted cost: Monday `public_url` values are short-lived signed URLs and will expire, so the files themselves are not preserved. A separate opt-in downloader can be written against the asset manifest later. |
 | 2026-07-30 | Board `activity_logs`: not captured | High volume, retention-limited by plan, no DeliveryOps use case. Item `updated_at` plus the updates feed cover the needed history. |
 | 2026-07-30 | Sequenced core-first, then the long tail | Core boards finish in minutes so schema work can start immediately; the ~478-board sweep runs resumably in the background. |
+| 2026-08-03 | Edit model: **drawer, one process at a time**. No editable grid. | Measured velocity, not preference: 125 of 146 rows created Feb 2026, 84 never edited after their creation month, recent months show 11-24 row-edits each. A spreadsheet would serve a workload that does not exist. |
+| 2026-08-03 | Board is **segmented by state**; default view is Active work only (18 rows) | Live 71 / Pipeline 12 / Closed 45 are sibling views. Monday showed all 146 by default, which is part of how the median row reached 174 days untouched. |
+| 2026-08-03 | The board doubles as the **weekly team review surface** | Rishabh's constraint. Forces read-only cards (legible, projectable) with all density in the drawer. |
+| 2026-08-03 | **No drag and drop.** Lane change happens in the drawer. | A lane change usually needs a second field. 7 currently-blocked rows have no reason set precisely because Monday let status change without asking. Compromise if wanted: drag opens the drawer pre-filled and unsaved. |
+| 2026-08-03 | Permissions: whole team edits, attribution best-effort | `updated_by` from the Auth0 session. No per-field locks. Does not block cutover. |
+| 2026-08-03 | **Activity Log (43 rows) archived, not migrated** | Nothing was ever closed on it: all Open, 0/43 resolved dates, 0/43 owners, all created Feb 2026, single group. 0021 drops `monday_activities` and the 360 Activity tab. |
+| 2026-08-03 | Inbound updates from Slack/Linear/mail get a **suggestion queue**, never a direct write | Planned future work, but it changes 0021: needs `process_suggestions` + per-field `field_provenance` + `reviewed_at`/`reviewed_by`. A wrong auto-update is worse than a stale row, because a stale row is visibly stale. |
+| 2026-08-03 | IA sequencing: **conservative during migration, consolidate after 1.9 passes** | Recommendation, not yet accepted. Step 1.9 requires row-for-row report agreement across cutover; if the IA changes in the same diff, a moved number cannot be attributed to the data model or the loader. |
+| 2026-08-03 | **"Project" and "process" are the same thing. Use `process` everywhere**, in code, schema and UI copy. | Rishabh. Removes a synonym that currently splits the codebase (`monday_projects`, `ProjectDetailPanel`, `loadActiveProjects` all become process-named). |
+| 2026-08-03 | **Three views of `processes`, not four.** Active work = Backlog + Upcoming + In Progress + On Hold (**30**). Delivered = Live (**71**). Archive = Inactive (**45**). | Rishabh. One screen for everything the team is actively doing, including V2 migration effort. My earlier "30 in-flight" was the right grouping under the wrong label. |
+| 2026-08-03 | `account_type` and `deal_type` are **two separate fields**, and neither overlaps `custom_category` | Rishabh. `account_type` = direct \| partner_managed. `deal_type` = long_term \| pov. Monday's single "Account Type" column conflated both, so the import must split it and will leave gaps. |
+| 2026-08-03 | **Conflicts always surface both values**, everywhere, not just in suggestions | Rishabh. Applies to inbound suggestions, sync-vs-manual, and duplicate rows at import. |
+| 2026-08-03 | NPS gets its **own page**, deferred. Land the table in 0021 so data has a home; build the surface later, with a survey-send form. | Rishabh. Do not build the NPS UI in this phase. |
+| 2026-08-03 | Customer health should be **auto-derived** from signals across systems, rules TBD | Rishabh's stated direction. The four manual axes stay as human-judgment inputs, because champion and exec-sponsor strength are not derivable from any system. |
+| 2026-08-03 | V2 migration keeps **its own page**, reading the same `processes` rows as Active work and the all-hands report | Rishabh. Program-level rollup, not a separate dataset. Retires the hand-transcribed literals in `v2-allhands-weeks.ts`. |
 
 ## Blockers
 
@@ -111,6 +127,16 @@ Not started. See the consolidation plan.
 
 ## Open decisions
 
+- **The IA choice, A or B.** Option A collapses to 5 nav entries (portfolio / customers / insights /
+  reports / agent), deleting `/dashboard`, `/delivery` and `/analytics`. Option B keeps all 7 and
+  dedupes only the loader layer. Recommendation is B during migration then A. Rishabh's call.
+- `Account Type` (Partner 9 / Long Term 25 / POV 7) overlaps `custom_category` at two values,
+  "Partner Managed" and "POV". Either it is contract shape and category is lifecycle and both stay, or
+  one is redundant. Not resolvable from the archive.
+- When an inbound suggestion arrives for a field a human set recently: drop it silently, or surface both
+  values? Recommendation is surface both, because the human may be out of date.
+- Whether the empty Discovery lane reflects reality or a logging gap. 0 of 18 active rows are in
+  discovery; 10 are Testing/UAT, 7 Waiting for Customer, 1 Development. Decides the board's lane set.
 - Own vs display the process record. Plan recommends own. Not formally settled.
 - Retirement scope: report boards only, or the whole account. The five read paths
   above mean "report only" leaves four broken surfaces.
@@ -221,6 +247,117 @@ analytics, customer 360, dashboard), Activity Log (43 items -> `monday_activitie
 read by the customer 360 activity card), and the Customers board (41 items — the
 roster exists natively but the field diff has not been done). Resolve all three in
 one pass so 0021 is a single migration, not three.
+
+### 2026-08-03 (cont.) — step 1.5, information architecture
+
+Delivered [docs/mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html), five panels, awaiting approval.
+All decisions taken are in the table above. What changed the design:
+
+**Edit velocity is tiny, and that settles the edit surface.** 125 of the 146 report rows were created in
+Feb 2026, 84 have never been edited after their creation month, and the last four months show only 11-24
+row-edits each. The board was populated once and then largely left. So a drawer is sufficient and an
+editable grid would be built for a workload that does not exist.
+
+**A correction to the 2026-08-03 relation finding.** The archive's `board_relation` cells carry an empty
+`text` field but a populated `linked_items` array. NPS is 87/87 linked to the Customers board and
+Activity Log is 43/43 on `Customer`. There is no name-matching pass to write for either. The 685
+"empty" relation cells are genuinely empty: Activity Log's second relation (`Project`) is empty on all
+43 rows while `Customer` is full.
+
+**The Customers board is a 9-field diff, not 24.** Fifteen of its 24 columns already have a native home
+or are derivable. The 9 that need columns are the four-axis health scorecard (Renewal / Pipeline /
+Champion / Exec Sponsor, each 41/41 filled, "Evaluating" → null), `account_type`, `company_revenue`,
+`company_focus`, `company_priorities`, and `v2_demo_completed_at` as a date rather than a yes/no. Four
+columns get dropped rather than migrated: Monday's blended `Customer Health`, its stale `NPS Score`
+copy, the board group (already mirrored in `lifecycle_group`, which 0005 backfilled into
+`custom_category` — 0021 should drop `lifecycle_group` outright), and `internal_profiles.health_score`,
+superseded by the scorecard.
+
+**A number I got wrong mid-session, corrected.** I first reported 30 in-flight rows by counting Backlog
+and Upcoming as active. That double-counts the Pipeline view. The true split is Live 71, Active 18
+(In Progress 14 + On Hold 4), Pipeline 12 (Backlog 10 + Upcoming 2), Closed 45 (Inactive), summing to
+146. Of the 18 active, 10 are 31-90d stale and 3 are past 90 days.
+
+**Two findings that fell out of the correction.** The Discovery lane is empty — the 18 active rows are
+Testing/UAT 10, Waiting for Customer 7, Development 1 — so either there is no early-stage work or it
+never gets logged. And health carries almost no signal on active work: On Track 13, On Hold 4, Off Track
+1, with "at risk" unused. Colouring cards by health would render 13 green cards and one red; staleness
+plus blocked-state differentiates better.
+
+**New import consequence.** For the 7 rows whose Monday phase is literally "Waiting for Customer", the
+underlying milestone is unrecoverable — the phase column was overwritten with the waiting state. The
+mapping in PROCESSES-SCHEMA-PROPOSAL.md says "phase unchanged", but there is no prior phase to keep.
+Import must leave `phase` null on those 7 and they need a human pass. That is 7 of 18 active rows.
+
+### 2026-08-03 (cont.) — clarifications from Rishabh, platform walkthrough delivered
+
+Second mockup: [docs/mockups/platform-vision.html](./mockups/platform-vision.html) — five views covering
+the whole platform (one-liner, platform map, how a process moves, the Monday-morning and Friday-review
+journeys, decisions and sequence). Companion to the detailed IA mockup. Decisions from this exchange are
+in the table above; the nav settles at **six entries**: Work · Customers · V2 Migration · Reports ·
+Insights · Agent, with Work holding the three-view switcher.
+
+Two data defects surfaced while deriving the exact view counts, both affecting headline numbers:
+
+- **4 rows marked `Live` are not live** — phase reads Pre-Kickoff (1), POV complete (1), Waiting for
+  Customer (2). The delivered count is overstated by 4 today.
+- **4 rows marked `Inactive` are "POV complete, Waiting for next steps"** — a POV awaiting a decision is
+  live pipeline, not archive.
+
+Corrected, the split is Active **34**, Delivered **67**, Archive **41**. Import must flag rather than
+silently reclassify these 8, consistent with the surface-both-values rule.
+
+Also new: splitting Monday's single "Account Type" column into `account_type` and `deal_type` means
+**every one of the 41 customer rows will be missing one of the two fields** after import, because no
+Monday row carries both axes. Cheap to fix by hand, but it needs planning rather than discovery.
+
+Still open and needed from Rishabh: the lane count on Active work (six lanes over 30 rows leaves
+Discovery empty; recommend collapsing to four — Pipeline · Building · Validating · Stuck), whether the
+nav rename happens before or after the 1.9 gate (recommend after), and who re-enters the 7 rows whose
+milestone Monday overwrote.
+
+**Next session:** get the three open items above, then write migration 0021 as a single migration covering
+`processes` (extending `migration_processes`), `nps_responses`, the 9 Customers-board columns, the
+`process_suggestions` table with `field_provenance`, and the `monday_activities` drop. Then 1.3, the
+importer. Still no application code until the mockup is signed off.
+
+### 2026-08-03 (cont.) — migration 0021 written
+
+`supabase/migrations/0021_processes_native.sql` plus the matching additions to
+`lib/supabase/types.ts`. Rishabh approved the IA and chose Journey A (edit one process at a time in
+context) as the update flow, four lanes on the Active board, and the nav rename deferred until after the
+1.9 gate.
+
+What 0021 does: renames `migration_processes` to `processes` and adds 36 columns, 9 enum types,
+`process_suggestions`, `nps_responses`, and the 9 Customers-board fields (the four-axis health scorecard,
+`account_type`, `deal_type`, `company_revenue`, `company_focus`, `company_priorities`,
+`v2_demo_completed_at`).
+
+Three things worth knowing about how it was built:
+
+- **It is additive only, against the step-1.5 plan.** See row 1.2b above. Catching this required checking
+  read sites rather than trusting the plan; a dropped column the code still selects is a runtime 500 that
+  `npm run build` does not catch.
+- **The rename is cheap and the cutover window is harmless.** The table name reaches application code
+  through exactly one constant, `TABLES.migrationProcesses`, consumed only by `lib/migrations/store.ts`.
+  Nothing in the UI fetches `/api/migrations` — the routes have no call sites — so there is no user-facing
+  breakage if the SQL and the deploy land minutes apart.
+- **A real bug was caught in validation.** `ttv_days` was originally added in the same `ALTER TABLE` as
+  `kickoff_date`, which Postgres rejects because a generated column's expression cannot reference a column
+  added in the same statement. It is now a separate statement. Found by parsing all 51 statements through
+  sqlglot's Postgres dialect after `apt-get install postgresql` failed for lack of root — so this was
+  **not** validated by applying it to a real Postgres, and that gap is worth closing before it runs on
+  production.
+- Also guarded: the `platform` text-to-enum conversion raises with the offending values listed rather than
+  coercing an unexpected value into `v1`.
+
+Verification run: `tsc --noEmit` clean, `vitest run` 111/111 pass. `next build` was started but did not
+finish inside the sandbox (10+ minutes, no output) — run it locally before committing.
+
+**Next session:** step 1.3, the importer from `monday-backup-2026-08-03` into `processes` +
+`nps_responses` + the customer fields, including the customer-key matching pass 0020 skipped, the
+`needs_attention` flagging for the 7 unrecoverable-milestone rows and the 8 misclassified ones, and the
+account/deal-type split gaps. Then the drawer and the Active board.
 
 ### Next session — start here
 

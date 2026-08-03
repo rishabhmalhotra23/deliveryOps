@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeliveryOps IA — step 1.5 mockups</title>
+<style>
+:root{
+  --brand-yellow:#F2FF70; --brand-yellow-soft:rgba(242,255,112,.18); --brand-yellow-line:rgba(242,255,112,.55);
+  --brand-seasalt:#FAFAFA; --brand-metal:#A3A3A3; --brand-metal-line:#E5E5E5;
+  --brand-gray:#737373; --brand-night:#171717; --brand-night-soft:#262626; --brand-canvas:#F4F4F2;
+  --glass-bg:rgba(255,255,255,.75); --glass-border:rgba(0,0,0,.08);
+  --glass-inner-glow:inset 0 0 0 1px rgba(255,255,255,.90);
+  --font-display:"Inter Tight",system-ui,sans-serif;
+  --font-body:Inter,system-ui,-apple-system,sans-serif;
+  --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--brand-canvas);color:var(--brand-night);font-family:var(--font-body);
+  font-size:14px;line-height:1.5;
+  background-image:radial-gradient(60rem 60rem at 20% 20%,rgba(242,255,112,.04),transparent),
+                   radial-gradient(60rem 60rem at 80% 80%,rgba(23,23,23,.03),transparent);}
+.wrap{max-width:1320px;margin:0 auto;padding:32px 28px 96px}
+.glass{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;
+  box-shadow:var(--glass-inner-glow),0 1px 2px rgba(0,0,0,.04);backdrop-filter:blur(8px)}
+.eyebrow{font-family:var(--font-display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-gray)}
+h1{font-family:var(--font-display);font-size:34px;line-height:1.1;margin:6px 0 8px;letter-spacing:-.02em}
+h2{font-family:var(--font-display);font-size:20px;margin:0 0 4px;letter-spacing:-.01em}
+h3{font-family:var(--font-display);font-size:14px;margin:0 0 10px;letter-spacing:-.005em}
+.sub{color:var(--brand-gray);max-width:74ch}
+.data-label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brand-gray);font-weight:600}
+.mark::before{content:"✴";color:var(--brand-yellow);margin-right:7px;font-size:11px;
+  text-shadow:0 0 0 #000;-webkit-text-stroke:.4px var(--brand-night)}
+/* tabs */
+.tabs{display:flex;gap:6px;margin:26px 0 22px;flex-wrap:wrap;position:sticky;top:0;z-index:30;
+  padding:10px 0;background:linear-gradient(var(--brand-canvas) 70%,transparent)}
+.tabs button{font-family:var(--font-display);font-size:12.5px;letter-spacing:.02em;border:1px solid var(--glass-border);
+  background:var(--glass-bg);padding:8px 15px;border-radius:999px;cursor:pointer;color:var(--brand-night)}
+.tabs button[aria-selected=true]{background:var(--brand-night);color:var(--brand-seasalt);border-color:var(--brand-night)}
+.panel{display:none} .panel.on{display:block}
+/* generic */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.pad{padding:18px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:999px;
+  border:1px solid var(--brand-metal-line);background:#fff;white-space:nowrap}
+.chip.y{background:var(--brand-yellow-soft);border-color:var(--brand-yellow-line)}
+.chip.dark{background:var(--brand-night);color:var(--brand-seasalt);border-color:var(--brand-night)}
+.chip.ok{color:var(--ok);border-color:#bbf7d0;background:#f0fdf4}
+.chip.warn{color:var(--warn);border-color:#fde68a;background:#fffbeb}
+.chip.bad{color:var(--bad);border-color:#fecaca;background:#fef2f2}
+.chip.new{background:var(--brand-yellow);border-color:var(--brand-night);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--brand-gray);
+  font-weight:600;padding:8px 10px;border-bottom:1px solid var(--brand-metal-line)}
+td{padding:9px 10px;border-bottom:1px solid rgba(0,0,0,.05);vertical-align:top}
+tr.click:hover td{background:var(--brand-yellow-soft);cursor:pointer}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.stat{padding:16px 18px}
+.stat .v{font-family:var(--font-display);font-size:28px;letter-spacing:-.02em;line-height:1}
+.stat .h{color:var(--brand-gray);font-size:11.5px;margin-top:5px}
+.note{border-left:2px solid var(--brand-yellow-line);background:var(--brand-yellow-soft);
+  padding:11px 14px;border-radius:0 10px 10px 0;font-size:12.5px;margin:14px 0}
+.kill{border-left:2px solid #fecaca;background:#fef2f2;padding:11px 14px;border-radius:0 10px 10px 0;font-size:12.5px;margin:14px 0}
+ul.tight{margin:6px 0 0;padding-left:18px} ul.tight li{margin:3px 0}
+.pipes{display:flex;gap:3px}
+.pipe{width:22px;height:6px;border-radius:2px;background:var(--brand-metal-line)}
+.pipe.f3{background:var(--ok)} .pipe.f2{background:#eab308} .pipe.f1{background:var(--bad)}
+/* nav mock */
+.navmock{display:flex;gap:5px;flex-wrap:wrap;padding:11px 14px;border-radius:12px;background:var(--brand-night)}
+.navmock span{font-family:var(--font-display);font-size:11.5px;color:#a3a3a3;padding:5px 11px;border-radius:999px}
+.navmock span.act{background:var(--brand-yellow);color:var(--brand-night);font-weight:600}
+.navmock span.gone{text-decoration:line-through;opacity:.42}
+.navmock span.new{border:1px dashed var(--brand-yellow-line);color:var(--brand-yellow)}
+/* browser frame */
+.frame{border:1px solid var(--glass-border);border-radius:14px;overflow:hidden;background:#fff;
+  box-shadow:0 10px 34px rgba(0,0,0,.09)}
+.frame .bar{display:flex;align-items:center;gap:7px;padding:9px 13px;background:#fff;border-bottom:1px solid var(--brand-metal-line)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--brand-metal-line)}
+.url{margin-left:8px;font-family:ui-monospace,monospace;font-size:11px;color:var(--brand-gray)}
+.stage{padding:22px;background:var(--brand-canvas);position:relative;min-height:200px}
+/* drawer */
+.drawerwrap{position:relative;overflow:hidden}
+.scrim{position:absolute;inset:0;background:rgba(23,23,23,.34);z-index:5}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(560px,88%);background:#fff;z-index:6;
+  border-left:1px solid var(--brand-metal-line);box-shadow:-16px 0 40px rgba(0,0,0,.16);
+  display:flex;flex-direction:column}
+.dhead{padding:16px 18px;border-bottom:1px solid var(--brand-metal-line)}
+.dbody{padding:16px 18px;overflow:auto;flex:1}
+.dfoot{padding:12px 18px;border-top:1px solid var(--brand-metal-line);display:flex;align-items:center;
+  justify-content:space-between;gap:10px;background:var(--brand-seasalt)}
+.btn{font-family:var(--font-display);font-size:12.5px;padding:8px 15px;border-radius:999px;border:1px solid var(--brand-night);
+  background:var(--brand-night);color:var(--brand-seasalt);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--brand-night)}
+.btn.y{background:var(--brand-yellow);color:var(--brand-night)}
+.fieldrow{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:center;padding:8px 0;
+  border-bottom:1px solid rgba(0,0,0,.05)}
+.fieldrow .lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brand-gray);font-weight:600}
+.ctl{border:1px solid var(--brand-metal-line);border-radius:9px;padding:7px 10px;background:#fff;font-size:12.5px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ctl.focus{border-color:var(--brand-night);box-shadow:0 0 0 3px var(--brand-yellow-soft)}
+.ctl.derived{background:var(--brand-seasalt);color:var(--brand-gray);border-style:dashed}
+.ctl textarea{border:0;outline:0;width:100%;font:inherit;resize:vertical;min-height:44px;background:transparent}
+.caret{color:var(--brand-metal);font-size:10px}
+.groupt{margin:20px 0 8px;display:flex;align-items:center;gap:9px}
+.groupt .ln{flex:1;height:1px;background:var(--brand-metal-line)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--brand-gray);margin-top:12px}
+.legend b{color:var(--brand-night);font-weight:600}
+.sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+footer.f{margin-top:34px;color:var(--brand-gray);font-size:12px}
+@media(max-width:1000px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="eyebrow mark">Monday decommission · step 1.5</div>
+<h1>DeliveryOps information architecture</h1>
+<p class="sub">Mockups for approval. Nothing here is built. Decisions already taken this session:
+editing happens <b>one process at a time in context</b>; the whole team can edit with best-effort
+attribution; the Activity&nbsp;Log board is <b>archived, not migrated</b>. The IA choice below is yours.</p>
+
+<div class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-t="p1">1 · IA options A vs B</button>
+  <button role="tab" aria-selected="false" data-t="p2">2 · Where every field lives</button>
+  <button role="tab" aria-selected="false" data-t="p3">3 · The process edit drawer</button>
+  <button role="tab" aria-selected="false" data-t="p4">4 · Weekly review board</button>
+  <button role="tab" aria-selected="false" data-t="p5">5 · Customer 360</button>
+</div>
+
+<!-- ══════════════════════════ PANEL 1 ══════════════════════════ -->
+<section class="panel on" id="p1">
+
+  <div class="glass pad" style="margin-bottom:20px">
+    <h2>The evidence that decides this</h2>
+    <p class="sub" style="margin:6px 0 0">Measured from <span class="mono">monday-backup-2026-08-03</span>,
+    the 6 report boards, 146 rows.</p>
+    <div class="grid4" style="margin-top:14px">
+      <div class="glass stat"><div class="data-label">Rows created Feb 2026</div><div class="v">125</div><div class="h">of 146. The boards were populated in one sitting.</div></div>
+      <div class="glass stat"><div class="data-label">Never edited since creation</div><div class="v">84</div><div class="h">of 146 (58%). Same month created and updated.</div></div>
+      <div class="glass stat"><div class="data-label">Median row age</div><div class="v">174d</div><div class="h">Last touch. 94 rows sit in the 91–180 day band.</div></div>
+      <div class="glass stat"><div class="data-label">Edits per month, recent</div><div class="v">11–24</div><div class="h">Rows touched: Jun 17, Jul 11, May 24.</div></div>
+    </div>
+    <div class="note"><b>This kills the spreadsheet option on evidence, not taste.</b> Real edit velocity is
+    roughly one to two dozen row-changes a month. A drawer handles that comfortably. Building an
+    editable grid to replicate Monday's board UX would be building for a workload that does not exist.
+    <span style="color:var(--brand-gray)">Inference: <span class="mono">updated_at</span> reflects column
+    edits, so "never edited" is a floor, not a ceiling — bulk-created rows edited the same month read as untouched.</span></div>
+  </div>
+
+  <div class="grid2">
+    <!-- OPTION A -->
+    <div class="glass pad">
+      <div class="eyebrow mark">Option A</div>
+      <h2>Aggressive — 5 entries</h2>
+      <p class="sub" style="font-size:13px">One loader per concept. Duplicated cards deleted, not hidden.</p>
+      <div class="navmock" style="margin:14px 0">
+        <span class="act">Portfolio</span><span>Customers</span><span class="new">Insights</span>
+        <span>Reports</span><span>Agent</span>
+        <span class="gone">Dashboard</span><span class="gone">Delivery</span><span class="gone">Analytics</span>
+      </div>
+      <table>
+        <tr><th style="width:96px">Route</th><th>Is for</th></tr>
+        <tr><td><b>/portfolio</b></td><td>The 146 processes as a <b>segmented board</b> — Active work by
+          lane is the default view, Live / Pipeline / Closed are siblings. Cards are read-only; click opens
+          the edit drawer. Doubles as the weekly review screen. Replaces <span class="mono">/delivery</span>.
+          <span style="color:var(--brand-gray)">See panel 4.</span></td></tr>
+        <tr><td><b>/customers</b><br><span class="mono" style="color:var(--brand-gray)">+ /[key]</span></td>
+          <td>Roster and the 360. Gains the 4-axis health scorecard and an NPS tab that can add a response.
+          Activity tab removed. Same edit drawer from the Processes tab.</td></tr>
+        <tr><td><b>/insights</b></td><td>Merge of <span class="mono">/dashboard</span> +
+          <span class="mono">/analytics</span>, two tabs: <b>Today</b> (attention, overnight, pipeline,
+          approvals) and <b>Trends</b> (ARR, NPS, TTV, workload). ARR computed once.</td></tr>
+        <tr><td><b>/reports</b></td><td>Weekly delivery update + V2 all-hands. The three dead catalog
+          cards deleted.</td></tr>
+        <tr><td><b>/operations</b></td><td>Renamed <b>Agent</b> in nav, merged with <span class="mono">/chat</span>.
+          One conversational surface, not two.</td></tr>
+      </table>
+      <div class="groupt"><span class="data-label">Cost</span><div class="ln"></div></div>
+      <ul class="tight" style="font-size:12.5px">
+        <li>Highest code churn. Touches 8 of 10 routes.</li>
+        <li><span class="mono">/insights</span> risks becoming a 900-line page; the two tabs are the mitigation.</li>
+        <li>You relearn where three things live.</li>
+      </ul>
+      <div class="groupt"><span class="data-label">Payoff</span><div class="ln"></div></div>
+      <ul class="tight" style="font-size:12.5px">
+        <li>ARR stops being computed on three pages from one loader.</li>
+        <li>"Active projects" stops having three different values from three loaders.</li>
+        <li>4 dead components and 1 dead route deleted in the same pass.</li>
+      </ul>
+    </div>
+
+    <!-- OPTION B -->
+    <div class="glass pad">
+      <div class="eyebrow mark">Option B</div>
+      <h2>Conservative — 7 entries, unchanged</h2>
+      <p class="sub" style="font-size:13px">Same nav. Dedupe happens behind it, in the loader layer only.</p>
+      <div class="navmock" style="margin:14px 0">
+        <span>Dashboard</span><span>Customers</span><span class="act">Delivery</span><span>Analytics</span>
+        <span>Reports</span><span>Operations</span><span>Agent</span>
+      </div>
+      <table>
+        <tr><th style="width:96px">Route</th><th>Change</th></tr>
+        <tr><td><b>/delivery</b></td><td>Becomes the process surface: the segmented board from panel 4
+          plus the edit drawer, added alongside the existing kanban and table views. No rename, no new
+          nav entry.</td></tr>
+        <tr><td><b>/customers/[key]</b></td><td>Same as Option A: health scorecard, NPS tab writable,
+          Activity tab removed, drawer on the Projects tab.</td></tr>
+        <tr><td><b>/dashboard</b><br><b>/analytics</b></td><td>Both stay. Both read one new
+          <span class="mono">loadPortfolio()</span> so numbers agree. The duplicate ARR and pipeline
+          cards stay on screen but stop disagreeing.</td></tr>
+        <tr><td><b>/reports</b></td><td>Dead catalog cards deleted. Otherwise unchanged.</td></tr>
+        <tr><td><b>/operations</b></td><td>Untouched.</td></tr>
+      </table>
+      <div class="groupt"><span class="data-label">Cost</span><div class="ln"></div></div>
+      <ul class="tight" style="font-size:12.5px">
+        <li>The duplication survives. ARR still renders in three places; someone still maintains three.</li>
+        <li><span class="mono">/delivery</span> keeps a 914-line client that already does kanban + table +
+          3 charts + a matrix, and now gains editing.</li>
+        <li>Dead components stay dead in the tree.</li>
+      </ul>
+      <div class="groupt"><span class="data-label">Payoff</span><div class="ln"></div></div>
+      <ul class="tight" style="font-size:12.5px">
+        <li>Retires Monday in the fewest moves. Nothing to relearn.</li>
+        <li>Smaller diff, easier to verify against the report row-for-row at step 1.9.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="glass pad" style="margin-top:18px">
+    <h3>My recommendation, and what it survived</h3>
+    <p style="margin:0;font-size:13px">
+    <b>Option B now, Option A immediately after cutover.</b> {Likely} The reason is step 1.9 in your own
+    checklist: "verify report numbers match row-for-row before cutover" is a hard gate, and it is far
+    cheaper to verify against an unchanged IA. Doing the merge and the migration in one diff means a
+    number that moves could be either the new data model or the new loader, and you will not know which.
+    </p>
+    <p style="margin:8px 0 0;font-size:13px">The counter-case, which I think loses: the deduplication in
+    Option B is the expensive half, and doing it without deleting the surfaces means you build
+    <span class="mono">loadPortfolio()</span> and then still keep three call sites. That is real waste.
+    It loses because the waste is bounded and one-time, while a botched cutover verification is not.</p>
+    <p style="margin:8px 0 0;font-size:13px">Either way, three things happen regardless and should be
+    done first: the process drawer (panel 3), migration 0021 (panel 2), and deleting
+    <span class="mono">/api/monday/item-updates</span>, which is public and unauthenticated today
+    while holding the server's Monday token.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ PANEL 2 ══════════════════════════ -->
+<section class="panel" id="p2">
+  <div class="glass pad">
+    <h2>Migration 0021 — one migration, three boards resolved</h2>
+    <p class="sub">Correction to the log first: the archive's <span class="mono">board_relation</span>
+    cells carry an empty <span class="mono">text</span> field but a populated
+    <span class="mono">linked_items</span> array. NPS is <b>87/87</b> linked to the Customers board and
+    Activity Log is <b>43/43</b> on <span class="mono">Customer</span>. There is no name-matching pass to
+    write. The 685 "empty" relation cells counted on 2026-08-03 are genuinely empty cells, confirmed:
+    Activity Log's second relation (<span class="mono">Project</span>) is empty on all 43 rows while
+    <span class="mono">Customer</span> is full.</p>
+  </div>
+
+  <div class="grid2" style="margin-top:18px">
+    <div class="glass pad">
+      <h3>NPS Tracking — 87 rows → new table <span class="mono">nps_responses</span></h3>
+      <table>
+        <tr><th>Monday column</th><th>Fill</th><th>Native home</th></tr>
+        <tr><td>item name</td><td>87/87</td><td><span class="mono">respondent_name</span></td></tr>
+        <tr><td>Customer (relation)</td><td>87/87</td><td><span class="mono">customer_id</span> — solid join</td></tr>
+        <tr><td>Quarter / group</td><td>87/87</td><td><span class="mono">quarter</span> · Q2'24 → Q4'25</td></tr>
+        <tr><td>Response Date</td><td>87/87</td><td><span class="mono">response_date</span></td></tr>
+        <tr><td>NPS Score</td><td>87/87</td><td><span class="mono">score</span> smallint 0–10</td></tr>
+        <tr><td>NPS Category</td><td>87/87</td><td><b>derived</b> from score, not stored</td></tr>
+        <tr><td>Respondent Type</td><td>77/87</td><td><span class="mono">respondent_type</span></td></tr>
+        <tr><td>Product Satisfaction</td><td>83/87</td><td><span class="mono">product_satisfaction</span></td></tr>
+        <tr><td>Feedback</td><td>30/87</td><td><span class="mono">feedback</span> text</td></tr>
+      </table>
+      <div class="note"><b>Lives in the IA at:</b> customer 360 → NPS tab (per-customer list + an
+      <b>Add response</b> form, because Monday entry was manual and there is no survey integration);
+      Insights/Analytics → portfolio trend by quarter; weekly report → NPS section.
+      <span class="mono">internal_profiles.nps_score</span> becomes <b>derived</b> from this table and
+      stops being hand-set.</div>
+    </div>
+
+    <div class="glass pad">
+      <h3>Activity Log — 43 rows → <span class="chip bad">archived, no native home</span></h3>
+      <p style="font-size:12.5px;margin:0 0 10px">Your call this session, and the data backs it: all 43
+      created Feb 2026 from Fireflies transcripts, single group, <span class="mono">Status=Open</span> on
+      every row, <span class="mono">Resolved Date</span> empty on all 43,
+      <span class="mono">Owner</span> empty on all 43. Nothing was ever closed.</p>
+      <div class="kill"><b>0021 drops:</b> table <span class="mono">monday_activities</span>,
+      its sync path in <span class="mono">lib/sync/monday.ts</span>, and the customer 360
+      <b>Activity</b> tab plus <span class="mono">ActivityLogCard</span>. The rows stay in the backup.
+      <br><br><b>One caveat before you sign this off.</b> The 360's Activity tab is the only place
+      meeting-derived commitments surface today. Removing it removes a capability, not just a dead card.
+      If you want the capability back later, it is a new feature built on <span class="mono">events</span>
+      or Fireflies directly — not a restore of this board.</div>
+    </div>
+  </div>
+
+  <div class="glass pad" style="margin-top:18px">
+    <h3>Customers board — 24 columns, but only a 9-field diff</h3>
+    <p class="sub" style="font-size:13px">Fifteen of the 24 already have a native home or are derivable.
+    Naming them explicitly so 0021 does not re-add them.</p>
+    <div class="grid3" style="margin-top:12px">
+      <div>
+        <div class="data-label" style="margin-bottom:7px"><span class="sw" style="background:var(--brand-yellow)"></span>New columns needed (9)</div>
+        <table>
+          <tr><th>Field</th><th>Home</th></tr>
+          <tr><td><b>Renewal Health</b></td><td rowspan="4" style="vertical-align:middle;background:var(--brand-yellow-soft)">
+            <span class="mono">internal_profiles</span><br>4 × smallint 1–3, null&nbsp;=&nbsp;not assessed.
+            <br><span style="color:var(--brand-gray)">41/41 filled. "Evaluating" (15–17 rows) → null.</span></td></tr>
+          <tr><td><b>Pipeline Health</b></td></tr>
+          <tr><td><b>Champion Health</b></td></tr>
+          <tr><td><b>Exec Sponsor Health</b></td></tr>
+          <tr><td>Account Type</td><td><span class="mono">customers.account_type</span><br>Partner 9 · Long Term 25 · POV 7</td></tr>
+          <tr><td>Company Revenue</td><td><span class="mono">profiles.company_revenue</span> text — 41/41, values like "~$3.8B"</td></tr>
+          <tr><td>Company Focus</td><td><span class="mono">profiles.company_focus</span> — 41/41</td></tr>
+          <tr><td>Company Priorities</td><td><span class="mono">profiles.company_priorities</span> — 41/41</td></tr>
+          <tr><td>V2 Demo Completed?</td><td><span class="mono">internal_profiles.v2_demo_completed_at</span> <b>date</b>, not a yes/no — 4 Yes, 24 No</td></tr>
+        </table>
+      </div>
+      <div>
+        <div class="data-label" style="margin-bottom:7px"><span class="sw" style="background:var(--brand-metal)"></span>Already native (7) — do not re-add</div>
+        <table>
+          <tr><th>Monday</th><th>Existing column</th></tr>
+          <tr><td>ARR</td><td><span class="mono">profiles.arr</span></td></tr>
+          <tr><td>Industry</td><td><span class="mono">profiles.industry</span></td></tr>
+          <tr><td>Employees</td><td><span class="mono">profiles.employee_count</span></td></tr>
+          <tr><td>Renewal Date</td><td><span class="mono">profiles.renewal_date</span></td></tr>
+          <tr><td>AE</td><td><span class="mono">customers.ae_owner</span></td></tr>
+          <tr><td>Partner</td><td><span class="mono">customers.partner</span></td></tr>
+          <tr><td>TAM / FDE</td><td>FDE roster + <span class="mono">processes.tam_owner</span></td></tr>
+        </table>
+        <div class="data-label" style="margin:16px 0 7px"><span class="sw" style="background:#ddd"></span>Derived from <span class="mono">processes</span> (4) — never stored</div>
+        <table>
+          <tr><td>Completed projects</td><td class="mono" style="color:var(--brand-gray)">count(lifecycle='live')</td></tr>
+          <tr><td>In Progress Projects</td><td class="mono" style="color:var(--brand-gray)">count(in_development…uat)</td></tr>
+          <tr><td>Last Delivery Date</td><td class="mono" style="color:var(--brand-gray)">max(go_live_date)</td></tr>
+          <tr><td>Summarize updates</td><td>agent output, already exists</td></tr>
+        </table>
+      </div>
+      <div>
+        <div class="data-label" style="margin-bottom:7px"><span class="sw" style="background:#fecaca"></span>Dropped (4)</div>
+        <table>
+          <tr><th>Field</th><th>Why</th></tr>
+          <tr><td><b>Customer Health</b><br><span class="mono" style="color:var(--brand-gray)">Healthy/Watch/At Risk/Churned/Dropped</span></td>
+            <td>Blended, same defect as project <span class="mono">Health</span>. Churned and Dropped are
+            lifecycle, not health. <b>Derive</b> health from the 4 axes; lifecycle already lives in
+            <span class="mono">custom_category</span>.</td></tr>
+          <tr><td><b>NPS Score</b> (17/41)</td><td>Stale copy. Derive from <span class="mono">nps_responses</span>.</td></tr>
+          <tr><td><b>board group</b><br><span class="mono" style="color:var(--brand-gray)">Upcoming Renewal, Churned/Dropped…</span></td>
+            <td>Already mirrored in <span class="mono">customers.lifecycle_group</span>, which
+            <span class="mono">0005</span> backfilled into <span class="mono">custom_category</span>.
+            0021 should <b>drop lifecycle_group</b> — it is Monday's field and becomes dead on cutover.</td></tr>
+          <tr><td><span class="mono">internal_profiles.health_score</span> int 0–100</td>
+            <td>Not from Monday, but replaced. A 0–100 number nobody can defend, superseded by the
+            4-axis scorecard.</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="note"><b>The one thing I could not settle from data.</b>
+    <span class="mono">Account Type</span> (Partner / Long&nbsp;Term / POV) overlaps
+    <span class="mono">custom_category</span> at two values — "Partner Managed" and "POV" appear in both.
+    Either Account Type is contract shape and category is lifecycle, in which case both stay and the
+    two shared values are a coincidence, or one is redundant. Needs your read.</div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ PANEL 3 ══════════════════════════ -->
+<section class="panel" id="p3">
+  <div class="glass pad" style="margin-bottom:18px">
+    <h2>The process edit drawer — the actual blocker</h2>
+    <p class="sub">Reachable identically from <span class="mono">/portfolio</span> (or
+    <span class="mono">/delivery</span>) and from the customer 360 Processes tab. One component, one
+    <span class="mono">PATCH /api/processes/[id]</span>. Today's <span class="mono">InlineEdit</span>
+    cannot be reused: it hardcodes the customer endpoint and takes no save callback, so it needs a
+    callback prop before it can serve anything but a customer field.</p>
+  </div>
+
+  <div class="frame">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">delivery-ops-delta.vercel.app/portfolio</span></div>
+    <div class="stage drawerwrap">
+      <!-- table behind -->
+      <div style="opacity:.85">
+        <div class="eyebrow mark">Portfolio</div>
+        <div style="font-family:var(--font-display);font-size:22px;margin:4px 0 12px">146 processes, 40 customers</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+          <span class="chip dark">Active · 18</span><span class="chip">Live · 71</span>
+          <span class="chip">Pipeline · 12</span><span class="chip">Closed · 45</span>
+          <span class="chip y">Mine · 4</span>
+        </div>
+        <div class="glass" style="padding:4px 6px">
+        <table>
+          <tr><th>Process</th><th>Customer</th><th>Lifecycle</th><th>Phase</th><th>Health</th><th>Owner</th><th>Last touched</th></tr>
+          <tr class="click"><td>Invoice matching</td><td>Century</td><td><span class="chip">live</span></td><td>—</td><td><span class="chip ok">on track</span></td><td>Arushi</td><td style="color:var(--brand-gray)">12d</td></tr>
+          <tr class="click" style="background:var(--brand-yellow-soft)"><td><b>Warranty</b></td><td>Norco</td><td><span class="chip">in development</span></td><td>M3 · testing/UAT</td><td><span class="chip ok">on track</span></td><td>Karthik</td><td style="color:var(--warn)">53d</td></tr>
+          <tr class="click"><td>Customer Payment</td><td>Plunkett</td><td><span class="chip">uat</span></td><td>M3 · testing/UAT</td><td><span class="chip warn">at risk</span></td><td>Ayush</td><td style="color:var(--brand-gray)">6d</td></tr>
+          <tr class="click"><td>Order intake</td><td>Ozark River</td><td><span class="chip">in development</span></td><td>M2 · development</td><td><span class="chip bad">off track</span></td><td>—</td><td style="color:var(--bad)">118d</td></tr>
+        </table>
+        </div>
+      </div>
+      <div class="scrim"></div>
+
+      <!-- drawer -->
+      <aside class="drawer">
+        <div class="dhead">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div class="eyebrow">Norco</div>
+              <div style="font-family:var(--font-display);font-size:19px;margin-top:2px">Warranty</div>
+            </div>
+            <span style="color:var(--brand-metal);font-size:16px;cursor:pointer">✕</span>
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">
+            <span class="chip">V2</span><span class="chip">Medium</span><span class="chip ok">on track</span>
+            <span class="chip" style="color:var(--warn);border-color:#fde68a">last touched 53d ago</span>
+          </div>
+        </div>
+
+        <div class="dbody">
+          <div class="groupt"><span class="data-label">State</span><div class="ln"></div></div>
+          <div class="fieldrow"><div class="lbl">Lifecycle</div><div class="ctl focus">in development <span class="caret">▾</span></div></div>
+          <div style="font-size:11px;color:var(--brand-gray);margin:-2px 0 4px 144px">
+            Changing this moves the card to another lane, and asks for the fields that lane requires.</div>
+          <div class="fieldrow"><div class="lbl">Phase</div><div class="ctl">M3 · testing / UAT <span class="caret">▾</span></div></div>
+          <div class="fieldrow"><div class="lbl">Health</div><div class="ctl">on track <span class="caret">▾</span></div></div>
+          <div class="fieldrow"><div class="lbl">Blocked on</div><div class="ctl">nothing <span class="caret">▾</span></div></div>
+          <div class="fieldrow"><div class="lbl">Work mode</div><div class="ctl" style="color:var(--brand-metal)">— <span class="caret">▾</span></div></div>
+          <div class="fieldrow"><div class="lbl">Platform</div><div class="ctl">V2 <span class="caret">▾</span></div></div>
+          <div class="fieldrow"><div class="lbl">Migration stage</div><div class="ctl">live on v2 <span class="caret">▾</span></div></div>
+
+          <div class="groupt"><span class="data-label">Dates &amp; effort</span><div class="ln"></div></div>
+          <div class="fieldrow"><div class="lbl">Kickoff</div><div class="ctl">2026-04-06</div></div>
+          <div class="fieldrow"><div class="lbl">Go live</div><div class="ctl" style="color:var(--brand-metal)">not set</div></div>
+          <div class="fieldrow"><div class="lbl">TTV</div><div class="ctl derived">computed on go-live · generated column</div></div>
+          <div class="fieldrow"><div class="lbl">Effort hours</div><div class="ctl" style="color:var(--brand-metal)">not set</div></div>
+
+          <div class="groupt"><span class="data-label">Ownership</span><div class="ln"></div></div>
+          <div class="fieldrow"><div class="lbl">Dev / FDE</div><div class="ctl">Karthik Nagabhushana <span class="caret">▾</span></div></div>
+          <div class="fieldrow"><div class="lbl">TAM</div><div class="ctl">shyam.prabhal@kognitos.com <span class="caret">▾</span></div></div>
+          <div class="fieldrow"><div class="lbl">Partner</div><div class="ctl" style="color:var(--brand-metal)">— <span class="caret">▾</span></div></div>
+
+          <div class="groupt"><span class="data-label">Value</span><div class="ln"></div></div>
+          <div class="fieldrow"><div class="lbl">Minutes saved / run</div><div class="ctl" style="color:var(--brand-metal)">not set — the one human input</div></div>
+          <div class="fieldrow"><div class="lbl">Basis</div><div class="ctl" style="color:var(--brand-metal)">how you arrived at it</div></div>
+          <div class="fieldrow"><div class="lbl">Runs this quarter</div><div class="ctl derived">no Kognitos link · single-workspace PAT</div></div>
+          <div class="fieldrow"><div class="lbl">Value</div><div class="ctl derived">nothing shown, deliberately</div></div>
+
+          <div class="groupt"><span class="data-label">Notes</span><div class="ln"></div></div>
+          <div class="ctl" style="align-items:flex-start"><textarea placeholder="Blockers…"></textarea></div>
+          <div class="ctl" style="align-items:flex-start;margin-top:8px"><textarea placeholder="Notes…"></textarea></div>
+
+          <div class="groupt"><span class="data-label">History</span><div class="ln"></div></div>
+          <div style="font-size:12px;color:var(--brand-gray)">
+            <div style="padding:5px 0;border-bottom:1px solid rgba(0,0,0,.05)">phase → M3 · testing/UAT &nbsp;·&nbsp; rishabh &nbsp;·&nbsp; 53d ago</div>
+            <div style="padding:5px 0;border-bottom:1px solid rgba(0,0,0,.05)">kickoff_date set 2026-04-06 &nbsp;·&nbsp; import &nbsp;·&nbsp; Feb 2026</div>
+            <div style="padding:5px 0">created from Monday item 9848…21 &nbsp;·&nbsp; Feb 2026</div>
+          </div>
+        </div>
+
+        <div class="dfoot">
+          <span style="font-size:11.5px;color:var(--brand-gray)">Saves per field, optimistically. No Save button.</span>
+          <div style="display:flex;gap:7px">
+            <button class="btn ghost">Open Norco</button>
+            <button class="btn y">Mark reviewed</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:18px">
+    <div class="glass pad">
+      <h3>Six mechanics worth agreeing on now</h3>
+      <ul class="tight" style="font-size:12.5px">
+        <li><b>Per-field save, optimistic, no Save button.</b> Today's <span class="mono">InlineEdit</span>
+          awaits the POST then calls <span class="mono">router.refresh()</span> and reads the value back
+          from props, so the new value only appears after a server round trip. In a 20-field drawer that
+          is 20 full-page refreshes. This needs local state.</li>
+        <li><b>Nothing is greyed out for permissions.</b> Whole team, attribution best-effort — so
+          <span class="mono">updated_by</span> from the Auth0 session, no per-field locks.</li>
+        <li><b>Derived fields are visually distinct and unclickable</b> — dashed border, muted. TTV, run
+          counts, computed value. Prevents the Monday habit of hand-editing a formula column.</li>
+        <li><b>"Mark reviewed" is separate from editing.</b> Confirming a row is still accurate is the
+          common action, and it is not an edit. Without it, an unchanged row can never leave the
+          needs-review queue.</li>
+        <li><b>Value shows nothing rather than a modelled number</b> when minutes-saved is unset or the
+          Kognitos link is missing. Per the schema proposal, intended behaviour.</li>
+        <li><b>History is per-field, not a Monday updates feed.</b> Only 607 of 7,798 archive items have
+          any update at all, so an imported feed would be empty almost everywhere. Per-field history is
+          also the substrate the Slack/Linear/mail suggestions will need — see panel 4.</li>
+        <li><b>One row is one process for one customer.</b> Confirmed grain, unchanged from the schema
+          proposal. A customer with 4 automations has 4 rows, and the customer 360 groups them.</li>
+      </ul>
+    </div>
+    <div class="glass pad">
+      <h3>What this replaces, concretely</h3>
+      <table>
+        <tr><th>Today</th><th>After</th></tr>
+        <tr><td><span class="mono">ProjectDetailPanel</span> — read-only, 1 GET, 4 call sites</td>
+          <td>Becomes the editable drawer. Same 4 call sites, same slide-over shape.</td></tr>
+        <tr><td><span class="mono">GET /api/monday/item-updates</span> called client-side on mount,
+          route is <b>public and unauthenticated</b> while using the server's Monday token</td>
+          <td><span class="chip bad">Deleted.</span> Replaced by native per-field history. Do this
+          regardless of the migration timeline.</td></tr>
+        <tr><td><span class="mono">/api/migrations</span> + <span class="mono">/[id]</span> — full CRUD,
+          zero UI call sites</td>
+          <td>Becomes <span class="mono">/api/processes</span>, finally with a caller.</td></tr>
+        <tr><td><span class="mono">lib/agent/prompts.ts</span>: "FDE assignments are not writable,
+          update Monday"</td>
+          <td>Prompt rewritten. The operations agent gains
+          <span class="mono">update_process</span> alongside its three customer tools.</td></tr>
+        <tr><td>3 dead stat cards + <span class="mono">_cards/hero-card.tsx</span> holding a second copy
+          of the 3 InlineEdit fields</td><td><span class="chip bad">Deleted.</span></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ PANEL 4 ══════════════════════════ -->
+<section class="panel" id="p4">
+  <div class="glass pad" style="margin-bottom:18px">
+    <h2>The board — one surface for editing and for the weekly review</h2>
+    <p class="sub">Built to your brief: the working set is a handful of processes, Live and Pipeline sit in
+    separate views, a status change moves the card to another lane, and the same screen has to survive
+    being projected in front of the team. That last constraint is the demanding one — an edit surface
+    optimised for density and a review surface optimised for legibility usually fight. The resolution
+    here is <b>lanes for legibility, drawer for density</b>: nothing on the card is editable, so the card
+    can stay big and quiet.</p>
+    <div class="note"><b>Default view is 18 rows, not 146.</b> Active work only. Live (71), Pipeline (12)
+    and Closed (45) are sibling views. This is the single biggest reason the board is readable at all —
+    Monday showed you all 146 by default and that is part of why the median row went 174 days without a
+    touch. The four buckets are exact and sum to 146: Live 71, Active 18 (In&nbsp;Progress&nbsp;14 +
+    On&nbsp;Hold&nbsp;4), Pipeline 12 (Backlog&nbsp;10 + Upcoming&nbsp;2), Closed 45 (Inactive).</div>
+    <div class="kill" style="margin-bottom:0"><b>Correction to an earlier number in this session.</b> I
+    first put Active at 30 by counting Backlog and Upcoming as in-flight, which double-counts the
+    Pipeline view. Active is <b>18</b>. Anything you heard from me earlier about "30 in-flight, 24 of them
+    stale" was wrong; the real figure is 18 active, of which 10 are 31–90d stale and 3 are past 90d.</div>
+  </div>
+
+  <div class="frame">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">delivery-ops-delta.vercel.app/portfolio</span></div>
+    <div class="stage">
+
+      <!-- view switcher -->
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:16px">
+        <div>
+          <div class="eyebrow mark">Portfolio</div>
+          <div style="font-family:var(--font-display);font-size:26px;letter-spacing:-.015em;margin-top:3px">Active work</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="chip dark">Active&nbsp;·&nbsp;18</span>
+          <span class="chip">Live&nbsp;·&nbsp;71</span>
+          <span class="chip">Pipeline&nbsp;·&nbsp;12</span>
+          <span class="chip">Closed&nbsp;·&nbsp;45</span>
+          <span class="chip y">Mine&nbsp;·&nbsp;4</span>
+        </div>
+      </div>
+
+      <!-- suggestion strip -->
+      <div class="glass" style="padding:12px 15px;margin-bottom:16px;border-left:2px solid var(--brand-yellow-line)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+          <div style="font-size:12.5px">
+            <b>3 suggested updates</b> waiting
+            <span style="color:var(--brand-gray)">· Linear LIN-482 closed on Norco Warranty · Slack
+            #paysafe mentions go-live 15 Aug · Kort Payments UAT sign-off email</span>
+          </div>
+          <div style="display:flex;gap:7px">
+            <button class="btn ghost" style="padding:6px 13px">Review all</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--brand-gray);margin-top:7px">
+          Placeholder for the inbound-signal work you described. Nothing writes to a process without
+          passing through here.</div>
+      </div>
+
+      <!-- lanes -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;align-items:start">
+
+        <!-- lane -->
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0 3px 9px">
+            <span style="font-family:var(--font-display);font-size:13px">Discovery</span>
+            <span style="font-size:11.5px;color:var(--brand-gray)">0</span>
+          </div>
+          <div style="display:grid;gap:9px">
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--warn)">
+              <div class="eyebrow" style="font-size:10px">JBI</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Vendor onboarding</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip" style="font-size:10px">waiting on customer</span><span class="chip warn" style="font-size:10px">37d</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">Arushi</div>
+            </div>
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--ok)">
+              <div class="eyebrow" style="font-size:10px">Salesbricks</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Contract intake</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip" style="font-size:10px">M1</span><span class="chip" style="font-size:10px">4d</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">Rishabh</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0 3px 9px">
+            <span style="font-family:var(--font-display);font-size:13px">Development</span>
+            <span style="font-size:11.5px;color:var(--brand-gray)">1</span>
+          </div>
+          <div style="display:grid;gap:9px">
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--bad)">
+              <div class="eyebrow" style="font-size:10px">Ozark River</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Order intake</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip bad" style="font-size:10px">off track</span><span class="chip bad" style="font-size:10px">118d</span><span class="chip" style="font-size:10px">no owner</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">unassigned</div>
+            </div>
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--ok)">
+              <div class="eyebrow" style="font-size:10px">Century</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Remittance posting</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip" style="font-size:10px">M2</span><span class="chip" style="font-size:10px">9d</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">Karthik</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0 3px 9px">
+            <span style="font-family:var(--font-display);font-size:13px">Testing / UAT</span>
+            <span style="font-size:11.5px;color:var(--brand-gray)">10</span>
+          </div>
+          <div style="display:grid;gap:9px">
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--ok);
+              box-shadow:0 0 0 2px var(--brand-yellow-line),var(--glass-inner-glow)">
+              <div class="eyebrow" style="font-size:10px">Norco</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Warranty</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip" style="font-size:10px">M3</span><span class="chip warn" style="font-size:10px">53d</span><span class="chip new" style="font-size:10px">1 suggestion</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">Karthik · open in drawer →</div>
+            </div>
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--warn)">
+              <div class="eyebrow" style="font-size:10px">Kort Payments</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Settlement recon</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip warn" style="font-size:10px">at risk</span><span class="chip" style="font-size:10px">11d</span><span class="chip new" style="font-size:10px">1 suggestion</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">Ayush</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0 3px 9px">
+            <span style="font-family:var(--font-display);font-size:13px">Blocked / waiting</span>
+            <span style="font-size:11.5px;color:var(--brand-gray)">7</span>
+          </div>
+          <div style="display:grid;gap:9px">
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--bad)">
+              <div class="eyebrow" style="font-size:10px">Plunkett</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Credit claim processing</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip bad" style="font-size:10px">no reason set</span><span class="chip warn" style="font-size:10px">41d</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">Ayush</div>
+            </div>
+            <div class="glass pad" style="padding:13px;border-top:2px solid var(--warn)">
+              <div class="eyebrow" style="font-size:10px">Dish — Ecostar</div>
+              <div style="font-family:var(--font-display);font-size:14.5px;margin:2px 0 8px">Claims triage</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip" style="font-size:10px">kognitos engg</span><span class="chip" style="font-size:10px">18d</span></div>
+              <div style="font-size:11px;color:var(--brand-gray);margin-top:8px">Shyam</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><b>Card click</b> opens the drawer. Cards are never editable in place.</span>
+        <span><b>Top border</b> = health. <span class="sw" style="background:var(--ok)"></span>on track
+          <span class="sw" style="background:var(--warn)"></span>at risk
+          <span class="sw" style="background:var(--bad)"></span>off track</span>
+        <span><b>Changing lifecycle in the drawer</b> moves the card to its lane.</span>
+        <span>No drag and drop.</span>
+        <span style="color:var(--bad)"><b>Lane counts are real.</b> Card contents are illustrative.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass pad" style="margin-top:18px">
+    <h3>Two things the corrected numbers exposed</h3>
+    <p style="margin:0;font-size:13px"><b>The Discovery lane is empty, and that is real.</b> The 18 active
+    rows are Testing/UAT&nbsp;10, Waiting&nbsp;for&nbsp;Customer&nbsp;7, Development&nbsp;1. Nothing is in
+    discovery. Either the team genuinely has no early-stage work in flight, or early-stage work never got
+    logged on the board. Worth knowing which before the board's lane set is fixed, because designing four
+    lanes for a pipeline that only ever occupies two is how you get a screen that looks broken in the
+    weekly review.</p>
+    <p style="margin:10px 0 0;font-size:13px"><b>Health carries almost no signal on active work.</b> Of the
+    18: On&nbsp;Track&nbsp;13, On&nbsp;Hold&nbsp;4, Off&nbsp;Track&nbsp;1. Nothing is "at risk" because
+    Monday's <span class="mono">Health</span> has no such value in use. Colour-coding cards by health will
+    render 13 green cards, 4 nulls and one red — a legend that earns its space only if the team starts
+    using at-risk honestly. Consider deriving the card border from staleness plus blocked-state instead,
+    which the data actually differentiates.</p>
+    <div class="note" style="margin-bottom:0"><b>Import consequence, new.</b> For the 7 rows whose Monday
+    phase is literally "Waiting for Customer", the underlying milestone is <b>unrecoverable</b> — the phase
+    column was overwritten with the waiting state. The schema proposal's mapping says "phase unchanged,
+    <span class="mono">blocked_on = customer</span>", but there is no prior phase to keep. Import must
+    leave <span class="mono">phase</span> null on those 7 and they need a human pass. That is 7 of your 18
+    active rows, so it is not a footnote.</div>
+  </div>
+
+  <div class="grid2" style="margin-top:18px">
+    <div class="glass pad">
+      <h3>Why no drag and drop, given it is a board</h3>
+      <p style="margin:0;font-size:13px">{Likely} Dragging sets one field. Every real lane change here
+      also wants a second and third field — moving to UAT wants a date, moving to Blocked wants a reason,
+      moving to Live wants a go-live date, and 7 of your currently-blocked rows have no reason set
+      precisely because Monday let you change status without asking. Opening the drawer on a lane change
+      is the cheap fix for the data quality problem you already have.</p>
+      <p style="margin:9px 0 0;font-size:13px">Counter-case, stated plainly: drag is faster and feels
+      better in a live meeting, and you asked for fluid. If you want it, the compromise is drag-to-move
+      that <i>opens the drawer pre-filled</i> with the new lifecycle unsaved, so the gesture is fast but
+      the required fields still get asked for.</p>
+    </div>
+    <div class="glass pad">
+      <h3>What the inbound-signal plan costs the schema</h3>
+      <p style="margin:0 0 9px;font-size:13px">This is the part of your note with real schema
+      consequences, so worth settling in 0021 rather than bolting on later. Suggested updates from Slack,
+      Linear or mail cannot write straight into <span class="mono">processes</span> — a wrong auto-update
+      is worse than a stale row, because a stale row is at least visibly stale.</p>
+      <table>
+        <tr><th>Addition</th><th>Why</th></tr>
+        <tr><td><span class="mono">reviewed_at</span> · <span class="mono">reviewed_by</span></td>
+          <td>Confirming a row is still accurate is not an edit. Without this an unchanged row can never
+          look fresh.</td></tr>
+        <tr><td>new table<br><span class="mono">process_suggestions</span></td>
+          <td><span class="mono">process_id, field, current_value, suggested_value, source, source_ref,
+          confidence, status, created_at, resolved_by</span>. Feeds the strip above. Accepting one writes
+          the field and stamps provenance.</td></tr>
+        <tr><td><span class="mono">field_provenance jsonb</span></td>
+          <td>Per field: who or what last set it and when. Needed the moment a human edit and a Slack
+          suggestion can disagree, and it is what lets a human edit win.</td></tr>
+      </table>
+      <div class="note" style="margin-bottom:0"><b>One decision I need from you, not now but before 0021
+      ships.</b> When a suggestion arrives for a field a human set 2 days ago — silently drop it, or still
+      surface it? I would surface it and show both values, because the human may simply be out of date.</div>
+    </div>
+  </div>
+
+  <div class="glass pad" style="margin-top:18px">
+    <h3>Effect on the IA choice in panel 1</h3>
+    <p style="margin:0;font-size:13px">Your brief makes this board the weekly-review surface, which is
+    work <span class="mono">/reports/weekly</span> does today from a different data path. {Likely} That
+    strengthens Option A, because once the team reviews live on the board, a separately-authored weekly
+    page becomes a second version of the same truth — the exact failure mode the hand-transcribed
+    <span class="mono">v2-allhands-weeks.ts</span> literals already represent.</p>
+    <p style="margin:9px 0 0;font-size:13px">I still recommend <b>B then A</b>, unchanged. The
+    verification gate at step 1.9 is the reason and it has not moved: you need the report numbers to
+    match row-for-row across the cutover, and you cannot attribute a discrepancy if the IA changed in the
+    same diff. Build the board and the drawer now inside the existing nav, prove the numbers, then
+    collapse the pages.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ PANEL 5 ══════════════════════════ -->
+<section class="panel" id="p5">
+  <div class="glass pad" style="margin-bottom:18px">
+    <h2>Customer 360 — the health scorecard lands here</h2>
+    <p class="sub">Same layout you have: hero, left tab column, sticky right rail. Three changes only —
+    the 4-axis scorecard replaces the undefendable <span class="mono">health_score</span>, the NPS tab
+    becomes writable, the Activity tab goes.</p>
+  </div>
+
+  <div class="frame">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">delivery-ops-delta.vercel.app/customers/norco</span></div>
+    <div class="stage">
+      <!-- hero -->
+      <div class="glass pad" style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap">
+          <div>
+            <div style="display:flex;align-items:center;gap:11px">
+              <div style="width:36px;height:36px;border-radius:9px;background:var(--brand-night);color:var(--brand-yellow);
+                display:grid;place-items:center;font-family:var(--font-display);font-size:14px">N</div>
+              <div>
+                <div style="font-family:var(--font-display);font-size:22px;letter-spacing:-.01em">Norco</div>
+                <div style="color:var(--brand-gray);font-size:12px">Industrial metal &amp; steel fabrication</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px">
+              <span class="chip">Long Term <span class="caret">▾</span></span>
+              <span class="chip">Strategic Growth <span class="caret">▾</span></span>
+              <span class="chip" style="color:var(--brand-metal)">no partner <span class="caret">▾</span></span>
+              <span class="chip">AE Andrew <span class="caret">▾</span></span>
+            </div>
+          </div>
+          <!-- SCORECARD -->
+          <div style="min-width:290px">
+            <div class="data-label" style="margin-bottom:9px">Account health <span class="chip new" style="margin-left:6px">new</span></div>
+            <div style="display:grid;gap:7px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <span style="font-size:12px">Renewal</span>
+                <span style="display:flex;align-items:center;gap:8px"><span class="pipes"><i class="pipe f3"></i><i class="pipe f3"></i><i class="pipe f3"></i></span><span style="font-size:11px;color:var(--ok);width:52px">strong</span></span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <span style="font-size:12px">Pipeline</span>
+                <span style="display:flex;align-items:center;gap:8px"><span class="pipes"><i class="pipe f2"></i><i class="pipe f2"></i><i class="pipe"></i></span><span style="font-size:11px;color:var(--warn);width:52px">moderate</span></span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <span style="font-size:12px">Champion</span>
+                <span style="display:flex;align-items:center;gap:8px"><span class="pipes"><i class="pipe f3"></i><i class="pipe f3"></i><i class="pipe f3"></i></span><span style="font-size:11px;color:var(--ok);width:52px">strong</span></span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <span style="font-size:12px">Exec sponsor</span>
+                <span style="display:flex;align-items:center;gap:8px"><span class="pipes"><i class="pipe f1"></i><i class="pipe"></i><i class="pipe"></i></span><span style="font-size:11px;color:var(--bad);width:52px">critical</span></span></div>
+            </div>
+            <div style="font-size:11px;color:var(--brand-gray);margin-top:9px;border-top:1px solid var(--brand-metal-line);padding-top:8px">
+              Click any axis to set it. Blank = not assessed, and reads as blank rather than zero.</div>
+          </div>
+          <div style="display:flex;gap:22px;align-items:flex-start">
+            <div><div class="data-label">ARR</div><div style="font-family:var(--font-display);font-size:22px">$210k</div></div>
+            <div><div class="data-label">Renews</div><div style="font-family:var(--font-display);font-size:22px">Apr 30</div></div>
+            <div><div class="data-label">NPS</div><div style="font-family:var(--font-display);font-size:22px">9</div>
+              <div style="font-size:10.5px;color:var(--brand-gray)">derived, 3 responses</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
+        <div class="glass pad">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px">
+            <span class="chip">Overview</span><span class="chip dark">Processes</span>
+            <span class="chip">NPS</span><span class="chip">Documents</span><span class="chip">Tasks</span>
+            <span class="chip">Profile</span><span class="chip">Rules</span>
+            <span class="chip" style="text-decoration:line-through;opacity:.45">Activity</span>
+          </div>
+          <table>
+            <tr><th>Process</th><th>Lifecycle</th><th>Phase</th><th>Health</th><th>Reviewed</th></tr>
+            <tr class="click"><td><b>Warranty</b></td><td><span class="chip">in development</span></td><td>M3 · testing/UAT</td><td><span class="chip ok">on track</span></td><td style="color:var(--warn)">53d</td></tr>
+            <tr class="click"><td>Invoice matching</td><td><span class="chip">live</span></td><td>—</td><td>—</td><td style="color:var(--brand-gray)">12d</td></tr>
+            <tr class="click"><td>Quote generation</td><td><span class="chip">backlog</span></td><td>pre-kickoff</td><td>—</td><td style="color:var(--brand-gray)">8d</td></tr>
+          </table>
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+            <button class="btn" style="padding:6px 13px">+ Add process</button>
+            <span style="font-size:11.5px;color:var(--brand-gray)">Row click opens the same drawer as
+              <span class="mono">/portfolio</span>. This is the "in context" path.</span>
+          </div>
+        </div>
+        <div style="display:grid;gap:14px;align-content:start">
+          <div class="glass pad">
+            <div class="data-label" style="margin-bottom:9px">Snapshot</div>
+            <div style="font-size:12.5px;display:grid;gap:6px">
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--brand-gray)">Account type</span><span>Long Term <span class="chip new" style="font-size:9px;padding:1px 5px">new</span></span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--brand-gray)">Company revenue</span><span>~$25M <span class="chip new" style="font-size:9px;padding:1px 5px">new</span></span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--brand-gray)">Employees</span><span>220</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--brand-gray)">V2 demo</span><span>2026-05-14 <span class="chip new" style="font-size:9px;padding:1px 5px">new</span></span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--brand-gray)">Live processes</span><span>1 <span style="color:var(--brand-gray);font-size:10.5px">derived</span></span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--brand-gray)">Last delivery</span><span>2026-01-22 <span style="color:var(--brand-gray);font-size:10.5px">derived</span></span></div>
+            </div>
+          </div>
+          <div class="glass pad">
+            <div class="data-label" style="margin-bottom:7px">Focus &amp; priorities <span class="chip new" style="font-size:9px;padding:1px 5px">new</span></div>
+            <div style="font-size:12.5px;color:var(--brand-gray)">Project profitability tracking, estimating accuracy.
+              41 of 41 customers have this filled in Monday and it has nowhere to go today.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass pad" style="margin-top:18px">
+    <h3>One thing I would push back on if you asked for it</h3>
+    <p style="margin:0;font-size:13px">Do not put the 4-axis scorecard on the
+    <span class="mono">/customers</span> list as four columns. {Likely} Sixteen pips across 40 rows reads
+    as noise and invites averaging four ordinal axes into one number, which is exactly the mistake
+    <span class="mono">health_score</span> made. On the list, show the <b>worst</b> axis and name it —
+    "exec sponsor: critical" — because that is the sentence you would actually say out loud.</p>
+  </div>
+</section>
+
+<footer class="f">
+  Mockup only · <span class="mono">docs/mockups/ia-step-1.5.html</span> · tokens taken from
+  <span class="mono">app/globals.css</span> (<span class="mono">--brand-yellow #F2FF70</span>,
+  <span class="mono">--brand-night #171717</span>, <span class="mono">--brand-canvas #F4F4F2</span>,
+  <span class="mono">.glass-card</span>). Display font falls back to Inter Tight; production uses Neue Machina.
+</footer>
+</div>
+
+<script>
+const tabs=[...document.querySelectorAll('.tabs button')];
+tabs.forEach(b=>b.addEventListener('click',()=>{
+  tabs.forEach(x=>x.setAttribute('aria-selected',String(x===b)));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===b.dataset.t));
+  window.scrollTo({top:0,behavior:'smooth'});
+}));
+</script>
+</body>
+</html>
