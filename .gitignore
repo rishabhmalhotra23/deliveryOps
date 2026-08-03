@@ -20,3 +20,4 @@ scripts/.*.json
 
 # Monday data backup snapshots (real customer data — keep local, do not commit)
 monday-backup/
+monday-backup-*/
