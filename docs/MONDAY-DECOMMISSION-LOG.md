@@ -75,9 +75,9 @@ Status values: `done` / `in progress` / `blocked` / `not started`.
 | # | Step | Status | Notes |
 |---|---|---|---|
 | 1.1 | Design the native schema from the real backup | **proposed 2026-08-03, awaiting approval** | [PROCESSES-SCHEMA-PROPOSAL.md](./PROCESSES-SCHEMA-PROPOSAL.md). Grain = one row per process, soft-linked to `k2_processes`. Clean orthogonal taxonomy replacing Monday's blended fields. `ttv_days` generated. Value = manual minutes-saved input x `k2_runs`. |
-| 1.2 | Generalize `migration_processes` into `processes` | **written 2026-08-03, awaiting apply** | `supabase/migrations/0021_processes_native.sql`. Renames the table and adds 36 columns + 9 enum types + `process_suggestions` + `nps_responses` + the 9 Customers-board fields. **Additive only — nothing dropped**, see 1.2b. `tsc --noEmit` clean, vitest 111/111. |
+| 1.2 | Generalize `migration_processes` into `processes` | **done 2026-08-03, verified on real PG 15** | `supabase/migrations/0021_processes_native.sql`. Renames the table and adds 36 columns + 9 enum types + `process_suggestions` + `nps_responses` + the 9 Customers-board fields. **Additive only — nothing dropped**, see 1.2b. `tsc --noEmit` clean, vitest 111/111, `npm run db:reset` replayed 0001-0021 clean, and an 8-check schema assertion passed exactly: 75 rows survived the rename, `platform` is `process_platform` with v1:69 v2:4 custom:2, `ttv_days` is `is_generated = ALWAYS`, `lifecycle` defaulted to discovery on all 75, both new tables present, all 11 new columns present, `migration_processes` gone. |
 | 1.2b | Drops: `monday_activities`, `customers.lifecycle_group`, `internal_profiles.health_score` | not started, **deliberately** | These were planned for 0021 and pulled out. Both still have live read sites (`lifecycle_group` 19, incl. a `.eq()` filter in `lib/customers.ts:93` and `ALLOWED_FIELDS` in the manual-update route; `monday_activities` 5, incl. `lib/sync/monday.ts:512`). Dropping a column the code still selects is a runtime 500, not a build error, so `npm run build` would have passed and the failure would have landed on customers. Becomes 0022, after the rewire. |
-| 1.3 | Write the importer from the backup into Supabase | not started | Nothing like this exists today. Must include the customer-key matching pass that 0020 skipped. |
+| 1.3 | Write the importer from the backup into Supabase | **written 2026-08-03, dry-run verified** | `scripts/import-monday-backup.ts` + `lib/import/monday-taxonomy.ts` + `tests/import/monday-taxonomy.test.ts` (28 tests, replays the real 146 rows). Dry run by default, idempotent on `source_item_id`, flags rather than guesses. Includes the customer matching pass 0020 skipped. Not yet run with `--apply`. |
 | 1.4 | Populate auto-derived columns from `k2_processes` / `k2_runs` | not started | Real usage data currently unused. |
 | 1.5 | Mockup the UI + decide the IA | **mockup delivered 2026-08-03, awaiting approval** | [docs/mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html). 5 panels: IA options A/B, field homes for 0021, the process edit drawer, the segmented board, customer 360. Editing model, permissions, Activity Log and the suggestion queue all decided. **The A-vs-B IA choice is still open and is Rishabh's.** |
 | 1.6 | Rewire `weekly-loader.ts` off `monday_projects` | not started | |
@@ -354,37 +354,187 @@ Three things worth knowing about how it was built:
 Verification run: `tsc --noEmit` clean, `vitest run` 111/111 pass. `next build` was started but did not
 finish inside the sandbox (10+ minutes, no output) — run it locally before committing.
 
-**Next session:** step 1.3, the importer from `monday-backup-2026-08-03` into `processes` +
+### 2026-08-03 (cont.) — 0021 applied and verified, importer written
+
+0021 was pushed (Vercel `dpl_3pRDmqfAXCgHU4qjmyHpHNGmnPrJ`, READY) and validated on real Postgres 15 via
+`npm run db:reset`, which replayed 0001-0021 clean. An 8-check schema assertion then passed exactly: 75
+rows survived the rename, `platform` is `process_platform` with v1:69 v2:4 custom:2, `ttv_days` is
+`is_generated = ALWAYS`, `lifecycle` defaulted to discovery on all 75, both new tables present, all 11
+new columns present, `migration_processes` gone.
+
+Step 1.3 written: `lib/import/monday-taxonomy.ts` (pure derivation), `scripts/import-monday-backup.ts`
+(I/O, dry run by default), `tests/import/monday-taxonomy.test.ts` (28 tests). The test suite replays the
+actual 146 archive rows and asserts the approved view split, so a change to either the archive or the
+mapping fails loudly instead of drifting. Full suite 139 passing, `tsc --noEmit` clean.
+
+**Two corrections the work forced, both to claims in these docs:**
+
+1. **The customer relation covers 94 of 146 rows, not 140.** `PROCESSES-SCHEMA-PROPOSAL.md` said 140 via
+   `board_relation`. Measured: relation 94, `Customer` dropdown 45, neither 7. The resolution order
+   matters and is not arbitrary — for the 7 `Wipro BPS - iHeartRadio - X` rows the dropdown says
+   iHeart Radio (correct; Wipro BPS is the partner) while the item-name prefix says Wipro BPS (wrong), so
+   the name prefix is a last resort and every row resolved that way is reported. Doc corrected.
+2. **A fourth platform value exists: `Currently in V1; Testing in V2`** (1 row, Scan Health Enhancements
+   Phase 2). Not a dirty value — a real mid-migration state. It maps to `platform = v1` (where it runs)
+   plus `migration_stage = parity_testing`. Calling it v2 would overstate the V2 estate in the all-hands
+   report by one row. 0021's SQL guard would have rejected it; the guard never fired locally because the
+   0020 seed holds only 75 rows and three values. Caught by the archive-replay test, not by review.
+
+Also handled: `migration_stage` is now set explicitly on every imported row, because 0019 defaults it to
+`in_development` and all 146 rows would otherwise look mid-V2-migration.
+
+**Customer matching cannot be validated against local Supabase.** `supabase/seed.sql` creates exactly
+**1** customer, so after `npm run db:reset` the local roster is empty and all 146 rows read as unmatched.
+The taxonomy and view counts are still valid locally (they come from the archive files); the customer
+numbers are not. The script now detects a roster below 10 customers, says so, and **refuses `--apply`**
+rather than importing 146 rows with null customers that would then have to be undone.
+
+Three bugs found by running it, all mine, all worth recording because two are traps for the next script:
+
+1. **`lib/supabase/ws-polyfill.ts` was not imported.** Its own doc comment says "import this as a
+   side-effect at the top of tsx scripts" — supabase-js >= 2.105 needs a global WebSocket and only
+   Node 22+ has one. On Node 18 it fails at roster load with a `RealtimeClient` transport message that
+   points nowhere near the cause. **11 other scripts in `scripts/` have the same omission**
+   (`apply-cloud-data-fixes`, `audit-sf-mappings`, `backfill-partner-ae`, `check-migration-safety`,
+   `debug-century`, `inspect-arr`, `map-customer-workspaces`, `remap-century`, `remap-customer`,
+   `resync-century`, `run-monday-sync`, `safe-migrate`). Not fixed here — flagged rather than silently
+   changing 11 files that have not been tested.
+2. **The dotenv prologue uses `override: true`**, so an inline `FOO=bar npx tsx ...` gets clobbered by
+   `.env.local`. Targeting another database needs the new `--secrets-file <path>` flag, which loads last
+   and wins. This affects every script sharing the prologue.
+3. **`--env-file` collides with Node 20+'s own native flag** and gets swallowed before the script sees
+   it. Hence `--secrets-file`.
+
+**Next: dry-run against production, which writes nothing.**
+
+```
+npx vercel env pull .env.production.local --environment=production
+npx tsx scripts/import-monday-backup.ts --secrets-file .env.production.local --verbose
+```
+
+Expect 146 rows, active 30 / delivered 71 / archive 45, customer source 94/45/7, and **15 flagged**.
+`.env.production.local` is already gitignored by `.env.*.local`. If it reads 15, re-run with `--apply`.
+
+**Then:** the drawer and the Active board, then 1.6-1.7 (rewire all five `monday_projects` read paths).
+
+**Old next-step note, superseded:** step 1.3, the importer from `monday-backup-2026-08-03` into `processes` +
 `nps_responses` + the customer fields, including the customer-key matching pass 0020 skipped, the
 `needs_attention` flagging for the 7 unrecoverable-milestone rows and the 8 misclassified ones, and the
 account/deal-type split gaps. Then the drawer and the Active board.
+
+---
+
+## Handoff — 2026-08-03, moving to Cursor / Claude Code
+
+Work moved to Cursor so the agent can run the scripts itself. The Cowork sandbox has no network route
+to Supabase (local or production) and no Docker, which meant every database step had to be handed back
+and forth. Nothing else about the plan changed.
+
+### State of the tree
+
+| Path | State |
+|---|---|
+| `supabase/migrations/0021_processes_native.sql` | **committed and pushed** (`66dd719`), applied to LOCAL Supabase and verified. **Not yet applied to production.** |
+| `lib/supabase/types.ts` | committed and pushed. `TABLES.migrationProcesses` now points at `"processes"`. |
+| `docs/mockups/*.html` | committed and pushed. The IA is approved. |
+| `lib/import/monday-taxonomy.ts` | **uncommitted.** Pure derivation, 28 tests. |
+| `scripts/import-monday-backup.ts` | **uncommitted.** Dry-run default, never run with `--apply`. |
+| `tests/import/monday-taxonomy.test.ts` | **uncommitted.** |
+| `docs/MONDAY-DECOMMISSION-LOG.md`, `PROCESSES-SCHEMA-PROPOSAL.md`, `INDEX.md` | **modified since the push.** |
+
+Verification status: `tsc --noEmit` clean, `vitest run` 139/139, `npm run db:reset` replays 0001-0021
+clean on Postgres 15. `next build` has **not** been run since the importer was added.
+
+### The one live risk
+
+`/api/migrations` is broken in production right now. The deployed code points at a table named
+`processes`, and production Supabase still has `migration_processes` because 0021 has not been applied
+there. No user-facing impact — nothing in the UI fetches those routes, verified before the rename was
+recommended — but it is genuinely broken until 0021 runs on production. **Apply 0021 to production
+first**, wrapped in `BEGIN; ... COMMIT;` since Postgres DDL is transactional and the file both renames a
+table and adds 36 columns.
+
+### Immediate next steps, in order
+
+1. Apply 0021 to production Supabase.
+2. Dry-run the importer against production (read-only, writes nothing without `--apply`):
+   `npx vercel env pull .env.production.local --environment=production` then
+   `npx tsx scripts/import-monday-backup.ts --secrets-file .env.production.local --verbose`.
+   Expect 146 rows, active 30 / delivered 71 / archive 45, customer source 94/45/7, **15 flagged**.
+   A higher flagged count is most likely roster display names differing from Monday's labels, which is a
+   `NAME_FIXUPS` entry per case, not a structural problem.
+3. `--apply`. Idempotent on `source_item_id`, so re-running converges.
+4. Build the process drawer and the Active board (four lanes: Pipeline · Building · Validating · Stuck).
+   Mockups are approved — see `docs/mockups/platform-vision.html`.
+5. Then 1.6-1.7: rewire all five `monday_projects` read paths, not just the report.
+6. `1.8` is unconditional and independent: delete or authenticate `/api/monday/item-updates`, which is
+   listed as public in `middleware.ts:14,27` while using the server's Monday token.
+
+### Known debt this session created or uncovered
+
+- **11 scripts miss the `ws-polyfill` import** and will fail on Node 18 with a misleading
+  `RealtimeClient` error: `apply-cloud-data-fixes`, `audit-sf-mappings`, `backfill-partner-ae`,
+  `check-migration-safety`, `debug-century`, `inspect-arr`, `map-customer-workspaces`, `remap-century`,
+  `remap-customer`, `resync-century`, `run-monday-sync`, `safe-migrate`. Left alone deliberately — they
+  are untested and some may predate supabase-js 2.105.
+- The shared dotenv prologue uses `override: true`, so inline env vars are clobbered by `.env.local`.
+  `import-monday-backup.ts` works around it with `--secrets-file`; other scripts do not.
+- `docs/supabase-schema-full.sql` is stale at 0019.
+- 0022 still needs writing: drop `monday_activities`, `customers.lifecycle_group` and
+  `internal_profiles.health_score` — only after their read sites are rewired.
+- `.env.local` points at local Supabase (`127.0.0.1:54321`), so any script run without
+  `--secrets-file` targets local.
+
+### Still open, needs Rishabh
+
+- Who re-enters the 7 rows whose milestone Monday overwrote. Working assumption: the importer flags them,
+  they land in the Stuck lane with a "milestone missing" badge, and the owning FDE fills them in during
+  the weekly review. No separate cleanup task.
+- Whether the empty Discovery lane is reality or a logging gap (0 of 30 active rows are in M1).
+- The 41-row account_type / deal_type pass. Monday conflated the two axes, so every customer lands
+  missing one of them.
+
+---
 
 ### Next session — start here
 
 Paste this prompt:
 
 > Continuing the Monday decommission for deliveryOps. Read
-> `docs/MONDAY-DECOMMISSION-LOG.md` first for the full state, then
-> `docs/PROCESSES-SCHEMA-PROPOSAL.md` for the schema so far. The verified full
-> archive is in `monday-backup-2026-08-03/` (492 boards, 7,798 items) — analyse it
-> directly, it's in the mounted folder.
+> `docs/MONDAY-DECOMMISSION-LOG.md` first — go straight to the "Handoff — 2026-08-03" section near the
+> bottom, which has the exact state of the tree, the one live production risk, and the ordered next
+> steps. Then skim `docs/PROCESSES-SCHEMA-PROPOSAL.md` for the schema and open
+> `docs/mockups/platform-vision.html` for the approved IA. Do not redesign the IA — it is signed off.
 >
-> This session is step 1.5: decide the overall information architecture and layout
-> of DeliveryOps before finalising the schema. The driving constraint is that
-> Monday is the team's input surface, so DeliveryOps needs an edit surface for
-> ~140 processes or Monday cannot actually be retired.
+> Unlike the previous sessions you can run things yourself here, so do. There is Docker + local Supabase
+> (`npm run db:reset`), and network access to production Supabase and Vercel.
 >
-> What I want out of this session:
-> 1. A proposed IA for the whole app — what pages exist, what each one is for, and
->    which data point lives where. Cover the existing routes (dashboard, customers,
->    customers/[key], delivery, analytics, reports, operations) and say which
->    should merge, split, or go.
-> 2. Where NPS (87 rows), Activity Log (43 rows) and the Customers board fields
->    live in that IA — these have no native home yet and must be settled so
->    migration 0021 is one migration, not three.
-> 3. Where and how a process gets **edited**, since that is the actual blocker.
-> 4. Visual mockups of the key screens for my approval before any code, matching
->    the existing design system (glass cards, brand tokens in `app/globals.css`).
+> Work in this order, and stop to show me output at each numbered step before moving on:
 >
-> Ask me clarifying questions before designing. Don't write application code this
-> session. Update the log and the schema proposal with whatever we decide.
+> 1. Apply `supabase/migrations/0021_processes_native.sql` to PRODUCTION Supabase, wrapped in
+>    `BEGIN; ... COMMIT;`. It is already applied and verified on local. This is urgent: production code
+>    already points at the renamed `processes` table, so `/api/migrations` is broken until this runs.
+> 2. Dry-run the importer against production. It writes nothing without `--apply`:
+>    `npx vercel env pull .env.production.local --environment=production` then
+>    `npx tsx scripts/import-monday-backup.ts --secrets-file .env.production.local --verbose`.
+>    Expect 146 rows, active 30 / delivered 71 / archive 45, customer source 94/45/7, 15 flagged.
+>    Do not "fix" a higher flagged count by loosening the matching — diagnose each case first. Most
+>    likely cause is roster display names differing from Monday labels, which is a `NAME_FIXUPS` entry.
+> 3. Re-run with `--apply`, then verify the written rows against the archive independently rather than
+>    trusting the script's own summary.
+> 4. Build the process edit drawer and the Active-work board (four lanes: Pipeline · Building ·
+>    Validating · Stuck). Cards read-only, all editing in the drawer, per-field save with no Save button,
+>    lifecycle change moves the card and asks for what the new lane requires. Match the existing design
+>    system — glass cards, brand tokens in `app/globals.css`. The mockups are approved; follow them.
+>
+> Independent of all the above and worth doing early: `/api/monday/item-updates` is listed as public in
+> `middleware.ts:14,27` while using the server's Monday token. Delete it or authenticate it.
+>
+> House rules that still apply: I push, you don't — hand me the commit and push commands, staging only
+> the files you changed, never `git add -A`. Verify with `npm run build`, `tsc --noEmit` and
+> `vitest run` before handing anything over. Show me a visual mockup before any UI change that is not
+> already in the approved mockups. Locales pinned (`toLocaleString("en-US")`) or the husky pre-commit
+> vitest fails on my en-IN Mac. This is production with real customer data.
+>
+> There is uncommitted work in the tree (the importer, the taxonomy lib, its tests, and doc updates).
+> Start by reviewing it rather than rewriting it.

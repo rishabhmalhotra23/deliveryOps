@@ -30,7 +30,7 @@ mockup at [mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html).
 | Project Status | status | 100% | keep, becomes `lifecycle` |
 | Current Phase | status | 100% | keep, splits three ways |
 | Development Platform | status | 100% | keep, becomes `platform` |
-| Customer (relation) | board_relation | 96% | **the join key**, 140/146, 40 customers |
+| Customer (relation) | board_relation | **64%** | the join key, but **94/146, not 140** — corrected 2026-08-03. 45 more resolve via the dropdown, 7 via neither. See the import plan. |
 | Complexity | dropdown | 91% | keep |
 | Kickoff Date | date | 71% | keep |
 | Total Effort | numbers | 68% | keep, the only real quantitative column |
@@ -313,14 +313,35 @@ modelled number. That is the intended behaviour.
 
 ## Import plan (146 rows)
 
+Implemented in `scripts/import-monday-backup.ts` (step 1.3). Dry run by default.
+
 1. Load the 6 report boards from `monday-backup-2026-08-03/boards/`.
-2. Resolve customer via `board_relation` linked item name -> `customers.key`.
-   140 of 146 resolve. Normalise `iHeartRadio` / `iHeart Radio` (7 rows, the only
-   disagreement in the set).
-3. Fall back to the `Customer` dropdown for the 3 FY-2026 rows with no relation
-   (Halemeyer, Airborne, Plunkett).
-4. Leave the 3 `Srinar` rows with `customer_key` null and flag them for review —
+2. Resolve the customer in strict order of trustworthiness. **Corrected 2026-08-03**
+   — the figure below replaces an earlier claim in this document that 140 of 146
+   rows carry a working `board_relation`. Measured coverage is:
+
+   | Source | n | Note |
+   |---|---|---|
+   | `board_relation` linked item | **94** | the most reliable signal |
+   | `Customer` dropdown | **45** | relation cell genuinely empty |
+   | neither | **7** | 4 recoverable from the item name, 3 are Srinar |
+
+   Order matters and is not arbitrary: for the 7 `Wipro BPS - iHeartRadio - X`
+   rows the dropdown says `iHeart Radio`, which is right (iHeartRadio is the
+   customer, Wipro BPS is the partner), while the item-name prefix says
+   `Wipro BPS`, which is wrong. The name prefix is therefore a last resort only,
+   and every row resolved that way is reported so it can be spot-checked.
+3. Normalise `iHeartRadio` / `iHeart Radio` — still the only name disagreement in
+   the set.
+4. Leave the 3 `Srinar` rows with a null customer and `needs_attention` set.
    Srinar is not in the customers roster.
+5. Set `migration_stage` explicitly on every row. 0019 defaults it to
+   `in_development`, which would otherwise make all 146 rows look mid-migration.
+   Rows with no V2 signal get `not_required`; `platform = v2` with no other signal
+   gets `v2_native`.
+6. Never overwrite a non-empty value in `ae_owner`, `partner`, `custom_category`,
+   `account_type` or `deal_type`, matching the `deliveryops_protected_fields`
+   principle that a manual edit beats a sync.
 5. Apply the derivation mapping above; write raw Monday values to `source_raw`.
 6. Set `source_item_id` so re-running the import is idempotent.
 
