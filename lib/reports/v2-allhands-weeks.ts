@@ -1047,10 +1047,9 @@ const WEEK_2026_08_03: V2Week = {
     { value: "56", label: "Live on V1 today", sub: "still production of record" },
     { value: "45", label: "Migrating to V2", sub: "V1 → V2 rebuilds" },
     { value: "25", label: "Retiring with V1", sub: "many already retired" },
-    { value: "5", label: "Outside the program", sub: "never a V1 migration" },
   ],
   snapshotNote:
-    "This row is the V1 estate only: of the 75, 45 migrate and 25 retire with V1, and 5 were never V1 migrations (3 built on V2 from the start, 2 custom off-platform). 45 + 25 + 5 = 75. All V2 counting lives on the next row, so nothing here should be read as a V2 total. No tile moved this week — the estate is fixed and the movement is inside it. Source: migration tracker (Excel), Aug 3.",
+    "This row is the V1 estate: of the 75 processes that ran on V1, 45 migrate to V2 and 25 retire with V1. The remaining 5 were never V1 migrations — 3 were built on V2 from the start and 2 are custom off-platform. All V2 counting lives on the next row. The estate is fixed week to week; the movement happens inside it. Source: migration tracker (Excel), Aug 3.",
   deltaSince: "Jul 27",
   v2Footprint: {
     items: [

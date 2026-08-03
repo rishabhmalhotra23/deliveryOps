@@ -83,6 +83,17 @@ function DeltaBadge({ delta, onDark = false }: { delta: MetricDelta; onDark?: bo
     </span>
   );
 }
+/** Tile rows are 2-up on mobile and one-per-item on desktop, so a row of four
+ *  fills the width instead of leaving a fifth empty column. Static class strings
+ *  because Tailwind cannot see interpolated ones. */
+const TILE_GRID: Record<number, string> = {
+  3: "grid grid-cols-2 lg:grid-cols-3 gap-3 mt-2",
+  4: "grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2",
+  5: "grid grid-cols-2 lg:grid-cols-5 gap-3 mt-2",
+  6: "grid grid-cols-2 lg:grid-cols-6 gap-3 mt-2",
+};
+const tileGrid = (n: number) => TILE_GRID[n] ?? TILE_GRID[5];
+
 function SinceNote({ since }: { since?: string }) {
   if (!since) return null;
   return <span className={`text-[11px] font-normal ${MUTED}`}>· vs {since}</span>;
@@ -254,7 +265,7 @@ export function V2MigrationClient() {
         {/* Delivery snapshot */}
         <section>
           <SectionLabel>Delivery snapshot <SinceNote since={week.snapshot.some((m) => m.delta) ? week.deltaSince : undefined} /></SectionLabel>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-2">
+          <div className={tileGrid(week.snapshot.length)}>
             {week.snapshot.map((m) => (
               <div key={m.label} className={m.hero ? "rounded-xl p-4" : "glass-card rounded-xl p-4"}
                 style={m.hero ? { background: "var(--brand-night)" } : undefined}>
@@ -274,7 +285,7 @@ export function V2MigrationClient() {
         {week.v2Footprint && (
         <section>
           <SectionLabel>On or moving to V2 <SinceNote since={week.v2Footprint.items.some((m) => m.delta) ? week.deltaSince : undefined} /></SectionLabel>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-2">
+          <div className={tileGrid(week.v2Footprint.items.length)}>
             {week.v2Footprint.items.map((m) => (
               <div key={m.label} className={m.hero ? "rounded-xl p-4" : "glass-card rounded-xl p-4"}
                 style={m.hero ? { background: "var(--brand-night)" } : undefined}>
