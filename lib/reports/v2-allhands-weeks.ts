@@ -1040,7 +1040,7 @@ const WEEK_2026_08_03: V2Week = {
   key: "2026-08-03",
   dateLabel: "Week of August 3, 2026",
   lede:
-    "75 processes have run on V1. As migration completes, 45 carry over to V2 and the rest retire with V1, many already retired. 39 of the 45 are at or near the finish line, and the mix moved forward this week: two more cut over to live on V2, one moved from testing into customer UAT, and one finished build. That leaves 10 complete, 11 in customer UAT and 18 in parity testing. The remaining 6 are known customer and commercial dependencies, not platform work. Open blocker tickets fell from 24 to 18, the lowest since the label began, as the Conectiv large-file and JBI IDP clusters closed.",
+    "75 processes have run on V1. As migration completes, 45 carry over to V2 and the rest retire with V1, many already retired. 39 of the 45 are at or near the finish line, and the mix moved up a stage this week: three cut over to live on V2 (Plunkett Payments, JBI QSR, JBI Design Meeting), one finished build, and two moved from parity testing into customer UAT. That leaves 12 complete, 10 in customer UAT and 17 in parity testing. The remaining 6 are known customer and commercial dependencies, not platform work. Open blocker tickets fell from 24 to 18, the lowest since the label began, as the Conectiv large-file and JBI IDP clusters closed.",
 
   snapshot: [
     { value: "75", label: "Built on V1", sub: "every process that ran on V1", hero: true },
@@ -1053,14 +1053,14 @@ const WEEK_2026_08_03: V2Week = {
   deltaSince: "Jul 27",
   v2Footprint: {
     items: [
-      { value: "13", label: "Live on V2", sub: "9 live · 4 pending commercial", hero: true, delta: { text: "+2", tone: "good" } },
-      { value: "14", label: "In customer UAT", sub: "2 moved up to live", delta: { text: "−1 ↑", tone: "good" } },
-      { value: "18", label: "In parity testing", sub: "1 moved up to UAT", delta: { text: "−1 ↑", tone: "good" } },
+      { value: "15", label: "Live on V2", sub: "11 live · 4 pending commercial", hero: true, delta: { text: "+4", tone: "good" } },
+      { value: "13", label: "In customer UAT", sub: "3 went live this week", delta: { text: "−2 ↑", tone: "good" } },
+      { value: "17", label: "In parity testing", sub: "2 moved up to UAT", delta: { text: "−2 ↑", tone: "good" } },
       { value: "6", label: "In development", sub: "building on V2" },
       { value: "6", label: "Blocked", sub: "customer or engineering dependency" },
     ],
     note:
-      "This row is the whole V2 estate: 57 processes are on or moving to V2 — 45 V1→V2 migrations, 9 net-new V2 builds, and the 3 built on V2 from the start. Live on V2 rose 11 → 13 as Plunkett Payments cut over and Scan Health Enrollment finished build; the 13 is 6 migrations cut over + 4 build-complete pending commercial + the 3 always on V2. These totals run above the 45-process stage board below, which covers the migrations only. New builds are from the Projects board; the rest from the tracker (Excel).",
+      "This row is the whole V2 estate: 57 processes are on or moving to V2 — 45 V1→V2 migrations, 9 net-new V2 builds, and the 3 built on V2 from the start. Live on V2 rose 11 → 15 as Plunkett Payments, JBI QSR and JBI Design Meeting cut over and Scan Health Enrollment finished build; the 15 is 8 migrations cut over + 4 build-complete pending commercial + the 3 always on V2. These totals run above the 45-process stage board below, which covers the migrations only. New builds are from the Projects board; the rest from the tracker (Excel).",
   },
 
   netNewDelta: "Net-new V2 builds, not V1 migrations. Phases carry from the Jul 27 pull.",
@@ -1099,15 +1099,16 @@ const WEEK_2026_08_03: V2Week = {
   },
 
   boardDelta:
-    "Stage follows the tracker's Migration Status: Live on V2 = live, Customer pending = customer UAT, v1 Parity Testing = testing. 39 of 45 at or near the finish line, with the mix moving up a stage: two cut over to live, one entered customer UAT, one finished build.",
+    "Stage follows the tracker's Migration Status: Live on V2 = live, Customer pending = customer UAT, v1 Parity Testing = testing. 39 of 45 at or near the finish line, with the mix moving up a stage: three cut over to live, one finished build, two entered customer UAT.",
   board: [
     {
-      stage: "Live on V2", count: 10, color: "#1D9E75",
-      delta: { text: "+2", tone: "good" },
+      stage: "Live on V2", count: 12, color: "#1D9E75",
+      delta: { text: "+4", tone: "good" },
       chips: [
-        { name: "Norco Packslip" },
+        { name: "JBI ×2", note: "QSR, Design Meeting — went live this week", mover: "up" },
         { name: "Plunkett ×3", note: "payments cut over this week", mover: "up" },
         { name: "TTX ×2", note: "Lease, COA" },
+        { name: "Norco Packslip" },
         { name: "JBI SBUX", note: "parked on V2" },
         { name: "iHeart Affidavits", note: "pending commercial" },
         { name: "Pepsi ServiceNow", note: "pending commercial" },
@@ -1115,10 +1116,10 @@ const WEEK_2026_08_03: V2Week = {
       ],
     },
     {
-      stage: "In customer UAT", count: 11, color: "#5BC4A0",
-      delta: { text: "−1 ↑", tone: "good" },
+      stage: "In customer UAT", count: 10, color: "#5BC4A0",
+      delta: { text: "−2 ↑", tone: "good" },
       chips: [
-        { name: "JBI ×5", note: "Merch, Design, QSR, PIR v2, Onsite", mover: "up" },
+        { name: "JBI ×4", note: "Merch, PIR v2, Onsite, AP — AP arrived this week", mover: "up" },
         { name: "TTX ×3", note: "AP, brake AR, goods receipt" },
         { name: "Plunkett Vendor Bill" },
         { name: "Ciena PO" },
@@ -1126,13 +1127,12 @@ const WEEK_2026_08_03: V2Week = {
       ],
     },
     {
-      stage: "Parity testing", count: 18, color: "#378ADD",
-      delta: { text: "−1 ↑", tone: "good" },
+      stage: "Parity testing", count: 17, color: "#378ADD",
+      delta: { text: "−2 ↑", tone: "good" },
       chips: [
         { name: "Wipro FSS ×12", note: "testing now" },
         { name: "Norco ×3", note: "AR, Safety, Solar Winds" },
         { name: "Century ×2", note: "fuzzy match cleared" },
-        { name: "JBI AP", note: "handover Aug 4, validation Aug 11" },
       ],
     },
     {
@@ -1145,7 +1145,7 @@ const WEEK_2026_08_03: V2Week = {
     },
   ],
   boardFootnote:
-    "Stage follows the tracker's Migration Status field: Live on V2 = 6 gone live plus 4 build-complete pending commercial (JBI SBUX, iHeart, Pepsi, Scan Health Enrollment), Customer pending = in customer UAT, v1 Parity Testing = internal testing (includes the four in-progress builds). Blocked = an open customer or engineering dependency: Kort ×4 on customer IP whitelisting, Conectiv on large-file throughput, Mitie PCard on a v2 UK instance. These 45 are the migration program (45 of 75 tracked V1 processes).",
+    "Stage follows the tracker's Migration Status field: Live on V2 = 8 gone live plus 4 build-complete pending commercial (JBI SBUX, iHeart, Pepsi, Scan Health Enrollment), Customer pending = in customer UAT, v1 Parity Testing = internal testing (includes the four in-progress builds). Blocked = an open customer or engineering dependency: Kort ×4 on customer IP whitelisting, Conectiv on large-file throughput, Mitie PCard on a v2 UK instance. JBI QSR and Design Meeting went live, and JBI AP moved into customer UAT (validation due Aug 11), after the tracker pull — field corrections applied. These 45 are the migration program (45 of 75 tracked V1 processes).",
 
   pushTitle: "Where we need help",
   push: [
@@ -1239,7 +1239,7 @@ const WEEK_2026_08_03: V2Week = {
   decisions: [], // hidden per Rishabh
 
   sources:
-    "Sources: migration tracker Working Sheet (75 processes, Aug 3) drives the estate, stage board, and journey endpoints; live Linear (Aug 3: 116 on the v2 Migration Blockers label, 18 open, plus 5 on browser-automation-v2) drives the blocker burn-up and open lists. Every ticket list was re-validated live: of the five platform issues shown on Jul 27, MAN-3818, MAN-3813 and ENG-4691 have closed. Net-new build rows carry from the Jul 20 Monday pull; push lanes were refreshed this week.",
+    "Sources: migration tracker Working Sheet (75 processes, Aug 3) drives the estate, stage board, and journey endpoints, with three field corrections applied after the pull (JBI QSR and JBI Design Meeting now live on V2, JBI AP now in customer UAT). Live Linear (Aug 3: 116 on the v2 Migration Blockers label, 18 open, plus 5 on browser-automation-v2) drives the blocker burn-up and open lists. Every ticket list was re-validated live: of the five platform issues shown on Jul 27, MAN-3818, MAN-3813 and ENG-4691 have closed. Net-new build rows carry from the Jul 20 Monday pull; push lanes were refreshed this week.",
 };
 
 // Latest first. Append new weeks at the top.
