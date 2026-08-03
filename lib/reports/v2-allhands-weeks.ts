@@ -1024,5 +1024,210 @@ const WEEK_2026_07_27: V2Week = {
     "Sources: migration tracker Working Sheet (75 processes, Jul 27) drives the estate, stage board, and journey endpoints; live Linear (Jul 27: 112 on the v2 Migration Blockers label, 24 open, plus 6 browser-automation and the on-call tickets) drives the blocker burn-up and open lists. Net-new and push lanes carry from the Jul 20 pull; the platform-issues list was refreshed live on Jul 27 (four of the prior six issues have since closed). Stage placements apply field corrections this week.",
 };
 
+// ── Week of August 3, 2026 ────────────────────────────────────────────────────
+
+const WEEK_2026_08_03: V2Week = {
+  key: "2026-08-03",
+  dateLabel: "Week of August 3, 2026",
+  lede:
+    "75 processes have run on V1. As migration completes, 45 carry over to V2 and the rest retire with V1, many already retired. 39 of the 45 are at or near the finish line, and the mix moved forward this week: two more cut over to live on V2, one moved from testing into customer UAT, and one finished build. That leaves 10 complete, 11 in customer UAT and 18 in parity testing. The remaining 6 are known customer and commercial dependencies, not platform work. Open blocker tickets fell from 24 to 18, the lowest since the label began, as the Conectiv large-file and JBI IDP clusters closed.",
+
+  snapshot: [
+    { value: "75", label: "Built on V1", sub: "every process that ran on V1", hero: true },
+    { value: "56", label: "Live on V1 today", sub: "still production of record" },
+    { value: "45", label: "Migrating to V2", sub: "V1 → V2 rebuilds" },
+    { value: "25", label: "Retiring with V1", sub: "many already retired" },
+    { value: "5", label: "Already on V2 or custom", sub: "3 on V2 · 2 custom" },
+  ],
+  snapshotNote:
+    "The 75 V1-era processes: 45 migrate to V2, 25 retire with V1, 3 are already on V2, 2 are custom. Estate unchanged from Jul 27. Source: migration tracker (Excel), Aug 3.",
+  v2Footprint: {
+    items: [
+      { value: "13", label: "Live on V2", sub: "9 live · 4 pending commercial", hero: true },
+      { value: "14", label: "In customer UAT", sub: "with the customer" },
+      { value: "18", label: "In parity testing", sub: "validating vs V1" },
+      { value: "6", label: "In development", sub: "building on V2" },
+      { value: "6", label: "Blocked", sub: "customer or engineering dependency" },
+    ],
+    note:
+      "57 processes are on or moving to V2 (45 V1→V2 migrations + 9 new builds + 3 already on V2), shown here by status. Live on V2 rose 11 → 13 as Plunkett Payments cut over and Scan Health Enrollment finished build. These run above the 45-migration stage board below because they include the 9 new builds and the 3 already on V2. New builds are from the Projects board; the rest from the tracker (Excel).",
+  },
+
+  netNewDelta: "Net-new V2 builds, not V1 migrations. Phases carry from the Jul 27 pull.",
+  netNew: WEEK_2026_07_27.netNew,
+
+  renewalsDelta: "",
+  renewalBanner: null,
+  renewals: [], // hidden per Rishabh
+  renewalsFootnote: WEEK_2026_07_20.renewalsFootnote,
+
+  migrationIntro:
+    "75 processes have run on V1. As migration completes, 45 carry over to V2 and the rest retire with V1, many already retired. Everything below is the 45-process migration program.",
+
+  journey: {
+    goalLabel: "Goal: all 45 migrations at V1 parity",
+    procMax: 45,
+    ticketMax: 120,
+    dates: ["Jun 1", "Jun 8", "Jun 15", "Jun 22", "Jun 29", "Jul 6", "Jul 13", "Jul 20", "Jul 27", "Aug 3"],
+    milestones: [
+      { text: "kickoff" },
+      { text: "pipeline" },
+      { text: "parity begins" },
+      { text: "snapshot" },
+      { text: "inflow peaks" },
+      { text: "browser review" },
+      { text: "Wipro → UAT", good: true },
+      { text: "blockers fall", good: true },
+      { text: "long tail" },
+      { text: "blockers at low", good: true },
+    ],
+    finish: [null, null, 0, 11, 19, 25, 38, 39, 39, 39],
+    blocked: [null, null, null, 8, 13, 9, 8, 6, 6, 6],
+    ticketsCreated: [4, 5, 7, 25, 45, 72, 90, 98, 112, 116],
+    ticketsOpen: [4, 5, 5, 19, 27, 35, 34, 19, 24, 18],
+    finalLabels: { finish: "39", toGo: "6 to go", blocked: "6", created: "116 created", open: "18 open", resolvedGap: "98 resolved" },
+  },
+
+  boardDelta:
+    "Stage follows the tracker's Migration Status: Live on V2 = live, Customer pending = customer UAT, v1 Parity Testing = testing. 39 of 45 at or near the finish line, with the mix moving up a stage: two cut over to live, one entered customer UAT, one finished build.",
+  board: [
+    {
+      stage: "Live on V2", count: 10, color: "#1D9E75",
+      chips: [
+        { name: "Norco Packslip" },
+        { name: "Plunkett ×3", note: "payments cut over this week", mover: "up" },
+        { name: "TTX ×2", note: "Lease, COA" },
+        { name: "JBI SBUX", note: "parked on V2" },
+        { name: "iHeart Affidavits", note: "pending commercial" },
+        { name: "Pepsi ServiceNow", note: "pending commercial" },
+        { name: "Scan Health Enrollment", note: "build complete, pending commercial", mover: "up" },
+      ],
+    },
+    {
+      stage: "In customer UAT", count: 11, color: "#5BC4A0",
+      chips: [
+        { name: "JBI ×5", note: "Merch, Design, QSR, PIR v2, Onsite", mover: "up" },
+        { name: "TTX ×3", note: "AP, brake AR, goods receipt" },
+        { name: "Plunkett Vendor Bill" },
+        { name: "Ciena PO" },
+        { name: "Norco Parts Recon" },
+      ],
+    },
+    {
+      stage: "Parity testing", count: 18, color: "#378ADD",
+      chips: [
+        { name: "Wipro FSS ×12", note: "testing now" },
+        { name: "Norco ×3", note: "AR, Safety, Solar Winds" },
+        { name: "Century ×2", note: "fuzzy match cleared" },
+        { name: "JBI AP", note: "handover Aug 4, validation Aug 11" },
+      ],
+    },
+    {
+      stage: "Blocked", count: 6, color: "#E24B4A",
+      chips: [
+        { name: "Kort Payments ×4", note: "customer IP whitelisting" },
+        { name: "Conectiv POV", note: "throughput on large files" },
+        { name: "Mitie PCard", note: "needs v2 UK instance" },
+      ],
+    },
+  ],
+  boardFootnote:
+    "Stage follows the tracker's Migration Status field: Live on V2 = 6 gone live plus 4 build-complete pending commercial (JBI SBUX, iHeart, Pepsi, Scan Health Enrollment), Customer pending = in customer UAT, v1 Parity Testing = internal testing (includes the four in-progress builds). Blocked = an open customer or engineering dependency: Kort ×4 on customer IP whitelisting, Conectiv on large-file throughput, Mitie PCard on a v2 UK instance. These 45 are the migration program (45 of 75 tracked V1 processes).",
+
+  pushTitle: "Where we need help",
+  push: [
+    { title: "Conectiv throughput", color: "#A32D2D", body: "The large-file cluster closed on Jul 30 (KOG-11905, KOG-11907, ENG-4672). The problem is now runtime, not file size: a 5-minute V1 task takes 3 hours-plus on V2 (KOG-11924, filed today), alongside prompt-too-long service errors (KOG-11923, Urgent)." },
+    { title: "Quill2 build stability", color: "#BA7517", body: "Long build sessions still drift and regress. The same 5 tickets remain open and unstarted (ENG-4480, 4494-4497)." },
+    { title: "Customer and commercial holds", color: "#185FA5", body: "Kort ×4 wait on customer IP whitelisting, open since their Jul 3 parity date; Mitie PCard needs a v2 UK instance plus commercial sign-off. Four completed migrations also sit on V2 pending commercial discussion." },
+    { title: "Keep builds and live processes healthy", color: "#534AB7", body: "Nine net-new V2 builds active alongside live V1 and V2 production. Browser automation stays hot on Century: KOG-11908 (502 from Browser) is Urgent and in review; the ENG-4444 readiness review closed this week." },
+  ],
+  platformIssuesTitle: "Live production issues needing attention · V1 + platform (outside the migration label)",
+  platformIssues: [
+    { id: "MAN-3802", title: "TTX · V2 — \"Generation was lost\" error", sev: "High", sevTone: "high", state: "Todo", note: "open since Jul 3" },
+    { id: "OC-1412", title: "Platform — OOMKills on browser pool pod/s in prod", sev: "High", sevTone: "high", state: "Todo", note: "same infra behind Kort / Century browser work" },
+    { id: "MAN-3824", title: "JBI · V2 — the chat stop or send button not working", sev: "High", sevTone: "high", state: "Todo", note: "filed Jul 27" },
+    { id: "MAN-3820", title: "Platform — cannot revoke workspace-scoped invites from Org, 404", sev: "High", sevTone: "high", state: "Backlog" },
+  ],
+
+  ticketsDelta:
+    "Live Linear, Aug 3. Live production issues first, then the 18 open v2 Migration Blockers by category, then the browser-automation cluster (5). Hover a ticket number for its title.",
+  labelHealth: {
+    label: "v2 Migration Blockers",
+    asOf: "Aug 3",
+    openNow: 18,
+    prevOpen: 24,
+    prevLabel: "Jul 27",
+    urgentHigh: 10,
+    filed7: 5,
+    closed7: 11,
+    flow: [],
+    note:
+      "Open = still open on the v2 Migration Blockers label (18 of 116 non-archived; the rest are closed, canceled, or duplicate). Lowest open count since the label began, and inflow fell from 21 filed last week to 5. Browser-automation tickets sit on the browser-automation-v2 / on-call tracks and are additional to these.",
+  },
+  compactTickets: true,
+  ticketGroups: [
+    {
+      theme: "Conectiv, throughput and large files",
+      rows: [
+        { id: "KOG-11924", title: "V1 | Conectiv | Jarvis taking too long to process - 5 mins V1 task takes 3 Hrs+ on V2", state: "Backlog", tone: "open" },
+        { id: "KOG-11923", title: "V2 | Conectiv | Service error - prompt too long", state: "Backlog", tone: "open" },
+        { id: "KOG-11890", title: "V2 | Conectiv | Stream error - Bedrock stream produced no data", state: "Backlog", tone: "open" },
+        { id: "KOG-11901", title: "V2| Conectiv | Quill fails to follow the users instructions, the chat thread does not match with the TODO list.", state: "Backlog", tone: "open" },
+        { id: "ENG-4429", title: "Increase BDK Excel pod memory for Connectiv V2 migration", state: "Validation", tone: "prog" },
+      ],
+    },
+    {
+      theme: "Quill2 build stability",
+      rows: [
+        { id: "ENG-4480", title: "Quill2 build experience: agent stability across long build sessions", state: "Backlog", tone: "open" },
+        { id: "ENG-4494", title: "Quill2 agent behavior: regressions, unauthorized changes, memory loss, AOP drift", state: "Backlog", tone: "open" },
+        { id: "ENG-4495", title: "SPy codegen robustness: language traps that fail silently", state: "Backlog", tone: "open" },
+        { id: "ENG-4496", title: "IDP reliability and determinism in Quill2 builds", state: "Backlog", tone: "open" },
+        { id: "ENG-4497", title: "Excel book and API surface friction in Quill2 builds", state: "Backlog", tone: "open" },
+      ],
+    },
+    {
+      theme: "Parallel runs and sub-processes",
+      rows: [
+        { id: "ENG-4722", title: "JBI - Can't call Draft using HTTP from another draft", state: "In Progress", tone: "prog" },
+        { id: "OC-1437", title: "Can we have support for more parallel runs for an automation?", state: "Validation", tone: "prog" },
+        { id: "ENG-4504", title: "V2 Feedback - Live Automations: Conectiv on V2 - Parallel Runs -- from @Ayush Ghosh", state: "Triage", tone: "open" },
+      ],
+    },
+    {
+      theme: "Connections and environments",
+      rows: [
+        { id: "KOG-11842", title: "Mitie - UK instance of v2 for v1 process migration", state: "Backlog", tone: "open" },
+      ],
+    },
+    {
+      theme: "Other / product feedback",
+      rows: [
+        { id: "ENG-3711", title: "V2 Feedback - Drafts: Exception Not Raised when Required Field is Missing -- from @Sasha", state: "Todo", tone: "open" },
+        { id: "ENG-4337", title: "Support managing triggers from quill2", state: "Backlog", tone: "open" },
+        { id: "ENG-4669", title: "V2 Feedback - Live Automations: -- from @Rishabh Malhotra", state: "Backlog", tone: "open" },
+        { id: "OC-1448", title: "Claude Service Overloaded", state: "Triage", tone: "open" },
+      ],
+    },
+    {
+      theme: "Browser automation",
+      rows: [
+        { id: "KOG-11908", title: "Century - 502 Bad Gateway from Browser", state: "In Review", tone: "prog" },
+        { id: "ENG-4454", title: "Honor transport-error contract or add browser session recovery", state: "In Progress", tone: "prog" },
+        { id: "ENG-4445", title: "Add browser JavaScript evaluation (page-context execution)", state: "In Progress", tone: "prog" },
+        { id: "ENG-4451", title: "Add semantic, content-addressed grid and element verbs", state: "In Progress", tone: "prog" },
+        { id: "ENG-4450", title: "Add network interception / response waiting for XHR-backed flows", state: "Backlog", tone: "open" },
+      ],
+    },
+  ],
+  ticketsFootnote:
+    "18 open on the v2 Migration Blockers label, by category, down from 24 on Jul 27 (5 filed, 11 closed in 7 days). Browser automation (5: KOG-11908, ENG-4454/4445/4451/4450) is a separate label, additional to the 18; the ENG-4444 readiness review closed this week. Hover a ticket number for its title; full detail lives in Linear.",
+
+  decisions: [], // hidden per Rishabh
+
+  sources:
+    "Sources: migration tracker Working Sheet (75 processes, Aug 3) drives the estate, stage board, and journey endpoints; live Linear (Aug 3: 116 on the v2 Migration Blockers label, 18 open, plus 5 on browser-automation-v2) drives the blocker burn-up and open lists. Every ticket list was re-validated live: of the five platform issues shown on Jul 27, MAN-3818, MAN-3813 and ENG-4691 have closed. Net-new build rows carry from the Jul 20 Monday pull; push lanes were refreshed this week.",
+};
+
 // Latest first. Append new weeks at the top.
-export const WEEKS: V2Week[] = [WEEK_2026_07_27, WEEK_2026_07_20, WEEK_2026_07_13, WEEK_2026_07_06];
+export const WEEKS: V2Week[] = [WEEK_2026_08_03, WEEK_2026_07_27, WEEK_2026_07_20, WEEK_2026_07_13, WEEK_2026_07_06];
