@@ -74,7 +74,7 @@ Status values: `done` / `in progress` / `blocked` / `not started`.
 
 | # | Step | Status | Notes |
 |---|---|---|---|
-| 1.1 | Design the native schema from the real backup | not started | Do this **after** 0.6, from actual column definitions, not from the current guess. |
+| 1.1 | Design the native schema from the real backup | **proposed 2026-08-03, awaiting approval** | [PROCESSES-SCHEMA-PROPOSAL.md](./PROCESSES-SCHEMA-PROPOSAL.md). Grain = one row per process, soft-linked to `k2_processes`. Clean orthogonal taxonomy replacing Monday's blended fields. `ttv_days` generated. Value = manual minutes-saved input x `k2_runs`. |
 | 1.2 | Generalize `migration_processes` into `processes` (or a sibling) | not started | Must cover all ~140 portfolio rows, not just the 75 V2 ones. |
 | 1.3 | Write the importer from the backup into Supabase | not started | Nothing like this exists today. Must include the customer-key matching pass that 0020 skipped. |
 | 1.4 | Populate auto-derived columns from `k2_processes` / `k2_runs` | not started | Real usage data currently unused. |
@@ -100,6 +100,14 @@ Not started. See the consolidation plan.
 | 2026-07-30 | File attachments: metadata only, no binaries | Small and fast; binaries are least likely to matter for reporting. Accepted cost: Monday `public_url` values are short-lived signed URLs and will expire, so the files themselves are not preserved. A separate opt-in downloader can be written against the asset manifest later. |
 | 2026-07-30 | Board `activity_logs`: not captured | High volume, retention-limited by plan, no DeliveryOps use case. Item `updated_at` plus the updates feed cover the needed history. |
 | 2026-07-30 | Sequenced core-first, then the long tail | Core boards finish in minutes so schema work can start immediately; the ~478-board sweep runs resumably in the background. |
+
+## Blockers
+
+| Blocker | Impact | Owner | Raised |
+|---|---|---|---|
+| **Kognitos v2 PAT is single-workspace** (`lib/sync/kognitos-v2.ts:51`, comment at 4-6). `k2_processes` / `k2_runs` cover ~1 customer, not 40. | `k2_process_id` will be null on nearly every one of the 146 imported rows, so value-derived-from-runs renders blank almost everywhere. Real usage reporting is impossible until fixed. Does **not** block building `processes` or retiring Monday. | unassigned | 2026-08-03 |
+| Gmail send blocked on Google Workspace admin (send-as aliases) | Outbound digests | in flight | 2026-07-22 |
+| Vercel Hobby caps crons at 2 | New scheduled work must ride the `tasks` dispatcher | accepted | 2026-07-22 |
 
 ## Open decisions
 
@@ -164,3 +172,82 @@ Findings that bear on design, not just completeness:
   `monday-backup-2026-08-03/boards/*.json` column definitions across the ~140
   portfolio rows, decide the `processes` shape, then step 1.5, a UI mockup for
   approval. No application code until the mockup is signed off.
+
+### 2026-08-03 (cont.) — schema designed from the archive
+
+Profiled the 6 report boards (146 rows). Findings that changed the design:
+
+- **`Delivered Value` is empty on all 116 rows that have it, and the `TTV (Days)`
+  formula returns nothing through the API on all 146.** The all-hands value and
+  time-to-value figures have never had underlying data. `Total Effort` (79/116) is
+  the only quantitative column with real content.
+- The customer join is solved, not risky: 140 of 146 rows carry a working
+  `board_relation` to the Customers board across 40 customers. The 6 exceptions
+  are 3 FY-2026 rows with a dropdown instead (Halemeyer, Airborne, Plunkett) and 3
+  `Srinar` rows with nothing. The only name disagreement in the entire set is
+  `iHeartRadio` vs `iHeart Radio`, 7 rows.
+- Monday's taxonomy is blended: `Current Phase` mixes milestones, terminal states
+  and waiting states across 15 values; `Health` is 91/146 "Finished", a lifecycle
+  value, not a health value.
+- Workspace `8906635`, "Unknown" in STATUS.md, resolves as **Norco**.
+- The Projects Portfolio workspace (8917830) holds a second, older portfolio
+  structure (Comprehensive Portfolio - Retired at 145 items, per-quarter Complete
+  Projects boards) that the report does not read. Not in migration scope; noted so
+  nobody rediscovers it and assumes it is authoritative.
+
+Decisions taken: grain = one row per process soft-linked to `k2_processes`; build
+a clean orthogonal taxonomy rather than inherit Monday's; TTV generated from
+kickoff to go-live; value = manual per-process minutes-saved input multiplied by
+real `k2_runs`, showing nothing where the input is absent.
+
+Wrote [PROCESSES-SCHEMA-PROPOSAL.md](./PROCESSES-SCHEMA-PROPOSAL.md): full DDL,
+the Monday-to-native derivation mapping with row counts, the 146-row import plan,
+and the path to fold the existing 75 `migration_processes` rows in by extending
+that table rather than replacing it.
+
+**Plan reordered at the end of this session.** Step 1.5 (UI/IA design) now comes
+*before* 1.2 (migration) and 1.3 (importer). Reason: the blocker on retiring
+Monday is not data, it is that Monday is the team's **input surface** and
+DeliveryOps has no way to edit a process. `lib/agent/prompts.ts` tells the agent
+"FDE assignments are not writable, update Monday", and every write path in the
+repo points outward at Monday. A read-only mirror goes stale the first time
+someone edits a board. So the information architecture decides what the schema
+needs to hold, not the reverse.
+
+Also noted: [PROCESSES-SCHEMA-PROPOSAL.md](./PROCESSES-SCHEMA-PROPOSAL.md) covers
+only the 146 project rows. Three production Monday dependencies still have **no
+native home**: NPS Tracking (87 items -> `monday_nps_responses`, read by report,
+analytics, customer 360, dashboard), Activity Log (43 items -> `monday_activities`,
+read by the customer 360 activity card), and the Customers board (41 items — the
+roster exists natively but the field diff has not been done). Resolve all three in
+one pass so 0021 is a single migration, not three.
+
+### Next session — start here
+
+Paste this prompt:
+
+> Continuing the Monday decommission for deliveryOps. Read
+> `docs/MONDAY-DECOMMISSION-LOG.md` first for the full state, then
+> `docs/PROCESSES-SCHEMA-PROPOSAL.md` for the schema so far. The verified full
+> archive is in `monday-backup-2026-08-03/` (492 boards, 7,798 items) — analyse it
+> directly, it's in the mounted folder.
+>
+> This session is step 1.5: decide the overall information architecture and layout
+> of DeliveryOps before finalising the schema. The driving constraint is that
+> Monday is the team's input surface, so DeliveryOps needs an edit surface for
+> ~140 processes or Monday cannot actually be retired.
+>
+> What I want out of this session:
+> 1. A proposed IA for the whole app — what pages exist, what each one is for, and
+>    which data point lives where. Cover the existing routes (dashboard, customers,
+>    customers/[key], delivery, analytics, reports, operations) and say which
+>    should merge, split, or go.
+> 2. Where NPS (87 rows), Activity Log (43 rows) and the Customers board fields
+>    live in that IA — these have no native home yet and must be settled so
+>    migration 0021 is one migration, not three.
+> 3. Where and how a process gets **edited**, since that is the actual blocker.
+> 4. Visual mockups of the key screens for my approval before any code, matching
+>    the existing design system (glass cards, brand tokens in `app/globals.css`).
+>
+> Ask me clarifying questions before designing. Don't write application code this
+> session. Update the log and the schema proposal with whatever we decide.
