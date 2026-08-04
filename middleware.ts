@@ -11,7 +11,6 @@
 //   /api/gmail/            — webhook, token-authed
 //   /api/cron/             — Vercel cron, CRON_SECRET-authed
 //   /api/jobs/             — internal fire-and-forget, JOBS_SECRET-authed
-//   /api/monday/           — webhook, secret-authed
 //   /_next/, /favicon.ico  — static assets
 
 import { type NextRequest, NextResponse } from "next/server";
@@ -24,7 +23,6 @@ const PUBLIC_PREFIXES = [
   "/api/gmail/",
   "/api/cron/",
   "/api/jobs/",
-  "/api/monday/",
   "/_next/",
   "/favicon.ico",
 ];

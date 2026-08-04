@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 import { formatPeopleList, formatPersonName } from "@/lib/delivery/taxonomy";
 
@@ -32,13 +31,6 @@ export interface ProjectPanelItem {
   group_title?: string | null;
 }
 
-interface Update {
-  id: string;
-  body: string;
-  created_at: string;
-  author: string;
-}
-
 const FY_COLORS: Record<string, string> = {
   active:           "#60a5fa",
   "FY-2026":        "#F2FF70",
@@ -48,14 +40,6 @@ const FY_COLORS: Record<string, string> = {
   account_overview: "#2dd4bf",
   inactive:         "#6b7280",
 };
-
-function fmtRelTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return "just now";
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
-  return `${Math.round(ms / 86_400_000)}d ago`;
-}
 
 function Chip({ label, color }: { label: string; color?: string }) {
   return (
@@ -78,20 +62,6 @@ export function ProjectDetailPanel({
   onClose: () => void;
   showCustomerLink?: boolean;
 }) {
-  const [updates, setUpdates] = useState<Update[] | null>(null);
-  const [loadingUpdates, setLoadingUpdates] = useState(false);
-
-  useEffect(() => {
-    if (!p.monday_item_id) return;
-    setLoadingUpdates(true);
-    setUpdates(null);
-    fetch(`/api/monday/item-updates?item_id=${encodeURIComponent(p.monday_item_id)}`)
-      .then((r) => r.json())
-      .then((d) => setUpdates((d as { updates?: Update[] }).updates ?? []))
-      .catch(() => setUpdates([]))
-      .finally(() => setLoadingUpdates(false));
-  }, [p.monday_item_id]);
-
   const cleanName = p.customer_display_name
     ? p.name.replace(new RegExp(`^${escapeRegex(p.customer_display_name)}\\s*[-—]\\s*`), "")
     : p.name;
@@ -223,39 +193,6 @@ export function ProjectDetailPanel({
               </div>
             </div>
           ) : null}
-
-          {/* Monday updates */}
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-[color:var(--muted-foreground)] mb-2">
-              Updates from Monday
-            </div>
-            {loadingUpdates ? (
-              <div className="space-y-2">
-                {[1,2,3].map(i => (
-                  <div key={i} className="h-12 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] animate-pulse" />
-                ))}
-              </div>
-            ) : updates === null || updates.length === 0 ? (
-              <div className="text-xs text-[color:var(--muted-foreground)] italic py-2">
-                {updates === null ? "No updates found." : "No updates yet."}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {updates.map((u) => (
-                  <div
-                    key={u.id}
-                    className="rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3"
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-xs font-medium text-[color:var(--foreground)]">{u.author}</span>
-                      <span className="text-[10px] text-[color:var(--muted-foreground)]">{fmtRelTime(u.created_at)}</span>
-                    </div>
-                    <p className="text-xs text-[color:var(--muted-foreground)] leading-relaxed">{u.body}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Footer */}
