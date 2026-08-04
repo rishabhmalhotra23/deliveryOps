@@ -21,7 +21,7 @@ Retire Monday and finish the wiring. The all-hands report still reads the Monday
 
 ## Deploy workflow (follow exactly)
 
-Edit files and verify with `npm run build`, type-check, and `vitest run`. Do NOT run `git add`/`commit`/`push` from the sandbox (it leaves a stale `.git/index.lock`). Hand the user exact commit + push commands, staging only the files you changed (never `git add -A`). The user pushes to `main` over SSH; Vercel auto-deploys. A husky pre-commit hook runs vitest, so pin locales in code (`toLocaleString("en-US")`). After a push, confirm the Vercel deployment reached READY via the Vercel connector (project "delivery-ops").
+Edit files and verify with `npm run build`, type-check, and `vitest run`. The agent may run `git add`/`commit`/`push` directly (2026-08-04: Rishabh lifted the earlier no-push rule) — stage only the files actually changed, never `git add -A`. Push to `main` over SSH; Vercel auto-deploys. Known risk: running git from the sandbox concurrently with the user's own terminal/IDE can leave a stale `.git/index.lock` that blocks the user's next local git command — if the user reports a stuck `git` command right after a sandbox push, that lock file is the first thing to check (`rm .git/index.lock` once no git process is actually running). A husky pre-commit hook runs vitest, so pin locales in code (`toLocaleString("en-US")`). After a push, confirm the Vercel deployment reached READY via the Vercel connector (project "delivery-ops").
 
 ## Gotchas
 
