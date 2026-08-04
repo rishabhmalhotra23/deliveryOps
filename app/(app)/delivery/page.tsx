@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { loadDeliveryBundle } from "@/lib/delivery/loader";
+import { loadActiveBoard } from "@/lib/processes/loader";
 import { PageHeader, formatTimeAgo } from "@/app/_components/brand";
 import { BackButton } from "@/app/_components/back-button";
 import { DeliveryClient } from "./delivery-client";
@@ -9,7 +10,7 @@ import { DeliveryStatsRow } from "./_components/delivery-stats-row";
 export const dynamic = "force-dynamic";
 
 export default async function DeliveryPage() {
-  const bundle = await loadDeliveryBundle();
+  const [bundle, board] = await Promise.all([loadDeliveryBundle(), loadActiveBoard()]);
   const sub =
     bundle.last_sync != null
       ? `Synced ${formatTimeAgo(bundle.last_sync)}.`
@@ -34,7 +35,7 @@ export default async function DeliveryPage() {
 
       <DeliveryStatsRow projects={bundle.projects} totals={bundle.totals} />
 
-      <DeliveryClient projects={bundle.projects} facets={bundle.facets} />
+      <DeliveryClient projects={bundle.projects} facets={bundle.facets} board={board} />
     </div>
   );
 }

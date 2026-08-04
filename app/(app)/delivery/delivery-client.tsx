@@ -9,6 +9,8 @@ import {
   ResponsiveContainer, Legend, AreaChart, Area,
 } from "recharts";
 import type { DeliveryProject, DeliveryFilterFacets } from "@/lib/delivery/loader";
+import type { ActiveBoard, BoardCard as BoardCardData } from "@/lib/processes/loader";
+import { ACTIVE_LANES, ACTIVE_LANE_LABELS } from "@/lib/processes/loader";
 import {
   HEALTH_PILL_CLS,
   STATUS_PILL_CLS,
@@ -18,13 +20,15 @@ import {
   pillClass,
 } from "@/lib/delivery/taxonomy";
 import { ProjectDetailPanel, type ProjectPanelItem } from "@/app/_components/project-detail-panel";
+import { ProcessDrawer } from "@/app/_components/process-drawer";
 
 interface DeliveryClientProps {
   projects: DeliveryProject[];
   facets: DeliveryFilterFacets;
+  board: ActiveBoard;
 }
 
-const TABS = ["Kanban", "Table", "Q-on-Q"] as const;
+const TABS = ["Active Work", "Kanban", "Table", "Q-on-Q"] as const;
 type Tab = (typeof TABS)[number];
 
 // ── Chart theme ───────────────────────────────────────────────────────────────
@@ -100,8 +104,8 @@ function TabButton({ label, active, onClick }: { label: string; active: boolean;
 
 // ── Main client component ─────────────────────────────────────────────────────
 
-export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
-  const [tab, setTab] = useState<Tab>("Kanban");
+export function DeliveryClient({ projects, facets, board }: DeliveryClientProps) {
+  const [tab, setTab] = useState<Tab>("Active Work");
   const [customer, setCustomer] = useState("");
   const [ae, setAe] = useState("");
   const [fde, setFde] = useState("");
@@ -109,6 +113,7 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
   const [fiscalYear, setFiscalYear] = useState("");
   const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState<ProjectPanelItem | null>(null);
+  const [selectedProcess, setSelectedProcess] = useState<BoardCardData | null>(null);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -172,6 +177,7 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
         ))}
       </div>
 
+      {tab === "Active Work" && <Board board={board} onSelect={setSelectedProcess} />}
       {tab === "Kanban" && <Kanban projects={filtered} onSelect={setSelectedProject} />}
       {tab === "Table" && <Table projects={filtered} onSelect={setSelectedProject} />}
       {tab === "Q-on-Q" && <QonQ projects={filtered} />}
@@ -179,6 +185,112 @@ export function DeliveryClient({ projects, facets }: DeliveryClientProps) {
       {selectedProject ? (
         <ProjectDetailPanel project={selectedProject} onClose={() => setSelectedProject(null)} />
       ) : null}
+      {selectedProcess ? (
+        <ProcessDrawer
+          process={selectedProcess}
+          customerDisplayName={selectedProcess.customer_display_name}
+          onClose={() => setSelectedProcess(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// ── Active work board ────────────────────────────────────────────────────────
+// Four fixed lanes, read-only cards — all editing happens in the drawer. No
+// drag-and-drop: a lane change is a lifecycle edit in the drawer, which asks
+// for whatever that lane requires. Per docs/mockups/ia-step-1.5.html panel 4.
+
+const HEALTH_BORDER: Record<string, string> = {
+  on_track: "border-t-emerald-400",
+  at_risk: "border-t-amber-400",
+  off_track: "border-t-red-400",
+};
+
+function Board({ board, onSelect }: { board: ActiveBoard; onSelect: (p: BoardCardData) => void }) {
+  const total = Object.values(board.lanes).reduce((n, l) => n + l.length, 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        <span className="text-[11px] px-2 py-1 rounded-full bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] font-medium">
+          Active · {total}
+        </span>
+        <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--glass-border)]">
+          Delivered · {board.viewCounts.delivered}
+        </span>
+        <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--glass-border)]">
+          Archive · {board.viewCounts.archive}
+        </span>
+      </div>
+
+      {total === 0 ? (
+        <div className="glass-card p-6 text-sm text-[color:var(--muted-foreground)]">
+          No active processes yet — run the Monday-archive importer to populate this board.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start">
+          {ACTIVE_LANES.map((lane) => (
+            <div key={lane}>
+              <div className="flex items-baseline justify-between px-1 pb-2">
+                <span className="text-[13px] font-semibold tracking-tight text-[color:var(--foreground)]">
+                  {ACTIVE_LANE_LABELS[lane]}
+                </span>
+                <span className="text-[11.5px] text-[color:var(--muted-foreground)] tabular-nums">
+                  {board.lanes[lane].length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {board.lanes[lane].map((card) => {
+                  const staleDays = Math.round((Date.now() - new Date(card.updated_at).getTime()) / 86_400_000);
+                  return (
+                    <button
+                      key={card.id}
+                      onClick={() => onSelect(card)}
+                      className={`w-full text-left glass-card-hover p-3 border-t-2 ${
+                        HEALTH_BORDER[card.health ?? ""] ?? "border-t-[var(--glass-border)]"
+                      }`}
+                    >
+                      <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
+                        {card.customer_display_name}
+                      </div>
+                      <div className="text-sm font-medium text-[color:var(--foreground)] mt-0.5 line-clamp-2">
+                        {card.process_name}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {card.needs_attention ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-700 border-red-500/25">
+                            needs attention
+                          </span>
+                        ) : null}
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                            staleDays > 60
+                              ? "bg-red-500/10 text-red-700 border-red-500/25"
+                              : staleDays > 30
+                                ? "bg-amber-500/10 text-amber-700 border-amber-500/25"
+                                : "border-[var(--glass-border)] text-[color:var(--muted-foreground)]"
+                          }`}
+                        >
+                          {staleDays}d
+                        </span>
+                        {card.open_suggestion_count > 0 ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-[rgba(242,255,112,0.18)] border-[rgba(242,255,112,0.4)]">
+                            {card.open_suggestion_count} suggestion{card.open_suggestion_count > 1 ? "s" : ""}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-[11px] text-[color:var(--muted-foreground)] mt-1.5">
+                        {card.fde_owner ?? "unassigned"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
