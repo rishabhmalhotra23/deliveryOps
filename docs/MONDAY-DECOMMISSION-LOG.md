@@ -756,3 +756,69 @@ the next real step toward the 1.9 cutover gate — `/delivery` and `/v2-migratio
 data while the weekly report, analytics, dashboard, and customer 360 still read the Monday cache, so their
 numbers can disagree. `docs/supabase-schema-full.sql` is still stale at 0019 and should be regenerated once
 someone has a moment (cosmetic — doesn't block anything).
+
+### 2026-08-06 (cont.) — ARR fix + duplicate cleanup on `/delivery`
+
+Two follow-ups from Rishabh reviewing the new pages.
+
+**ARR was stale for the same reason `migration_stage` was: `processes.arr` is a one-time Excel snapshot,
+never re-synced.** JBI showed $384,335 (really $162K after a renewal) and Norco showed $639,000 (really
+$311K). The app already has a live-ARR system for exactly this
+(`lib/commercials/confirmed-arr.ts` — most recent past Closed-Won SF opp, plus a manual GTM-override table
+for cases SF gets wrong) used by the customer 360, dashboard, and analytics; the V2 Migration page just
+wasn't wired to it. Checked the raw `sf_opportunities` cache before touching anything: JBI's $162K renewal
+was already correctly synced, so the live derivation needed no override — the page was simply reading the
+wrong field. Norco needed an override, but the code already had one, at a now-stale $284K (someone hit this
+same staleness before); updated to $311K. Wired `loadV2MigrationOverview()` to compute `confirmed_arr` the
+same way the rest of the app does, verified against production (JBI → $162K, Norco → $311K exactly).
+
+**Duplicate cleanup.** Rishabh flagged "a lot of duplicates" on `/delivery` — the same failure mode as the
+JBI Design Meeting Prep case from earlier today (one real process represented by two rows: a stale V1
+Monday item plus a separately-created V2 item, instead of one row updated in place), just more of them.
+Pulled all 153 production rows and checked every same-customer pair, but **fuzzy name-similarity alone was
+a bad signal** — e.g. "same go-live date, same customer" looked diagnostic at first (three real duplicate
+pairs shared it) but turned out to be common for genuinely distinct processes too (Kognitos frequently
+launched several unrelated automations for one customer on the same rollout day). Ended up requiring an
+actual per-pair read of the fields, not just the names. Five confirmed and merged (survivor kept, loser's
+non-conflicting fields folded in, then deleted — same technique as the JBI case):
+
+  - Bradley & Beams: **`Tax Reconciliation Yardi`** (orphaned seed row) → **`Tax Reconciliation`** (exact
+    go-live-date match, "Yardi" just names which property-management system the same reconciliation runs
+    against).
+  - Bradley & Beams: **`Tax Recon Vantaca and Random Flow`** (orphaned seed row) → **`Tax Recon v2`** (same
+    pattern, a second and genuinely different tax-recon workflow for the Vantaca system — confirmed real by
+    checking the *other* pair didn't collide with this one).
+  - TTX: **`AP Invoicing`** (orphaned seed row) → **`AP Invoice Status`** — this one mattered beyond
+    cosmetics: the seed row carried real `customer_validation` progress (parity/handover/validation dates)
+    that the Monday-sourced survivor had never captured at all.
+  - Plunkett: **`Customer Claims RA`** (plural, Monday duplicate) → **`Customer Claim RA`** (singular,
+    richer history) — a one-letter pluralization split into two rows.
+  - Bradley & Beams: **`Engagement Letter Flow - v2 Migration`** → **`Engagement Letters`** — the duplicate's
+    own title named itself as this process's v2 migration. `went_live_at` set to the 2026-03-19 cutover date
+    rather than overwriting `go_live_date` (kept at the real 2025-10-31 v1 launch), same pattern as the JBI
+    case.
+
+**Ruled out, not merged, after reading the actual data (not just names):** the `JBI - Project Initiation
+Request` / `... v2` / `... 2` three-way looked like the obvious next candidate but has three distinct
+kickoff/go-live timelines spanning 2024→2026 — three real automations built over time for a recurring need,
+not duplicates. Also left alone: the several `<Process> Enhancements` rows across Wipro FSS/Halemeyer,
+which are real distinct follow-on backlog items, not copies of their base process.
+
+**Also fixed while in there:** 9 orphaned seed rows (`Conectiv POV`, `Pepsi - Fuzzy Matching`,
+`Scan Health - Report`, and 6 `Wipro FSS` extraction rows) had `customer_key = NULL` even though their
+account text trivially matches an existing roster customer other rows already resolve to — this wasn't a
+real ambiguity, just a matching pass that only ran for Monday-merged seed rows during the original import.
+Set `customer_key`/`customer_id` on all 9; left their content untouched.
+
+**Open, asked Rishabh rather than guessed:**
+- `Conectiv POV` (the orphaned seed row) carries real weight — 25 Linear tickets, $65K ARR, a real blocker —
+  clearly the substantive Conectiv V2 effort. Unclear whether it's the same process as `Conectiv POV - SDS
+  Billing` or `Conectiv - SONY Billing` (both Monday-sourced, no name overlap with "POV") or a third, broader
+  thing. Not merged.
+- `Airborne - Invoice Process` (v2, cancelled, zero evidence — one of the earlier-identified fallback-noise
+  rows) vs. `Airborne - Invoice Processing` (v1, live, real revenue). Could be an abandoned V2 attempt at the
+  same process (matches Rishabh's own note that some V1 work isn't migrating yet) or an unrelated cancelled
+  item. Not merged.
+
+Total after cleanup: 153 → 148 rows. No code changes needed — `/delivery` and `/v2-migration` read `processes`
+live, so the lower, deduped count shows up automatically.
