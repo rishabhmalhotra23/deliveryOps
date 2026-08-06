@@ -10,6 +10,7 @@
 // is being retired, not extended.
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { DrillDownPanel } from "@/app/_components/drilldown-panel";
 import {
@@ -23,6 +24,8 @@ import {
   MIGRATION_STAGE_LABELS,
   type Process,
 } from "@/lib/supabase/types";
+
+const OTHER = "__other__";
 
 function label(s: string): string {
   return s.replace(/_/g, " ");
@@ -146,6 +149,105 @@ function FieldRow({
   );
 }
 
+// A select backed by real data (existing FDE/TAM/partner names already in
+// use) rather than a hardcoded roster — there is no canonical employee or
+// partner list anywhere in this app to hardcode against. "+ add new" falls
+// back to free text so a new hire or partner never gets blocked on a list
+// nobody maintains.
+function ComboRow({
+  fieldLabel,
+  value,
+  options,
+  onCommit,
+}: {
+  fieldLabel: string;
+  value: string | null;
+  options: string[];
+  onCommit: (value: string | null) => Promise<void>;
+}) {
+  const knownOptions = Array.from(new Set(value ? [...options, value] : options)).sort();
+  const [customizing, setCustomizing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [flash, setFlash] = useState(false);
+
+  async function commit(next: string | null) {
+    if (next === value) {
+      setCustomizing(false);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onCommit(next);
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1200);
+      setCustomizing(false);
+    } catch (err) {
+      setDraft(value ?? "");
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const ctlClass = `flex-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-[var(--glass-bg)] text-[color:var(--foreground)] transition-colors ${
+    flash ? "border-[color:var(--brand-yellow)] bg-[rgba(242,255,112,0.12)]" : "border-[var(--glass-border)]"
+  } focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-yellow)] disabled:opacity-60`;
+
+  return (
+    <div className="grid grid-cols-[132px_1fr] gap-3 items-start py-2 border-b border-[var(--glass-border)]/60">
+      <div className="text-[11px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold pt-2">
+        {fieldLabel}
+      </div>
+      <div>
+        {customizing ? (
+          <input
+            autoFocus
+            value={draft}
+            disabled={busy}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => commit(draft.trim() === "" ? null : draft.trim())}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") {
+                setDraft(value ?? "");
+                setCustomizing(false);
+              }
+            }}
+            placeholder="Type a name…"
+            className={ctlClass}
+          />
+        ) : (
+          <select
+            value={value ?? ""}
+            disabled={busy}
+            onChange={(e) => {
+              if (e.target.value === OTHER) {
+                setDraft("");
+                setCustomizing(true);
+                return;
+              }
+              void commit(e.target.value === "" ? null : e.target.value);
+            }}
+            className={ctlClass}
+          >
+            <option value="">—</option>
+            {knownOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+            <option value={OTHER}>+ add new…</option>
+          </select>
+        )}
+        {error ? <div className="text-[11px] text-red-600 mt-1">{error}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 function DerivedRow({ fieldLabel, display }: { fieldLabel: string; display: string }) {
   return (
     <div className="grid grid-cols-[132px_1fr] gap-3 items-start py-2 border-b border-[var(--glass-border)]/60">
@@ -172,15 +274,25 @@ function GroupHeader({ title }: { title: string }) {
 
 // ─── Drawer ──────────────────────────────────────────────────────────────────
 
+export interface ProcessDrawerFacets {
+  fdeOwners: string[];
+  tamOwners: string[];
+  partners: string[];
+  customerOptions: { id: string; display_name: string }[];
+}
+
 export function ProcessDrawer({
   process,
   customerDisplayName,
+  facets,
   onClose,
 }: {
   process: Process;
   customerDisplayName: string;
+  facets: ProcessDrawerFacets;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [proc, setProc] = useState(process);
   const [reviewBusy, setReviewBusy] = useState(false);
 
@@ -193,6 +305,10 @@ export function ProcessDrawer({
     const json = await parseJsonResponse(res);
     if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
     setProc(json.process as Process);
+    // The board/table lists are a server-fetched snapshot passed down as
+    // props — refresh so a lifecycle change actually moves the card to its
+    // new lane instead of only updating inside the (still-open) drawer.
+    router.refresh();
   }
 
   async function markReviewed() {
@@ -206,12 +322,16 @@ export function ProcessDrawer({
       const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setProc(json.process as Process);
+      router.refresh();
     } catch {
       /* best-effort — the field rows already surface per-field errors */
     } finally {
       setReviewBusy(false);
     }
   }
+
+  const resolvedCustomerName =
+    facets.customerOptions.find((c) => c.id === proc.customer_id)?.display_name ?? customerDisplayName;
 
   const historyEntries = Object.entries(proc.field_provenance ?? {}).sort(
     (a, b) => (b[1]?.at ?? "").localeCompare(a[1]?.at ?? "")
@@ -223,7 +343,7 @@ export function ProcessDrawer({
       subtitle={
         <div className="space-y-1.5">
           <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
-            {customerDisplayName}
+            {resolvedCustomerName}
           </div>
           <div className="flex flex-wrap gap-1.5">
             <Chip>{label(proc.platform)}</Chip>
@@ -258,6 +378,18 @@ export function ProcessDrawer({
           {proc.needs_attention_reason}
         </div>
       ) : null}
+
+      <GroupHeader title="Identity" />
+      <FieldRow
+        fieldLabel="Customer"
+        kind="select"
+        value={proc.customer_id}
+        options={facets.customerOptions.map((c) => ({ value: c.id, label: c.display_name }))}
+        onCommit={(v) => saveField("customer_id", v)}
+      />
+      <div className="text-[11px] text-[color:var(--muted-foreground)] -mt-1 mb-1 ml-[144px]">
+        Only fix this for a mismatched import — it doesn't rename or move the process.
+      </div>
 
       <GroupHeader title="State" />
       <FieldRow
@@ -325,9 +457,9 @@ export function ProcessDrawer({
       />
 
       <GroupHeader title="Ownership" />
-      <FieldRow fieldLabel="Dev / FDE" kind="text" value={proc.fde_owner} onCommit={(v) => saveField("fde_owner", v)} />
-      <FieldRow fieldLabel="TAM" kind="text" value={proc.tam_owner} onCommit={(v) => saveField("tam_owner", v)} />
-      <FieldRow fieldLabel="Partner" kind="text" value={proc.partner} onCommit={(v) => saveField("partner", v)} />
+      <ComboRow fieldLabel="Dev / FDE" value={proc.fde_owner} options={facets.fdeOwners} onCommit={(v) => saveField("fde_owner", v)} />
+      <ComboRow fieldLabel="TAM" value={proc.tam_owner} options={facets.tamOwners} onCommit={(v) => saveField("tam_owner", v)} />
+      <ComboRow fieldLabel="Partner" value={proc.partner} options={facets.partners} onCommit={(v) => saveField("partner", v)} />
 
       <GroupHeader title="Value" />
       <FieldRow

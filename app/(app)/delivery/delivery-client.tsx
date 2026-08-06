@@ -180,6 +180,7 @@ export function DeliveryClient({ overview }: DeliveryClientProps) {
         <ProcessDrawer
           process={selectedProcess}
           customerDisplayName={selectedProcess.customer_display_name}
+          facets={overview.facets}
           onClose={() => setSelectedProcess(null)}
         />
       ) : null}

@@ -74,6 +74,8 @@ export interface ProcessesOverview {
     fdeOwners: string[];
     tamOwners: string[];
     partners: string[];
+    /** {id, display_name} pairs, for the drawer's customer-reassignment select. */
+    customerOptions: { id: string; display_name: string }[];
   };
 }
 
@@ -211,6 +213,7 @@ export async function loadProcessesOverview(): Promise<ProcessesOverview> {
       fdeOwners: dedupSorted(all.map((r) => r.fde_owner)),
       tamOwners: dedupSorted(all.map((r) => r.tam_owner)),
       partners: dedupSorted(all.map((r) => r.partner)),
+      customerOptions: Array.from(custById.values()).sort((a, b) => a.display_name.localeCompare(b.display_name)),
     },
   };
 }

@@ -32,6 +32,7 @@ export class ProcessNotFoundError extends Error {
 // provenance (source_*), and needs_attention — those are import-time or
 // creation-time, not drawer edits.
 const EDITABLE_FIELDS: (keyof Process)[] = [
+  "customer_id",
   "lifecycle",
   "phase",
   "health",
