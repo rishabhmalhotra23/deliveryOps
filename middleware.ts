@@ -69,6 +69,12 @@ export async function middleware(request: NextRequest) {
     const session = await auth0.getSession(request);
 
     if (!session?.user) {
+      // API routes are fetch()ed by client components expecting JSON — a
+      // redirect to the HTML login page makes res.json() throw a cryptic
+      // "Unexpected token '<'" instead of surfacing "your session expired".
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Session expired — please refresh the page and log in again." }, { status: 401 });
+      }
       const loginUrl = new URL("/api/auth/login", request.url);
       loginUrl.searchParams.set("returnTo", request.nextUrl.pathname + request.nextUrl.search);
       return NextResponse.redirect(loginUrl);
@@ -76,6 +82,9 @@ export async function middleware(request: NextRequest) {
 
     // Extra domain check in case the Auth0 Action isn't set up yet.
     if (!isAllowedEmail(session.user.email)) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "This account is not allowed to access DeliveryOps." }, { status: 403 });
+      }
       const logoutUrl = new URL("/api/auth/logout", request.url);
       logoutUrl.searchParams.set("returnTo", "/login?error=domain");
       return NextResponse.redirect(logoutUrl);

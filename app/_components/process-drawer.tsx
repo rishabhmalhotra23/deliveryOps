@@ -40,6 +40,22 @@ function daysAgo(iso: string): number {
   return Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
 
+// A non-JSON response (an HTML login page, a Vercel error interstitial) means
+// something upstream of the route handler intercepted the request — most
+// often an expired session. res.json() on that throws an opaque "Unexpected
+// token '<'"; this gives a message a user can actually act on.
+async function parseJsonResponse(res: Response): Promise<{ error?: string; process?: Process }> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      res.status === 401 || res.status === 403
+        ? "Your session expired — refresh the page and log in again."
+        : `Unexpected response (HTTP ${res.status}) — try refreshing the page.`
+    );
+  }
+  return res.json();
+}
+
 // ─── Field row ───────────────────────────────────────────────────────────────
 
 type FieldKind = "select" | "text" | "date" | "number" | "textarea";
@@ -174,7 +190,7 @@ export function ProcessDrawer({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [field]: value }),
     });
-    const json = await res.json();
+    const json = await parseJsonResponse(res);
     if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
     setProc(json.process as Process);
   }
@@ -187,7 +203,7 @@ export function ProcessDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "mark-reviewed" }),
       });
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setProc(json.process as Process);
     } catch {
