@@ -295,6 +295,7 @@ export const MIGRATION_STAGES = [
   "customer_validation",
   "live_on_v2",
   "v2_native",
+  "migrated_pending_commercial",
 ] as const;
 
 export type MigrationStage = (typeof MIGRATION_STAGES)[number];
@@ -307,6 +308,7 @@ export const MIGRATION_STAGE_LABELS: Record<MigrationStage, string> = {
   customer_validation: "Customer validation",
   live_on_v2: "Live on v2",
   v2_native: "V2 native",
+  migrated_pending_commercial: "Migrated, pending commercial",
 };
 
 // Stages that count as actively migrating — drives the "in flight" metric.
