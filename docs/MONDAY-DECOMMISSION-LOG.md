@@ -75,15 +75,15 @@ Status values: `done` / `in progress` / `blocked` / `not started`.
 | # | Step | Status | Notes |
 |---|---|---|---|
 | 1.1 | Design the native schema from the real backup | **proposed 2026-08-03, awaiting approval** | [PROCESSES-SCHEMA-PROPOSAL.md](./PROCESSES-SCHEMA-PROPOSAL.md). Grain = one row per process, soft-linked to `k2_processes`. Clean orthogonal taxonomy replacing Monday's blended fields. `ttv_days` generated. Value = manual minutes-saved input x `k2_runs`. |
-| 1.2 | Generalize `migration_processes` into `processes` | **done 2026-08-03, verified on real PG 15** | `supabase/migrations/0021_processes_native.sql`. Renames the table and adds 36 columns + 9 enum types + `process_suggestions` + `nps_responses` + the 9 Customers-board fields. **Additive only — nothing dropped**, see 1.2b. `tsc --noEmit` clean, vitest 111/111, `npm run db:reset` replayed 0001-0021 clean, and an 8-check schema assertion passed exactly: 75 rows survived the rename, `platform` is `process_platform` with v1:69 v2:4 custom:2, `ttv_days` is `is_generated = ALWAYS`, `lifecycle` defaulted to discovery on all 75, both new tables present, all 11 new columns present, `migration_processes` gone. |
-| 1.2b | Drops: `monday_activities`, `customers.lifecycle_group`, `internal_profiles.health_score` | not started, **deliberately** | These were planned for 0021 and pulled out. Both still have live read sites (`lifecycle_group` 19, incl. a `.eq()` filter in `lib/customers.ts:93` and `ALLOWED_FIELDS` in the manual-update route; `monday_activities` 5, incl. `lib/sync/monday.ts:512`). Dropping a column the code still selects is a runtime 500, not a build error, so `npm run build` would have passed and the failure would have landed on customers. Becomes 0022, after the rewire. |
-| 1.3 | Write the importer from the backup into Supabase | **written 2026-08-03, dry-run verified** | `scripts/import-monday-backup.ts` + `lib/import/monday-taxonomy.ts` + `tests/import/monday-taxonomy.test.ts` (28 tests, replays the real 146 rows). Dry run by default, idempotent on `source_item_id`, flags rather than guesses. Includes the customer matching pass 0020 skipped. Not yet run with `--apply`. |
+| 1.2 | Generalize `migration_processes` into `processes` | **done, applied to production 2026-08-06** | `supabase/migrations/0021_processes_native.sql`, plus `0019`/`0020` (also applied to prod the same day — production had never run those either) and `0022` (fixed a real `ON CONFLICT` bug: the `source_item_id` index was partial, Postgres won't infer from that). **Additive only — nothing dropped**, see 1.2b. |
+| 1.2b | Drops: `monday_activities`, `customers.lifecycle_group`, `internal_profiles.health_score` | not started, **deliberately** | Unchanged from 2026-08-03: both still have live read sites, dropping now would 500 on customers. Note: **0022 was used for the ON CONFLICT fix above, not these drops** — renumber to 0023+ when this is picked up. |
+| 1.3 | Write the importer from the backup into Supabase | **done, applied to production 2026-08-06** | `scripts/import-monday-backup.ts` run with `--apply`. 146 rows imported, deduped (5 cross-board + 63 seed-merge), final count 153. See the 2026-08-06 handoff below for the full diagnosis trail (22-vs-15 flagged count, Srinar now a real customer, 3 near-miss rows left for a human). |
 | 1.4 | Populate auto-derived columns from `k2_processes` / `k2_runs` | not started | Real usage data currently unused. |
-| 1.5 | Mockup the UI + decide the IA | **mockup delivered 2026-08-03, awaiting approval** | [docs/mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html). 5 panels: IA options A/B, field homes for 0021, the process edit drawer, the segmented board, customer 360. Editing model, permissions, Activity Log and the suggestion queue all decided. **The A-vs-B IA choice is still open and is Rishabh's.** |
+| 1.5 | Mockup the UI + decide the IA | **done** | [docs/mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html) approved. Drawer + Active-work board built and shipped 2026-08-04/06 — see handoff below. |
 | 1.6 | Rewire `weekly-loader.ts` off `monday_projects` | not started | |
-| 1.7 | Rewire the other four read paths | not started | analytics, delivery, cache/integrations, dashboard drilldowns. |
-| 1.8 | Authenticate or delete `/api/monday/item-updates` | not started | Currently public + unauthenticated. |
-| 1.9 | Verify report numbers match row-for-row before cutover | not started | Hard gate. |
+| 1.7 | Rewire the other four read paths | **1 of 5 done** | `/delivery` fully rewired onto `processes` 2026-08-06 (own tabs, own loader). analytics, dashboard, cache/integrations (customer 360) still on `monday_projects`. |
+| 1.8 | Authenticate or delete `/api/monday/item-updates` | **done 2026-08-06** | Deleted — was public and unauthenticated. |
+| 1.9 | Verify report numbers match row-for-row before cutover | not started | Hard gate. Matters more now that `/delivery` and the weekly report can disagree (1.7 is partial). |
 | 1.10 | Disable the Monday sync in `vercel.json` | not started | Only after 1.9 passes. |
 
 ### Phase 2+ — Adoption, self-updating, agents
@@ -496,45 +496,156 @@ table and adds 36 columns.
 
 ---
 
+---
+
+## Handoff — 2026-08-06, moving to the V2 reconciliation phase
+
+Steps 1.2–1.5 and 1.8 are now done, in production, on real data. This section supersedes the
+2026-08-03 handoff above for "what's next" purposes; that section is kept for history.
+
+### What shipped since 2026-08-03
+
+- **0019 + 0020 + 0021 applied to production**, in one transaction. Production had never run 0019/0020
+  at all (not just "not yet renamed" — `migration_processes` was a flat 404), so the real gap was three
+  migrations deep, not one. Also found and left alone: `0014_chat_tool_traces.sql` and
+  `0017_linear_tickets.sql`/`0018` are *also* missing from production — unrelated to this work, flagged,
+  not touched.
+- **0019/0020 committed to git** (`cafdb90`) — they existed only on disk before, never in git history,
+  even though the already-committed 0021 depends on the table 0019 creates.
+- **0022 written and applied**: `0021`'s `source_item_id` index was a *partial* unique index
+  (`where source_item_id is not null`). Postgres won't use a partial index for `ON CONFLICT` inference
+  unless the query restates the same `WHERE`, which `supabase-js`'s `.upsert()` can't do — every import
+  upsert failed with "no unique or exclusion constraint matching the ON CONFLICT specification" until this
+  was replaced with a plain unique constraint (NULLs still repeat freely under standard SQL semantics, so
+  nothing about hand-created future rows changes).
+- **Importer run with `--apply` against production.** 146 rows, exact approved split (active 30 /
+  delivered 71 / archive 45, customer source 94/45/7). Flagged count came in at 22, not the documented 15
+  — diagnosed, not "fixed" by loosening matching: the 15 only ever counted taxonomy-derived flags (7
+  unrecoverable-milestone + 8 misclassified); it never counted the customer-matching flags the script has
+  always raised (4 documented last-resort name-inference recoveries + 3 Srinar rows, which resolved
+  successfully this time because **Srinar is now a real roster customer**, added since the original
+  analysis). 15 + 4 + 3 = 22, exactly. No `NAME_FIXUPS` change needed.
+- **Deduped the imported set.** Two distinct duplicate classes, both diagnosed before merging:
+  - 5 cross-board duplicates *within* the 146 Monday rows (same process listed on two FY boards — the
+    exact failure mode `lib/delivery/loader.ts`'s `dedupeByCustomerAndName()` already exists to solve on
+    the old Monday-cache path). Resolved by richness score (go-live-date presence, then populated-field
+    count), loser deleted.
+  - 63 rows also existed in the old 75-row 0020 seed (never matched against Monday because 0020 left
+    `customer_key` null "for a later matching pass" — this was that pass, one day later than planned).
+    Merged per `PROCESSES-SCHEMA-PROPOSAL.md`'s rule — Monday wins delivery fields, the seed wins
+    V2-migration fields (`migration_stage`, `went_live_at`, parity/handover/validation dates,
+    `linear_ticket_ids`, `arr`, `company_size`, …) — then the seed row deleted. Every merge's full
+    pre-merge seed content is preserved in the surviving row's `source_raw._merged_from_seed`, so nothing
+    was destroyed without a trace. 12 seed rows had no Monday match at all and were left standing —
+    see "needs classification" below. **3 of those 12 look like near-miss name variants of a real Monday
+    row** (`TTX - AP Invoicing` vs Monday's `TTX - AP Invoice Status`; `Bradley & Beams - Tax
+    Reconciliation Yardi` vs `Tax Reconciliation`; `Conectiv POV` vs `Conectiv POV - SDS Billing`) — not
+    auto-merged, names don't match exactly and guessing wrong silently merges two different processes.
+    Still sitting there for a human call.
+  - Final count: **153 processes** (141 Monday-sourced + 12 seed-only).
+- **The process edit drawer + Active-work board, built and shipped** (`0d80139`), then substantially
+  hardened after real usage:
+  - `app/(app)/delivery/` is now **fully rebuilt on `processes`**, not `monday_projects` (`167aa3b`). Five
+    tabs, one loader (`lib/processes/loader.ts`'s `loadProcessesOverview()`): Active Work (the four-lane
+    board), Delivered, Archive (with a cancelled/churned/retired breakdown), All (sortable table — this is
+    also the "consolidated view" Rishabh asked for), Q-on-Q (delivered/in-flight/at-risk by quarter, avg
+    TTV from the generated `ttv_days` column, per-customer delivered counts). The old on-time-delivery-rate
+    chart was dropped — it compared `go_live_date` against Monday's `timeline_end`, which 0021 didn't carry
+    forward and nothing replaces.
+  - **Known, accepted tradeoff**: the weekly report, analytics, dashboard, and customer 360 still read
+    `monday_projects` — untouched. `/delivery`'s numbers can now disagree with theirs until those are
+    rewired too (steps 1.6/1.7, still not started).
+  - Rows with no `source_system` (the 12 seed-only rows above) get a visible **"needs classification"**
+    badge everywhere they render, rather than looking like ordinary `discovery`-lifecycle work.
+  - **Real bug, found and fixed**: the auth middleware redirected *any* unauthenticated `/api/` request to
+    the HTML login page. A client `fetch().then(r => r.json())` against an HTML redirect throws an opaque
+    "Unexpected token '<'" — this is what broke every field edit when Rishabh's session expired. Fixed
+    middleware to return real `401`/`403` JSON for `/api/` paths (`6e1e431`); the root cause was session
+    expiry, but the redirect-on-unauth behavior was a real gap affecting every API route, not just this one.
+  - **FDE / TAM / Partner / Customer are now dropdowns** (`b5ec558`) — confirmed there is no canonical
+    roster anywhere in this app (checked every layer: DB schema, API validation, the customer page's
+    equivalent fields). Built from the distinct values already in the data instead of hardcoding one, with
+    a "+ add new" fallback so a new hire or partner is never blocked. Customer is now reassignable too (a
+    real select, not free text) — this is the tool to use for fixing the 3 near-miss rows above, and the 12
+    needs-classification rows, once a human has decided the right customer for each.
+  - Saving now calls `router.refresh()`, so a lifecycle change actually moves the card to its new lane
+    live instead of only updating inside the still-open drawer.
+- **`/api/monday/item-updates` deleted** (`cb144b0`) — was public and unauthenticated while holding the
+  server's Monday token. Its only call site already degraded gracefully.
+- **The no-push rule lifted.** Rishabh confirmed SSH push works from this sandbox; CLAUDE.md now allows
+  `git commit`/`push` directly. The stale-`.git/index.lock` risk (concurrent sandbox + local terminal git)
+  is documented there as the first thing to check if the user's own `git` gets stuck after a sandbox push.
+
+### The next phase: Monday refresh + V2 Excel reconciliation
+
+Rishabh's direction, stated directly: **Monday's Delivery Planning workspace
+([board 18395281570](https://kognitos-company.monday.com/boards/18395281570)) is the source of truth for
+V1/general delivery status. The V2 Migration List Excel is the source of truth for V2 migration progress.**
+Overlap between the two is expected and correct, not a bug to reconcile away — Monday tracks a process
+while it's live/in-flight, the Excel independently tracks that same process's V2 migration effort. Do not
+try to collapse them into one row-for-row identity beyond the existing `(account, process_name)` match key.
+
+Two concrete findings from this session, not yet acted on:
+
+1. **This sandbox now has live network egress to Monday's API** (confirmed via a live GraphQL call to
+   board 18395281570 — this did *not* work in earlier sessions, per the 2026-07-30 decision log entry
+   above; that constraint no longer holds). A fresh pull no longer requires the user's own machine.
+2. **`V2 Migration List (1).xlsx`** (repo root, dropped 2026-08-06, confirmed by Rishabh as the current
+   authoritative version — supersedes `v2-migration-data/v2-migration-tracker-2026-08-03.xlsx`) has the
+   **same 75 rows** as the Aug 3 version (no adds/removes) but **31 rows changed**: mostly an FDE
+   reassignment (`Paige Gill` and `Arushi`'s book of work redistributed to `Rishabh Malhotra`, `Karthik N`,
+   `Ayush`), plus real `Migration Status` transitions. One transition introduces a **genuinely new status**
+   with no home in the current schema: `"Migration complete, waiting for commercial discussion or won't be
+   used for now"` (8 Wipro FSS rows). Rishabh's call: **add a new `migration_stage` enum value** for this
+   (not a forced fit into `live_on_v2` or `not_required` — both would lose real information), via a small
+   additive migration (0023).
+
 ### Next session — start here
 
 Paste this prompt:
 
-> Continuing the Monday decommission for deliveryOps. Read
-> `docs/MONDAY-DECOMMISSION-LOG.md` first — go straight to the "Handoff — 2026-08-03" section near the
-> bottom, which has the exact state of the tree, the one live production risk, and the ordered next
-> steps. Then skim `docs/PROCESSES-SCHEMA-PROPOSAL.md` for the schema and open
-> `docs/mockups/platform-vision.html` for the approved IA. Do not redesign the IA — it is signed off.
+> Continuing the Monday decommission for deliveryOps. Read `docs/MONDAY-DECOMMISSION-LOG.md` first — go
+> straight to the "Handoff — 2026-08-06" section near the bottom for exact state and the plan below.
+> `processes` is live in production with 153 rows; the drawer and Active-work board are shipped and
+> working. This phase is the Monday refresh + V2 Excel reconciliation Rishabh asked for.
 >
-> Unlike the previous sessions you can run things yourself here, so do. There is Docker + local Supabase
-> (`npm run db:reset`), and network access to production Supabase and Vercel.
+> Source-of-truth split, Rishabh's explicit call: Monday's Delivery Planning workspace (board
+> `18395281570`) is authoritative for V1/general delivery status. `V2 Migration List (1).xlsx` (repo root)
+> is authoritative for V2 migration progress. Overlap between the two is expected, not a bug — do not try
+> to fully collapse them, match on `(account, process_name)` as the existing importer already does.
 >
-> Work in this order, and stop to show me output at each numbered step before moving on:
+> Work in this order, stop to show output at each step:
 >
-> 1. Apply `supabase/migrations/0021_processes_native.sql` to PRODUCTION Supabase, wrapped in
->    `BEGIN; ... COMMIT;`. It is already applied and verified on local. This is urgent: production code
->    already points at the renamed `processes` table, so `/api/migrations` is broken until this runs.
-> 2. Dry-run the importer against production. It writes nothing without `--apply`:
->    `npx vercel env pull .env.production.local --environment=production` then
->    `npx tsx scripts/import-monday-backup.ts --secrets-file .env.production.local --verbose`.
->    Expect 146 rows, active 30 / delivered 71 / archive 45, customer source 94/45/7, 15 flagged.
->    Do not "fix" a higher flagged count by loosening the matching — diagnose each case first. Most
->    likely cause is roster display names differing from Monday labels, which is a `NAME_FIXUPS` entry.
-> 3. Re-run with `--apply`, then verify the written rows against the archive independently rather than
->    trusting the script's own summary.
-> 4. Build the process edit drawer and the Active-work board (four lanes: Pipeline · Building ·
->    Validating · Stuck). Cards read-only, all editing in the drawer, per-field save with no Save button,
->    lifecycle change moves the card and asks for what the new lane requires. Match the existing design
->    system — glass cards, brand tokens in `app/globals.css`. The mockups are approved; follow them.
+> 1. Write migration 0023: add a new `migration_stage` enum value for `"Migration complete, waiting for
+>    commercial discussion or won't be used for now"` (8 Wipro FSS rows in the Excel). Apply locally, then
+>    production, same transaction-wrapped pattern as 0019-0022.
+> 2. Live-pull Monday board `18395281570` (and the other 5 report boards, same set
+>    `scripts/import-monday-backup.ts` already reads) directly via the API — this sandbox has network
+>    access to Monday now, confirmed 2026-08-06, no longer needs the user's own machine. Diff against the
+>    `monday-backup-2026-08-03` archive first so you know exactly what changed before writing anything.
+> 3. Diff `V2 Migration List (1).xlsx`'s Working Sheet against what's already merged into `processes`
+>    (75 rows, same shape as the old 0020 seed). 31 rows already known to differ — mostly FDE reassignment,
+>    some Migration Status transitions. Merge using the existing "Monday wins delivery fields, Excel wins
+>    V2-migration fields" rule, applied to the *refreshed* Monday data from step 2.
+> 4. Build the dedicated **V2 Migration page/tab** (Rishabh confirmed this scope) — reads the same
+>    `processes` rows, filtered to real V2 activity (`platform = 'v2'` or `migration_stage != 'not_required'`
+>    or any V2-specific field populated), showing migration-specific columns: stage, parity/handover/
+>    validation dates, completion %, blockers, Linear tickets. Follow the existing `ProcessTable`/loader
+>    pattern in `lib/processes/loader.ts` and `app/(app)/delivery/delivery-client.tsx` — don't invent a new
+>    pattern for this.
 >
-> Independent of all the above and worth doing early: `/api/monday/item-updates` is listed as public in
-> `middleware.ts:14,27` while using the server's Monday token. Delete it or authenticate it.
+> Also still open, not yet decided:
+> - The 3 near-miss rows (`TTX - AP Invoicing`/`AP Invoice Status`, two Bradley & Beams tax entries, two
+>   Conectiv POV entries) — use the new customer-reassignment dropdown once Rishabh confirms each is/isn't
+>   a real duplicate.
+> - The 12 "needs classification" rows (seed-only, no Monday match) — same tool, once triaged.
+> - The stray `Acme` customer in production (seed data that `docs/CREDENTIALS.md` says should never be
+>   there).
+> - Whether to build the shared "field registry" (one source of truth for field labels/types across the
+>   drawer, table, and card, instead of each defining its own) — flagged as a real but separate
+>   architecture cleanup, not yet scoped.
 >
-> House rules that still apply: I push, you don't — hand me the commit and push commands, staging only
-> the files you changed, never `git add -A`. Verify with `npm run build`, `tsc --noEmit` and
-> `vitest run` before handing anything over. Show me a visual mockup before any UI change that is not
-> already in the approved mockups. Locales pinned (`toLocaleString("en-US")`) or the husky pre-commit
-> vitest fails on my en-IN Mac. This is production with real customer data.
->
-> There is uncommitted work in the tree (the importer, the taxonomy lib, its tests, and doc updates).
-> Start by reviewing it rather than rewriting it.
+> House rules: I push, you don't need to ask — the no-push rule was lifted 2026-08-04, see CLAUDE.md.
+> Stage only files you actually changed, never `git add -A`. Verify with `npm run build`, `tsc --noEmit`,
+> `vitest run` before pushing. Locales pinned (`toLocaleString("en-US")`). This is production with real
+> customer data — diagnose drift before "fixing" it by loosening anything, same rule as always.
