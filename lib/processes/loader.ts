@@ -249,15 +249,30 @@ export const V2_STAGES: MigrationStage[] = [
   "v2_native",
 ];
 
-function isV2Relevant(row: ProcessRow): boolean {
+/** Any concrete sign this process actually went through migration work, as
+ *  opposed to just carrying a stage label. */
+function hasV2Evidence(row: ProcessRow): boolean {
   return (
-    row.migration_stage !== "not_required" ||
-    row.platform !== "v1" ||
     row.linear_ticket_ids.length > 0 ||
     row.date_parity_complete != null ||
     row.date_customer_handover != null ||
-    row.date_customer_validation != null
+    row.date_customer_validation != null ||
+    row.went_live_at != null
   );
+}
+
+function isV2Relevant(row: ProcessRow): boolean {
+  if (row.migration_stage === "not_required") return false;
+  // v2_native means "built directly on v2, nothing ever migrated" — the same
+  // reason lib/reports/v2-week's tracker parser has always excluded "V2
+  // implementation" from the migration board and counted it only in the
+  // estate split. Most v2_native rows here are a side effect of a broad
+  // import-time default (platform === 'v2' => v2_native even with zero
+  // linear tickets or dates, so cancelled/backlog/pipeline processes tagged
+  // platform V2 for unrelated reasons all inherited the label). Only show
+  // the ones with real evidence something was actually migrated.
+  if (row.migration_stage === "v2_native" && !hasV2Evidence(row)) return false;
+  return true;
 }
 
 export interface V2MigrationOverview {
