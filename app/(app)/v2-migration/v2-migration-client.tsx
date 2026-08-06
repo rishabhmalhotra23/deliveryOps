@@ -12,6 +12,25 @@ interface V2MigrationClientProps {
   overview: V2MigrationOverview;
 }
 
+// The Excel/Monday sources spell the same 3 active FDEs several ways
+// ("Karthik Nagabhushana" / "Karthik N", a bare email, a full name). This is
+// a display-only normalization for this page — the underlying fde_owner
+// value (and every other page that reads it) is untouched.
+const FDE_ALIASES: Record<string, string> = {
+  ayush: "Ayush",
+  "ayush ghosh": "Ayush",
+  "ayush.ghosh@kognitos.com": "Ayush",
+  "karthik n": "Karthik",
+  "karthik nagabhushana": "Karthik",
+  rishabh: "Rishabh",
+  "rishabh malhotra": "Rishabh",
+};
+
+function fdeLabel(raw: string | null): string {
+  if (!raw) return "Unassigned";
+  return FDE_ALIASES[raw.trim().toLowerCase()] ?? raw;
+}
+
 const STAGE_BADGE: Record<MigrationStage, string> = {
   not_required: "border-[var(--glass-border)] text-[color:var(--muted-foreground)]",
   in_development: "bg-indigo-500/10 text-indigo-700 border-indigo-500/25",
@@ -31,10 +50,54 @@ function StageBadge({ stage }: { stage: MigrationStage }) {
   );
 }
 
+// One column instead of three near-empty ones: the furthest milestone this
+// process has actually reached, in the order work moves through. Sparse
+// per-column dates were exactly what made the old layout hard to scan — most
+// cells were "—" in any one of the three date columns.
+const MILESTONES: { key: keyof ProcessRow; label: string }[] = [
+  { key: "went_live_at", label: "Live" },
+  { key: "date_customer_validation", label: "Validated" },
+  { key: "date_customer_handover", label: "Handed over" },
+  { key: "date_parity_complete", label: "Parity done" },
+];
+
+function latestMilestone(row: ProcessRow): { label: string; date: string } | null {
+  for (const m of MILESTONES) {
+    const v = row[m.key] as string | null;
+    if (v) return { label: m.label, date: v.slice(0, 10) };
+  }
+  return null;
+}
+
+function formatMoney(n: number | null): string {
+  if (n == null) return "—";
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+  return `$${n}`;
+}
+
+// Collapsed to a count by default — Conectiv's migration alone carries 25
+// tickets, which turned "Linear" into an unreadable wall of chips. Expands
+// in place on click; no modal, no navigating away from the table.
 function LinearTickets({ ids }: { ids: string[] }) {
+  const [open, setOpen] = useState(false);
   if (ids.length === 0) return <span className="text-[color:var(--muted-foreground)]">—</span>;
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="text-[11px] px-1.5 py-0.5 rounded border border-[var(--glass-border)] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:border-[color:var(--brand-yellow)]"
+      >
+        {ids.length} ticket{ids.length > 1 ? "s" : ""}
+      </button>
+    );
+  }
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1 max-w-[220px]">
       {ids.map((id) => (
         <a
           key={id}
@@ -47,11 +110,21 @@ function LinearTickets({ ids }: { ids: string[] }) {
           {id}
         </a>
       ))}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(false);
+        }}
+        className="text-[10px] px-1 text-[color:var(--muted-foreground)] underline"
+      >
+        collapse
+      </button>
     </div>
   );
 }
 
-type SortKey = "default" | "name" | "customer" | "stage" | "fde" | "parity" | "handover" | "validation" | "completion" | "arr";
+type SortKey = "default" | "name" | "stage" | "fde" | "milestone" | "completion" | "arr";
 type SortDir = "asc" | "desc";
 
 function compareString(a: string | null | undefined, b: string | null | undefined): number {
@@ -71,13 +144,10 @@ function compareNumber(a: number | null | undefined, b: number | null | undefine
 
 const COLS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "name", label: "Process" },
-  { key: "customer", label: "Customer" },
   { key: "stage", label: "Stage" },
   { key: "fde", label: "FDE" },
-  { key: "parity", label: "Parity" },
-  { key: "handover", label: "Handover" },
-  { key: "validation", label: "Validation" },
-  { key: "completion", label: "Completion", align: "right" },
+  { key: "milestone", label: "Latest milestone" },
+  { key: "completion", label: "Progress", align: "right" },
   { key: "arr", label: "ARR", align: "right" },
 ];
 
@@ -90,12 +160,9 @@ function sortRows(rows: ProcessRow[], key: SortKey, dir: SortDir): ProcessRow[] 
   }
   const cmp: Record<Exclude<SortKey, "default">, (a: ProcessRow, b: ProcessRow) => number> = {
     name: (a, b) => compareString(a.process_name, b.process_name),
-    customer: (a, b) => compareString(a.customer_display_name, b.customer_display_name),
     stage: (a, b) => compareString(a.migration_stage, b.migration_stage),
-    fde: (a, b) => compareString(a.fde_owner, b.fde_owner),
-    parity: (a, b) => compareString(a.date_parity_complete, b.date_parity_complete),
-    handover: (a, b) => compareString(a.date_customer_handover, b.date_customer_handover),
-    validation: (a, b) => compareString(a.date_customer_validation, b.date_customer_validation),
+    fde: (a, b) => compareString(fdeLabel(a.fde_owner), fdeLabel(b.fde_owner)),
+    milestone: (a, b) => compareString(latestMilestone(a)?.date, latestMilestone(b)?.date),
     completion: (a, b) => compareNumber(a.completion_pct, b.completion_pct),
     arr: (a, b) => compareNumber(a.arr, b.arr),
   };
@@ -112,12 +179,17 @@ export function V2MigrationClient({ overview }: V2MigrationClientProps) {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedProcess, setSelectedProcess] = useState<ProcessRow | null>(null);
 
+  const fdeOptions = useMemo(
+    () => Array.from(new Set(overview.rows.map((r) => fdeLabel(r.fde_owner)))).sort(),
+    [overview.rows]
+  );
+
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     return overview.rows.filter((p) => {
       if (stage && p.migration_stage !== stage) return false;
       if (customer && p.customer_display_name !== customer) return false;
-      if (fde && p.fde_owner !== fde) return false;
+      if (fde && fdeLabel(p.fde_owner) !== fde) return false;
       if (s) {
         const hay = [p.process_name, p.customer_display_name, p.fde_owner ?? "", p.blockers ?? "", ...p.linear_ticket_ids]
           .join(" ")
@@ -136,7 +208,7 @@ export function V2MigrationClient({ overview }: V2MigrationClientProps) {
       else { setSortKey("default"); setSortDir("asc"); }
     } else {
       setSortKey(k);
-      setSortDir(["parity", "handover", "validation", "completion", "arr"].includes(k) ? "desc" : "asc");
+      setSortDir(["milestone", "completion", "arr"].includes(k) ? "desc" : "asc");
     }
   }
 
@@ -177,7 +249,7 @@ export function V2MigrationClient({ overview }: V2MigrationClientProps) {
           className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
         >
           <option value="">FDE: all</option>
-          {overview.facets.fdeOwners.map((o) => (
+          {fdeOptions.map((o) => (
             <option key={o} value={o}>FDE: {o}</option>
           ))}
         </select>
@@ -223,43 +295,54 @@ export function V2MigrationClient({ overview }: V2MigrationClientProps) {
                     );
                   })}
                   <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-left">Linear</th>
-                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-left">Blockers</th>
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors cursor-pointer align-top"
-                    onClick={() => setSelectedProcess(p)}
-                  >
-                    <td className="px-3 py-2 font-medium text-[color:var(--foreground)] min-w-[200px] whitespace-normal break-words leading-snug">
-                      {p.process_name}
-                    </td>
-                    <td className="px-3 py-2 text-[color:var(--foreground)] min-w-[120px] whitespace-normal break-words leading-snug">
-                      {p.customer_display_name}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <StageBadge stage={p.migration_stage} />
-                    </td>
-                    <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.fde_owner ?? "—"}</td>
-                    <td className="px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">{p.date_parity_complete ?? "—"}</td>
-                    <td className="px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">{p.date_customer_handover ?? "—"}</td>
-                    <td className="px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">{p.date_customer_validation ?? "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
-                      {p.completion_pct != null ? `${Math.round(p.completion_pct * 100)}%` : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
-                      {p.arr != null ? `$${p.arr.toLocaleString("en-US")}` : "—"}
-                    </td>
-                    <td className="px-3 py-2 min-w-[140px]">
-                      <LinearTickets ids={p.linear_ticket_ids} />
-                    </td>
-                    <td className="px-3 py-2 text-[color:var(--muted-foreground)] min-w-[160px] whitespace-normal break-words leading-snug">
-                      {p.blockers ?? "—"}
-                    </td>
-                  </tr>
-                ))}
+                {sorted.map((p) => {
+                  const milestone = latestMilestone(p);
+                  return (
+                    <tr
+                      key={p.id}
+                      className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors cursor-pointer align-top"
+                      onClick={() => setSelectedProcess(p)}
+                    >
+                      <td className="px-3 py-2 min-w-[220px] whitespace-normal break-words leading-snug">
+                        <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
+                          {p.customer_display_name}
+                        </div>
+                        <div className="font-medium text-[color:var(--foreground)] mt-0.5">{p.process_name}</div>
+                        {p.blockers ? (
+                          <div className="text-[11px] text-red-700 mt-1 line-clamp-2" title={p.blockers}>
+                            ⚑ {p.blockers}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <StageBadge stage={p.migration_stage} />
+                      </td>
+                      <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{fdeLabel(p.fde_owner)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {milestone ? (
+                          <>
+                            <span className="text-[color:var(--foreground)] font-medium tabular-nums">{milestone.date}</span>
+                            <span className="text-[11px] text-[color:var(--muted-foreground)] ml-1.5">{milestone.label}</span>
+                          </>
+                        ) : (
+                          <span className="text-[color:var(--muted-foreground)]">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
+                        {p.completion_pct != null ? `${Math.round(p.completion_pct * 100)}%` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
+                        {formatMoney(p.arr)}
+                      </td>
+                      <td className="px-3 py-2 min-w-[100px]">
+                        <LinearTickets ids={p.linear_ticket_ids} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
