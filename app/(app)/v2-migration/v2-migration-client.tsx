@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { V2MigrationOverview } from "@/lib/processes/loader";
+import type { V2MigrationOverview, V2ProcessRow } from "@/lib/processes/loader";
 import { V2_STAGES, MIGRATION_STAGE_LABELS } from "@/lib/processes/loader";
-import type { ProcessRow } from "@/lib/processes/loader";
 import type { MigrationStage } from "@/lib/supabase/types";
 import { ProcessDrawer } from "@/app/_components/process-drawer";
 import { StatBlock } from "@/app/_components/brand";
@@ -54,14 +53,14 @@ function StageBadge({ stage }: { stage: MigrationStage }) {
 // process has actually reached, in the order work moves through. Sparse
 // per-column dates were exactly what made the old layout hard to scan — most
 // cells were "—" in any one of the three date columns.
-const MILESTONES: { key: keyof ProcessRow; label: string }[] = [
+const MILESTONES: { key: keyof V2ProcessRow; label: string }[] = [
   { key: "went_live_at", label: "Live" },
   { key: "date_customer_validation", label: "Validated" },
   { key: "date_customer_handover", label: "Handed over" },
   { key: "date_parity_complete", label: "Parity done" },
 ];
 
-function latestMilestone(row: ProcessRow): { label: string; date: string } | null {
+function latestMilestone(row: V2ProcessRow): { label: string; date: string } | null {
   for (const m of MILESTONES) {
     const v = row[m.key] as string | null;
     if (v) return { label: m.label, date: v.slice(0, 10) };
@@ -151,20 +150,20 @@ const COLS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "arr", label: "ARR", align: "right" },
 ];
 
-function sortRows(rows: ProcessRow[], key: SortKey, dir: SortDir): ProcessRow[] {
+function sortRows(rows: V2ProcessRow[], key: SortKey, dir: SortDir): V2ProcessRow[] {
   const sign = dir === "asc" ? 1 : -1;
   const sorted = rows.slice();
   if (key === "default") {
     sorted.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     return sorted;
   }
-  const cmp: Record<Exclude<SortKey, "default">, (a: ProcessRow, b: ProcessRow) => number> = {
+  const cmp: Record<Exclude<SortKey, "default">, (a: V2ProcessRow, b: V2ProcessRow) => number> = {
     name: (a, b) => compareString(a.process_name, b.process_name),
     stage: (a, b) => compareString(a.migration_stage, b.migration_stage),
     fde: (a, b) => compareString(fdeLabel(a.fde_owner), fdeLabel(b.fde_owner)),
     milestone: (a, b) => compareString(latestMilestone(a)?.date, latestMilestone(b)?.date),
     completion: (a, b) => compareNumber(a.completion_pct, b.completion_pct),
-    arr: (a, b) => compareNumber(a.arr, b.arr),
+    arr: (a, b) => compareNumber(a.confirmed_arr, b.confirmed_arr),
   };
   sorted.sort((a, b) => sign * cmp[key](a, b));
   return sorted;
@@ -177,7 +176,7 @@ export function V2MigrationClient({ overview }: V2MigrationClientProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("default");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [selectedProcess, setSelectedProcess] = useState<ProcessRow | null>(null);
+  const [selectedProcess, setSelectedProcess] = useState<V2ProcessRow | null>(null);
 
   const fdeOptions = useMemo(
     () => Array.from(new Set(overview.rows.map((r) => fdeLabel(r.fde_owner)))).sort(),
@@ -335,7 +334,7 @@ export function V2MigrationClient({ overview }: V2MigrationClientProps) {
                         {p.completion_pct != null ? `${Math.round(p.completion_pct * 100)}%` : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
-                        {formatMoney(p.arr)}
+                        {formatMoney(p.confirmed_arr)}
                       </td>
                       <td className="px-3 py-2 min-w-[100px]">
                         <LinearTickets ids={p.linear_ticket_ids} />

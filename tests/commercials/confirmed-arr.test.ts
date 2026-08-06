@@ -26,6 +26,6 @@ describe("getConfirmedArrForCustomer", () => {
 
     const corrected = getConfirmedArrForCustomer("norco", opps);
     expect(corrected.arr).toBe(CONFIRMED_ARR_OVERRIDES.norco);
-    expect(corrected.arr).toBe(284_000);
+    expect(corrected.arr).toBe(311_000);
   });
 });

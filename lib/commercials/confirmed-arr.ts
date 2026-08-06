@@ -23,7 +23,9 @@ export interface ConfirmedArrResult {
 
 /** GTM-corrected confirmed ARR when SF cache is wrong or noisy. */
 export const CONFIRMED_ARR_OVERRIDES: Readonly<Record<string, number>> = {
-  norco: 284_000,
+  // SF's most recent past Closed-Won opp for Norco is $689K, which doesn't
+  // match GTM truth after a renegotiation. Updated 2026-08-06 (was $284K).
+  norco: 311_000,
 };
 
 export function deriveConfirmedArrFromOpps(opps: OppForConfirmedArr[]): ConfirmedArrResult {

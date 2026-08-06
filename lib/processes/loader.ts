@@ -9,6 +9,7 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { laneFor, viewForLifecycle, type ActiveLane } from "@/lib/import/monday-taxonomy";
 import { TABLES, MIGRATION_STAGES, MIGRATION_STAGE_LABELS, type Process, type ProcessView, type MigrationStage } from "@/lib/supabase/types";
+import { getConfirmedArrForCustomer, type OppForConfirmedArr } from "@/lib/commercials/confirmed-arr";
 
 // Full Process row plus fields the UI needs that aren't on the table itself:
 // the resolved customer name, the open-suggestion count, and whether this
@@ -275,8 +276,18 @@ function isV2Relevant(row: ProcessRow): boolean {
   return true;
 }
 
+// processes.arr is a one-time snapshot from the V2 Migration Excel import —
+// never re-synced, so it drifts from reality the moment a deal renews or
+// shrinks (caught 2026-08-06: JBI and Norco were both stale). ARR shown here
+// instead comes from the same confirmed-ARR system the customer 360 and
+// dashboard already use (lib/commercials/confirmed-arr.ts): the most recent
+// past Closed-Won Salesforce opp, with the same manual GTM overrides.
+export interface V2ProcessRow extends ProcessRow {
+  confirmed_arr: number | null;
+}
+
 export interface V2MigrationOverview {
-  rows: ProcessRow[];
+  rows: V2ProcessRow[];
   counts: {
     total: number;
     byStage: Record<MigrationStage, number>;
@@ -292,7 +303,26 @@ export interface V2MigrationOverview {
 
 export async function loadV2MigrationOverview(): Promise<V2MigrationOverview> {
   const { all, custById } = await fetchAllProcessRows();
-  const rows = all.filter(isV2Relevant);
+  const relevant = all.filter(isV2Relevant);
+
+  const sb = requireAdmin();
+  const { data: oppsData, error: oppsError } = await sb
+    .from("sf_opportunities")
+    .select("customer_id, amount, close_date, is_won, is_closed, stage_name");
+  if (oppsError) throw oppsError;
+
+  const oppsByCustomer = new Map<string, OppForConfirmedArr[]>();
+  for (const o of (oppsData as (OppForConfirmedArr & { customer_id: string })[] | null) ?? []) {
+    const list = oppsByCustomer.get(o.customer_id) ?? [];
+    list.push(o);
+    oppsByCustomer.set(o.customer_id, list);
+  }
+
+  const rows: V2ProcessRow[] = relevant.map((row) => {
+    const opps = (row.customer_id && oppsByCustomer.get(row.customer_id)) || [];
+    const confirmed = getConfirmedArrForCustomer(row.customer_key, opps);
+    return { ...row, confirmed_arr: confirmed.arr > 0 ? confirmed.arr : null };
+  });
 
   const byStage = Object.fromEntries(MIGRATION_STAGES.map((s) => [s, 0])) as Record<
     MigrationStage,
