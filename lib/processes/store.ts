@@ -53,6 +53,13 @@ const EDITABLE_FIELDS: (keyof Process)[] = [
   "value_basis",
   "blockers",
   "notes",
+  "date_parity_complete",
+  "date_customer_handover",
+  "date_customer_validation",
+  "completion_pct",
+  "linear_ticket_ids",
+  "arr",
+  "company_size",
 ];
 
 const GENERATED = new Set<string>(PROCESS_GENERATED_COLUMNS);

@@ -8,7 +8,7 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { laneFor, viewForLifecycle, type ActiveLane } from "@/lib/import/monday-taxonomy";
-import { TABLES, type Process, type ProcessView } from "@/lib/supabase/types";
+import { TABLES, MIGRATION_STAGES, MIGRATION_STAGE_LABELS, type Process, type ProcessView, type MigrationStage } from "@/lib/supabase/types";
 
 // Full Process row plus fields the UI needs that aren't on the table itself:
 // the resolved customer name, the open-suggestion count, and whether this
@@ -96,7 +96,13 @@ function quarterLabel(iso: string | null): string | null {
 const dedupSorted = (values: (string | null | undefined)[]): string[] =>
   Array.from(new Set(values.filter((v): v is string => !!v))).sort();
 
-export async function loadProcessesOverview(): Promise<ProcessesOverview> {
+// Shared by every overview loader — one fetch of `processes` + the customer
+// roster + open suggestion counts, mapped into the ProcessRow shape the UI
+// needs. Pulled out so loadV2MigrationOverview doesn't re-derive this.
+async function fetchAllProcessRows(): Promise<{
+  all: ProcessRow[];
+  custById: Map<string, CustomerRow>;
+}> {
   const sb = requireAdmin();
 
   const [processesRes, customersRes, suggestionsRes] = await Promise.all([
@@ -124,6 +130,12 @@ export async function loadProcessesOverview(): Promise<ProcessesOverview> {
     open_suggestion_count: suggestionCounts.get(row.id) ?? 0,
     needs_classification: !row.source_system,
   }));
+
+  return { all, custById };
+}
+
+export async function loadProcessesOverview(): Promise<ProcessesOverview> {
+  const { all, custById } = await fetchAllProcessRows();
 
   // ─── Lanes (Active view) ────────────────────────────────────────────────
   const lanes: Record<ActiveLane, ProcessRow[]> = {
@@ -219,3 +231,73 @@ export async function loadProcessesOverview(): Promise<ProcessesOverview> {
 }
 
 export { viewForLifecycle };
+
+// ─── V2 migration overview ──────────────────────────────────────────────────
+// Reads the same `processes` rows as the Delivery page — no separate dataset.
+// "V2 relevant" means the row carries some real signal of migration activity;
+// plain not_required/v1 rows with no migration fields populated are excluded
+// so this page isn't just "every process" with a different label.
+
+/** Stage order for the summary strip — roughly the order work moves through. */
+export const V2_STAGES: MigrationStage[] = [
+  "in_development",
+  "engg_pending",
+  "parity_testing",
+  "customer_validation",
+  "live_on_v2",
+  "migrated_pending_commercial",
+  "v2_native",
+];
+
+function isV2Relevant(row: ProcessRow): boolean {
+  return (
+    row.migration_stage !== "not_required" ||
+    row.platform !== "v1" ||
+    row.linear_ticket_ids.length > 0 ||
+    row.date_parity_complete != null ||
+    row.date_customer_handover != null ||
+    row.date_customer_validation != null
+  );
+}
+
+export interface V2MigrationOverview {
+  rows: ProcessRow[];
+  counts: {
+    total: number;
+    byStage: Record<MigrationStage, number>;
+  };
+  facets: {
+    customers: string[];
+    fdeOwners: string[];
+    tamOwners: string[];
+    partners: string[];
+    customerOptions: { id: string; display_name: string }[];
+  };
+}
+
+export async function loadV2MigrationOverview(): Promise<V2MigrationOverview> {
+  const { all, custById } = await fetchAllProcessRows();
+  const rows = all.filter(isV2Relevant);
+
+  const byStage = Object.fromEntries(MIGRATION_STAGES.map((s) => [s, 0])) as Record<
+    MigrationStage,
+    number
+  >;
+  for (const row of rows) byStage[row.migration_stage]++;
+
+  return {
+    rows,
+    counts: { total: rows.length, byStage },
+    facets: {
+      customers: dedupSorted(rows.map((r) => r.customer_display_name)),
+      fdeOwners: dedupSorted(rows.map((r) => r.fde_owner)),
+      tamOwners: dedupSorted(rows.map((r) => r.tam_owner)),
+      partners: dedupSorted(rows.map((r) => r.partner)),
+      customerOptions: Array.from(custById.values()).sort((a, b) =>
+        a.display_name.localeCompare(b.display_name)
+      ),
+    },
+  };
+}
+
+export { MIGRATION_STAGE_LABELS };

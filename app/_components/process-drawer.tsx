@@ -248,6 +248,67 @@ function ComboRow({
   );
 }
 
+// Linear tickets are stored as text[]; edited as a comma-separated list since
+// there's rarely more than a handful per process.
+function TicketsRow({
+  fieldLabel,
+  value,
+  onCommit,
+}: {
+  fieldLabel: string;
+  value: string[];
+  onCommit: (value: string[]) => Promise<void>;
+}) {
+  const asText = value.join(", ");
+  const [draft, setDraft] = useState(asText);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [flash, setFlash] = useState(false);
+
+  async function commit(next: string) {
+    const parsed = next
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parsed.join(", ") === asText) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onCommit(parsed);
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1200);
+    } catch (err) {
+      setDraft(asText);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const ctlClass = `flex-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-[var(--glass-bg)] text-[color:var(--foreground)] transition-colors ${
+    flash ? "border-[color:var(--brand-yellow)] bg-[rgba(242,255,112,0.12)]" : "border-[var(--glass-border)]"
+  } focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-yellow)] disabled:opacity-60`;
+
+  return (
+    <div className="grid grid-cols-[132px_1fr] gap-3 items-start py-2 border-b border-[var(--glass-border)]/60">
+      <div className="text-[11px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold pt-2">
+        {fieldLabel}
+      </div>
+      <div>
+        <input
+          value={draft}
+          disabled={busy}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => commit(draft)}
+          placeholder="ENG-1234, KOG-5678"
+          className={ctlClass}
+        />
+        {error ? <div className="text-[11px] text-red-600 mt-1">{error}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 function DerivedRow({ fieldLabel, display }: { fieldLabel: string; display: string }) {
   return (
     <div className="grid grid-cols-[132px_1fr] gap-3 items-start py-2 border-b border-[var(--glass-border)]/60">
@@ -296,7 +357,7 @@ export function ProcessDrawer({
   const [proc, setProc] = useState(process);
   const [reviewBusy, setReviewBusy] = useState(false);
 
-  async function saveField(field: keyof Process, value: string | number | null) {
+  async function saveField(field: keyof Process, value: string | number | string[] | null) {
     const res = await fetch(`/api/processes/${proc.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -443,6 +504,44 @@ export function ProcessDrawer({
         value={proc.migration_stage}
         options={MIGRATION_STAGES.map((v) => ({ value: v, label: MIGRATION_STAGE_LABELS[v] }))}
         onCommit={(v) => saveField("migration_stage", v)}
+      />
+
+      <GroupHeader title="V2 migration" />
+      <FieldRow
+        fieldLabel="Parity complete"
+        kind="date"
+        value={proc.date_parity_complete}
+        onCommit={(v) => saveField("date_parity_complete", v)}
+      />
+      <FieldRow
+        fieldLabel="Customer handover"
+        kind="date"
+        value={proc.date_customer_handover}
+        onCommit={(v) => saveField("date_customer_handover", v)}
+      />
+      <FieldRow
+        fieldLabel="Customer validation"
+        kind="date"
+        value={proc.date_customer_validation}
+        onCommit={(v) => saveField("date_customer_validation", v)}
+      />
+      <FieldRow
+        fieldLabel="Completion"
+        kind="number"
+        value={proc.completion_pct}
+        onCommit={(v) => saveField("completion_pct", v)}
+      />
+      <TicketsRow
+        fieldLabel="Linear tickets"
+        value={proc.linear_ticket_ids}
+        onCommit={(v) => saveField("linear_ticket_ids", v)}
+      />
+      <FieldRow fieldLabel="ARR" kind="number" value={proc.arr} onCommit={(v) => saveField("arr", v)} />
+      <FieldRow
+        fieldLabel="Company size"
+        kind="text"
+        value={proc.company_size}
+        onCommit={(v) => saveField("company_size", v)}
       />
 
       <GroupHeader title="Dates & effort" />

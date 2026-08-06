@@ -76,7 +76,7 @@ Status values: `done` / `in progress` / `blocked` / `not started`.
 |---|---|---|---|
 | 1.1 | Design the native schema from the real backup | **proposed 2026-08-03, awaiting approval** | [PROCESSES-SCHEMA-PROPOSAL.md](./PROCESSES-SCHEMA-PROPOSAL.md). Grain = one row per process, soft-linked to `k2_processes`. Clean orthogonal taxonomy replacing Monday's blended fields. `ttv_days` generated. Value = manual minutes-saved input x `k2_runs`. |
 | 1.2 | Generalize `migration_processes` into `processes` | **done, applied to production 2026-08-06** | `supabase/migrations/0021_processes_native.sql`, plus `0019`/`0020` (also applied to prod the same day — production had never run those either) and `0022` (fixed a real `ON CONFLICT` bug: the `source_item_id` index was partial, Postgres won't infer from that). **Additive only — nothing dropped**, see 1.2b. |
-| 1.2b | Drops: `monday_activities`, `customers.lifecycle_group`, `internal_profiles.health_score` | not started, **deliberately** | Unchanged from 2026-08-03: both still have live read sites, dropping now would 500 on customers. Note: **0022 was used for the ON CONFLICT fix above, not these drops** — renumber to 0023+ when this is picked up. |
+| 1.2b | Drops: `monday_activities`, `customers.lifecycle_group`, `internal_profiles.health_score` | not started, **deliberately** | Unchanged from 2026-08-03: both still have live read sites, dropping now would 500 on customers. Note: **0022 and 0023 were used for other fixes, not these drops** — renumber to 0024+ when this is picked up. |
 | 1.3 | Write the importer from the backup into Supabase | **done, applied to production 2026-08-06** | `scripts/import-monday-backup.ts` run with `--apply`. 146 rows imported, deduped (5 cross-board + 63 seed-merge), final count 153. See the 2026-08-06 handoff below for the full diagnosis trail (22-vs-15 flagged count, Srinar now a real customer, 3 near-miss rows left for a human). |
 | 1.4 | Populate auto-derived columns from `k2_processes` / `k2_runs` | not started | Real usage data currently unused. |
 | 1.5 | Mockup the UI + decide the IA | **done** | [docs/mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html) approved. Drawer + Active-work board built and shipped 2026-08-04/06 — see handoff below. |
@@ -649,3 +649,110 @@ Paste this prompt:
 > Stage only files you actually changed, never `git add -A`. Verify with `npm run build`, `tsc --noEmit`,
 > `vitest run` before pushing. Locales pinned (`toLocaleString("en-US")`). This is production with real
 > customer data — diagnose drift before "fixing" it by loosening anything, same rule as always.
+
+---
+
+## 2026-08-06 (cont.) — Monday refresh + V2 Excel reconciliation, all four steps done
+
+Ran the four-step plan from the handoff above end to end, stopping to show output at each step per the
+plan's own instruction. All writes went to production via the Supabase MCP connector, which needed
+reconnecting mid-session — it was initially scoped to a different Supabase account/org
+(`rishabhmalhotra23's Project`) and only exposed the real `Delivery Ops` project (`prnakdaxcpzagntgvaqf`)
+after Rishabh refreshed the connector's tool list from claude.ai connector settings. No local Postgres
+connection string exists anywhere in the repo, so all production DDL/DML this session went through
+`apply_migration`/`execute_sql`, not `safe-migrate.ts` (local-only, talks to the Docker container).
+
+**Step 1 — migration 0023.** Added `migrated_pending_commercial` to the `migration_stage` enum (the new
+Wipro FSS status from the refreshed Excel). Applied locally via `safe-migrate.ts`, then to production via
+`apply_migration`. Also updated `lib/supabase/types.ts` (`MIGRATION_STAGES`/`MIGRATION_STAGE_LABELS`) — the
+process drawer's stage dropdown picks it up automatically since it builds options from that constant.
+
+**Step 2 — Monday refresh.** Live-pulled the same 6 report boards via `scripts/monday-full-backup.ts
+--boards <ids>` into `monday-backup-2026-08-06-live/` (147 items vs. 146 archived) and diffed item-by-item
+against `monday-backup-2026-08-03`. The diff was small — 1 new item, 2 changed status cells — but one of
+the three needed a real judgment call, not a mechanical upsert:
+
+- `JBI - Design Meeting Preparation` had actually migrated V1→V2, but Rishabh recorded it by creating a
+  *new* Monday item on the FY-2026 board (`Development Platform: V2`, `Current Phase: Live in v2`) rather
+  than editing the Feb-created FY-2025 item in place. Blindly re-running the existing dedup rule
+  ("richness wins") would have kept the old, richer-but-stale V1 row and silently discarded the real
+  migration signal right before building the V2 report on this data. Flagged to Rishabh, confirmed: kept
+  the original row (real kickoff/go-live/effort history intact) but updated `platform`/`migration_stage`/
+  `work_mode` from the newer item, and discarded the duplicate rather than importing it as a second row.
+- `TTX - Lease Invoicing` moved to `Current Phase: Live in v2` — this resolved a pre-existing
+  `needs_attention` data-defect flag (it was marked Live with a contradictory phase); cleared the flag.
+- `JBI - Project Initiation Request 2` moved to `Waiting for Customer`, Monday's lossy state (overwrites
+  the milestone). Flagged `needs_attention` per the established rule rather than guessing a phase.
+
+All three transitions were verified against the actual `deriveState`/`derivePlatform` functions in
+`lib/import/monday-taxonomy.ts` before writing anything (no taxonomy code changes needed — the mappings
+already existed and were correct). Applied via three `execute_sql` updates, not by re-running the importer
+wholesale, because the importer's plain `upsert(onConflict: source_item_id)` would have reintroduced the 5
+cross-board duplicates the 2026-08-06 import already resolved by deleting the loser row — those duplicate
+Monday items still exist upstream and would read back in as "new" on any raw re-import.
+
+**Step 3 — V2 Excel reconciliation.** Parsed `V2 Migration List (1).xlsx` (`Working Sheet`, 75 rows) with
+`openpyxl` and matched all 75 to production `processes` rows by normalized `(account, process_name)` —
+100% match, no near-misses this time. Computed a full field-level diff against production (pulled via a
+throwaway script using `.env.cloud` creds, since the MCP `execute_sql` text channel truncates results over
+~60K characters). Findings before writing anything:
+
+- All 8 distinct `Migration Status` values mapped cleanly to `migration_stage` (validated by checking the
+  *distribution* of current prod values per status text — the dominant value per bucket confirmed the
+  mapping; minority values were real drift to reconcile, not a mapping bug).
+- `fde_owner` differed on 57 of 75 rows. Asked Rishabh before overwriting: mostly Monday's full names vs.
+  Excel's shorthand (`Karthik Nagabhushana` vs `Karthik N`), but also the real FDE-reassignment the Excel
+  refresh was supposed to capture (Paige Gill/Arushi's book of work → Rishabh/Karthik N/Ayush). Confirmed:
+  Excel wins fde_owner too, despite it being Monday-sourced in the original 2026-08-06 merge — the
+  reassignment is exactly what this pass exists to capture.
+- Added a guard mid-analysis: a blank Excel cell never overwrites an existing non-blank value on
+  owner/financial fields. Caught one real case (`engg_owner: 'Sid' → None` on a Mitie row) that would have
+  silently erased data the Excel export just didn't happen to carry this time.
+- `go_live_date` was deliberately left alone (two columns in the sheet share the header `Go-Live Date`;
+  the first is empty on 66/75 rows and the second matches 0020's original seed values — used the second,
+  but didn't touch this field at all since it's ambiguous whether Monday or Excel owns it post-merge and
+  the plan's field list didn't name it).
+
+Applied 67 row updates: 12 rows now `migrated_pending_commercial` (8 Wipro FSS + iHeartRadio + Pepsi + Scan
+Health + JBI SBUX Quote Generator), 2 rows genuinely transitioned to `live_on_v2`
+(`went_live_at` backfilled from validation/handover dates so the Slack notifier won't retro-fire on next
+edit), 57 `fde_owner` refreshes, plus scattered `linear_ticket_ids`/date/notes updates.
+
+**Step 4 — V2 Migration page.** Built `app/(app)/v2-migration/` (`page.tsx` + `v2-migration-client.tsx`),
+following the existing `/delivery` pattern exactly rather than inventing a new one:
+
+- `lib/processes/loader.ts`: extracted the shared `processes` + customer + suggestion-count fetch into
+  `fetchAllProcessRows()` (was inlined in `loadProcessesOverview`) so `loadV2MigrationOverview()` doesn't
+  re-derive it. Filter for "V2 relevant": `migration_stage != 'not_required' OR platform != 'v1' OR
+  linear_ticket_ids.length OR any of the three V2 dates set` — so the page isn't just every process with a
+  different label.
+- Stage-count strip (reusing `StatBlock`, clickable to filter) + a single sortable table (Process,
+  Customer, Stage, FDE, Parity/Handover/Validation dates, Completion %, ARR, Linear tickets as clickable
+  chips linking to `linear.app`, Blockers) + the existing `ProcessDrawer` for editing, exactly per the plan
+  ("don't invent a new pattern").
+- Real gap found and fixed while wiring the drawer: it exposed `migration_stage` but none of the other V2
+  fields (parity/handover/validation dates, completion %, Linear tickets, ARR, company size) — meaning
+  there was no way to *edit* this data natively even after this session's reconciliation. Added a "V2
+  migration" field group to `process-drawer.tsx` (including a new `TicketsRow` component for the
+  comma-separated `linear_ticket_ids` array) and extended `EDITABLE_FIELDS` in `lib/processes/store.ts` so
+  the new rows actually save. Without this, DeliveryOps would still not be a real substitute for the Excel
+  on the one axis that matters most for retiring it — being able to update migration progress natively.
+- Added `/v2-migration` to `PRIMARY_NAV` in `app-shell.tsx`, no other nav changes (nav consolidation is
+  still deferred until after the 1.9 gate, per the standing decision).
+
+Verified: `tsc --noEmit` clean, `vitest run` 139/139, `npm run build` succeeds and lists `/v2-migration`.
+Called `loadV2MigrationOverview()` directly via a throwaway script against local Supabase to confirm no
+runtime error (54 of 75 local seed rows read as V2-relevant) — full browser verification wasn't done since
+the page sits behind Auth0 middleware and local Supabase only seeds 1 customer, same limitation noted in
+every prior session for this reason.
+
+**What's still open, unchanged from the handoff above:** the 3 near-miss rows, the 12 needs-classification
+rows, the stray `Acme` customer, and the field-registry cleanup. None of those were touched this session.
+Also newly true: `go_live_date`'s ownership (Monday vs. Excel, post-merge) is still unresolved — flagged
+above, not decided.
+
+**Next session:** 1.6/1.7 (rewire `weekly-loader.ts` and the other three `monday_projects` read paths) is
+the next real step toward the 1.9 cutover gate — `/delivery` and `/v2-migration` now read live `processes`
+data while the weekly report, analytics, dashboard, and customer 360 still read the Monday cache, so their
+numbers can disagree. `docs/supabase-schema-full.sql` is still stale at 0019 and should be regenerated once
+someone has a moment (cosmetic — doesn't block anything).
