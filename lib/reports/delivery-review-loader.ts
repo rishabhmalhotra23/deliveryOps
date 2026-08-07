@@ -8,7 +8,11 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { resolveRange, type DateRange, type RangeRequest } from "@/lib/reports/date-range";
 import { buildDeliveryReview, type DeliveryReviewReport } from "@/lib/reports/delivery-review";
-import { getConfirmedArrForCustomer, type OppForConfirmedArr } from "@/lib/commercials/confirmed-arr";
+import {
+  getConfirmedArrForCustomer,
+  CONFIRMED_ARR_OVERRIDES,
+  type OppForConfirmedArr,
+} from "@/lib/commercials/confirmed-arr";
 import { TABLES, type Process } from "@/lib/supabase/types";
 
 export interface DeliveryReviewLoaderResult extends DeliveryReviewReport {
@@ -28,7 +32,12 @@ export async function loadDeliveryReview(req: RangeRequest = {}): Promise<Delive
   const now = new Date();
 
   const [processesRes, customersRes, oppsRes] = await Promise.all([
-    sb.from(TABLES.processes).select("*"),
+    // Deterministic row order — without it, process rows within a customer
+    // card have no defined order and can shift between page loads (Important
+    // 3). buildDeliveryReview() re-sorts by status-rank then name for display,
+    // but that re-sort should operate on a stable base order, not raw
+    // whatever-Postgres-felt-like-that-day order.
+    sb.from(TABLES.processes).select("*").order("id", { ascending: true }),
     sb.from("customers").select("id, key, display_name").is("deleted_at", null),
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed, stage_name"),
   ]);
@@ -48,8 +57,19 @@ export async function loadDeliveryReview(req: RangeRequest = {}): Promise<Delive
     list.push(o);
     oppsByCustomer.set(o.customer_id, list);
   }
+  // ConfirmedArrResult.source_close_date is null when there's no Closed-Won
+  // opp to confirm ARR from — distinct from a confirmed $0. Surface that as a
+  // null `arr` (Important 4) rather than defaulting to 0, which would
+  // fabricate a figure the data doesn't support (real cases: iHeartRadio,
+  // SSD/SKP, TSM Law, Wipro FSS). A per-customer override (e.g. Norco) still
+  // counts as a confirmed source even if the derived opp-based lookup found
+  // none, since the override itself *is* GTM-confirmed truth.
   const arrByCustomer = new Map(
-    customers.map((c) => [c.id, getConfirmedArrForCustomer(c.key, oppsByCustomer.get(c.id) ?? [])])
+    customers.map((c) => {
+      const confirmed = getConfirmedArrForCustomer(c.key, oppsByCustomer.get(c.id) ?? []);
+      const hasConfirmedSource = confirmed.source_close_date != null || c.key in CONFIRMED_ARR_OVERRIDES;
+      return [c.id, { arr: hasConfirmedSource ? confirmed.arr : null, renewal_date: confirmed.renewal_date }];
+    })
   );
 
   const processes = (processesRes.data as Process[] | null) ?? [];

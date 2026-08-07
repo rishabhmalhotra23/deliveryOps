@@ -65,6 +65,45 @@ describe("statusForProcess", () => {
     expect(statusForProcess(proc({ lifecycle: "churned" }), PERIOD)).toBeNull();
     expect(statusForProcess(proc({ lifecycle: "retired" }), PERIOD)).toBeNull();
   });
+
+  // Important 2 — legacy is_blocked flag with real blocker text (Kort
+  // Payments UAT, Conectiv POV, Ciena PO all have blocked_on: "none" but a
+  // genuinely populated `blockers` string and must show as blocked).
+  it("tags is_blocked with non-empty blockers text as blocked even when blocked_on is none", () => {
+    expect(
+      statusForProcess(
+        proc({ is_blocked: true, blocked_on: "none", blockers: "Waiting on customer legal sign-off" }),
+        PERIOD
+      )
+    ).toBe("blocked");
+  });
+
+  // The Century — Carrier Booking case: is_blocked is true but there's no
+  // blocker text, and the process is genuinely live/on_track. OR'ing in
+  // is_blocked unconditionally would falsely flip this to "blocked" — must
+  // not regress.
+  it("does not tag is_blocked alone (no blockers text) as blocked", () => {
+    expect(
+      statusForProcess(
+        proc({
+          is_blocked: true,
+          blocked_on: "none",
+          blockers: null,
+          health: "on_track",
+          lifecycle: "live",
+          go_live_date: "2026-01-01",
+        }),
+        PERIOD
+      )
+    ).not.toBe("blocked");
+    // Also verify whitespace-only blocker text doesn't count as "real" text.
+    expect(
+      statusForProcess(
+        proc({ is_blocked: true, blocked_on: "none", blockers: "   ", health: "on_track", lifecycle: "backlog" }),
+        PERIOD
+      )
+    ).not.toBe("blocked");
+  });
 });
 
 describe("buildDeliveryReview", () => {
@@ -118,5 +157,54 @@ describe("buildDeliveryReview", () => {
     ];
     const result = buildDeliveryReview(processes, customers, arrByCustomer, PERIOD, new Date("2026-08-07T00:00:00Z"));
     expect(result.longestUntouched.map((i) => i.processName)).toEqual(["Old One"]);
+  });
+
+  // Important 2 — the note text from the legacy is_blocked + blockers path
+  // must actually reach the rendered item, same as the blocked_on path.
+  it("preserves the blocker note text on the item when is_blocked + blockers triggers blocked status", () => {
+    const processes = [
+      proc({
+        id: "p1",
+        customer_id: "c1",
+        is_blocked: true,
+        blocked_on: "none",
+        blockers: "Waiting on customer legal sign-off",
+      }),
+    ];
+    const result = buildDeliveryReview(processes, customers, arrByCustomer, PERIOD, new Date("2026-08-07T00:00:00Z"));
+    const acme = result.customerGroups.find((g) => g.customerKey === "acme");
+    expect(acme?.processes[0].status).toBe("blocked");
+    expect(acme?.processes[0].blockedNote).toBe("Waiting on customer legal sign-off");
+  });
+
+  // Important 3 — a real production tie exists today: two customer groups
+  // sharing identical hasBlocked/renewalInDays must not fall through to
+  // Map-insertion (DB row) order.
+  it("breaks a hasBlocked/renewalInDays tie between customer groups alphabetically", () => {
+    const tiedCustomers = [
+      { id: "c2", key: "zeta", display_name: "Zeta Inc" },
+      { id: "c1", key: "alpha", display_name: "Alpha Inc" },
+    ];
+    const tiedArr = new Map([
+      ["c1", { arr: 10_000, renewal_date: "2026-09-01" }],
+      ["c2", { arr: 20_000, renewal_date: "2026-09-01" }], // identical renewal date -> tie
+    ]);
+    const processes = [
+      proc({ id: "p1", customer_id: "c2", lifecycle: "uat" }),
+      proc({ id: "p2", customer_id: "c1", lifecycle: "uat" }),
+    ];
+    const result = buildDeliveryReview(processes, tiedCustomers, tiedArr, PERIOD, new Date("2026-08-07T00:00:00Z"));
+    expect(result.customerGroups.map((g) => g.customerName)).toEqual(["Alpha Inc", "Zeta Inc"]);
+  });
+
+  // Important 4 — no confirmed ARR source (no Closed-Won opp on file, e.g.
+  // iHeartRadio, SSD/SKP, TSM Law, Wipro FSS) must surface as null, not a
+  // fabricated $0.
+  it("surfaces a null arr, not 0, when the customer has no confirmed ARR source", () => {
+    const noArrCustomers = [{ id: "c1", key: "acme", display_name: "Acme" }];
+    const noArr = new Map([["c1", { arr: null, renewal_date: null }]]);
+    const processes = [proc({ id: "p1", customer_id: "c1", lifecycle: "uat" })];
+    const result = buildDeliveryReview(processes, noArrCustomers, noArr, PERIOD, new Date("2026-08-07T00:00:00Z"));
+    expect(result.customerGroups[0].arr).toBeNull();
   });
 });

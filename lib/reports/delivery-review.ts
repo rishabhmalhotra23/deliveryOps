@@ -32,8 +32,15 @@ function inPeriod(iso: string | null, period: Period): boolean {
  *  not part of a "what's happening right now" review.
  *
  *  Blocked is driven only by genuine operational-blockage signals —
- *  `blocked_on !== "none"` or `health` being at_risk/off_track. Deliberately
- *  NOT included: `needs_attention`. That flag is set once, at import time,
+ *  `blocked_on !== "none"`, `health` being at_risk/off_track, or the legacy
+ *  `is_blocked` flag when it's paired with actual free-text in `blockers`
+ *  (e.g. Kort Payments UAT, Conectiv POV, Ciena PO — rows with `blocked_on:
+ *  "none"` but a genuinely populated `blockers` string). `is_blocked` alone
+ *  is NOT enough: some rows (e.g. Century — Carrier Booking) have
+ *  `is_blocked: true` with no `blockers` text and are legitimately
+ *  live/on_track — OR'ing in `is_blocked` unconditionally would falsely flip
+ *  those to "Blocked" too. Deliberately NOT included: `needs_attention`.
+ *  That flag is set once, at import time,
  *  by lib/import/monday-taxonomy.ts's deriveState() and means "this row's
  *  classification from the Monday import is uncertain, a human should
  *  verify it" (see `needs_attention_reason`, e.g. "customer inferred from
@@ -45,7 +52,13 @@ function inPeriod(iso: string | null, period: Period): boolean {
  *  uncertainty flag. Do not reintroduce it here. */
 export function statusForProcess(p: Process, period: Period): DeliveryReviewStatus | null {
   if (ARCHIVE_LIFECYCLES.has(p.lifecycle)) return null;
-  if (p.blocked_on !== "none" || p.health === "at_risk" || p.health === "off_track") {
+  const hasBlockerText = typeof p.blockers === "string" && p.blockers.trim().length > 0;
+  if (
+    p.blocked_on !== "none" ||
+    (p.is_blocked && hasBlockerText) ||
+    p.health === "at_risk" ||
+    p.health === "off_track"
+  ) {
     return "blocked";
   }
   if (p.lifecycle === "live") {
@@ -99,7 +112,11 @@ function toItem(p: Process, status: DeliveryReviewStatus, now: Date): DeliveryRe
 export interface DeliveryReviewCustomerGroup {
   customerKey: string;
   customerName: string;
-  arr: number;
+  // null when there's no confirmed-ARR source for this customer (no
+  // Closed-Won opp on file — e.g. iHeartRadio, SSD/SKP, TSM Law, Wipro FSS)
+  // — distinct from a confirmed $0. Do not default this to 0; that fabricates
+  // an ARR figure the data doesn't support. See ConfirmedArrResult.source_close_date.
+  arr: number | null;
   renewalInDays: number | null;
   hasBlocked: boolean;
   processes: DeliveryReviewProcessItem[];
@@ -120,6 +137,16 @@ export interface DeliveryReviewReport {
 const STALE_THRESHOLD_DAYS = 30;
 const LONGEST_UNTOUCHED_MAX = 10;
 
+// Within a customer card, surface what needs attention first. The loader's
+// DB query has no defined row order of its own (Important 3), so without an
+// explicit rank here the card's process order would be raw DB order.
+const STATUS_RANK: Record<DeliveryReviewStatus, number> = {
+  blocked: 0,
+  done: 1,
+  coming_up: 2,
+  live: 3,
+};
+
 // Renewal dates are stored date-only (SF close_date, e.g. "2026-09-24"), which
 // parses to midnight UTC. `now` typically carries a real time-of-day, so
 // diffing the two raw timestamps lets the elapsed fraction of "today" erode
@@ -137,7 +164,7 @@ function startOfDayUTC(d: Date): Date {
 export function buildDeliveryReview(
   processes: Process[],
   customers: Array<{ id: string; key: string; display_name: string }>,
-  arrByCustomer: Map<string, { arr: number; renewal_date: string | null }>,
+  arrByCustomer: Map<string, { arr: number | null; renewal_date: string | null }>,
   period: Period,
   now: Date
 ): DeliveryReviewReport {
@@ -163,19 +190,29 @@ export function buildDeliveryReview(
     const renewalInDays = arr?.renewal_date
       ? Math.round((new Date(arr.renewal_date).getTime() - today.getTime()) / 86_400_000)
       : null;
+    const sortedItems = [...items].sort((a, b) => {
+      const rank = STATUS_RANK[a.status] - STATUS_RANK[b.status];
+      return rank !== 0 ? rank : a.name.localeCompare(b.name);
+    });
     customerGroups.push({
       customerKey: customer.key,
       customerName: customer.display_name,
-      arr: arr?.arr ?? 0,
+      arr: arr?.arr ?? null,
       renewalInDays,
       hasBlocked: items.some((i) => i.status === "blocked"),
-      processes: items,
+      processes: sortedItems,
     });
   }
 
   customerGroups.sort((a, b) => {
     if (a.hasBlocked !== b.hasBlocked) return a.hasBlocked ? -1 : 1;
-    if (a.renewalInDays != null && b.renewalInDays != null) return a.renewalInDays - b.renewalInDays;
+    // Both non-null: equal renewal dates (a real production tie — two pairs
+    // of customers currently share identical renewal dates) must fall
+    // through to the alphabetical tiebreak below, not resolve to 0 and rely
+    // on Map-insertion (DB row) order.
+    if (a.renewalInDays != null && b.renewalInDays != null) {
+      return a.renewalInDays - b.renewalInDays || a.customerName.localeCompare(b.customerName);
+    }
     if (a.renewalInDays != null) return -1;
     if (b.renewalInDays != null) return 1;
     return a.customerName.localeCompare(b.customerName);

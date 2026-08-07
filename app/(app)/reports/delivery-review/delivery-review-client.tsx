@@ -161,9 +161,14 @@ function PresetPicker({ range }: { range: DeliveryReviewLoaderResult["range"] })
 // ── One process row inside a customer's card ─────────────────────────────────
 function ProcessRow({ item, isLast }: { item: DeliveryReviewProcessItem; isLast: boolean }) {
   const label = STATUS_LABEL[item.status];
+  // `daysSinceUpdate` derives from `processes.updated_at`, which a blanket DB
+  // trigger resets on ANY column write (imports, backfills, sweeps) — it is
+  // not an activity/staleness signal, so the label must say what the field
+  // actually measures ("updated Nd ago"), not claim the process has been
+  // "blocked" for that long.
   const blockedMetaParts = [
     item.blockedReasonLabel,
-    `blocked ${item.daysSinceUpdate} day${item.daysSinceUpdate === 1 ? "" : "s"}`,
+    `updated ${item.daysSinceUpdate}d ago`,
     item.blockedNote,
   ].filter((part): part is string => Boolean(part));
 
@@ -229,10 +234,16 @@ function CustomerCard({ g }: { g: DeliveryReviewCustomerGroup }) {
           {g.customerName}
         </span>
         <div className="flex gap-3.5 text-[10px] shrink-0">
-          <span>
-            <span style={{ color: "var(--rt-fg-muted)" }}>ARR</span>{" "}
-            <strong style={{ color: "var(--rt-fg)" }}>{fmtMoney(g.arr)}</strong>
-          </span>
+          {/* Omit the ARR chip entirely when there's no confirmed ARR source
+              (no Closed-Won opp on file) rather than showing a fabricated
+              "$0" — same "omit rather than fake a zero" pattern already used
+              for the renewal badge below. */}
+          {g.arr != null && (
+            <span>
+              <span style={{ color: "var(--rt-fg-muted)" }}>ARR</span>{" "}
+              <strong style={{ color: "var(--rt-fg)" }}>{fmtMoney(g.arr)}</strong>
+            </span>
+          )}
           {g.renewalInDays != null && (
             <span>
               <span style={{ color: "var(--rt-fg-muted)" }}>Renews</span>{" "}
@@ -270,8 +281,10 @@ export function DeliveryReviewClient({ report }: { report: DeliveryReviewLoaderR
       {/* One card per report.customerGroups entry, in the order the loader
           already sorted them (blocked-first, then renewal proximity, then
           alphabetical) — do not re-sort in the component. Customer header row:
-          name, ARR, and renewalInDays badge (omit the renewal badge entirely
-          when renewalInDays is null — no "no renewal" placeholder). Inside,
+          name, ARR, and renewalInDays badge (omit the ARR chip entirely when
+          there's no confirmed ARR source, i.e. arr is null — no fabricated
+          "$0"; same for the renewal badge when renewalInDays is null — no
+          "no renewal" placeholder). Inside,
           one row per process in g.processes, showing STATUS_LABEL[item.status]
           as the trailing pill, phase/complexity/platform as leading chips, and
           — only when item.status === "blocked" — the blockedReasonLabel,
@@ -287,36 +300,41 @@ export function DeliveryReviewClient({ report }: { report: DeliveryReviewLoaderR
       )}
 
       <div className="text-[9px] mb-6" style={{ color: "var(--rt-fg-muted)" }}>
-        Sort: accounts with a blocked item first, then by renewal proximity, then alphabetical. Customers with zero
-        active/recent work this period are omitted entirely, not shown empty.
+        Sort: accounts with a blocked item first, then by renewal proximity, then alphabetical. Customers with only
+        archived work (cancelled/churned/retired) are omitted entirely; all other active and live work is shown,
+        including long-running steady-state Live rows.
       </div>
 
       {/* Footer: report.longestUntouched as a compact list — "{processName} —
-          {customerName} — {daysSinceUpdate} days, {lifecycle}". Render nothing
-          if the array is empty (don't show an empty section header). */}
-      {report.longestUntouched.length > 0 && (
-        <>
-          <Caption>
-            Longest untouched — an independent view, not additive with the groups above (a process can appear in both)
-          </Caption>
-          <div className="rounded-[14px] p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            {report.longestUntouched.map((item, i) => (
-              <div
-                key={`${item.customerName}-${item.processName}-${i}`}
-                className="text-[10px] py-1.5 px-1"
-                style={{
-                  borderBottom: i < report.longestUntouched.length - 1 ? "1px solid var(--rt-surface-2)" : undefined,
-                  color: "var(--rt-fg-body)",
-                }}
-              >
-                <span className="font-semibold" style={{ color: "var(--rt-fg)" }}>
-                  {item.processName}
-                </span>{" "}
-                — {item.customerName} — {item.daysSinceUpdate} days, {item.lifecycle}
-              </div>
-            ))}
-          </div>
-        </>
+          {customerName} — {daysSinceUpdate} days, {lifecycle}". When empty,
+          still render the section (with its caption) so the empty state
+          reads as a real signal — "nothing crossed the 30-day threshold" —
+          rather than a rendering gap that looks broken. */}
+      <Caption>
+        Longest untouched — an independent view, not additive with the groups above (a process can appear in both)
+      </Caption>
+      {report.longestUntouched.length > 0 ? (
+        <div className="rounded-[14px] p-2.5" style={{ background: "var(--rt-surface-1)" }}>
+          {report.longestUntouched.map((item, i) => (
+            <div
+              key={`${item.customerName}-${item.processName}-${i}`}
+              className="text-[10px] py-1.5 px-1"
+              style={{
+                borderBottom: i < report.longestUntouched.length - 1 ? "1px solid var(--rt-surface-2)" : undefined,
+                color: "var(--rt-fg-body)",
+              }}
+            >
+              <span className="font-semibold" style={{ color: "var(--rt-fg)" }}>
+                {item.processName}
+              </span>{" "}
+              — {item.customerName} — {item.daysSinceUpdate} days, {item.lifecycle}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
+          No processes untouched 30+ days.
+        </div>
       )}
     </div>
   );
