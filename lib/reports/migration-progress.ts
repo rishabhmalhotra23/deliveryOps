@@ -58,9 +58,11 @@ function startOfIsoWeek(date: Date): Date {
   return d;
 }
 
-/** One point per week from programStart to asOf, each a running total of how
- *  many processes had reached parity-or-later by that week. Weeks with no
- *  new milestones simply repeat the previous total. */
+/** One point per week from the first Monday at or after programStart through asOf,
+ *  each a running total of how many processes had reached parity-or-later by that week.
+ *  Weeks with no new milestones simply repeat the previous total. If programStart is
+ *  not a Monday, the first data point represents the next Monday; this ensures all
+ *  points represent full ISO weeks. */
 export function computeCumulativeProgress(processes: Process[], programStart: Date, asOf: Date): ProgressPoint[] {
   const reachedDates = processes
     .map(parityReachedDate)
