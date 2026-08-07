@@ -1,5 +1,14 @@
 "use client";
 
+// TODO(weekly-delivery-review plan): this page is being replaced wholesale.
+// WeeklyBundle.v2_migration_list / v2_program were removed from the loader in
+// the All-Hands Migration Report plan (Task 8) since that curated data now
+// lives in the live All-Hands report instead. MigrationSection/V2ProgramSection
+// below are fed `[]` here (rather than reintroduced data-fetching) purely to
+// satisfy the type checker and avoid a runtime crash — no functional
+// replacement was attempted; the Weekly Delivery Review plan replaces this
+// whole file.
+
 import { useState, useRef, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -550,7 +559,9 @@ function shortProc(customer: string, process: string): string {
   return p || process;
 }
 
-function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_list"]; inDev: number }) {
+type MigrationListItem = { customer: string; process: string; stage: string; fde: string[]; migrating_count: number };
+
+function MigrationSection({ list, inDev }: { list: MigrationListItem[]; inDev: number }) {
   if (list.length === 0) return null;
   // Group by customer — one block per customer, processes named inline.
   const grouped = new Map<string, { processes: string[]; stages: string[]; owners: string[]; count: number }>();
@@ -606,8 +617,10 @@ function MigrationSection({ list, inDev }: { list: WeeklyBundle["v2_migration_li
   );
 }
 
+type V2ProgramWorkstreamItem = { title: string; owners: string[]; body: string };
+
 // ── V2 Migration Program — bulk-migration build-out ─────────────────────────────
-function V2ProgramSection({ workstreams }: { workstreams: WeeklyBundle["v2_program"] }) {
+function V2ProgramSection({ workstreams }: { workstreams: V2ProgramWorkstreamItem[] }) {
   if (!workstreams || workstreams.length === 0) return null;
   return (
     <Section title="V2 Migration Program — bulk migration build-out" count={workstreams.length}
@@ -719,11 +732,16 @@ export function WeeklyReportClient({ bundle }: { bundle: WeeklyBundle }) {
         </Section>
       </div>
 
-      {/* Migrating to V2 — the strategic focus. */}
-      <MigrationSection list={bundle.v2_migration_list} inDev={bundle.portfolio.in_dev.v2} />
+      {/* Migrating to V2 — the strategic focus.
+          v2_migration_list / v2_program were removed from WeeklyBundle in the
+          All-Hands Migration Report plan (Task 8); this page is being fully
+          replaced by the Weekly Delivery Review plan, so pass empty lists
+          here rather than reintroducing that data source. Both sections
+          render null when empty. */}
+      <MigrationSection list={[]} inDev={bundle.portfolio.in_dev.v2} />
 
       {/* V2 Migration Program — the bulk-migration build-out. */}
-      <V2ProgramSection workstreams={bundle.v2_program} />
+      <V2ProgramSection workstreams={[]} />
 
       {/* Momentum — go-lives over the trailing window. */}
       <div className="glass-card p-5">

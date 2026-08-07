@@ -18,10 +18,6 @@ import {
   kognitosFYQuarter, previousKognitosFYQuarter,
   legacyFieldsFromProcess,
 } from "@/lib/delivery/taxonomy";
-import {
-  loadV2Migrations, type V2Migration,
-  MANUAL_V2_MIGRATIONS, V2_PROGRAM_WORKSTREAMS, type V2ProgramWorkstream,
-} from "@/lib/reports/v2-migrations";
 import { TABLES, type Process, type NpsResponse } from "@/lib/supabase/types";
 import { resolveRange, type DateRange, type RangePreset, type RangeRequest } from "@/lib/reports/date-range";
 export type { DateRange, RangePreset, RangeRequest };
@@ -223,18 +219,6 @@ export interface WeeklyBundle {
    *  both the delivery and engineering columns. */
   workload_fde: WorkloadEntry[];
   nps_this_quarter: { quarter: string; average: number; count: number } | null;
-  /** Active customer-process migrations from Kognitos v1 → v2.  Curated
-   *  list today (see lib/reports/v2-migrations.ts); will move to a
-   *  Monday column once Rishabh adds it to the Customers board. */
-  v2_migrations: V2Migration[];
-
-  /** Processes currently migrating v1 → v2 (the weekly report's focus list).
-   *  migrating_count is the curated per-customer process count (Monday under-
-   *  counts), summed for the "processes migrating to v2" metric. */
-  v2_migration_list: Array<{ customer: string; process: string; stage: string; fde: string[]; migrating_count: number }>;
-  /** Bulk-migration program update — workstreams running alongside the
-   *  per-customer migrations. Curated copy (see lib/reports/v2-migrations.ts). */
-  v2_program: V2ProgramWorkstream[];
   /** Full portfolio waterfall over every project card (see loader rules). */
   portfolio: {
     total_cards: number;
@@ -264,13 +248,12 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   const now = new Date();
   const range = resolveRange(req, now);
 
-  const [processesRes, customersRes, npsRes, lastSyncRes, v2Migrations] = await Promise.all([
+  const [processesRes, customersRes, npsRes, lastSyncRes] = await Promise.all([
     sb.from(TABLES.processes).select("*"),
     sb.from("customers").select("id, key, display_name, custom_category, lifecycle_group").is("deleted_at", null),
     sb.from(TABLES.npsResponses).select("quarter, score"),
     sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok")
       .order("finished_at", { ascending: false }).limit(1).maybeSingle(),
-    loadV2Migrations().catch(() => [] as V2Migration[]),
   ]);
 
   type CustomerRow = { id: string; key: string; display_name: string; custom_category: string | null; lifecycle_group: string | null };
@@ -425,21 +408,6 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     else if (m.includes("migrating")) v2Progress.migrating++;
     else if (m.includes("upcoming")) v2Progress.upcoming++;
   }
-  // Migration tile is a curated, fixed list — deliberately NOT a live Monday
-  // pull (signed off 2026-06). Owners come from the curated delivery +
-  // engineering teams in lib/reports/v2-migrations.ts, plus the manual
-  // JBI/Ciena rows. Stage is set per entry there (all Development today).
-  const v2_migration_list = [
-    ...v2Migrations.map((m) => ({
-      customer: m.customer_display_name ?? m.customer_key,
-      process: m.processes.length > 0 ? m.processes.join(", ") : "All processes",
-      stage: m.stage as string,
-      fde: [...(m.delivery_team ?? []), ...(m.engineering_team ?? [])],
-      migrating_count: m.migrating_count,
-    })),
-    ...MANUAL_V2_MIGRATIONS,
-  ].sort((a, b) => a.customer.localeCompare(b.customer));
-
   // ── Portfolio overview — the full waterfall over every project card ───────
   // Rules (signed off 2026-06): enhancements/CRs are pulled OUT of the project
   // count and reported separately; v1 and v2 versions are counted as separate
@@ -648,12 +616,9 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
       value: liveValue,
       v2_progress: v2Progress,
     },
-    v2_migration_list,
-    v2_program: V2_PROGRAM_WORKSTREAMS,
     portfolio,
     workload_fde,
     nps_this_quarter,
-    v2_migrations: v2Migrations,
     totals: {
       shipped_in_range: shippedInRange.length,
       in_flight_active: activeGroupProjects.length,
