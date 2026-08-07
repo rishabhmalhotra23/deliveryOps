@@ -1,3 +1,19 @@
+// ⚠️ OBSOLETE as of 2026-08-07 — DO NOT RUN.
+//
+// This script emitted `lib/reports/weeks/<week>.generated.ts`, typed as `V2Week`
+// from `lib/reports/v2-allhands-weeks.ts`. Both that registry file and the
+// hand-maintained report it fed were deleted when /reports/v2-migration was
+// rebuilt as the live All-Hands report (docs/superpowers/plans/
+// 2026-08-07-allhands-migration-report.md). The report now reads `processes` and
+// `linear_tickets` straight from Supabase via `lib/reports/allhands-loader.ts` —
+// there is no weekly Excel upload step and nothing consumes this output.
+//
+// Kept only as a reference for the tracker-Excel parsing rules in
+// parse-tracker.mjs (stage-from-dates precedence, blocked detection), which have
+// no equivalent elsewhere. Running it will write a file that imports a module
+// that no longer exists and will not typecheck.
+//
+// ─── Original header ────────────────────────────────────────────────────────
 // Assemble a weekly V2 migration All-Hands snapshot from three inputs and write
 // it as a ready-to-commit V2Week file.
 //

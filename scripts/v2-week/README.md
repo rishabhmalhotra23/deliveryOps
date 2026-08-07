@@ -1,21 +1,26 @@
-# Weekly V2 migration report — build script
+# Weekly V2 migration report — build script (OBSOLETE)
 
-Regenerates the All-Hands weekly snapshot from three inputs so the recurring work is "upload the Excel + skim," not hand-typing numbers.
+> **Obsolete as of 2026-08-07 — do not run `npm run build:v2-week`.**
+>
+> This script generated `lib/reports/weeks/<week>.generated.ts`, typed against
+> `lib/reports/v2-allhands-weeks.ts`. That registry file no longer exists, and
+> neither does the hand-maintained All-Hands report it fed:
+> `/reports/v2-migration` was rebuilt to read `processes` and `linear_tickets`
+> live from Supabase (`lib/reports/allhands-loader.ts`), so there is no weekly
+> Excel-upload step any more and nothing consumes this script's output. Running
+> it now writes a file that imports a deleted module and won't typecheck.
+>
+> The rest of this README is kept for one reason: `parse-tracker.mjs`'s
+> stage-from-dates rules (documented below) are the only written record of how
+> the migration-tracker Excel was interpreted, and they're still a useful
+> reference if that spreadsheet ever needs reconciling against `processes`.
+
+The original workflow was "upload the Excel + skim," not hand-typing numbers:
 
 ```
 npm install                       # once — adds xlsx
 npm run build:v2-week -- --xlsx "v2-migration-data/V2 Migration List.xlsx" --week 2026-07-13
 ```
-
-It writes `lib/reports/weeks/<week>.generated.ts`. Add it to the registry and ship:
-
-```ts
-// lib/reports/v2-allhands-weeks.ts
-import { WEEK_2026_07_13 } from "./weeks/2026-07-13.generated";
-export const WEEKS: V2Week[] = [WEEK_2026_07_13, /* previous weeks */];
-```
-
-Then `npx tsc --noEmit && npm test`, commit, push.
 
 ## Where each number comes from
 
