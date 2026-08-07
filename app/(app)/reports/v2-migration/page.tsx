@@ -1,20 +1,23 @@
-import Link from "next/link";
 import { BackButton } from "@/app/_components/back-button";
-import { V2MigrationClient } from "./_components/v2-migration-client";
+import { loadAllHandsReport } from "@/lib/reports/allhands-loader";
+import { AllHandsClient } from "./allhands-client";
+import type { RangePreset } from "@/lib/reports/date-range";
 
 export const dynamic = "force-dynamic";
 
-export default function V2MigrationReportPage() {
+export default async function AllHandsReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
+}) {
+  const params = await searchParams;
+  const preset = (params.preset as RangePreset | undefined) ?? "week";
+  const report = await loadAllHandsReport({ preset, from: params.from, to: params.to });
+
   return (
     <div className="px-6 lg:px-10 py-8 max-w-[1200px] mx-auto space-y-8">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <BackButton href="/reports" label="Reports" />
-        <Link href="/reports/v2-migration/tickets"
-          className="text-xs font-medium text-[color:var(--foreground)] border border-[var(--glass-border)] rounded-xl px-3 py-1.5 hover:bg-[rgba(0,0,0,0.04)] dark:hover:bg-[rgba(255,255,255,0.04)] transition-colors">
-          Open Tickets →
-        </Link>
-      </div>
-      <V2MigrationClient />
+      <BackButton href="/reports" label="Reports" />
+      <AllHandsClient report={report} />
     </div>
   );
 }
