@@ -25,13 +25,31 @@ function proc(overrides: Partial<Process>): Process {
 }
 
 describe("computeMigrationProgramStart", () => {
-  it("returns the earliest kickoff_date among processes with real V2 evidence", () => {
+  it("takes the earliest per-process migration-progress date among processes with real V2 evidence", () => {
     const processes = [
-      proc({ kickoff_date: "2026-03-01", linear_ticket_ids: ["ENG-1"] }),
-      proc({ kickoff_date: "2026-01-15", date_parity_complete: "2026-02-01" }),
+      proc({ kickoff_date: "2026-03-01", linear_ticket_ids: ["ENG-1"] }), // no milestone yet — falls back to kickoff_date
+      proc({ kickoff_date: "2026-01-15", date_parity_complete: "2026-02-01" }), // milestone present — parity date wins over kickoff_date
       proc({ kickoff_date: "2020-01-01" }), // no V2 evidence — excluded
     ];
-    expect(computeMigrationProgramStart(processes)).toEqual(new Date("2026-01-15"));
+    // Minimum of 2026-03-01 (p1's kickoff fallback) and 2026-02-01 (p2's parity date), not p2's earlier kickoff_date.
+    expect(computeMigrationProgramStart(processes)).toEqual(new Date("2026-02-01"));
+  });
+
+  it("uses date_parity_complete instead of a much-older kickoff_date when both are present (the production bug)", () => {
+    // Reproduces the real production symptom: a process whose v1 automation kicked off years
+    // before any V2 migration work started on it. Using kickoff_date here produced a program
+    // start of 2022-12-26 and a ~3-year flat chart lead-in before the actual migration ramp-up.
+    const processes = [
+      proc({ kickoff_date: "2022-12-26", date_parity_complete: "2026-06-15", linear_ticket_ids: ["ENG-9"] }),
+    ];
+    expect(computeMigrationProgramStart(processes)).toEqual(new Date("2026-06-15"));
+  });
+
+  it("falls back to kickoff_date for a process with V2 evidence but no migration milestone yet", () => {
+    // Only a linear ticket as evidence — actively being migrated, but nothing has landed,
+    // so there's no parity/handover/validation/live date to prefer.
+    const processes = [proc({ kickoff_date: "2026-04-01", linear_ticket_ids: ["ENG-42"] })];
+    expect(computeMigrationProgramStart(processes)).toEqual(new Date("2026-04-01"));
   });
 
   it("returns null when no process has any V2 evidence", () => {

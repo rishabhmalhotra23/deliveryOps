@@ -25,20 +25,6 @@ function hasV2Evidence(p: Process): boolean {
   );
 }
 
-/** Earliest kickoff_date among processes with real V2 evidence — the
- *  program's start date, derived rather than hardcoded so it never needs
- *  manual updating. Returns null if nothing qualifies (e.g. an empty or
- *  freshly-seeded table). */
-export function computeMigrationProgramStart(processes: Process[]): Date | null {
-  const dates = processes
-    .filter(hasV2Evidence)
-    .map((p) => p.kickoff_date)
-    .filter((d): d is string => d != null)
-    .map((d) => new Date(d));
-  if (dates.length === 0) return null;
-  return dates.reduce((min, d) => (d < min ? d : min));
-}
-
 /** The earliest of a process's parity-or-later milestone dates — the date it
  *  first counted as "at or past parity". Reaching handover, validation, or
  *  go-live all imply parity was reached at or before that date. Returns null
@@ -49,6 +35,32 @@ function parityReachedDate(p: Process): Date | null {
     .map((d) => new Date(d));
   if (candidates.length === 0) return null;
   return candidates.reduce((min, d) => (d < min ? d : min));
+}
+
+/** The program's start date: the earliest, across all processes with real V2
+ *  evidence, of each process's actual-migration-progress date — a parity/
+ *  handover/validation/live milestone if it has reached one, else its
+ *  kickoff_date. Derived rather than hardcoded so it never needs manual
+ *  updating. Returns null if nothing qualifies (e.g. an empty or
+ *  freshly-seeded table).
+ *
+ *  kickoff_date marks when the process's ORIGINAL v1 automation began, which
+ *  for older processes can be years before any V2 migration work started —
+ *  using it as the primary signal produced a program start of 2022-12-26 in
+ *  production (one old process with a stray linear ticket), stretching the
+ *  progress chart with a multi-year flat lead-in before real migration work
+ *  began. A parity/handover/validation/live date, when present, is real
+ *  evidence that migration work landed and takes precedence; kickoff_date is
+ *  only used as a fallback for a process that has V2 evidence (e.g. a linear
+ *  ticket) but hasn't reached any of those milestones yet — i.e. it's
+ *  actively being migrated but nothing has landed. */
+export function computeMigrationProgramStart(processes: Process[]): Date | null {
+  const dates = processes
+    .filter(hasV2Evidence)
+    .map((p) => parityReachedDate(p) ?? (p.kickoff_date ? new Date(p.kickoff_date) : null))
+    .filter((d): d is Date => d != null);
+  if (dates.length === 0) return null;
+  return dates.reduce((min, d) => (d < min ? d : min));
 }
 
 function startOfIsoWeek(date: Date): Date {
