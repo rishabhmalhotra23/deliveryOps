@@ -58,6 +58,12 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
     sb.from(TABLES.processes).select("*"),
   ]);
+  // Surface read failures instead of silently rendering a misleadingly-empty
+  // report (0 live processes, no renewal spotlight, etc.) — same convention
+  // as lib/processes/loader.ts's fetchAllProcessRows().
+  if (customersRes.error) throw customersRes.error;
+  if (oppsRes.error) throw oppsRes.error;
+  if (processesRes.error) throw processesRes.error;
 
   type CustomerRow = { id: string; key: string; display_name: string; custom_category: string | null; lifecycle_group: string | null };
   const customers = (customersRes.data as CustomerRow[] | null) ?? [];
