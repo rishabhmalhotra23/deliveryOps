@@ -35,10 +35,7 @@ const REPORT_CARDS: ReportCard[] = [
     icon: "📋",
     status: "available",
     needs: [],
-    // TEMPORARY: points at the still-live /reports/weekly page. The separate
-    // Weekly Delivery Review plan replaces it with /reports/delivery-review —
-    // when that ships, move this href there and delete this comment.
-    href: "/reports/weekly",
+    href: "/reports/delivery-review",
   },
 ];
 
