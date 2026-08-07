@@ -384,6 +384,13 @@ export async function loadDeliveryReview(req: RangeRequest = {}): Promise<Delive
     sb.from("customers").select("id, key, display_name").is("deleted_at", null),
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
   ]);
+  // Throw rather than silently degrade to empty arrays on a failed read — a
+  // read-failure disguised as "zero active work" was a real Critical finding
+  // in the sibling All-Hands report plan's final review (2026-08-07). Matches
+  // the existing precedent in lib/processes/loader.ts's fetchAllProcessRows().
+  if (processesRes.error) throw processesRes.error;
+  if (customersRes.error) throw customersRes.error;
+  if (oppsRes.error) throw oppsRes.error;
 
   type CustomerRow = { id: string; key: string; display_name: string };
   const customers = (customersRes.data as CustomerRow[] | null) ?? [];
