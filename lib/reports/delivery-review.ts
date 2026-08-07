@@ -29,10 +29,23 @@ function inPeriod(iso: string | null, period: Period): boolean {
 /** Per-process status for this report. Blocked beats everything else — a
  *  process that is technically "live" but flagged at_risk still needs
  *  attention. Archived lifecycles return null: excluded entirely, they're
- *  not part of a "what's happening right now" review. */
+ *  not part of a "what's happening right now" review.
+ *
+ *  Blocked is driven only by genuine operational-blockage signals —
+ *  `blocked_on !== "none"` or `health` being at_risk/off_track. Deliberately
+ *  NOT included: `needs_attention`. That flag is set once, at import time,
+ *  by lib/import/monday-taxonomy.ts's deriveState() and means "this row's
+ *  classification from the Monday import is uncertain, a human should
+ *  verify it" (see `needs_attention_reason`, e.g. "customer inferred from
+ *  the item name — verify") — a data-quality flag about the import, not a
+ *  signal that the process is currently stuck. Conflating the two
+ *  previously caused 4 genuinely on-track/backlog production processes
+ *  (blocked_on: "none", health: "on_track") to show up mislabeled "blocked"
+ *  in the customer-grouped report purely because of a leftover import-time
+ *  uncertainty flag. Do not reintroduce it here. */
 export function statusForProcess(p: Process, period: Period): DeliveryReviewStatus | null {
   if (ARCHIVE_LIFECYCLES.has(p.lifecycle)) return null;
-  if (p.blocked_on !== "none" || p.health === "at_risk" || p.health === "off_track" || p.needs_attention) {
+  if (p.blocked_on !== "none" || p.health === "at_risk" || p.health === "off_track") {
     return "blocked";
   }
   if (p.lifecycle === "live") {

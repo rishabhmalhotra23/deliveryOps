@@ -48,6 +48,18 @@ describe("statusForProcess", () => {
     expect(statusForProcess(proc({ lifecycle: "backlog" }), PERIOD)).toBe("coming_up");
   });
 
+  it("does not tag needs_attention alone as blocked — it's an import-time classification-uncertainty flag, not an operational-blockage signal", () => {
+    expect(
+      statusForProcess(
+        proc({ lifecycle: "backlog", needs_attention: true, blocked_on: "none", health: "on_track" }),
+        PERIOD
+      )
+    ).toBe("coming_up");
+    expect(
+      statusForProcess(proc({ lifecycle: "backlog", needs_attention: true, blocked_on: "none", health: null }), PERIOD)
+    ).toBe("coming_up");
+  });
+
   it("returns null for archived work (cancelled/churned/retired) — excluded entirely", () => {
     expect(statusForProcess(proc({ lifecycle: "cancelled" }), PERIOD)).toBeNull();
     expect(statusForProcess(proc({ lifecycle: "churned" }), PERIOD)).toBeNull();
