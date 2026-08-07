@@ -26,20 +26,36 @@ export interface AllHandsReport {
   generatedAt: string;
   status: AllHandsStatus;
   cumulativeProgress: ProgressPoint[];
+  /** Denominator for the cumulative-progress headline: how many V2-relevant
+   *  processes are tracked at all. Drawn from the SAME population the chart's
+   *  numerator is computed over (overview.rows), so "N of M at or past parity"
+   *  is always a true subset relationship — never two numbers from two
+   *  different filters added together. */
+  trackedMigrationTotal: number;
   renewalSpotlight: RenewalSpotlight | null;
   atRiskMigrating: AtRiskMigratingEntry[];
   blockers: BlockerItem[];
   ticketHealth: {
     openInScope: number;
     hardBlockers: number;
-    closedThisPeriod: number;
-    newThisPeriod: number;
+    /** Rolling last-7-days deltas from loadTicketsBundle(), NOT the selected
+     *  date range — labelled as "last 7 days" in the UI for that reason. */
+    closedLast7Days: number;
+    newLast7Days: number;
   };
+  /** Non-null when the Linear ticket tables couldn't be read (e.g. migrations
+   *  0017/0018 not applied to this Supabase project). The blockers and
+   *  ticket-health sections are meaningless in that case — the UI renders an
+   *  error banner instead of confident zeros. Everything else on the report
+   *  still loads, so we surface it rather than throwing. */
+  ticketDataError: string | null;
 }
 
+// Only the stages in STAGE_ORDER below are ever looked up here.
+// `migrated_pending_commercial` deliberately has no entry: it's folded into
+// the `live_on_v2` column by the filter in stageRows, never labelled directly.
 const STAGE_LABELS: Record<string, string> = {
   live_on_v2: "Live on V2",
-  migrated_pending_commercial: "Live on V2",
   customer_validation: "Customer validation",
   parity_testing: "Parity testing",
   engg_pending: "Engg pending",
@@ -47,6 +63,19 @@ const STAGE_LABELS: Record<string, string> = {
 };
 const STAGE_ORDER = ["live_on_v2", "customer_validation", "parity_testing", "engg_pending", "in_development"];
 
+/**
+ * Loads the whole All-Hands report.
+ *
+ * Range semantics, so a future reader doesn't mistake this for a bug: only
+ * `range.label` (header) and `range.end` (the chart's "as of" and the renewal
+ * spotlight's "today") actually consume the selected range. `status`,
+ * `atRiskMigrating`, `cumulativeProgress` and `renewalSpotlight` are
+ * current-state snapshots by design — they answer "where does the portfolio
+ * stand right now", not "what happened inside this window" — so Week / Month /
+ * Quarter render the same content with a different header. `ticketHealth`'s
+ * closed/new counts come from loadTicketsBundle()'s hardcoded rolling 7-day
+ * delta and are labelled "last 7 days" in the UI accordingly.
+ */
 export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHandsReport> {
   const sb = requireAdmin();
   const range = resolveRange(req);
@@ -105,8 +134,18 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   }).filter((row) => row.count > 0);
 
   // ── Cumulative progress (all-time since program start, not per-quarter) ──
-  const programStart = computeMigrationProgramStart(allProcesses);
-  const cumulativeProgress = programStart ? computeCumulativeProgress(allProcesses, programStart, range.end) : [];
+  // Computed over overview.rows — the V2-relevant set (isV2Relevant() in
+  // lib/processes/loader.ts) — and NOT over every process row. The chart's
+  // headline reads "N of M tracked migrations at or past parity", so the
+  // numerator (N, the chart's final cumulative value) and the denominator
+  // (M = trackedMigrationTotal) have to come from one population. Using
+  // allProcesses for N previously let migration_stage='not_required' rows that
+  // happen to carry a milestone date inflate the numerator above a denominator
+  // built from the filtered rows. V2ProcessRow extends Process, so these carry
+  // every milestone field the derivation needs.
+  const trackedProcesses: Process[] = overview.rows;
+  const programStart = computeMigrationProgramStart(trackedProcesses);
+  const cumulativeProgress = programStart ? computeCumulativeProgress(trackedProcesses, programStart, range.end) : [];
 
   // ── Renewal spotlight + at-risk cross-signal ─────────────────────────────
   const renewalSpotlight = findRenewalSpotlight(customers, arrByCustomer, processesByCustomer, range.end);
@@ -127,14 +166,16 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
       stageRows,
     },
     cumulativeProgress,
+    trackedMigrationTotal: trackedProcesses.length,
     renewalSpotlight,
     atRiskMigrating,
     blockers,
     ticketHealth: {
       openInScope: tickets.totals.open,
       hardBlockers: tickets.open_tickets.filter((t) => t.classification === "hard_blocker").length,
-      closedThisPeriod: tickets.delta.newly_closed,
-      newThisPeriod: tickets.delta.new_count,
+      closedLast7Days: tickets.delta.newly_closed,
+      newLast7Days: tickets.delta.new_count,
     },
+    ticketDataError: tickets.data_error,
   };
 }

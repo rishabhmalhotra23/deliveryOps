@@ -142,6 +142,30 @@ function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgres
   );
 }
 
+// ── Ticket-data error banner ─────────────────────────────────────────────────
+// The Linear-backed sections (blockers, ticket health) read tables that may not
+// exist in this Supabase project. loadTicketsBundle() returns empty arrays plus
+// a data_error rather than throwing, so without this banner the report would
+// present a failed read as "no blockers / 0 open / 0 hard blockers" — confident
+// fabricated zeros. Same wording as the /reports/v2-migration/tickets page.
+function TicketDataErrorBanner({ message }: { message: string }) {
+  return (
+    <div
+      className="rounded-[14px] px-3.5 py-3 mb-3 text-[11px] leading-relaxed"
+      style={{
+        border: "1px solid var(--rt-status-bad)",
+        background: "rgba(248,113,113,0.08)",
+        color: "var(--rt-status-bad)",
+      }}
+    >
+      <span className="font-bold">Couldn&apos;t load ticket data:</span> {message}
+      <div className="mt-1" style={{ color: "var(--rt-fg-muted)" }}>
+        Blockers and ticket health below are unavailable for this run — they are not zero.
+      </div>
+    </div>
+  );
+}
+
 // ── Preset picker — client-side navigation via search params (same pattern
 //    as weekly-report-client.tsx's RangeSelector) ─────────────────────────────
 function PresetPicker({ range }: { range: AllHandsReport["range"] }) {
@@ -256,14 +280,15 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
     }
   }
 
-  const { status, cumulativeProgress, renewalSpotlight, atRiskMigrating, blockers, ticketHealth } = report;
+  const { status, cumulativeProgress, renewalSpotlight, atRiskMigrating, blockers, ticketHealth, ticketDataError } = report;
 
-  // Denominator for the cumulative-progress headline, per spec: in-flight
-  // migrations (haven't reached parity yet) + the live-on-v2 stage-board
-  // count + the all-time reached-parity total itself.
-  const liveOnV2Count = status.stageRows.find((r) => r.stage === "live_on_v2")?.count ?? 0;
+  // Numerator and denominator both come from the one V2-relevant population
+  // the loader builds the chart from (see AllHandsReport.trackedMigrationTotal).
+  // Never add the stage-board counts back in: live_on_v2 /
+  // migrated_pending_commercial processes have already reached parity, so
+  // adding them to the reached-parity total double-counts them.
   const reachedParityTotal = cumulativeProgress.length > 0 ? cumulativeProgress[cumulativeProgress.length - 1].cumulativeAtOrPastParity : 0;
-  const trackedTotal = status.migratingNowCount + liveOnV2Count + reachedParityTotal;
+  const trackedTotal = report.trackedMigrationTotal;
 
   const exportLabel =
     exportState === "loading" ? "Rendering…" : exportState === "done" ? "Saved ✓" : exportState === "error" ? "Failed" : "Download PNG";
@@ -404,10 +429,18 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         </>
       )}
 
+      {/* Sections 4 & 5 both read Linear-backed tables — surface a read failure
+          once, above them, instead of rendering fabricated zeros. */}
+      {ticketDataError && <TicketDataErrorBanner message={ticketDataError} />}
+
       {/* Section 4: blockers */}
       <Caption>This week&apos;s blockers</Caption>
       <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
-        {blockers.length === 0 ? (
+        {ticketDataError ? (
+          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
+            Unavailable — ticket data could not be read (see above).
+          </div>
+        ) : blockers.length === 0 ? (
           <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-fg-muted)" }}>
             No blockers reported this period.
           </div>
@@ -453,42 +486,54 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         )}
       </div>
 
-      {/* Section 5: ticket health */}
+      {/* Section 5: ticket health. The closed/new tiles are a rolling 7-day
+          delta from loadTicketsBundle(), independent of the selected preset —
+          labelled "last 7 days" rather than "this period" so a Quarter view
+          doesn't imply a quarter's worth of movement. */}
       <Caption>Ticket health — live Linear pull</Caption>
-      <div className="flex gap-2">
-        <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-          <div className="text-base font-extrabold" style={{ color: "var(--rt-fg)" }}>
-            {ticketHealth.openInScope}
+      {ticketDataError ? (
+        <div
+          className="rounded-xl p-2.5 text-xs italic"
+          style={{ background: "var(--rt-surface-1)", color: "var(--rt-status-bad)" }}
+        >
+          Unavailable — ticket data could not be read (see above).
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
+            <div className="text-base font-extrabold" style={{ color: "var(--rt-fg)" }}>
+              {ticketHealth.openInScope}
+            </div>
+            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+              open, in scope
+            </div>
           </div>
-          <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
-            open, in scope
+          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
+            <div className="text-base font-extrabold" style={{ color: "var(--rt-status-bad)" }}>
+              {ticketHealth.hardBlockers}
+            </div>
+            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+              hard blockers
+            </div>
+          </div>
+          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
+            <div className="text-base font-extrabold" style={{ color: "var(--rt-status-good)" }}>
+              +{ticketHealth.closedLast7Days}
+            </div>
+            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+              closed, last 7 days
+            </div>
+          </div>
+          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
+            <div className="text-base font-extrabold" style={{ color: "var(--rt-fg)" }}>
+              +{ticketHealth.newLast7Days}
+            </div>
+            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+              new, last 7 days
+            </div>
           </div>
         </div>
-        <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-          <div className="text-base font-extrabold" style={{ color: "var(--rt-status-bad)" }}>
-            {ticketHealth.hardBlockers}
-          </div>
-          <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
-            hard blockers
-          </div>
-        </div>
-        <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-          <div className="text-base font-extrabold" style={{ color: "var(--rt-status-good)" }}>
-            +{ticketHealth.closedThisPeriod}
-          </div>
-          <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
-            closed this period
-          </div>
-        </div>
-        <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-          <div className="text-base font-extrabold" style={{ color: "var(--rt-fg)" }}>
-            +{ticketHealth.newThisPeriod}
-          </div>
-          <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
-            new this period
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
