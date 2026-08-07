@@ -60,7 +60,14 @@ function startOfDayUTC(d: Date): Date {
 
 /** The single soonest-renewing customer within RENEWAL_WINDOW_DAYS, or null.
  *  Only ever surfaces one — this is a spotlight, not a table; if several
- *  customers qualify, the nearest renewal is the one that matters most. */
+ *  customers qualify, the nearest renewal is the one that matters most.
+ *
+ *  Ties are broken deterministically: soonest renewal, then highest ARR, then
+ *  lexicographically smallest customer key. Without this the winner depended
+ *  on whatever order Supabase happened to return the `customers` rows in (that
+ *  query has no .order()), so the spotlight could switch customers between two
+ *  page loads or between the page and its PNG export. Real case as of
+ *  2026-08-07: Conectiv, Scan Health and Pepsi all renew 24 days out. */
 export function findRenewalSpotlight(
   customers: CustomerForSignals[],
   arrByCustomer: Map<string, ArrForSignals>,
@@ -75,7 +82,23 @@ export function findRenewalSpotlight(
     if (!arr?.renewal_date) continue;
     const days = Math.round((new Date(arr.renewal_date).getTime() - today.getTime()) / 86_400_000);
     if (days < 0 || days > RENEWAL_WINDOW_DAYS) continue;
-    if (!best || days < best.days) best = { customer, days, arr };
+    if (!best) {
+      best = { customer, days, arr };
+      continue;
+    }
+    if (days < best.days) {
+      best = { customer, days, arr };
+      continue;
+    }
+    if (days > best.days) continue;
+    // Tied on days — higher ARR first, then smaller key.
+    if (arr.arr > best.arr.arr) {
+      best = { customer, days, arr };
+      continue;
+    }
+    if (arr.arr === best.arr.arr && customer.key < best.customer.key) {
+      best = { customer, days, arr };
+    }
   }
 
   if (!best) return null;

@@ -83,7 +83,11 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   const [overview, tickets, customersRes, oppsRes, processesRes] = await Promise.all([
     loadV2MigrationOverview(),
     loadTicketsBundle(),
-    sb.from(TABLES.customers).select("id, key, display_name, custom_category, lifecycle_group").is("deleted_at", null),
+    // .order("key") so every customer-derived list on this report (the
+    // at-risk-and-migrating list, and the renewal spotlight's tiebreak input)
+    // is stable across page loads and PNG exports rather than depending on
+    // Postgres's physical row order.
+    sb.from(TABLES.customers).select("id, key, display_name, custom_category, lifecycle_group").is("deleted_at", null).order("key"),
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
     sb.from(TABLES.processes).select("*"),
   ]);

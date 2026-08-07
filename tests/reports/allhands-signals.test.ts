@@ -33,6 +33,40 @@ describe("findRenewalSpotlight", () => {
     const customers = [customer({ id: "c1" })];
     expect(findRenewalSpotlight(customers, new Map([["c1", { arr: 0, renewal_date: null }]]), new Map(), new Date("2026-08-07"))).toBeNull();
   });
+
+  it("breaks a tie on renewal days by picking the higher-ARR customer", () => {
+    // Production has a real 3-way tie (Conectiv / Scan Health / Pepsi, 24 days out
+    // as of 2026-08-07) and the customers query has no .order(), so without an
+    // explicit tiebreak the winner varied between page loads and PNG exports.
+    const customers = [
+      customer({ id: "c1", key: "small", display_name: "Small Co" }),
+      customer({ id: "c2", key: "big", display_name: "Big Co" }),
+    ];
+    const arrByCustomer = new Map([
+      ["c1", { arr: 100_000, renewal_date: "2026-08-31" }],
+      ["c2", { arr: 900_000, renewal_date: "2026-08-31" }],
+    ]);
+    const spotlight = findRenewalSpotlight(customers, arrByCustomer, new Map(), new Date("2026-08-07"));
+    expect(spotlight?.customerKey).toBe("big");
+    // Same answer regardless of the order the rows arrive in.
+    const reversed = findRenewalSpotlight([...customers].reverse(), arrByCustomer, new Map(), new Date("2026-08-07"));
+    expect(reversed?.customerKey).toBe("big");
+  });
+
+  it("breaks a tie on both days and ARR by picking the lexicographically smaller key", () => {
+    const customers = [
+      customer({ id: "c1", key: "zulu", display_name: "Zulu" }),
+      customer({ id: "c2", key: "alpha", display_name: "Alpha" }),
+    ];
+    const arrByCustomer = new Map([
+      ["c1", { arr: 250_000, renewal_date: "2026-08-31" }],
+      ["c2", { arr: 250_000, renewal_date: "2026-08-31" }],
+    ]);
+    const spotlight = findRenewalSpotlight(customers, arrByCustomer, new Map(), new Date("2026-08-07"));
+    expect(spotlight?.customerKey).toBe("alpha");
+    const reversed = findRenewalSpotlight([...customers].reverse(), arrByCustomer, new Map(), new Date("2026-08-07"));
+    expect(reversed?.customerKey).toBe("alpha");
+  });
 });
 
 describe("findAtRiskMigratingCustomers", () => {
