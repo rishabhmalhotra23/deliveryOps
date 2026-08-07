@@ -250,6 +250,29 @@
   color: #ECECF1;
 }
 
+/* ─── Report theme — scoped dark palette for the two live reports (All-Hands,
+   Weekly Delivery Review). Deliberately NOT merged into `.dark` above: that
+   class is the app's existing generic dark-mode toggle with different literal
+   values (#0d0d12 bg, #ECECF1 fg) and touching it would reskin every page a
+   user has toggled to dark, which is Stage A's job, not this report's.
+   Approved direction: docs/superpowers/specs/2026-08-07-app-design-foundation-design.md,
+   validated against real UI in docs/mockups/2026-08-07-visual-direction-approved.html. */
+.report-theme {
+  --rt-bg:            #171717;
+  --rt-surface-1:      #262626;
+  --rt-surface-2:      #1F1F1F;
+  --rt-fg:            #FAFAFA;
+  --rt-fg-muted:      #A3A3A3;
+  --rt-fg-body:        #D4D4D4;
+  --rt-accent:        #F2FF70;
+  --rt-status-good:    #4ADE80;
+  --rt-status-warn:    #FB923C;
+  --rt-status-bad:     #F87171;
+  background: var(--rt-bg);
+  color: var(--rt-fg);
+  color-scheme: dark;
+}
+
 /* Tone chips that ship with light backgrounds (FEF2F2, ECFDF5, …) need
    a dark-mode treatment — the pale fills wash to near-white on #0d0d12.
    Swap for tinted overlays that match the dark-theme colour story. */
