@@ -23,6 +23,8 @@ import {
   MANUAL_V2_MIGRATIONS, V2_PROGRAM_WORKSTREAMS, type V2ProgramWorkstream,
 } from "@/lib/reports/v2-migrations";
 import { TABLES, type Process, type NpsResponse } from "@/lib/supabase/types";
+import { resolveRange, type DateRange, type RangePreset, type RangeRequest } from "@/lib/reports/date-range";
+export type { DateRange, RangePreset, RangeRequest };
 
 function parseDate(iso: string | null): Date | null {
   if (!iso) return null;
@@ -51,64 +53,6 @@ function currentNpsQuarterLabel(): string {
   const now = new Date();
   const q = Math.floor(now.getUTCMonth() / 3) + 1;
   return `${q}Q${String(now.getUTCFullYear()).slice(2)}`;
-}
-
-// ─── Range presets ────────────────────────────────────────────────────────────
-
-export type RangePreset = "week" | "month" | "quarter" | "custom";
-
-export interface DateRange {
-  start: Date;
-  end: Date;
-  preset: RangePreset;
-  label: string;       // "May 9 – May 15, 2026"
-  cadenceLabel: string; // "Weekly" | "Monthly" | "Quarterly" | "Custom"
-}
-
-export interface RangeRequest {
-  preset?: RangePreset;
-  from?: string; // ISO date
-  to?: string;
-}
-
-// Snap a date to midnight UTC so go-live dates (which Monday stores as
-// date-only and parse to 00:00 UTC) are always >= the range start.
-function startOfDayUTC(d: Date): Date {
-  const out = new Date(d);
-  out.setUTCHours(0, 0, 0, 0);
-  return out;
-}
-
-export function resolveRange(req: RangeRequest = {}, now: Date = new Date()): DateRange {
-  // Custom range: needs both from + to to be valid.
-  if (req.preset === "custom" && req.from && req.to) {
-    const start = startOfDayUTC(new Date(req.from));
-    const end = new Date(req.to);
-    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
-      end.setUTCHours(23, 59, 59, 999);
-      return { start, end, preset: "custom", label: `${fmtShort(start)} – ${fmtShort(end)}, ${end.getUTCFullYear()}`, cadenceLabel: "Custom" };
-    }
-  }
-
-  if (req.preset === "month") {
-    const start = startOfDayUTC(new Date(now));
-    start.setUTCDate(start.getUTCDate() - 30);
-    return { start, end: now, preset: "month", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Monthly" };
-  }
-
-  if (req.preset === "quarter") {
-    const start = startOfDayUTC(new Date(now));
-    start.setUTCDate(start.getUTCDate() - 90);
-    return { start, end: now, preset: "quarter", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Quarterly" };
-  }
-
-  // Default: rolling last 7 days, start snapped to midnight so a go-live
-  // on the start day isn't excluded due to time-of-day mismatch.
-  // Example: now = May 18 14:30 → start = May 11 00:00, so a project
-  // with go_live_date "2026-05-11" (parses to May 11 00:00) is included.
-  const start = startOfDayUTC(new Date(now));
-  start.setUTCDate(start.getUTCDate() - 7);
-  return { start, end: now, preset: "week", label: `${fmtShort(start)} – ${fmtShort(now)}, ${now.getUTCFullYear()}`, cadenceLabel: "Weekly" };
 }
 
 // ─── Public types ─────────────────────────────────────────────────────────────
