@@ -90,7 +90,19 @@ Net change to `app/_components/app-shell.tsx`'s `PRIMARY_NAV`: 8 entries → 6
   future lifecycle question, not a design decision to make now.
 - The `/dev/*` secondary nav (Tools section) — internal debug tooling, not part of the product IA.
 
-## Weekly All-Hands report — data-accuracy fix (time-sensitive, decoupled from Stage A/B)
+## Weekly All-Hands report — superseded by deeper design work
+
+The section below (written before implementation started) scoped this as a same-day-shippable
+data-source swap with no visual change. Further brainstorming with Rishabh — after discovering
+`lib/reports/v2-allhands-weeks.ts` is 1,247 lines of hand-written weekly editorial content, not just
+stale numbers — expanded this into two full reports, replacing the report catalog's other stub cards.
+See the mockups at `docs/mockups/2026-08-07-allhands-report-layout.html` and
+`docs/mockups/2026-08-07-delivery-review-layout.html` (approved) and the implementation plans:
+`docs/superpowers/plans/2026-08-07-allhands-migration-report.md` and
+`docs/superpowers/plans/2026-08-07-weekly-delivery-review.md`. The original scoping below is kept for
+history but is no longer the plan.
+
+
 
 Discovered while confirming the IA: `/reports/v2-migration` — the report Rishabh presents from every
 week — reads a hand-maintained file (`lib/reports/v2-allhands-weeks.ts`, a `WEEKS` registry someone

@@ -1,0 +1,51 @@
+<h2>Richer per-item detail</h2>
+<p class="subtitle">Same Done/Coming Up/Blocked structure you approved, but each entry becomes a fuller card instead of a thin row — process detail (phase, complexity, dates, linked tickets) plus customer context (category, ARR, health) together. One example per bucket below.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Preview: "Blocked / needs attention" entry, expanded</div>
+  <div class="mockup-body" style="padding:0;">
+    <div style="background:#171717;padding:16px;font-family:system-ui;color:#FAFAFA;">
+      <div style="background:#262626;border-radius:14px;padding:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+          <div>
+            <div style="font-size:13px;font-weight:800;">Kort Payments — Invoice Reconciliation ×2</div>
+            <div style="display:flex;gap:6px;margin-top:5px;">
+              <span style="font-size:9px;background:#1F1F1F;color:#D4D4D4;padding:2px 7px;border-radius:20px;">M3 · Testing/UAT</span>
+              <span style="font-size:9px;background:#1F1F1F;color:#D4D4D4;padding:2px 7px;border-radius:20px;">High complexity</span>
+              <span style="font-size:9px;background:#1F1F1F;color:#D4D4D4;padding:2px 7px;border-radius:20px;">V2</span>
+            </div>
+          </div>
+          <span style="font-size:9px;background:#F87171;color:#171717;padding:3px 9px;border-radius:20px;font-weight:700;">Off track</span>
+        </div>
+        <div style="display:flex;gap:14px;margin-bottom:10px;padding:10px;background:#1F1F1F;border-radius:10px;">
+          <div><div style="font-size:9px;color:#737373;">Customer</div><div style="font-size:11px;font-weight:600;">Kort Payments</div></div>
+          <div><div style="font-size:9px;color:#737373;">Category</div><div style="font-size:11px;color:#FB923C;font-weight:600;">Upcoming Renewal</div></div>
+          <div><div style="font-size:9px;color:#737373;">ARR</div><div style="font-size:11px;font-weight:600;">$94K</div></div>
+          <div><div style="font-size:9px;color:#737373;">Renews</div><div style="font-size:11px;font-weight:600;">18 days</div></div>
+        </div>
+        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:10px;">
+          <div><span style="color:#737373;">FDE</span> <span style="color:#D4D4D4;">Karthik N.</span></div>
+          <div><span style="color:#737373;">Kickoff</span> <span style="color:#D4D4D4;">Jun 2</span></div>
+          <div><span style="color:#737373;">Blocked</span> <span style="color:#F87171;">18 days · browser automation</span></div>
+        </div>
+        <div style="font-size:10px;color:#D4D4D4;background:#1F1F1F;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+          Customer requires IP whitelisting before browser automation can run in their environment — waiting on their IT team, escalated Jul 28.
+        </div>
+        <div style="display:flex;gap:6px;">
+          <span style="font-size:9px;color:#60A5FA;background:rgba(96,165,250,0.12);padding:2px 8px;border-radius:20px;">ENG-4444</span>
+          <span style="font-size:9px;color:#60A5FA;background:rgba(96,165,250,0.12);padding:2px 8px;border-radius:20px;">ENG-4445</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>What's new per card vs. the thin-row version</h3>
+  <ul>
+    <li><strong>Process:</strong> phase, complexity, platform (v1/v2), how long it's been blocked and why (free-text note field — the one thing that still needs a human to type a sentence, everything else is live).</li>
+    <li><strong>Customer:</strong> category, ARR, and renewal countdown pulled in directly — so "this is blocked" and "this customer renews in 18 days" are in the same glance, no separate lookup.</li>
+    <li><strong>Cross-linked:</strong> the actual Linear tickets behind the blocker, not just a text description.</li>
+  </ul>
+  <p><strong>One structural question:</strong> right now these are still grouped by status bucket (Done/Coming/Blocked) with rich cards inside each. The alternative is grouping by <em>customer</em> first — "here's everything happening with Kort" — with status as a tag inside each customer's section instead. Status-first is better for "what needs my attention today" scanning; customer-first is better for "how's this account doing overall," which sounds closer to what CS specifically needs. Want me to switch to customer-first grouping, or keep status-first with the customer context baked into each card like this?</p>
+</div>
