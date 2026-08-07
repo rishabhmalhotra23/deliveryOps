@@ -16,56 +16,26 @@ interface ReportCard {
 
 const REPORT_CARDS: ReportCard[] = [
   {
-    id: "qbr",
-    title: "QBR Generator",
-    subtitle: "Quarterly Business Review decks",
-    description:
-      "Auto-build a 10–12 slide QBR deck for any customer: contract history, active projects, NPS trend, key wins, open issues, and renewal risk — all sourced from live Salesforce + Monday data. Brand-correct slides, ready to customise and send.",
-    icon: "📊",
-    status: "coming-soon",
-    needs: ["Kognitos v1/v2 live process data", "Google Slides API access", "Customer slide template (.pptx)"],
-  },
-  {
-    id: "weekly",
-    title: "Delivery Update",
-    subtitle: "Weekly · monthly · quarterly · custom range",
-    description:
-      "Live portfolio snapshot for any time window: what shipped, what's in UAT, what's at risk, team workload, and a delivery trend chart. Pick a preset or set custom dates. Export as PNG or print-to-PDF for your All Hands or QBR.",
-    icon: "📋",
-    status: "available",
-    needs: [],
-    href: "/reports/weekly",
-  },
-  {
     id: "v2-migration",
-    title: "V2 Migration — All Hands",
-    subtitle: "Weekly migration & delivery update",
+    title: "All-Hands",
+    subtitle: "Company-wide · Delivery & Customer Success",
     description:
-      "Company All-Hands view of the V1→V2 migration: the migrate-or-retire split across the V1 estate, net-new V2 builds, renewals due this quarter with migration readiness, live engineering blockers from Linear, and key decision points. Export as PNG for the deck.",
+      "Portfolio and migration status, cumulative migration progress since the program started, upcoming-renewal spotlight, this week's blockers, and live ticket health. All from live processes + Linear data — export as PNG or print for the meeting.",
     icon: "🚀",
     status: "available",
     needs: [],
     href: "/reports/v2-migration",
   },
   {
-    id: "monthly-digest",
-    title: "Monthly Customer Digest",
-    subtitle: "Customer-facing monthly summary",
+    id: "delivery-review",
+    title: "Weekly Delivery Review",
+    subtitle: "Delivery & Customer Success team",
     description:
-      "A branded monthly digest sent to each customer's primary contact: automations live, credits consumed, recent milestones, upcoming work. One per customer, generated in under 60 seconds.",
-    icon: "📨",
-    status: "needs-access",
-    needs: ["Gmail send-as aliases (Google Suite access)", "Kognitos v2 credit data"],
-  },
-  {
-    id: "health-report",
-    title: "Customer Health Report",
-    subtitle: "Portfolio health scorecard",
-    description:
-      "A data-derived health score for every customer — based on NPS trend, credit burn, project velocity, support case volume, and open exceptions. No more subjective colour coding.",
-    icon: "🩺",
-    status: "coming-soon",
-    needs: ["Kognitos v1/v2 run + exception data", "NPS trend (partially available)"],
+      "What's done, what's coming up, and what's blocked — grouped by customer, live from processes. The working review for the team, not a presented artifact.",
+    icon: "📋",
+    status: "available",
+    needs: [],
+    href: "/reports/delivery-review",
   },
 ];
 
@@ -86,7 +56,7 @@ export default function ReportsPage() {
           Reports & insights.
         </h1>
         <p className="text-sm text-[color:var(--muted-foreground)] mt-2 max-w-2xl">
-          Automated reports powered by live data from Salesforce, Monday, and Kognitos. No manual copy-paste — every report generates from a single click and reflects the current state of the customer relationship.
+          Real-time delivery and migration tracking for your entire organization. From all-hands presentations to team working documents — powered by live process and Linear data, ready to export or print.
         </p>
       </div>
 
