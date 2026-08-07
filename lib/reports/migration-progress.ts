@@ -40,9 +40,9 @@ function parityReachedDate(p: Process): Date | null {
 /** The program's start date: the earliest, across all processes with real V2
  *  evidence, of each process's actual-migration-progress date — a parity/
  *  handover/validation/live milestone if it has reached one, else its
- *  kickoff_date. Derived rather than hardcoded so it never needs manual
- *  updating. Returns null if nothing qualifies (e.g. an empty or
- *  freshly-seeded table).
+ *  kickoff_date, clamped (see below). Derived rather than hardcoded so it
+ *  never needs manual updating. Returns null if nothing qualifies (e.g. an
+ *  empty or freshly-seeded table).
  *
  *  kickoff_date marks when the process's ORIGINAL v1 automation began, which
  *  for older processes can be years before any V2 migration work started —
@@ -53,12 +53,37 @@ function parityReachedDate(p: Process): Date | null {
  *  evidence that migration work landed and takes precedence; kickoff_date is
  *  only used as a fallback for a process that has V2 evidence (e.g. a linear
  *  ticket) but hasn't reached any of those milestones yet — i.e. it's
- *  actively being migrated but nothing has landed. */
+ *  actively being migrated but nothing has landed.
+ *
+ *  That fallback is CLAMPED, and the clamp is load-bearing rather than
+ *  belt-and-braces: attaching a Linear ticket to an old v1 process is the
+ *  normal first step of starting its migration, and that single edit would
+ *  otherwise make its years-old kickoff_date the program start and bring the
+ *  multi-year flat chart straight back. So a fallback kickoff_date can never
+ *  pull the program start earlier than `earliestMilestoneDate` — the earliest
+ *  real parity/handover/validation/live date anywhere in the set. Anything
+ *  before that is raised up to it; real milestone dates are unaffected, since
+ *  they are all >= earliestMilestoneDate by construction. If no process has
+ *  reached any milestone at all, there is nothing to clamp against and the
+ *  plain minimum of available kickoff_dates is used. */
 export function computeMigrationProgramStart(processes: Process[]): Date | null {
-  const dates = processes
-    .filter(hasV2Evidence)
-    .map((p) => parityReachedDate(p) ?? (p.kickoff_date ? new Date(p.kickoff_date) : null))
+  const evidenceBearing = processes.filter(hasV2Evidence);
+
+  // Pass 1: the earliest real migration milestone anywhere. Processes that
+  // have not reached one contribute nothing here.
+  const milestoneDates = evidenceBearing
+    .map(parityReachedDate)
     .filter((d): d is Date => d != null);
+  const earliestMilestoneDate =
+    milestoneDates.length > 0 ? milestoneDates.reduce((min, d) => (d < min ? d : min)) : null;
+
+  // Pass 2: each process's own progress date, with the kickoff_date fallback
+  // clamped up to earliestMilestoneDate.
+  const dates = evidenceBearing
+    .map((p) => parityReachedDate(p) ?? (p.kickoff_date ? new Date(p.kickoff_date) : null))
+    .filter((d): d is Date => d != null)
+    .map((d) => (earliestMilestoneDate && d < earliestMilestoneDate ? earliestMilestoneDate : d));
+
   if (dates.length === 0) return null;
   return dates.reduce((min, d) => (d < min ? d : min));
 }

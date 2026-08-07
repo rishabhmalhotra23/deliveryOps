@@ -52,6 +52,27 @@ describe("computeMigrationProgramStart", () => {
     expect(computeMigrationProgramStart(processes)).toEqual(new Date("2026-04-01"));
   });
 
+  it("clamps a far-older kickoff_date fallback up to the earliest real milestone date", () => {
+    // The structural version of the production bug: attaching a Linear ticket to an
+    // old v1 process (the normal first step of starting its migration) must not drag
+    // the program start back to when that process's *v1* automation kicked off.
+    const processes = [
+      proc({ id: "old", kickoff_date: "2020-01-01", linear_ticket_ids: ["ENG-1"] }), // evidence, no milestone
+      proc({ id: "real", kickoff_date: "2026-01-01", date_parity_complete: "2026-05-01" }),
+    ];
+    expect(computeMigrationProgramStart(processes)).toEqual(new Date("2026-05-01"));
+  });
+
+  it("still uses the plain minimum kickoff_date when NO process has any milestone date", () => {
+    // Nothing to clamp against — an early-program state where work has started but
+    // nothing has landed yet.
+    const processes = [
+      proc({ id: "a", kickoff_date: "2026-04-01", linear_ticket_ids: ["ENG-42"] }),
+      proc({ id: "b", kickoff_date: "2026-02-10", linear_ticket_ids: ["ENG-43"] }),
+    ];
+    expect(computeMigrationProgramStart(processes)).toEqual(new Date("2026-02-10"));
+  });
+
   it("returns null when no process has any V2 evidence", () => {
     expect(computeMigrationProgramStart([proc({})])).toBeNull();
   });
