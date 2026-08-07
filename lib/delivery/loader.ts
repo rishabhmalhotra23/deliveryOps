@@ -1,18 +1,16 @@
-// Portfolio-wide Delivery loader. Pulls all Monday project rows (all FY boards
-// + active + inactive/cancelled) with their stored columns so the Delivery
-// Analytics page has complete historical context for Q-on-Q.
+// Portfolio-wide Delivery loader, used only by the agent's `find_projects` /
+// `summarize_portfolio` tools (lib/agent/operations.ts) — the /delivery page
+// itself reads lib/processes/loader.ts directly.
 //
-// Source: monday_projects + customers caches. All 6 boards are now synced;
-// the fiscal_year column identifies which board each row came from.
+// Source: `processes` + customers, translated to the legacy Monday string
+// vocabulary via legacyFieldsFromProcess (see lib/delivery/taxonomy.ts) so
+// this loader's shape — and the agent tools built on it — didn't need to
+// change when Monday was retired.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer } from "@/app/_components/brand";
-import { MONDAY_PROJECT_COLS as COLS, colText, isDelivered as txIsDelivered, unionPeopleColumns, formatPersonName } from "@/lib/delivery/taxonomy";
-
-type RawColumns = Record<string, { type: string; text: string | null; value: string | null }>;
-function txt(cols: RawColumns, id: string): string | null {
-  return colText(cols, id);
-}
+import { isDelivered as txIsDelivered, unionPeopleColumns, formatPersonName, legacyFieldsFromProcess } from "@/lib/delivery/taxonomy";
+import { TABLES, type Process } from "@/lib/supabase/types";
 
 export interface DeliveryProject {
   monday_item_id: string;
@@ -74,26 +72,6 @@ export interface DeliveryBundle {
   last_sync: string | null;
 }
 
-interface ProjectRow {
-  monday_item_id: string;
-  name: string;
-  group_title: string | null;
-  state: string | null;
-  monday_updated_at: string | null;
-  customer_id: string;
-  raw_columns: RawColumns;
-  fiscal_year: string | null;
-  board_name: string | null;
-  go_live_date: string | null;
-  kickoff_date: string | null;
-  total_effort_days: number | null;
-  delivered_value: string | null;
-  ttv_days_text: string | null;
-  timeline_start: string | null;
-  timeline_end: string | null;
-  latest_update: string | null;
-}
-
 interface CustomerRow {
   id: string;
   key: string;
@@ -122,18 +100,8 @@ function isDelivered(p: DeliveryProject): boolean {
 export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
   const sb = requireAdmin();
 
-  const [projects, customers, lastSync] = await Promise.all([
-    sb
-      .from("monday_projects")
-      .select(
-        "monday_item_id, name, group_title, state, monday_updated_at, customer_id, " +
-        "fiscal_year, board_name, raw_columns, " +
-        "go_live_date, kickoff_date, " +
-        "total_effort_days, delivered_value, ttv_days_text, " +
-        "timeline_start, timeline_end, latest_update"
-      )
-      .order("go_live_date", { ascending: false, nullsFirst: false })
-      .limit(1000),
+  const [processesRes, customers, lastSync] = await Promise.all([
+    sb.from(TABLES.processes).select("*").order("go_live_date", { ascending: false, nullsFirst: false }),
     sb
       .from("customers")
       .select("id, key, display_name, ae_owner, partner, custom_category, lifecycle_group")
@@ -153,24 +121,14 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
     custById.set(c.id, c);
   }
 
-  // The Account Overview boards (per-customer workspaces) and the Projects
-  // Portfolio board are *aggregate* surfaces — every project they list is
-  // already on one of the FY delivery boards.  Including them here triples
-  // the row count and pollutes every chart with placeholder "Active
-  // Projects" rows that have empty status / phase / FDE fields.  We keep
-  // them in the per-customer cache (used by /customers/[key]) but exclude
-  // them from the portfolio-wide view.
-  const PORTFOLIO_DUPE_FYS = new Set(["account_overview", "portfolio"]);
-
   const allRows: DeliveryProject[] = [];
-  for (const p of (projects.data as ProjectRow[] | null) ?? []) {
-    if (p.fiscal_year && PORTFOLIO_DUPE_FYS.has(p.fiscal_year)) continue;
-    const cust = custById.get(p.customer_id);
+  for (const p of (processesRes.data as Process[] | null) ?? []) {
+    const cust = p.customer_id ? custById.get(p.customer_id) : undefined;
     if (!cust) continue;
-    const cols = p.raw_columns ?? {};
+    const legacy = legacyFieldsFromProcess(p);
     allRows.push({
-      monday_item_id: p.monday_item_id,
-      name: p.name,
+      monday_item_id: legacy.id,
+      name: legacy.name,
       customer_key: cust.key,
       customer_display_name: cust.display_name,
       customer_category: categoryFromCustomer({
@@ -178,34 +136,35 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
         lifecycle_group: cust.lifecycle_group,
       }),
       ae_owner: cust.ae_owner,
-      fiscal_year: p.fiscal_year,
-      board_name: p.board_name,
-      group_title: p.group_title,
-      state: p.state,
-      monday_updated_at: p.monday_updated_at,
-      health:       txt(cols, COLS.health),
-      status:       txt(cols, COLS.status),
-      phase:        txt(cols, COLS.phase),
-      platform:     txt(cols, COLS.platform),
-      complexity:   txt(cols, COLS.complexity),
-      kickoff_date: p.kickoff_date ?? txt(cols, COLS.kickoff_date),
-      go_live_date: p.go_live_date ?? txt(cols, COLS.go_live_date),
-      fde:          unionPeopleColumns(txt(cols, COLS.tam), txt(cols, COLS.dev)),
-      partner:      txt(cols, COLS.partner) ?? cust.partner,
-      total_effort_days: p.total_effort_days,
-      delivered_value:   p.delivered_value,
-      ttv_days_text:     p.ttv_days_text,
-      timeline_start:    p.timeline_start,
-      timeline_end:      p.timeline_end,
-      latest_update:     p.latest_update,
+      fiscal_year: legacy.fiscal_year,
+      board_name: null,
+      group_title: legacy.group_title,
+      state: null,
+      monday_updated_at: p.updated_at,
+      health:       legacy.health,
+      status:       legacy.status,
+      phase:        legacy.phase,
+      platform:     legacy.platform,
+      complexity:   legacy.complexity,
+      kickoff_date: legacy.kickoff_date,
+      go_live_date: legacy.go_live_date,
+      fde:          unionPeopleColumns(legacy.tam_text, legacy.dev_text),
+      partner:      p.partner ?? cust.partner,
+      // No native equivalent for total_effort_days/delivered_value/
+      // timeline_start/timeline_end/latest_update — see the equivalent note
+      // in lib/cache/integrations.ts.
+      total_effort_days: p.total_effort_hours != null ? Math.round(p.total_effort_hours) : null,
+      delivered_value:   null,
+      ttv_days_text:     legacy.ttv_days != null ? String(legacy.ttv_days) : null,
+      timeline_start:    null,
+      timeline_end:      null,
+      latest_update:     null,
     });
   }
 
-  // Even after dropping the AO + Portfolio boards a customer can have the
-  // same project name on two FY boards (e.g. kicked off in FY-2025, went
-  // live in FY-2026).  Dedupe by (customer_id, normalised name) so the
-  // delivery view shows each project once, picking the row that carries
-  // the most signal (richest data wins).
+  // `processes` holds one row per process — no more per-FY-board duplication
+  // to dedupe. Kept as a no-op safety net in case a real duplicate slips in
+  // (e.g. two rows with the same customer + name from a bad import).
   const rows = dedupeByCustomerAndName(allRows);
 
   // Build platform list from actual data, not just a hardcoded set.

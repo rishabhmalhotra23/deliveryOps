@@ -380,3 +380,203 @@ export function previousKognitosFYQuarter(q: KognitosQuarter): KognitosQuarter {
 function mk(qNum: 1 | 2 | 3 | 4, fy: number, start: Date, end: Date): KognitosQuarter {
   return { start, end, qNum, fyYear: fy, label: `Q${qNum} FY${String(fy).slice(2)}` };
 }
+
+// ─── Legacy view: translate a native `processes` row back to Monday's string
+// vocabulary ──────────────────────────────────────────────────────────────────
+// Added when Monday was retired as the source for the weekly report,
+// analytics, dashboard drilldowns, and the customer-360 cards (see
+// docs/MONDAY-DECOMMISSION-LOG.md, steps 1.6/1.7). Those loaders — and the UI
+// they feed (ProjectDetailPanel, STATUS_PILL_CLS/HEALTH_PILL_CLS, flightGroup,
+// phaseGroup, isDelivered, isAtRisk, all above) — were all built around
+// Monday's status/health/phase/platform strings. Rather than touch that UI
+// (which needs its own mockup + sign-off per the project's UI-change rule),
+// this translates `processes`' native orthogonal columns back into the same
+// string vocabulary at the loader boundary, so every function above keeps
+// working unchanged on the new data source.
+//
+// New surfaces should read `processes` natively (see lib/processes/loader.ts,
+// which already does this for /delivery and /v2-migration) — this exists only
+// to carry pre-existing Monday-era consumers across the cutover without a UI
+// change.
+
+import type {
+  Process, ProcessLifecycle, ProcessHealth, ProcessPlatform, ProcessPhase, ProcessWorkMode,
+  MigrationStage,
+} from "@/lib/supabase/types";
+
+// Monday's "fiscal_year" board-provenance field. Cancelled/churned/retired
+// processes lived on a separate "inactive" board — isActiveBoard() and
+// isActive() (customer-360 projects card) both gate on fiscal_year==="active"
+// AND !isDelivered, so archived rows must NOT report "active" here or
+// they're wrongly counted as in-flight work. Every other lifecycle
+// (including "live" — isDelivered() already excludes those independently)
+// reports "active".
+const LIFECYCLE_TO_FISCAL_YEAR: Record<ProcessLifecycle, string> = {
+  backlog: "active",
+  upcoming: "active",
+  discovery: "active",
+  in_development: "active",
+  uat: "active",
+  live: "active",
+  on_hold: "active",
+  cancelled: "inactive",
+  churned: "inactive",
+  retired: "inactive",
+};
+
+const LIFECYCLE_TO_STATUS: Record<ProcessLifecycle, string> = {
+  backlog: "Backlog",
+  upcoming: "Upcoming",
+  discovery: "In Progress",
+  in_development: "In Progress",
+  uat: "In Progress",
+  live: "Live",
+  on_hold: "On Hold",
+  cancelled: "Cancelled",
+  churned: "Inactive",
+  retired: "Inactive",
+};
+
+// Monday's board "group_title" (Active / Pipeline / On Hold / Backlog),
+// consumed by flightGroup() above. flightGroup() is only ever called on the
+// active-board subset (isActiveBoard already excludes live/cancelled/churned/
+// retired), so the live/cancelled/churned/retired values below don't need to
+// satisfy flightGroup's matching rules — they exist so consumers that bucket
+// *all* rows by group_title (e.g. the analytics "projects by stage" chart)
+// get a sensible, non-colliding label instead of every delivered/archived row
+// silently landing in "Active". Names match the account-overview and
+// terminal-state labels those charts already sort by.
+const LIFECYCLE_TO_GROUP: Record<ProcessLifecycle, string> = {
+  backlog: "Backlog",
+  upcoming: "Pipeline",
+  discovery: "Active",
+  in_development: "Active",
+  uat: "Active",
+  on_hold: "On Hold",
+  live: "Completed Projects",
+  cancelled: "Cancelled",
+  churned: "Churned",
+  retired: "Inactive",
+};
+
+const HEALTH_TO_LEGACY: Record<ProcessHealth, string> = {
+  on_track: "On Track",
+  at_risk: "At Risk",
+  off_track: "Off Track",
+};
+
+const PLATFORM_TO_LEGACY: Record<ProcessPlatform, string> = {
+  v1: "V1",
+  v2: "V2",
+  custom: "Custom Solution",
+};
+
+const PHASE_TO_LEGACY: Record<ProcessPhase, string> = {
+  pre_kickoff: "Pre-Kickoff",
+  m1_discovery: "M1 - Discovery",
+  m2_development: "M2 - Development",
+  m3_testing_uat: "M3 - Testing/UAT",
+  m4_deployment: "M4 - Deployment",
+  m5_exception_handling: "M5 - Exception Handling",
+};
+
+const WORK_MODE_TO_LEGACY_PHASE: Partial<Record<ProcessWorkMode, string>> = {
+  support: "Support",
+  enhancement: "Enhancement",
+};
+
+const IN_FLIGHT_MIGRATION_STAGES = new Set<MigrationStage>([
+  "in_development", "engg_pending", "parity_testing", "customer_validation",
+]);
+
+/**
+ * Approximate legacy "Migration" column text from the native `migration_stage`
+ * V2-tracker enum. Two known gaps, both low materiality because
+ * /v2-migration (loadV2MigrationOverview) is the live, authoritative
+ * migration surface — this only feeds the weekly report's summary snapshot
+ * tile, already labelled a placeholder in weekly-loader.ts:
+ *   1. Monday's "Upcoming Migration" bucket (queued, not yet started) has no
+ *      native equivalent, so a translated row never produces "Upcoming
+ *      Migration" — v2_progress.upcoming is always 0 post-cutover.
+ *   2. `v2_native` is a broad import-time default (platform === 'v2' =>
+ *      v2_native even with zero linear tickets or dates), the same false-
+ *      positive lib/processes/loader.ts's hasV2Evidence() filters out for
+ *      /v2-migration. Verified against production 2026-08-07: without this
+ *      check, v2_progress.in_dev read 27 (of 39 active rows) — almost all
+ *      false positives from the default, not real migration work. Applying
+ *      the same evidence gate here.
+ */
+function hasV2Evidence(p: Process): boolean {
+  return (
+    p.linear_ticket_ids.length > 0 ||
+    p.date_parity_complete != null ||
+    p.date_customer_handover != null ||
+    p.date_customer_validation != null ||
+    p.went_live_at != null
+  );
+}
+
+export function legacyMigrationText(p: Process): string | null {
+  const stage = p.migration_stage;
+  // Only v2_native needs the evidence gate — matches isV2Relevant() in
+  // lib/processes/loader.ts exactly. migrated_pending_commercial is never a
+  // default; it's only ever set explicitly, so it doesn't need the same check.
+  if (stage === "v2_native") return hasV2Evidence(p) ? "v2" : null;
+  if (stage === "migrated_pending_commercial") return "v2";
+  if (IN_FLIGHT_MIGRATION_STAGES.has(stage)) return "Migrating to v2";
+  return null;
+}
+
+/** Legacy-shaped fields translated from one native `processes` row. Field
+ *  names intentionally match what each pre-existing loader used to read out
+ *  of Monday's `raw_columns` via colText(), so callers can drop this in with
+ *  minimal changes to their per-row mapping code. */
+export interface LegacyProcessFields {
+  id: string;
+  name: string;
+  customer_id: string | null;
+  group_title: string;
+  /** "active" for everything except cancelled/churned/retired ("inactive") —
+   *  see LIFECYCLE_TO_FISCAL_YEAR. */
+  fiscal_year: string;
+  status: string;
+  health: string | null;
+  phase: string | null;
+  platform: string;
+  migration: string | null;
+  complexity: string | null;
+  go_live_date: string | null;
+  kickoff_date: string | null;
+  ttv_days: number | null;
+  /** Raw Monday "TAM" + "Dev" people-column equivalents — feed both into the
+   *  existing peopleNames()/unionPeopleColumns() helpers exactly as before.
+   *  `engg_owner` is a distinct V2-migration-specific assignee, not part of
+   *  the per-project delivery roster, so it is intentionally excluded here —
+   *  same scope as the old tam+dev union. */
+  tam_text: string | null;
+  dev_text: string | null;
+}
+
+export function legacyFieldsFromProcess(p: Process): LegacyProcessFields {
+  const phase = p.phase
+    ? PHASE_TO_LEGACY[p.phase]
+    : (p.work_mode ? WORK_MODE_TO_LEGACY_PHASE[p.work_mode] ?? null : null);
+  return {
+    id: p.id,
+    name: p.process_name,
+    customer_id: p.customer_id,
+    group_title: LIFECYCLE_TO_GROUP[p.lifecycle],
+    fiscal_year: LIFECYCLE_TO_FISCAL_YEAR[p.lifecycle],
+    status: LIFECYCLE_TO_STATUS[p.lifecycle],
+    health: p.health ? HEALTH_TO_LEGACY[p.health] : null,
+    phase,
+    platform: PLATFORM_TO_LEGACY[p.platform],
+    migration: legacyMigrationText(p),
+    complexity: p.complexity,
+    go_live_date: p.go_live_date,
+    kickoff_date: p.kickoff_date,
+    ttv_days: p.ttv_days,
+    tam_text: p.tam_owner,
+    dev_text: p.fde_owner,
+  };
+}

@@ -8,49 +8,36 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
 import { categoryFromCustomer } from "@/app/_components/brand";
 import {
-  MONDAY_PROJECT_COLS,
-  MONDAY_NPS_COLS,
-  colText,
   formatPersonName,
   isDelivered,
   unionPeopleColumns,
+  legacyFieldsFromProcess,
 } from "@/lib/delivery/taxonomy";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
+import { TABLES, npsCategory, type Process, type NpsResponse } from "@/lib/supabase/types";
 
 const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
 
 /**
- * Build a Map<customer_id → canonical FDE roster> across every project that
+ * Build a Map<customer_id → canonical FDE roster> across every process that
  * is *not* delivered/cancelled.  Used by the dashboard ARR drill-down, the
  * Customers page strips, and the dashboard Pipeline list to surface which
  * delivery team is working a customer right now.
  *
  * Each person is canonical-cased (e.g. "Shyam P. (PM)") and deduped per
- * customer.  Returns an empty Map if Monday hasn't synced yet — callers
- * should treat "no entry" as "no FDE on file" not as an error.
+ * customer.  Returns an empty Map if `processes` is empty — callers should
+ * treat "no entry" as "no FDE on file" not as an error.
  */
 export async function loadFdesByCustomerId(): Promise<Map<string, string[]>> {
   const sb = requireAdmin();
-  const { data } = await sb
-    .from("monday_projects")
-    .select("customer_id, raw_columns, group_title")
-    .limit(2000);
-
-  type Row = {
-    customer_id: string;
-    raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
-    group_title: string | null;
-  };
+  const { data } = await sb.from(TABLES.processes).select("*");
 
   const out = new Map<string, Set<string>>();
-  for (const p of (data as Row[] | null) ?? []) {
-    const cols = p.raw_columns ?? {};
-    const status = colText(cols, MONDAY_PROJECT_COLS.status);
-    if (isDelivered(status, p.group_title)) continue;
-    const merged = unionPeopleColumns(
-      colText(cols, MONDAY_PROJECT_COLS.tam),
-      colText(cols, MONDAY_PROJECT_COLS.dev),
-    );
+  for (const p of (data as Process[] | null) ?? []) {
+    if (!p.customer_id) continue;
+    const legacy = legacyFieldsFromProcess(p);
+    if (isDelivered(legacy.status, legacy.group_title)) continue;
+    const merged = unionPeopleColumns(legacy.tam_text, legacy.dev_text);
     if (!merged) continue;
     const set = out.get(p.customer_id) ?? new Set<string>();
     for (const piece of merged.split(",")) {
@@ -272,55 +259,37 @@ export interface ActiveProjectRow {
   fde: string | null;
 }
 
-/** Projects currently in flight — status === "In Progress". */
+/** Processes currently in flight — translated legacy status === "In Progress"
+ *  (native lifecycle in_development / uat / discovery — see
+ *  legacyFieldsFromProcess in lib/delivery/taxonomy.ts). `fiscal_year` is a
+ *  fixed "active" string now — `processes` holds one row per process with no
+ *  more historical per-FY-board snapshots, and only the old "active" board
+ *  ever carried the literal "In Progress" status this filters on. */
 export async function loadActiveProjects(): Promise<ActiveProjectRow[]> {
   const sb = requireAdmin();
-  const [projects, customers] = await Promise.all([
-    sb
-      .from("monday_projects")
-      .select(
-        "monday_item_id, customer_id, name, fiscal_year, group_title, " +
-          "raw_columns, go_live_date, kickoff_date"
-      ),
+  const [processesRes, customers] = await Promise.all([
+    sb.from(TABLES.processes).select("*"),
     listCustomers(),
   ]);
   const custById = new Map(customers.map((c) => [c.id, c]));
   const rows: ActiveProjectRow[] = [];
-  type ProjRow = {
-    monday_item_id: string;
-    customer_id: string;
-    name: string;
-    fiscal_year: string | null;
-    group_title: string | null;
-    raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
-    go_live_date: string | null;
-    kickoff_date: string | null;
-  };
-  // Same fiscal-year exclusions as the delivery loader so the count
-  // matches what /delivery shows.
-  const PORTFOLIO_DUPE_FYS = new Set(["account_overview", "portfolio"]);
-  for (const p of (projects.data as unknown as ProjRow[] | null) ?? []) {
-    if (p.fiscal_year && PORTFOLIO_DUPE_FYS.has(p.fiscal_year)) continue;
-    const cols = p.raw_columns ?? {};
-    const status = colText(cols, MONDAY_PROJECT_COLS.status);
-    if (status !== "In Progress") continue;
-    const cust = custById.get(p.customer_id);
+  for (const p of (processesRes.data as Process[] | null) ?? []) {
+    const legacy = legacyFieldsFromProcess(p);
+    if (legacy.status !== "In Progress") continue;
+    const cust = p.customer_id ? custById.get(p.customer_id) : undefined;
     rows.push({
-      monday_item_id: p.monday_item_id,
+      monday_item_id: legacy.id,
       customer_key: cust?.key ?? null,
       customer_display_name: cust?.display_name ?? null,
-      name: p.name,
-      status,
-      health: colText(cols, MONDAY_PROJECT_COLS.health),
-      phase: colText(cols, MONDAY_PROJECT_COLS.phase),
-      fiscal_year: p.fiscal_year,
-      group_title: p.group_title,
-      go_live_date: p.go_live_date ?? colText(cols, MONDAY_PROJECT_COLS.go_live_date),
-      kickoff_date: p.kickoff_date ?? colText(cols, MONDAY_PROJECT_COLS.kickoff_date),
-      fde: unionPeopleColumns(
-        colText(cols, MONDAY_PROJECT_COLS.tam),
-        colText(cols, MONDAY_PROJECT_COLS.dev),
-      ),
+      name: legacy.name,
+      status: legacy.status,
+      health: legacy.health,
+      phase: legacy.phase,
+      fiscal_year: legacy.fiscal_year,
+      group_title: legacy.group_title,
+      go_live_date: legacy.go_live_date,
+      kickoff_date: legacy.kickoff_date,
+      fde: unionPeopleColumns(legacy.tam_text, legacy.dev_text),
     });
   }
   return rows;
@@ -337,40 +306,30 @@ export interface NpsResponseRow {
   feedback: string | null;
 }
 
-/** All NPS responses with a numeric score. Sorted newest-first by quarter. */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** All NPS responses. Sorted newest-first by quarter. */
 export async function loadNpsResponses(): Promise<NpsResponseRow[]> {
   const sb = requireAdmin();
   const [nps, customers] = await Promise.all([
-    sb
-      .from("monday_nps_responses")
-      .select("monday_item_id, customer_id, name, raw_columns"),
+    sb.from(TABLES.npsResponses).select("*"),
     listCustomers(),
   ]);
   const custById = new Map(customers.map((c) => [c.id, c]));
-  type NpsRow = {
-    monday_item_id: string;
-    customer_id: string;
-    name: string;
-    raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
-  };
   const rows: NpsResponseRow[] = [];
-  for (const r of (nps.data as unknown as NpsRow[] | null) ?? []) {
-    const cols = r.raw_columns ?? {};
-    const scoreText = colText(cols, MONDAY_NPS_COLS.score);
-    const score = scoreText != null ? Number(scoreText) : null;
-    if (score == null || !Number.isFinite(score)) continue;
+  for (const r of (nps.data as NpsResponse[] | null) ?? []) {
     const cust = custById.get(r.customer_id);
     rows.push({
-      monday_item_id: r.monday_item_id,
+      monday_item_id: r.id,
       customer_key: cust?.key ?? null,
       customer_display_name: cust?.display_name ?? null,
-      respondent: r.name,
-      score,
-      category: colText(cols, MONDAY_NPS_COLS.category),
-      quarter: colText(cols, MONDAY_NPS_COLS.quarter),
-      // Feedback column id is captured separately by the analytics
-      // loader; for the drill-down we just expose the score + category.
-      feedback: colText(cols, "long_text_mm0aq08p"),
+      respondent: r.respondent_name,
+      score: r.score,
+      category: capitalize(npsCategory(r.score)),
+      quarter: r.quarter,
+      feedback: r.feedback,
     });
   }
   // Sort: newest quarter first (4Q26 > 3Q26 > 2Q26 > 1Q26 > 4Q25...)

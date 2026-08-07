@@ -96,20 +96,28 @@ interface CustomerRow {
   ae_owner: string | null;
   partner: string | null;
 }
+/** One `processes` row translated to the legacy Monday string vocabulary this
+ *  loader (and the UI it feeds) was built around — see
+ *  legacyFieldsFromProcess in lib/delivery/taxonomy.ts. `fiscal_year` is a
+ *  fixed "active" string: `processes` holds one row per process, not a
+ *  per-FY-board snapshot per row, so there's no more historical-board axis to
+ *  report. */
 interface ProjectRow {
   monday_item_id: string;
   name: string;
   customer_id: string;
-  group_title: string | null;
+  group_title: string;
+  status: string;
+  health: string | null;
+  phase: string | null;
+  platform: string;
+  complexity: string | null;
   go_live_date: string | null;
   kickoff_date: string | null;
-  ttv_days_text: string | null;
-  fiscal_year: string | null;
-  raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
-}
-interface NpsRow {
-  customer_id: string;
-  raw_columns: Record<string, { type: string; text: string | null; value: string | null }> | null;
+  ttv_days: number | null;
+  tam_text: string | null;
+  dev_text: string | null;
+  fiscal_year: string;
 }
 interface AccountRow {
   customer_id: string | null;
@@ -118,7 +126,12 @@ interface AccountRow {
 
 // Column IDs + helpers come from the canonical taxonomy. See
 // lib/delivery/taxonomy.ts — adding a new column ID here is a smell.
-import { MONDAY_PROJECT_COLS, MONDAY_NPS_COLS, colText, peopleNames, isDelivered } from "@/lib/delivery/taxonomy";
+import { peopleNames, isDelivered, legacyFieldsFromProcess } from "@/lib/delivery/taxonomy";
+import { TABLES, npsCategory, type Process, type NpsResponse } from "@/lib/supabase/types";
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // ── Value modelling (project-wise) ──────────────────────────────────────────
 // Domain is the project's *functional* area, inferred from the process name —
@@ -144,19 +157,6 @@ function valTierHours(complexity: string | null): number {
   return VAL_TIER_HOURS[(complexity ?? "").toLowerCase()] ?? VAL_TIER_HOURS.medium;
 }
 
-const PROJECT_COL_STATUS = MONDAY_PROJECT_COLS.status;
-const PROJECT_COL_PHASE  = MONDAY_PROJECT_COLS.phase;
-const PROJECT_COL_GOLIVE = MONDAY_PROJECT_COLS.go_live_date;
-const PROJECT_COL_TAM    = MONDAY_PROJECT_COLS.tam;
-const PROJECT_COL_DEV    = MONDAY_PROJECT_COLS.dev;
-const NPS_COL_SCORE      = MONDAY_NPS_COLS.score;
-const NPS_COL_CATEGORY   = MONDAY_NPS_COLS.category;
-const NPS_COL_QUARTER    = MONDAY_NPS_COLS.quarter;
-
-function txt(cols: ProjectRow["raw_columns"], id: string): string | null {
-  return colText(cols, id);
-}
-
 // Use the canonical helper from brand.tsx so the dynamic rules (90-day
 // renewal → Upcoming Renewals, revenue>$20M → Strategic Growth, etc.)
 // stay in one place. brand.tsx is server-component-safe.
@@ -168,7 +168,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const [
     customers,
     sfOpps,
-    projects,
+    processes,
     nps,
     accounts,
     openOpps,
@@ -181,13 +181,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       .select("id, key, display_name, custom_category, lifecycle_group, ae_owner, partner")
       .is("deleted_at", null),
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
-    sb
-      .from("monday_projects")
-      .select(
-        "monday_item_id, name, customer_id, group_title, raw_columns, " +
-          "go_live_date, ttv_days_text, kickoff_date, fiscal_year"
-      ),
-    sb.from("monday_nps_responses").select("customer_id, raw_columns"),
+    sb.from(TABLES.processes).select("*"),
+    sb.from(TABLES.npsResponses).select("*"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
     sb
       .from("sf_opportunities")
@@ -227,18 +222,29 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     list.push(o);
     oppsByC.set(o.customer_id, list);
   }
-  // Exclude Account Overview + Projects Portfolio rows — they're aggregate
-  // duplicates of the FY-board rows.  Same rule as lib/delivery/loader.ts.
-  const PORTFOLIO_DUPE_FYS = new Set(["account_overview", "portfolio"]);
-  // Cast through unknown — Supabase's row-typing union (GenericStringError[]
-  // | null) doesn't unify cleanly with our wider ProjectRow shape.
-  const projectList = ((projects.data as unknown as ProjectRow[]) ?? [])
-    .filter((p) => {
-      if (p.fiscal_year && PORTFOLIO_DUPE_FYS.has(p.fiscal_year)) return false;
-      const g = (p.group_title ?? "").toLowerCase();
-      return !g.startsWith("subitem") && g !== "unknown";
-    });
-  const npsList = ((nps.data as NpsRow[]) ?? []);
+  // `processes` holds one row per process — no more per-FY-board duplication,
+  // so the old account-overview/portfolio/subitem exclusions no longer apply.
+  const projectList: ProjectRow[] = ((processes.data as Process[] | null) ?? []).map((p) => {
+    const legacy = legacyFieldsFromProcess(p);
+    return {
+      monday_item_id: legacy.id,
+      name: legacy.name,
+      customer_id: p.customer_id ?? "",
+      group_title: legacy.group_title,
+      status: legacy.status,
+      health: legacy.health,
+      phase: legacy.phase,
+      platform: legacy.platform,
+      complexity: legacy.complexity,
+      go_live_date: legacy.go_live_date,
+      kickoff_date: legacy.kickoff_date,
+      ttv_days: legacy.ttv_days,
+      tam_text: legacy.tam_text,
+      dev_text: legacy.dev_text,
+      fiscal_year: legacy.fiscal_year,
+    };
+  });
+  const npsList = ((nps.data as NpsResponse[] | null) ?? []);
   const accountList = ((accounts.data as AccountRow[]) ?? []);
 
   const revenueByC = new Map<string, number | null>();
@@ -287,18 +293,14 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     .reduce((s, a) => s + (a.annual_revenue ?? 0), 0);
   const projectsTotal = projectList.length;
 
-  const projectsInProgress = projectList.filter(
-    (p) => txt(p.raw_columns, PROJECT_COL_STATUS) === "In Progress"
-  ).length;
+  const projectsInProgress = projectList.filter((p) => p.status === "In Progress").length;
   const projectsDelivered = projectList.filter((p) => {
-    const status = txt(p.raw_columns, PROJECT_COL_STATUS);
-    return status === "Delivered" || status === "Live" || !!txt(p.raw_columns, PROJECT_COL_GOLIVE);
+    return p.status === "Delivered" || p.status === "Live" || !!p.go_live_date;
   }).length;
 
   const npsScores: number[] = [];
   for (const n of npsList) {
-    const s = Number(txt(n.raw_columns, NPS_COL_SCORE) ?? "");
-    if (Number.isFinite(s)) npsScores.push(s);
+    if (Number.isFinite(n.score)) npsScores.push(n.score);
   }
   const npsAverage = npsScores.length
     ? Math.round((npsScores.reduce((a, b) => a + b, 0) / npsScores.length) * 10) / 10
@@ -412,16 +414,13 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       customer_display_name: cust?.display_name ?? null,
       fiscal_year: p.fiscal_year,
       group_title: p.group_title,
-      status: txt(p.raw_columns, PROJECT_COL_STATUS),
-      health: txt(p.raw_columns, MONDAY_PROJECT_COLS.health),
-      phase: txt(p.raw_columns, PROJECT_COL_PHASE),
-      platform: txt(p.raw_columns, MONDAY_PROJECT_COLS.platform),
-      fde: unionPeople(
-        txt(p.raw_columns, PROJECT_COL_TAM),
-        txt(p.raw_columns, PROJECT_COL_DEV),
-      ),
-      go_live_date: p.go_live_date ?? txt(p.raw_columns, PROJECT_COL_GOLIVE),
-      kickoff_date: p.kickoff_date ?? txt(p.raw_columns, MONDAY_PROJECT_COLS.kickoff_date),
+      status: p.status,
+      health: p.health,
+      phase: p.phase,
+      platform: p.platform,
+      fde: unionPeople(p.tam_text, p.dev_text),
+      go_live_date: p.go_live_date,
+      kickoff_date: p.kickoff_date,
     };
   }
 
@@ -451,7 +450,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   ]);
 
   function isActiveProject(p: ProjectRow): boolean {
-    const status = txt(p.raw_columns, PROJECT_COL_STATUS);
+    const status = p.status;
     // If Monday has a status that explicitly says active, trust it.
     if (status && ACTIVE_PROJECT_STATUSES.has(status)) return true;
     // Otherwise fall back to the group label.
@@ -469,9 +468,9 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   for (const p of projectList) {
     const g = p.group_title ?? "(other)";
     projGroupAgg.set(g, (projGroupAgg.get(g) ?? 0) + 1);
-    const s = txt(p.raw_columns, PROJECT_COL_STATUS) ?? "(unset)";
+    const s = p.status ?? "(unset)";
     projStatusAgg.set(s, (projStatusAgg.get(s) ?? 0) + 1);
-    const ph = txt(p.raw_columns, PROJECT_COL_PHASE) ?? "(unset)";
+    const ph = p.phase ?? "(unset)";
     projPhaseAgg.set(ph, (projPhaseAgg.get(ph) ?? 0) + 1);
 
     // Stage drill-down: every project gets a slot under its group_title so
@@ -483,8 +482,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     // same project counts once (not twice).
     if (isActiveProject(p)) {
       const ddProject = toDrillDownProject(p);
-      const tamNames = cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_TAM));
-      const devNames = cleanWorkloadNames(txt(p.raw_columns, PROJECT_COL_DEV));
+      const tamNames = cleanWorkloadNames(p.tam_text);
+      const devNames = cleanWorkloadNames(p.dev_text);
       const fdeNames = new Set<string>([...tamNames, ...devNames]);
       for (const name of fdeNames) {
         fdeAgg.set(name, (fdeAgg.get(name) ?? 0) + 1);
@@ -493,7 +492,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     }
 
     // TTV distribution
-    const ttvDays = p.ttv_days_text ? Number(p.ttv_days_text) : null;
+    const ttvDays = p.ttv_days;
     if (ttvDays != null && Number.isFinite(ttvDays) && ttvDays > 0) {
       const bucket =
         ttvDays <= 30 ? "0–30d" :
@@ -586,11 +585,11 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     { sum: number; count: number; promoter: number; passive: number; detractor: number }
   >();
   for (const n of npsList) {
-    const cat = txt(n.raw_columns, NPS_COL_CATEGORY);
-    if (cat) npsDistAgg.set(cat, (npsDistAgg.get(cat) ?? 0) + 1);
+    const cat = capitalize(npsCategory(n.score));
+    npsDistAgg.set(cat, (npsDistAgg.get(cat) ?? 0) + 1);
 
-    const quarter = txt(n.raw_columns, NPS_COL_QUARTER);
-    const score = Number(txt(n.raw_columns, NPS_COL_SCORE) ?? "");
+    const quarter = n.quarter;
+    const score = n.score;
     if (quarter && Number.isFinite(score)) {
       const prev = npsByQuarterAgg.get(quarter) ?? { sum: 0, count: 0, promoter: 0, passive: 0, detractor: 0 };
       prev.sum += score;
@@ -629,7 +628,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const npsCustCatAgg = new Map<string, { sum: number; count: number }>();
   for (const n of npsList) {
     const cat = categoryByC.get(n.customer_id) ?? "Active";
-    const score = Number(txt(n.raw_columns, NPS_COL_SCORE) ?? "");
+    const score = n.score;
     if (Number.isFinite(score)) {
       const prev = npsCustCatAgg.get(cat) ?? { sum: 0, count: 0 };
       prev.sum += score;
@@ -648,8 +647,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   // ─── Deliveries over time (by go-live month) ────────────────────────
   const deliveryAgg = new Map<string, number>();
   for (const p of projectList) {
-    // Use the stored go_live_date column first; fall back to raw_columns.
-    const go = p.go_live_date ?? txt(p.raw_columns, PROJECT_COL_GOLIVE);
+    const go = p.go_live_date;
     if (go && go.length >= 7) {
       const month = go.slice(0, 7); // YYYY-MM
       deliveryAgg.set(month, (deliveryAgg.get(month) ?? 0) + 1);
@@ -664,9 +662,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const custValAgg = new Map<string, { count: number; hours: number }>();
   let liveProjects = 0, liveHours = 0;
   for (const p of projectList) {
-    const status = txt(p.raw_columns, PROJECT_COL_STATUS);
-    if (!isDelivered(status, p.group_title)) continue;
-    const hrs = valTierHours(txt(p.raw_columns, MONDAY_PROJECT_COLS.complexity));
+    if (!isDelivered(p.status, p.group_title)) continue;
+    const hrs = valTierHours(p.complexity);
     liveProjects++; liveHours += hrs;
     const dom = projectDomain(p.name);
     const d = domainAgg.get(dom) ?? { count: 0, hours: 0 };

@@ -133,35 +133,12 @@ const ACTIVITY_COLS = {
   raw_content: "long_text_mm016mph",
 };
 
-const NPS_COLS = {
-  quarter: "dropdown_mm0ahec7",
-  response_date: "date_mm0acgpg",
-  score: "numeric_mm0aqvk3",
-  category: "color_mm0af90g",
-  feedback: "long_text_mm0aq08p",
-  respondent_type: "color_mm0axaxp",
-  product_satisfaction: "color_mm0amv8q",
-};
+import { unionPeopleColumns, legacyFieldsFromProcess } from "@/lib/delivery/taxonomy";
+import { TABLES, npsCategory, type Process, type NpsResponse } from "@/lib/supabase/types";
 
-// Monday Projects board column IDs come from lib/delivery/taxonomy.ts.
-// Aliases below match this module's pre-existing field names so call sites
-// keep working without churn.
-import { MONDAY_PROJECT_COLS, unionPeopleColumns } from "@/lib/delivery/taxonomy";
-
-const PROJECT_COLS = {
-  health:         MONDAY_PROJECT_COLS.health,
-  project_status: MONDAY_PROJECT_COLS.status,
-  current_phase:  MONDAY_PROJECT_COLS.phase,
-  dev_platform:   MONDAY_PROJECT_COLS.platform,
-  complexity:     MONDAY_PROJECT_COLS.complexity,
-  kickoff_date:   MONDAY_PROJECT_COLS.kickoff_date,
-  go_live_date:   MONDAY_PROJECT_COLS.go_live_date,
-  partner:        MONDAY_PROJECT_COLS.partner,
-  // Monday still exposes two separate people-columns (delivery + engineering);
-  // we union them into a single "fde" field downstream.
-  tam:            MONDAY_PROJECT_COLS.tam,
-  dev:            MONDAY_PROJECT_COLS.dev,
-};
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 interface RawColumns {
   [columnId: string]: { type: string; text: string | null; value: string | null } | undefined;
@@ -174,7 +151,7 @@ function txt(cols: RawColumns | null | undefined, id: string): string | null {
 export async function loadCustomerEnrichment(customerId: string): Promise<CustomerEnrichment> {
   const sb = requireAdmin();
 
-  const [acc, opps, cases, projects, activities, nps] = await Promise.all([
+  const [acc, opps, cases, processes, activities, nps] = await Promise.all([
     sb.from("sf_accounts").select("*").eq("customer_id", customerId).maybeSingle(),
     sb
       .from("sf_opportunities")
@@ -188,82 +165,56 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
       .eq("customer_id", customerId)
       .order("sf_created_at", { ascending: false })
       .limit(50),
-    // Pull ALL projects (no fiscal_year filter) so historical + active
-    // all appear on the customer page. Order by go_live_date (stored col) desc.
-    sb
-      .from("monday_projects")
-      .select(
-        "monday_item_id, name, group_title, state, monday_updated_at, " +
-        "fiscal_year, board_name, raw_columns, " +
-        "go_live_date, kickoff_date, " +
-        "total_effort_days, delivered_value, ttv_days_text, " +
-        "timeline_start, timeline_end, latest_update"
-      )
-      .eq("customer_id", customerId)
-      .order("go_live_date", { ascending: false, nullsFirst: false })
-      .limit(500),
+    // Pull every process for this customer — one row per process, no more
+    // historical per-FY-board duplication, so no ordering/filter games needed
+    // beyond the go-live sort applied client-side below.
+    sb.from(TABLES.processes).select("*").eq("customer_id", customerId),
     sb
       .from("monday_activities")
       .select("*")
       .eq("customer_id", customerId)
       .order("monday_updated_at", { ascending: false })
       .limit(100),
-    sb
-      .from("monday_nps_responses")
-      .select("*")
-      .eq("customer_id", customerId)
-      .order("monday_updated_at", { ascending: false })
-      .limit(50),
+    sb.from(TABLES.npsResponses).select("*").eq("customer_id", customerId),
   ]);
 
-  type ProjectRow = {
-    monday_item_id: string;
-    name: string;
-    group_title: string | null;
-    state: string | null;
-    monday_updated_at: string | null;
-    fiscal_year: string | null;
-    board_name: string | null;
-    raw_columns: RawColumns;
-    go_live_date: string | null;
-    kickoff_date: string | null;
-    total_effort_days: number | null;
-    delivered_value: string | null;
-    ttv_days_text: string | null;
-    timeline_start: string | null;
-    timeline_end: string | null;
-    latest_update: string | null;
-  };
-  const projectCache: MondayProjectCache[] = (
-    (projects.data as ProjectRow[] | null) ?? []
-  ).map((p) => {
-    const cols = p.raw_columns ?? {};
-    return {
-      monday_item_id: p.monday_item_id,
-      name: p.name,
-      group_title: p.group_title,
-      state: p.state,
-      monday_updated_at: p.monday_updated_at,
-      fiscal_year: p.fiscal_year,
-      board_name: p.board_name,
-      health:          txt(cols, PROJECT_COLS.health),
-      project_status:  txt(cols, PROJECT_COLS.project_status),
-      current_phase:   txt(cols, PROJECT_COLS.current_phase),
-      dev_platform:    txt(cols, PROJECT_COLS.dev_platform),
-      complexity:      txt(cols, PROJECT_COLS.complexity),
-      // Use stored columns (migration 0012) for dates so they sort correctly.
-      go_live_date:    p.go_live_date ?? txt(cols, PROJECT_COLS.go_live_date),
-      kickoff_date:    p.kickoff_date ?? txt(cols, PROJECT_COLS.kickoff_date),
-      partner:         txt(cols, PROJECT_COLS.partner),
-      fde:             unionPeopleColumns(txt(cols, PROJECT_COLS.tam), txt(cols, PROJECT_COLS.dev)),
-      total_effort_days: p.total_effort_days,
-      delivered_value: p.delivered_value,
-      ttv_days_text:   p.ttv_days_text,
-      timeline_start:  p.timeline_start,
-      timeline_end:    p.timeline_end,
-      latest_update:   p.latest_update,
-    };
-  });
+  const projectCache: MondayProjectCache[] = ((processes.data as Process[] | null) ?? [])
+    .map((p) => {
+      const legacy = legacyFieldsFromProcess(p);
+      return {
+        monday_item_id: legacy.id,
+        name: legacy.name,
+        group_title: legacy.group_title,
+        state: null,
+        monday_updated_at: p.updated_at,
+        fiscal_year: legacy.fiscal_year,
+        board_name: null,
+        health:          legacy.health,
+        project_status:  legacy.status,
+        current_phase:   legacy.phase,
+        dev_platform:    legacy.platform,
+        complexity:      legacy.complexity,
+        go_live_date:    legacy.go_live_date,
+        kickoff_date:    legacy.kickoff_date,
+        partner:         p.partner,
+        fde:             unionPeopleColumns(legacy.tam_text, legacy.dev_text),
+        // total_effort_hours has no confirmed unit conversion from Monday's
+        // original "Total Effort" column (it was carried into the native
+        // schema as-is) — shown unconverted rather than guessed.
+        total_effort_days: p.total_effort_hours != null ? Math.round(p.total_effort_hours) : null,
+        // No native equivalent — Monday's "Delivered Value" column was
+        // already empty on every row that had it (docs/PROCESSES-SCHEMA-
+        // PROPOSAL.md audit), so this was never real content.
+        delivered_value: null,
+        ttv_days_text:   legacy.ttv_days != null ? String(legacy.ttv_days) : null,
+        timeline_start:  null,
+        timeline_end:    null,
+        // No native equivalent yet — Monday's free-text "latest update" note
+        // has no `processes` column. Was real content; now always blank.
+        latest_update:   null,
+      };
+    })
+    .sort((a, b) => (b.go_live_date ?? "").localeCompare(a.go_live_date ?? ""));
 
   type ActivityRow = {
     monday_item_id: string;
@@ -303,30 +254,29 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     };
   });
 
-  type NpsRow = {
-    monday_item_id: string;
-    name: string;
-    group_title: string | null;
-    raw_columns: RawColumns;
-  };
-  const npsCache: MondayNpsCache[] = ((nps.data as NpsRow[] | null) ?? []).map((n) => {
-    const cols = n.raw_columns ?? {};
-    const scoreText = txt(cols, NPS_COLS.score);
-    return {
-      monday_item_id: n.monday_item_id,
-      respondent: n.name,
-      group_title: n.group_title,
-      quarter: txt(cols, NPS_COLS.quarter),
-      score: scoreText ? Number(scoreText) : null,
-      category: txt(cols, NPS_COLS.category),
-      response_date: txt(cols, NPS_COLS.response_date),
-      feedback: txt(cols, NPS_COLS.feedback),
-      respondent_type: txt(cols, NPS_COLS.respondent_type),
-      product_satisfaction: txt(cols, NPS_COLS.product_satisfaction),
-    };
-  });
+  const npsCache: MondayNpsCache[] = ((nps.data as NpsResponse[] | null) ?? []).map((n) => ({
+    monday_item_id: n.id,
+    respondent: n.respondent_name,
+    // No native equivalent — Monday's NPS board grouped responses by section;
+    // nps_responses has no matching column. Not read by the customer-360 NPS
+    // card today (grouping there is by quarter, not group_title).
+    group_title: null,
+    quarter: n.quarter,
+    score: n.score,
+    category: capitalize(npsCategory(n.score)),
+    response_date: n.response_date,
+    feedback: n.feedback,
+    respondent_type: n.respondent_type,
+    product_satisfaction: n.product_satisfaction,
+  }));
 
-  // (projectCache is built above in the projects section of Promise.all)
+  // (projectCache is built above in the processes section of Promise.all)
+
+  const lastProcessUpdate = ((processes.data as Process[] | null) ?? [])
+    .map((p) => p.updated_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? null;
 
   return {
     account: (acc.data as SfAccountCache | null) ?? null,
@@ -337,8 +287,10 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     nps: npsCache,
     freshness: {
       salesforce_synced_at: (acc.data as SfAccountCache | null)?.synced_at ?? null,
-      monday_synced_at:
-        (projects.data as Array<{ synced_at: string }> | null)?.[0]?.synced_at ?? null,
+      // Was the Monday sync timestamp; `processes` isn't synced from an
+      // external source anymore, so this now reflects the most recent
+      // process edit for this customer instead.
+      monday_synced_at: lastProcessUpdate,
     },
   };
 }

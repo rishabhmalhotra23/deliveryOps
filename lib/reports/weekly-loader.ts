@@ -12,17 +12,17 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer } from "@/app/_components/brand";
 import {
-  MONDAY_PROJECT_COLS as PCOLS, MONDAY_NPS_COLS as NCOLS,
-  colText, type RawCols,
   isDelivered, isAtRisk, isActiveBoard, flightGroup,
   phaseGroup, type PhaseGroup,
   peopleNames, ttvDays,
   kognitosFYQuarter, previousKognitosFYQuarter,
+  legacyFieldsFromProcess,
 } from "@/lib/delivery/taxonomy";
 import {
   loadV2Migrations, type V2Migration,
   MANUAL_V2_MIGRATIONS, V2_PROGRAM_WORKSTREAMS, type V2ProgramWorkstream,
 } from "@/lib/reports/v2-migrations";
+import { TABLES, type Process, type NpsResponse } from "@/lib/supabase/types";
 
 function parseDate(iso: string | null): Date | null {
   if (!iso) return null;
@@ -320,56 +320,48 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
   const now = new Date();
   const range = resolveRange(req, now);
 
-  const [projectsRes, customersRes, npsRes, lastSyncRes, v2Migrations] = await Promise.all([
-    sb.from("monday_projects")
-      .select("monday_item_id, name, group_title, customer_id, fiscal_year, go_live_date, kickoff_date, latest_update, raw_columns")
-      .limit(2000),
+  const [processesRes, customersRes, npsRes, lastSyncRes, v2Migrations] = await Promise.all([
+    sb.from(TABLES.processes).select("*"),
     sb.from("customers").select("id, key, display_name, custom_category, lifecycle_group").is("deleted_at", null),
-    sb.from("monday_nps_responses").select("raw_columns"),
+    sb.from(TABLES.npsResponses).select("quarter, score"),
     sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok")
       .order("finished_at", { ascending: false }).limit(1).maybeSingle(),
     loadV2Migrations().catch(() => [] as V2Migration[]),
   ]);
 
   type CustomerRow = { id: string; key: string; display_name: string; custom_category: string | null; lifecycle_group: string | null };
-  type ProjectRow = {
-    monday_item_id: string; name: string; group_title: string | null; customer_id: string;
-    fiscal_year: string | null; go_live_date: string | null; kickoff_date: string | null;
-    latest_update: string | null; raw_columns: RawCols;
-  };
 
   const custMap = new Map<string, CustomerRow>();
   for (const c of (customersRes.data as CustomerRow[] | null) ?? []) custMap.set(c.id, c);
 
   const projects: WeeklyProject[] = [];
-  for (const p of (projectsRes.data as ProjectRow[] | null) ?? []) {
-    const cust = custMap.get(p.customer_id);
+  for (const p of (processesRes.data as Process[] | null) ?? []) {
+    const cust = p.customer_id ? custMap.get(p.customer_id) : undefined;
     if (!cust) continue;
-    const cols = p.raw_columns;
-    const status = colText(cols, PCOLS.status);
-    const phase  = colText(cols, PCOLS.phase);
-    const go = p.go_live_date ?? colText(cols, PCOLS.go_live_date);
+    const legacy = legacyFieldsFromProcess(p);
     const fdeSeen = new Set<string>();
-    for (const name of peopleNames(colText(cols, PCOLS.tam))) fdeSeen.add(name);
-    for (const name of peopleNames(colText(cols, PCOLS.dev))) fdeSeen.add(name);
+    for (const name of peopleNames(legacy.tam_text)) fdeSeen.add(name);
+    for (const name of peopleNames(legacy.dev_text)) fdeSeen.add(name);
     projects.push({
-      monday_item_id: p.monday_item_id,
-      name: p.name,
+      monday_item_id: legacy.id,
+      name: legacy.name,
       customer_display_name: cust.display_name,
       customer_category: categoryFromCustomer({ custom_category: cust.custom_category, lifecycle_group: cust.lifecycle_group }),
-      status, phase,
-      phase_group: phaseGroup(phase, status),
-      platform: colText(cols, PCOLS.platform),
-      migration: colText(cols, PCOLS.migration),
-      complexity: colText(cols, PCOLS.complexity),
-      health: colText(cols, PCOLS.health),
-      go_live_date: go,
-      kickoff_date: p.kickoff_date,
-      latest_update: p.latest_update,
-      ttv_days: ttvDays(p.kickoff_date, go),
+      status: legacy.status, phase: legacy.phase,
+      phase_group: phaseGroup(legacy.phase, legacy.status),
+      platform: legacy.platform,
+      migration: legacy.migration,
+      complexity: legacy.complexity,
+      health: legacy.health,
+      go_live_date: legacy.go_live_date,
+      kickoff_date: legacy.kickoff_date,
+      // No native equivalent — Monday's free-text "latest update" note has no
+      // `processes` column. Was real content; now always blank.
+      latest_update: null,
+      ttv_days: legacy.ttv_days ?? ttvDays(legacy.kickoff_date, legacy.go_live_date),
       fde: Array.from(fdeSeen),
-      fiscal_year: p.fiscal_year,
-      group_title: p.group_title,
+      fiscal_year: legacy.fiscal_year,
+      group_title: legacy.group_title,
     });
   }
 
@@ -672,13 +664,11 @@ export async function loadWeeklyBundle(req: RangeRequest = {}): Promise<WeeklyBu
     });
 
   // ── NPS this quarter ──────────────────────────────────────────────────────
-  type NpsRow = { raw_columns: RawCols };
   const currQ = currentNpsQuarterLabel();
   const npsScores: number[] = [];
-  for (const n of (npsRes.data as NpsRow[] | null) ?? []) {
-    if ((n.raw_columns?.[NCOLS.quarter]?.text ?? "").trim() !== currQ) continue;
-    const s = Number(n.raw_columns?.[NCOLS.score]?.text ?? "");
-    if (Number.isFinite(s)) npsScores.push(s);
+  for (const n of (npsRes.data as Pick<NpsResponse, "quarter" | "score">[] | null) ?? []) {
+    if (n.quarter !== currQ) continue;
+    if (Number.isFinite(n.score)) npsScores.push(n.score);
   }
   const nps_this_quarter = npsScores.length > 0
     ? { quarter: currQ, average: Math.round((npsScores.reduce((a, b) => a + b, 0) / npsScores.length) * 10) / 10, count: npsScores.length }

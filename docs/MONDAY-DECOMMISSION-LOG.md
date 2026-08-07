@@ -80,11 +80,11 @@ Status values: `done` / `in progress` / `blocked` / `not started`.
 | 1.3 | Write the importer from the backup into Supabase | **done, applied to production 2026-08-06** | `scripts/import-monday-backup.ts` run with `--apply`. 146 rows imported, deduped (5 cross-board + 63 seed-merge), final count 153. See the 2026-08-06 handoff below for the full diagnosis trail (22-vs-15 flagged count, Srinar now a real customer, 3 near-miss rows left for a human). |
 | 1.4 | Populate auto-derived columns from `k2_processes` / `k2_runs` | not started | Real usage data currently unused. |
 | 1.5 | Mockup the UI + decide the IA | **done** | [docs/mockups/ia-step-1.5.html](./mockups/ia-step-1.5.html) approved. Drawer + Active-work board built and shipped 2026-08-04/06 — see handoff below. |
-| 1.6 | Rewire `weekly-loader.ts` off `monday_projects` | not started | |
-| 1.7 | Rewire the other four read paths | **1 of 5 done** | `/delivery` fully rewired onto `processes` 2026-08-06 (own tabs, own loader). analytics, dashboard, cache/integrations (customer 360) still on `monday_projects`. |
+| 1.6 | Rewire `weekly-loader.ts` off `monday_projects` | **done 2026-08-07** | See handoff below. |
+| 1.7 | Rewire the other four read paths | **5 of 5 done** | `/delivery` (2026-08-06) + `lib/analytics/loader.ts`, `lib/dashboard/stats-drilldown.ts`, `lib/cache/integrations.ts` (customer 360, projects+NPS only), `lib/delivery/loader.ts` (agent tools) all done 2026-08-07. Only `monday_activities` remains — deliberately deferred, see below. |
 | 1.8 | Authenticate or delete `/api/monday/item-updates` | **done 2026-08-06** | Deleted — was public and unauthenticated. |
-| 1.9 | Verify report numbers match row-for-row before cutover | not started | Hard gate. Matters more now that `/delivery` and the weekly report can disagree (1.7 is partial). |
-| 1.10 | Disable the Monday sync in `vercel.json` | not started | Only after 1.9 passes. |
+| 1.9 | Verify report numbers match row-for-row before cutover | **partially done 2026-08-07** | Verified live against production (tsc/vitest/build clean, loaders run end-to-end with no exceptions, numbers internally consistent — see handoff). Not yet a row-for-row diff against the pre-cutover Monday output; nobody has visually compared the two reports side by side. Recommend doing that before 1.10. |
+| 1.10 | Disable the Monday sync in `vercel.json` | not started | Only after 1.9's side-by-side comparison. |
 
 ### Phase 2+ — Adoption, self-updating, agents
 
@@ -822,3 +822,77 @@ Set `customer_key`/`customer_id` on all 9; left their content untouched.
 
 Total after cleanup: 153 → 148 rows. No code changes needed — `/delivery` and `/v2-migration` read `processes`
 live, so the lower, deduped count shows up automatically.
+
+### 2026-08-07 — steps 1.6/1.7: rewired the remaining five Monday read paths
+
+Rishabh confirmed the data readiness question directly (checked production first: `nps_responses` already
+carries 84/84 of the same rows as `monday_nps_responses`, so NPS was fully native too, not just `processes`) —
+cleared to proceed with 1.6/1.7 without further discussion.
+
+**Approach.** Rather than re-derive each consumer's bucketing logic against the native orthogonal taxonomy
+(lifecycle/phase/health/blocked_on) — which would risk silently changing report semantics — added one
+translation function, `legacyFieldsFromProcess()` in `lib/delivery/taxonomy.ts`, that maps a native `processes`
+row back to the exact Monday string vocabulary (`"Live"`, `"In Progress"`, `"On Track"`, `"At Risk"`, `"V2"`,
+etc.) every existing loader and UI component (`ProjectDetailPanel`, `STATUS_PILL_CLS`/`HEALTH_PILL_CLS`,
+`flightGroup`, `phaseGroup`, `isDelivered`, `isAtRisk`) was already built and tested around. Each consumer then
+only needed its Supabase query swapped from `monday_projects`/`monday_nps_responses` to
+`processes`/`nps_responses`, plus the per-row field extraction swapped from `colText(raw_columns, COL_ID)` to
+the translated fields — the bucketing/aggregation logic downstream is untouched, byte-for-byte. This keeps the
+existing UI working with zero UI changes, honouring the project's "mockup before UI change" rule (no UI changed,
+so no mockup needed).
+
+Rewired, in order: `lib/dashboard/stats-drilldown.ts` (`loadFdesByCustomerId`, `loadActiveProjects`,
+`loadNpsResponses`), `lib/cache/integrations.ts` (`loadCustomerEnrichment` — projects + NPS only,
+`monday_activities` left alone, see below), `lib/analytics/loader.ts`, `lib/reports/weekly-loader.ts`, and
+`lib/delivery/loader.ts` (`loadDeliveryBundle` — a 6th read path not in the original 5-path table, found while
+auditing: feeds only the agent's `find_projects`/`summarize_portfolio` tools, `lib/agent/operations.ts`).
+
+**Two real bugs caught by translating rather than guessing:**
+1. `fiscal_year`. Monday kept cancelled/churned/retired processes on a separate "inactive" board;
+   `isActiveBoard()`/the customer-360 `isActive()` both gate on `fiscal_year === "active" && !isDelivered`. A
+   naive translation hard-coding `fiscal_year: "active"` for every row would have made every archived process
+   register as active in-flight work (delivered rows were safe regardless, since `isDelivered` already excludes
+   them independently). Fixed by adding `LIFECYCLE_TO_FISCAL_YEAR` to the translation and threading it through
+   all four consumers that had hard-coded the string locally.
+2. `v2_progress` (weekly report tile). First pass mapped `migration_stage` to legacy "Migration" text naively and
+   read `in_dev: 27` of 39 active rows against production — implausibly high. Root cause: `v2_native` is a broad
+   import-time default (`platform === 'v2' => v2_native` even with zero Linear tickets or dates) — the exact
+   false positive `lib/processes/loader.ts`'s `hasV2Evidence()` already filters out for `/v2-migration`. Applied
+   the same evidence gate in `legacyMigrationText()`; `in_dev` dropped to a plausible `6`.
+
+**Verification.** `tsc --noEmit`, `vitest run` (139/139), `npm run build` all clean. Then ran every rewired
+loader live against production (`.env.cloud`, read-only, via a throwaway `tsx` script — deleted after use, not
+committed) to catch what typecheck/tests can't: `loadAnalytics`, `loadWeeklyBundle`, `loadActiveProjects`,
+`loadNpsResponses`, `loadArrBreakdown`, and `loadCustomerEnrichment` (JBI) all ran with no exceptions.
+Cross-checked the returned numbers for internal consistency (lifecycle counts sum to 148; flight_breakdown sums
+to in_flight_total; at_risk=1 matches the single `off_track` row in production; NPS average 8.6 across 84
+responses) — this is NOT yet the row-for-row diff against the pre-cutover Monday-based report that 1.9 calls
+for; that still needs someone to open both reports side by side.
+
+**Known, deliberate gaps — surfaced, not silently dropped:**
+- `latest_update` (Monday's free-text project note) and `delivered_value` / `timeline_start` / `timeline_end`
+  have no `processes` column. `delivered_value` was already empty on every row that had it (per the 2026-08-03
+  audit), so nothing real is lost there; `latest_update` *was* real content and is now always blank on the
+  customer-360 project cards until a native replacement exists.
+- The weekly report's phase breakdown (`by_phase`) now shows more "Other" than before — checked against
+  production: most active-lane rows simply have `phase = null` today, because `phase` and `lifecycle` are
+  separately editable in the new process drawer and aren't always kept in sync by whoever edits a row. Not a
+  translation bug — it reflects real, current data completeness.
+- Monday's "waiting on customer" phase bucket has no native equivalent (that signal now lives in `blocked_on`,
+  an orthogonal field) — affects ~8 of 39 active rows in production. Low materiality, not fixed this pass.
+- `v2_progress.upcoming` (queued-not-started migrations) is always 0 now — no native equivalent to Monday's
+  "Upcoming Migration" label.
+- `monday_synced_at` freshness label on the customer-360 Projects card now reflects the most recent `processes`
+  edit for that customer, not a Monday sync — the label text still says "synced", a one-line copy fix not made
+  this pass.
+- `total_effort_hours` (native) was passed through unconverted into the old `total_effort_days` field — no
+  confirmed unit relationship between Monday's original "Total Effort" column and the native column's name.
+
+**`monday_activities` deliberately NOT touched** — the customer-360 Activity tab still reads it. Retiring that
+read path means removing the tab outright (no native replacement was ever planned — see the 2026-08-03 decision
+that Activity Log data is low-value and archived, not migrated), which is a visible UI change needing its own
+mockup and sign-off per the project's UI-change rule. Flagged for Rishabh, not done.
+
+**Next session:** get a human to eyeball the weekly report and `/analytics` side by side against the pre-cutover
+Monday-based version for one real week of data (the actual 1.9 gate), decide on the `monday_activities` tab
+removal, then 1.10 (turn off the Monday sync in `vercel.json`).
