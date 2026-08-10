@@ -25,7 +25,7 @@ export interface LinearTicketsSyncResult {
   errors: Array<{ stage: string; error: string }>;
 }
 
-const CLOSED_TYPES = new Set(["completed", "canceled"]);
+const CLOSED_TYPES = new Set(["completed", "canceled", "duplicate"]);
 
 export async function syncLinearTickets(): Promise<LinearTicketsSyncResult> {
   const result: LinearTicketsSyncResult = { fetched: 0, upserted: 0, newly_closed: 0, errors: [] };

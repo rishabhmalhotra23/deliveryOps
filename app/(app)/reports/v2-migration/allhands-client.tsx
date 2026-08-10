@@ -686,8 +686,17 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
 
       {/* Compact chip rows, not a detailed breakdown — this is a company-wide
           quick overview, not a ticket triage view (Rishabh, 2026-08-10). No
-          sample titles; that level of detail lives on /reports/v2-migration/tickets. */}
-      <Caption>Hard blockers — {ticketHealth.hardBlockers} total</Caption>
+          sample titles; that level of detail (plus manual Refresh) lives on
+          /reports/v2-migration/tickets, linked below since this page has no
+          other pointer to it (Rishabh, 2026-08-10). */}
+      <div className="flex justify-between items-baseline mb-2">
+        <div className="text-[10px] uppercase tracking-[0.06em]" style={{ color: "var(--rt-fg-muted)" }}>
+          Hard blockers — {ticketHealth.hardBlockers} total
+        </div>
+        <a href="/reports/v2-migration/tickets" className="text-[9px] font-semibold" style={{ color: "var(--rt-accent)" }}>
+          Manage tickets &amp; refresh from Linear →
+        </a>
+      </div>
       <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
         {ticketDataError ? (
           <div className="text-xs italic" style={{ color: "var(--rt-status-bad)" }}>
