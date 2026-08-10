@@ -75,7 +75,7 @@ export async function syncLinearTickets(): Promise<LinearTicketsSyncResult> {
       url: issue.url,
       team: issue.team,
       project: issue.project,
-      source: resolveSource(issue.labels, issue.team),
+      source: resolveSource(issue.labels),
       priority: issue.priority,
       linear_status: issue.status,
       status_type: issue.statusType,

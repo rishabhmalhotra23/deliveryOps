@@ -36,11 +36,18 @@ export interface AllHandsStatus {
    *  line, the stat tiles, and the headline caption all read this same
    *  number so it's never possible for a chart's peak to exceed its own goal. */
   migrationGoalTotal: number;
-  /** Processes in the migration-goal population with is_blocked = true, right
-   *  now. A single current snapshot, not a historical trend — there's no
-   *  point-in-time history of is_blocked to reconstruct a real trend line
-   *  from, so this is surfaced as a badge, not a chart series. */
+  /** Engineering-blocked processes right now — is_blocked, not customer-
+   *  caused, with an actual blocker reason on file (see the loader for why
+   *  this excludes customer-pending/commercial-discussion cases, which have
+   *  their own visible signal elsewhere). A single current snapshot, not a
+   *  historical trend — there's no point-in-time history of is_blocked to
+   *  reconstruct a real trend line from, so this is a badge, not a chart
+   *  series. */
   migrationBlockedNowCount: number;
+  /** The actual processes behind migrationBlockedNowCount — spans whichever
+   *  stages currently have one, not necessarily just the in-flight ones, so
+   *  the count is never a black box. */
+  migrationBlockedProcesses: Array<{ account: string; processName: string; stage: string; reasons: string[] }>;
   byStage: V2MigrationOverview["counts"]["byStage"];
   /** group: "complete" for stages that are done migrating (live_on_v2,
    *  migrated_pending_commercial — shown for context), "in_progress" for the
@@ -187,7 +194,53 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   // directly on V2 — there's nothing to migrate).
   const migrationTrackedRows = overview.rows.filter((r) => r.migration_stage !== "v2_native");
   const migrationDoneRows = migrationTrackedRows.filter((r) => !IN_FLIGHT_STAGES.includes(r.migration_stage));
-  const migrationBlockedNowCount = migrationTrackedRows.filter((r) => r.is_blocked).length;
+
+  // Computed here (not down by the ticket-bucket section below) because the
+  // engineering-blocked derivation needs it too — one map, two consumers.
+  const hardBlockerOpenTickets = tickets.open_tickets.filter((t) => t.classification === "hard_blocker");
+  const hardBlockerTicketsById = new Map(hardBlockerOpenTickets.map((t) => [t.id, t]));
+
+  // "Blocked right now" means engineering-blocked specifically (Rishabh,
+  // 2026-08-10): customer-caused waits already show up as their own signal
+  // (blocked_on: "customer" — visible on the customer_validation/UAT stage
+  // itself), and migrated_pending_commercial is a sales/commercial wait, not
+  // an engineering one — excluded via the blocked_on check below, not by
+  // migration_stage, since neither ever appears on the two stages that
+  // actually produce blocked rows in practice.
+  //
+  // A process can be engineering-blocked in TWO ways that don't always agree
+  // (Rishabh, 2026-08-10, re: Mitie) — is_blocked/blockers free text (set by
+  // hand, sometimes stale or missing even when a real blocker exists), and an
+  // open hard_blocker ticket linked via linear_ticket_ids (tracked in Linear,
+  // sometimes missing when the process's is_blocked flag was never flipped).
+  // Neither alone is complete, so a process is blocked if EITHER fires, and
+  // every firing reason is surfaced — a process can have more than one
+  // (Kort Payments has both an IP-whitelisting blocker and a separate
+  // browser-automation one).
+  function engineeringBlockReasons(p: Process): string[] {
+    const reasons: string[] = [];
+    if (p.blocked_on !== "customer" && p.blockers != null && p.blockers.trim().length > 0) {
+      reasons.push(p.blockers.trim());
+    }
+    if (p.blocked_on !== "customer") {
+      for (const ticketId of p.linear_ticket_ids) {
+        const ticket = hardBlockerTicketsById.get(ticketId);
+        if (ticket) reasons.push(ticket.title);
+      }
+    }
+    return [...new Set(reasons)];
+  }
+
+  const migrationBlocked = migrationTrackedRows
+    .map((r) => ({ row: r, reasons: engineeringBlockReasons(r) }))
+    .filter((x) => x.reasons.length > 0);
+  const migrationBlockedNowCount = migrationBlocked.length;
+  const migrationBlockedProcesses = migrationBlocked.map(({ row: r, reasons }) => ({
+    account: r.account,
+    processName: r.process_name,
+    stage: r.migration_stage,
+    reasons,
+  }));
   const stageRows = STAGE_ORDER.map((stage) => {
     const rows = overview.rows.filter((r) => r.migration_stage === stage);
     return {
@@ -232,9 +285,7 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
 
   // ── Blockers ──────────────────────────────────────────────────────────────
   const blockers = resolveBlockers(tickets.team_asks.now.concat(tickets.team_asks.soon));
-  const hardBlockerOpenTickets = tickets.open_tickets.filter((t) => t.classification === "hard_blocker");
   const ticketDomainBuckets = computeDomainBuckets(hardBlockerOpenTickets);
-  const hardBlockerTicketsById = new Map(hardBlockerOpenTickets.map((t) => [t.id, t]));
   const customerTicketConcentration = computeCustomerTicketConcentration(customers, processesByCustomer, hardBlockerTicketsById);
   // Shares V2_PROGRAM_LAUNCH with the migration-progress chart above so both
   // charts cover the identical window (Rishabh, 2026-08-10) — cumulative
@@ -253,6 +304,7 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
       migrationDoneCount: migrationDoneRows.length,
       migrationGoalTotal: migrationTrackedRows.length,
       migrationBlockedNowCount,
+      migrationBlockedProcesses,
       byStage: overview.counts.byStage,
       stageRows,
     },

@@ -490,9 +490,25 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           <StatTile value={status.migrationDoneCount} label="Migrated to V2" color="var(--rt-status-good)" />
           <StatTile value={status.migratingNowCount} label="Actively migrating" color="var(--rt-accent)" />
           {status.migrationBlockedNowCount > 0 && (
-            <StatTile value={status.migrationBlockedNowCount} label="Blocked right now" color="var(--rt-status-bad)" />
+            <StatTile value={status.migrationBlockedNowCount} label="Engineering blocked" color="var(--rt-status-bad)" />
           )}
         </div>
+        {status.migrationBlockedProcesses.length > 0 && (
+          <div className="mb-3.5 pb-3.5" style={{ borderBottom: "1px solid var(--rt-surface-2)" }}>
+            <div className="text-[9px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
+              Engineering-blocked (excludes customer-pending and commercial-discussion waits, already visible above):
+            </div>
+            {status.migrationBlockedProcesses.map((p) => (
+              <div key={`${p.account}-${p.processName}`} className="text-[10px] mb-1" style={{ color: "var(--rt-fg-body)" }}>
+                <span className="font-bold" style={{ color: "var(--rt-status-bad)" }}>
+                  {p.processName}
+                </span>
+                {" — "}
+                {p.reasons.join("; ")}
+              </div>
+            ))}
+          </div>
+        )}
         {(() => {
           const completeRows = status.stageRows.filter((r) => r.group === "complete");
           const inProgressRows = status.stageRows.filter((r) => r.group === "in_progress");
@@ -670,83 +686,65 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         </>
       )}
 
-      <Caption>Hard blockers by category — {ticketHealth.hardBlockers} total, no workarounds stated</Caption>
-      <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
+      {/* Compact chip rows, not a detailed breakdown — this is a company-wide
+          quick overview, not a ticket triage view (Rishabh, 2026-08-10). No
+          sample titles; that level of detail lives on /reports/v2-migration/tickets. */}
+      <Caption>Hard blockers — {ticketHealth.hardBlockers} total</Caption>
+      <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
         {ticketDataError ? (
-          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
+          <div className="text-xs italic" style={{ color: "var(--rt-status-bad)" }}>
             Unavailable — ticket data could not be read (see above).
           </div>
-        ) : ticketDomainBuckets.length === 0 ? (
-          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-fg-muted)" }}>
-            No open hard blockers.
-          </div>
         ) : (
-          ticketDomainBuckets.map((bucket, i) => (
-            <div
-              key={bucket.domain}
-              className="py-2 px-1"
-              style={{ borderBottom: i < ticketDomainBuckets.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
-            >
-              <div className="flex justify-between items-baseline gap-2">
-                <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
-                  {domainLabel(bucket.domain)}
-                </span>
-                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-status-bad)" }}>
-                  {bucket.count}
-                </span>
-              </div>
-              {bucket.sampleTitles.length > 0 && (
-                <div className="text-[9px] mt-1" style={{ color: "var(--rt-fg-muted)" }}>
-                  {bucket.sampleTitles.join(" · ")}
-                </div>
-              )}
+          <>
+            <div className="text-[9px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
+              By category:
             </div>
-          ))
-        )}
-      </div>
-      {/* Manually-maintained, deliberately not ticket-derived (Rishabh, 2026-08-10):
-          IDP experience is a recurring gap across several customers' migrations, not fully
-          captured as tracked tickets today — shown regardless of the current IDP ticket
-          count above. Revisit/remove once it's tracked as real tickets. */}
-      {!ticketDataError && (
-        <div className="text-[9px] italic px-1 -mt-3 mb-5" style={{ color: "var(--rt-fg-muted)" }}>
-          Known gap beyond what&apos;s tracked above — IDP experience is a recurring need across multiple customers&apos;
-          migrations (not fully captured as tracked tickets today).
-        </div>
-      )}
-
-      <Caption>Hard blockers by migration — {ticketHealth.hardBlockers} total, no workarounds stated</Caption>
-      <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
-        {ticketDataError ? (
-          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
-            Unavailable — ticket data could not be read (see above).
-          </div>
-        ) : customerTicketConcentration.length === 0 ? (
-          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-fg-muted)" }}>
-            No open hard blockers linked to a specific migration.
-          </div>
-        ) : (
-          customerTicketConcentration.map((c, i) => (
-            <div
-              key={c.customerName}
-              className="py-2 px-1"
-              style={{ borderBottom: i < customerTicketConcentration.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
-            >
-              <div className="flex justify-between items-baseline gap-2">
-                <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
-                  {c.customerName}
-                </span>
-                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-status-bad)" }}>
-                  {c.ticketCount}
-                </span>
+            {ticketDomainBuckets.length === 0 ? (
+              <div className="text-xs italic mb-3" style={{ color: "var(--rt-fg-muted)" }}>
+                No open hard blockers.
               </div>
-              {c.sampleTitles.length > 0 && (
-                <div className="text-[9px] mt-1" style={{ color: "var(--rt-fg-muted)" }}>
-                  {c.sampleTitles.join(" · ")}
-                </div>
-              )}
+            ) : (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {ticketDomainBuckets.map((bucket) => (
+                  <span
+                    key={bucket.domain}
+                    className="text-[10px] rounded-full px-2 py-1"
+                    style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg)" }}
+                  >
+                    {domainLabel(bucket.domain)} · <span style={{ color: "var(--rt-status-bad)", fontWeight: 700 }}>{bucket.count}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="text-[9px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
+              By migration:
             </div>
-          ))
+            {customerTicketConcentration.length === 0 ? (
+              <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
+                No open hard blockers linked to a specific migration.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {customerTicketConcentration.map((c) => (
+                  <span
+                    key={c.customerName}
+                    className="text-[10px] rounded-full px-2 py-1"
+                    style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg)" }}
+                  >
+                    {c.customerName} · <span style={{ color: "var(--rt-status-bad)", fontWeight: 700 }}>{c.ticketCount}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Manually-maintained, deliberately not ticket-derived (Rishabh, 2026-08-10):
+                IDP experience is a recurring gap across several customers' migrations, not
+                fully captured as tracked tickets today. Revisit/remove once it is. */}
+            <div className="text-[9px] italic mt-3" style={{ color: "var(--rt-fg-muted)" }}>
+              Known gap beyond what&apos;s tracked above: IDP experience is a recurring need across multiple customers&apos;
+              migrations.
+            </div>
+          </>
         )}
       </div>
 

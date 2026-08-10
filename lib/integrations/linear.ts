@@ -65,13 +65,20 @@ export interface LinearIssue {
   canceledAt: string | null;
 }
 
-// The wide net used to surface tickets relevant to the V2 migration.
-// Deliberately broad — same label/team set as the original manual triage
-// pass — and it catches general engineering-roadmap noise along with it.
-// in_scope on linear_tickets exists to let the periodic classification pass
-// flip that noise out; this client does not try to filter it here.
-export const SOURCE_LABELS = ["v2 Migration Blockers", "gc-feedback", "ux-quality", "Bugathon"];
-export const SOURCE_TEAMS = ["On-Call", "Integrations", "Product Improvements"];
+// Tickets relevant to the V2 migration — scoped to the "v2 Migration
+// Blockers" label only (Rishabh, 2026-08-10: the prior net additionally
+// pulled in gc-feedback/ux-quality/Bugathon-labelled tickets, any "cust*"
+// label, and anything from the On-Call/Integrations/Product Improvements
+// teams — general engineering-roadmap noise, not migration blockers. Every
+// browser-automation-domain ticket already carries the "v2 Migration
+// Blockers" label in production, so narrowing to just this label doesn't
+// drop any real blocker — it drops 78 of 150 previously-synced tickets that
+// were never actually migration-relevant. in_scope on linear_tickets was
+// meant to flip that noise back out via a periodic classification pass, but
+// that pass never ran for this batch — narrowing the net here means a
+// future sync can't reintroduce the same class of noise even if that pass
+// is skipped again).
+export const SOURCE_LABELS = ["v2 Migration Blockers"];
 
 const PAGE_SIZE = 100;
 const MAX_ISSUES = 2000; // safety cap — current volume is in the low hundreds
@@ -82,11 +89,7 @@ const ISSUES_QUERY = `
       first: ${PAGE_SIZE}
       after: $after
       filter: {
-        or: [
-          { labels: { name: { in: ${JSON.stringify(SOURCE_LABELS)} } } }
-          { labels: { name: { startsWith: "cust" } } }
-          { team: { name: { in: ${JSON.stringify(SOURCE_TEAMS)} } } }
-        ]
+        labels: { name: { in: ${JSON.stringify(SOURCE_LABELS)} } }
       }
     ) {
       pageInfo { hasNextPage endCursor }
@@ -152,13 +155,10 @@ export async function listRelevantIssues(): Promise<LinearIssue[]> {
   return out;
 }
 
-/** Which label/team surfaced this ticket — mirrors the "source" column
- *  filled in by hand during the original triage pass. Exact SOURCE_LABELS
- *  match wins first, then any "cust*"-prefixed label, then team name. */
-export function resolveSource(labels: string[], team: string | null): string {
-  for (const l of SOURCE_LABELS) if (labels.includes(l)) return l;
-  const cust = labels.find((l) => l.toLowerCase().startsWith("cust"));
-  if (cust) return cust;
-  if (team && SOURCE_TEAMS.includes(team)) return team;
-  return labels[0] ?? team ?? "unknown";
+/** Which label surfaced this ticket — mirrors the "source" column filled in
+ *  by hand during the original triage pass. Every ticket listRelevantIssues()
+ *  returns already carries the "v2 Migration Blockers" label (the query's
+ *  own filter guarantees it), so this always resolves to that one label. */
+export function resolveSource(labels: string[]): string {
+  return labels.includes("v2 Migration Blockers") ? "v2 Migration Blockers" : labels[0] ?? "unknown";
 }
