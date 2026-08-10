@@ -63,23 +63,15 @@ function StatTile({ value, label, color }: { value: number | string; label: stri
   );
 }
 
-// ── Stage column (grouped, deduped process names — mirrors the mockup's
-//    "Name ×N / +N more" truncation) ─────────────────────────────────────────
-function summarizeNames(names: string[], maxLines = 2): string[] {
+// ── Stage column (grouped, deduped process names — every name shown in full,
+//    no "+N more" truncation) ────────────────────────────────────────────────
+function summarizeNames(names: string[]): string[] {
   if (names.length === 0) return [];
   const counts = new Map<string, number>();
   for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
-  const groups = [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
-
-  if (groups.length <= maxLines) {
-    return groups.map((g) => (g.count > 1 ? `${g.name} ×${g.count}` : g.name));
-  }
-  const shown = groups.slice(0, maxLines - 1);
-  const shownCount = shown.reduce((s, g) => s + g.count, 0);
-  const remaining = names.length - shownCount;
-  return [...shown.map((g) => (g.count > 1 ? `${g.name} ×${g.count}` : g.name)), `+${remaining} more`];
+  return [...counts.entries()]
+    .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name))
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function StageColumn({ stage, label, count, processNames }: { stage: string; label: string; count: number; processNames: string[] }) {

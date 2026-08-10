@@ -170,8 +170,20 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   // built from the filtered rows. V2ProcessRow extends Process, so these carry
   // every milestone field the derivation needs.
   const trackedProcesses: Process[] = overview.rows;
-  const programStart = computeMigrationProgramStart(trackedProcesses);
-  const cumulativeProgress = programStart ? computeCumulativeProgress(trackedProcesses, programStart, range.end) : [];
+  const derivedProgramStart = computeMigrationProgramStart(trackedProcesses);
+  // V2 migration became a company-wide program in mid-June 2026 (Rishabh,
+  // 2026-08-10) — a handful of pilot migrations (JBI, TTX, Plunkett, Norco,
+  // Bradley & Beams) landed one at a time over the prior two years and
+  // predate the program itself. Charting from their dates compresses the
+  // real ~6-week ramp into a sliver of a 2-year-wide chart, reading as one
+  // spike instead of a legible climb. The chart's window is floored at the
+  // program's actual launch — never earlier — while
+  // computeMigrationProgramStart's per-process derivation (and the
+  // "N of M tracked... since the program started" headline denominator,
+  // which doesn't depend on this floor) are unaffected.
+  const V2_PROGRAM_LAUNCH = new Date("2026-06-15T00:00:00Z");
+  const programStart = derivedProgramStart && derivedProgramStart > V2_PROGRAM_LAUNCH ? derivedProgramStart : V2_PROGRAM_LAUNCH;
+  const cumulativeProgress = derivedProgramStart ? computeCumulativeProgress(trackedProcesses, programStart, range.end) : [];
 
   // ── Renewal spotlight + at-risk cross-signal ─────────────────────────────
   const renewalSpotlight = findRenewalSpotlight(customers, arrByCustomer, processesByCustomer, range.end);
