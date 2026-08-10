@@ -191,8 +191,8 @@ function CombinedProgressChart({
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
         <defs>
           <linearGradient id="cumulative-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--rt-accent)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--rt-accent)" stopOpacity="0" />
+            <stop offset="0%" style={{ stopColor: "var(--rt-accent)", stopOpacity: 0.35 }} />
+            <stop offset="100%" style={{ stopColor: "var(--rt-accent)", stopOpacity: 0 }} />
           </linearGradient>
         </defs>
 
@@ -200,11 +200,11 @@ function CombinedProgressChart({
           const y = padTop + chartH - frac * chartH;
           return (
             <g key={frac}>
-              <line x1={padLeft} x2={W - padRight} y1={y} y2={y} stroke="var(--rt-surface-2)" strokeWidth="1" />
-              <text x={padLeft - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" fill="var(--rt-fg-muted)">
+              <line x1={padLeft} x2={W - padRight} y1={y} y2={y} strokeWidth="1" style={{ stroke: "var(--rt-surface-2)" }} />
+              <text x={padLeft - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" style={{ fill: "var(--rt-fg-muted)" }}>
                 {Math.round(frac * axisMaxLeft)}
               </text>
-              <text x={W - padRight + 8} y={y} textAnchor="start" dominantBaseline="middle" fontSize="9" fill="var(--rt-fg-muted)">
+              <text x={W - padRight + 8} y={y} textAnchor="start" dominantBaseline="middle" fontSize="9" style={{ fill: "var(--rt-fg-muted)" }}>
                 {Math.round(frac * axisMaxRight)}
               </text>
             </g>
@@ -213,18 +213,20 @@ function CombinedProgressChart({
 
         {migratedCoords.length > 0 && (
           <>
-            <line x1={padLeft} x2={W - padRight} y1={goalY} y2={goalY} stroke="var(--rt-status-good)" strokeWidth="1.5" strokeDasharray="4 3" />
+            <line x1={padLeft} x2={W - padRight} y1={goalY} y2={goalY} strokeWidth="1.5" strokeDasharray="4 3" style={{ stroke: "var(--rt-status-good)" }} />
             <path d={migratedAreaD} fill="url(#cumulative-gradient)" />
-            <path d={migratedLineD} fill="none" stroke="var(--rt-accent)" strokeWidth="2.5" />
+            <path d={migratedLineD} fill="none" strokeWidth="2.5" style={{ stroke: "var(--rt-accent)" }} />
             {migratedCoords.map(([x, y], i) => (
               <g key={migrationPoints[i].weekStart}>
                 <circle
                   cx={x}
                   cy={y}
                   r={i === migratedCoords.length - 1 ? 3.5 : 2.5}
-                  fill={i === migratedCoords.length - 1 ? "var(--rt-accent)" : "var(--rt-surface-1)"}
-                  stroke="var(--rt-accent)"
                   strokeWidth="1.5"
+                  style={{
+                    fill: i === migratedCoords.length - 1 ? "var(--rt-accent)" : "var(--rt-surface-1)",
+                    stroke: "var(--rt-accent)",
+                  }}
                 />
                 <text
                   x={x}
@@ -232,7 +234,7 @@ function CombinedProgressChart({
                   textAnchor={i === migratedCoords.length - 1 ? "end" : "middle"}
                   fontSize="10"
                   fontWeight={i === migratedCoords.length - 1 ? "700" : "600"}
-                  fill={i === migratedCoords.length - 1 ? "var(--rt-fg)" : "var(--rt-fg-body)"}
+                  style={{ fill: i === migratedCoords.length - 1 ? "var(--rt-fg)" : "var(--rt-fg-body)" }}
                 >
                   {migratedValues[i]}
                 </text>
@@ -243,20 +245,34 @@ function CombinedProgressChart({
 
         {createdWeekly.length > 0 && (
           <>
-            <path d={createdD} fill="none" stroke="var(--rt-fg-muted)" strokeWidth="1.75" />
-            <path d={closedD} fill="none" stroke="var(--rt-status-good)" strokeWidth="1.75" strokeDasharray="0" />
+            <path d={createdD} fill="none" strokeWidth="1.75" style={{ stroke: "var(--rt-fg-muted)" }} />
+            <path d={closedD} fill="none" strokeWidth="1.75" strokeDasharray="0" style={{ stroke: "var(--rt-status-good)" }} />
             {createdWeekly.map((v, i) => (
-              <circle key={`c-${ticketPoints[i].weekStart}`} cx={xAt(i)} cy={yAtRight(v)} r="2" fill="var(--rt-surface-1)" stroke="var(--rt-fg-muted)" strokeWidth="1.5" />
+              <circle
+                key={`c-${ticketPoints[i].weekStart}`}
+                cx={xAt(i)}
+                cy={yAtRight(v)}
+                r="2"
+                strokeWidth="1.5"
+                style={{ fill: "var(--rt-surface-1)", stroke: "var(--rt-fg-muted)" }}
+              />
             ))}
             {closedWeekly.map((v, i) => (
-              <circle key={`d-${ticketPoints[i].weekStart}`} cx={xAt(i)} cy={yAtRight(v)} r="2" fill="var(--rt-surface-1)" stroke="var(--rt-status-good)" strokeWidth="1.5" />
+              <circle
+                key={`d-${ticketPoints[i].weekStart}`}
+                cx={xAt(i)}
+                cy={yAtRight(v)}
+                r="2"
+                strokeWidth="1.5"
+                style={{ fill: "var(--rt-surface-1)", stroke: "var(--rt-status-good)" }}
+              />
             ))}
           </>
         )}
 
         {labelPoints.map((p, i) =>
           i % labelStep === 0 || i === labelPoints.length - 1 ? (
-            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="9" fill="var(--rt-fg-muted)">
+            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="9" style={{ fill: "var(--rt-fg-muted)" }}>
               {fmtAxis(new Date(p.weekStart))}
             </text>
           ) : null
