@@ -119,7 +119,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 
   // ─── Read-only tools across the rest of the data surface ───────────────
-  // The dashboard, /delivery, /analytics, /reports all read the same caches;
+  // The dashboard (Overview + Trends), /delivery, /reports all read the same caches;
   // these tools surface them to the operations agent so it can answer
   // questions about FDE workload, projects, opportunities, NPS, and events
   // — not just AE/category/partner.

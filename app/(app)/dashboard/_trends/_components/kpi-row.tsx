@@ -17,7 +17,7 @@ import type {
 type Drill = "arr" | "active" | "nps" | "pipeline" | null;
 
 const COLOR = {
-  arr: "#818cf8",
+  arr: "#F2FF70",
   active: "#34d399",
   nps_high: "#34d399",
   nps_mid:  "#fbbf24",

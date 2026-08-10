@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.auth0.com" },
     ],
   },
+  async redirects() {
+    return [
+      // /analytics folded into the Dashboard's Trends tab (Stage A IA merge,
+      // docs/superpowers/specs/2026-08-07-app-design-foundation-design.md).
+      // Temporary: the URL shape may change again once Stage B's Recharts
+      // dark-palette work lands.
+      { source: "/analytics", destination: "/dashboard?tab=trends", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

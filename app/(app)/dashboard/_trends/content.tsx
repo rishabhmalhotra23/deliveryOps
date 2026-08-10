@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import { loadAnalytics } from "@/lib/analytics/loader";
 import { formatTimeAgo, formatMoney } from "@/app/_components/brand";
-import { BackButton } from "@/app/_components/back-button";
 import {
   ArrByCategoryChart,
   CustomersByCategoryChart,
@@ -23,9 +22,7 @@ import {
   loadOpenOpportunities,
 } from "@/lib/dashboard/stats-drilldown";
 
-export const dynamic = "force-dynamic";
-
-export default async function AnalyticsPage() {
+export async function DashboardTrends() {
   const [bundle, arrRows, activeProjects, npsResponses, oppsRows] = await Promise.all([
     loadAnalytics(),
     loadArrBreakdown().catch(() => []),
@@ -38,23 +35,15 @@ export default async function AnalyticsPage() {
   const lastSynced = bundle.last_sync.monday ?? bundle.last_sync.salesforce;
 
   return (
-    <div className="px-6 lg:px-10 py-8 max-w-[1400px] mx-auto space-y-8">
-      {/* Nav */}
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <BackButton href="/dashboard" label="Dashboard" />
-        <Link href="/dev/sync" className="btn-primary inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold">
-          Refresh data
-        </Link>
-      </div>
-
-      {/* Header */}
-      <div>
-        <div className="text-[10px] uppercase tracking-[0.15em] text-[color:var(--muted-foreground)] mb-1">Analytics</div>
-        <h1 className="text-4xl font-bold tracking-tight text-[color:var(--foreground)]">Portfolio at a glance.</h1>
-        <p className="text-sm text-[color:var(--muted-foreground)] mt-2">
+        <p className="text-sm text-[color:var(--muted-foreground)]">
           Aggregate metrics across the book — customers, projects, NPS, pipeline.
           {lastSynced ? ` Last synced ${formatTimeAgo(lastSynced)}.` : ""}
         </p>
+        <Link href="/dev/sync" className="btn-primary inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold shrink-0">
+          Refresh data
+        </Link>
       </div>
 
       {/* Hero KPI row — every card is click-through to the underlying
@@ -215,7 +204,7 @@ export default async function AnalyticsPage() {
 }
 
 // ── Components ───────────────────────────────────────────────────────────────
-// (KpiCard moved to ./_components/kpi-row.tsx as a click-through KPI button.)
+// (KpiCard lives in ./_components/kpi-row.tsx as a click-through KPI button.)
 
 function Chart({
   title,

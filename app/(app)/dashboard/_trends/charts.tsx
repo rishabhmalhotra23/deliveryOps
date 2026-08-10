@@ -17,19 +17,19 @@ function useChartTheme() {
   useEffect(() => setMounted(true), []);
   const dark = mounted && resolvedTheme === "dark";
   return {
-    grid:   dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-    axis:   dark ? "#71717a" : "#a1a1aa",
-    bg:     dark ? "#18181b" : "#ffffff",
+    grid:   dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+    axis:   dark ? "#A3A3A3" : "#a1a1aa",
+    bg:     dark ? "#262626" : "#ffffff",
     border: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-    text:   dark ? "#f4f4f5" : "#18181b",
-    muted:  dark ? "#71717a" : "#71717a",
+    text:   dark ? "#FAFAFA" : "#18181b",
+    muted:  dark ? "#A3A3A3" : "#71717a",
     tooltipStyle: {
-      background: dark ? "#18181b" : "#ffffff",
+      background: dark ? "#262626" : "#ffffff",
       border:     dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)",
       borderRadius: 10,
       padding: "8px 12px",
       fontSize: 12,
-      color:    dark ? "#f4f4f5" : "#18181b",
+      color:    dark ? "#FAFAFA" : "#18181b",
       boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.12)",
     },
   };
