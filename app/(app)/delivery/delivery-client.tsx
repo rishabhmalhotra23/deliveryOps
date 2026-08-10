@@ -26,15 +26,15 @@ function useChartTheme() {
   useEffect(() => setMounted(true), []);
   const dark = mounted && resolvedTheme === "dark";
   return {
-    grid:   dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-    axis:   dark ? "#71717a" : "#9ca3af",
+    grid:   dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+    axis:   dark ? "#A3A3A3" : "#9ca3af",
     tooltipStyle: {
-      background: dark ? "#1c1c24" : "#ffffff",
+      background: dark ? "#262626" : "#ffffff",
       border:     dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e5e7eb",
       borderRadius: 10,
       padding: "8px 12px",
       fontSize: 12,
-      color: dark ? "#f0f0f0" : "#18181b",
+      color: dark ? "#FAFAFA" : "#18181b",
       boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.12)",
     },
   };
@@ -77,12 +77,12 @@ function Flags({ row }: { row: ProcessRow }) {
   return (
     <>
       {row.needs_classification ? (
-        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-700 border-amber-500/25">
+        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25">
           needs classification
         </span>
       ) : null}
       {row.needs_attention ? (
-        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-700 border-red-500/25">
+        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25">
           needs attention
         </span>
       ) : null}
@@ -252,7 +252,7 @@ function Board({
                 <button
                   key={card.id}
                   onClick={() => onSelect(card)}
-                  className={`w-full text-left glass-card-hover p-3 border-t-2 ${
+                  className={`w-full text-left glass-card-hover dark:bg-[color:var(--surface-2)] dark:border-0 p-3 border-t-2 ${
                     HEALTH_BORDER[card.health ?? ""] ?? "border-t-[var(--glass-border)]"
                   }`}
                 >
@@ -267,9 +267,9 @@ function Board({
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded border ${
                         staleDays > 60
-                          ? "bg-red-500/10 text-red-700 border-red-500/25"
+                          ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25"
                           : staleDays > 30
-                            ? "bg-amber-500/10 text-amber-700 border-amber-500/25"
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
                             : "border-[var(--glass-border)] text-[color:var(--muted-foreground)]"
                       }`}
                     >
@@ -379,8 +379,8 @@ function ProcessTable({ rows, onSelect }: { rows: ProcessRow[]; onSelect: (p: Pr
   }
 
   return (
-    <div className="glass-card overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-[color:var(--muted-foreground)] border-b border-[var(--glass-border)] bg-[var(--glass-bg)]/30">
+    <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-[color:var(--muted-foreground)] border-b border-[var(--glass-border)] dark:border-0 bg-[var(--glass-bg)]/30 dark:bg-transparent">
         <span>
           Sorted by{" "}
           <span className="text-[color:var(--foreground)] font-medium">
@@ -399,9 +399,9 @@ function ProcessTable({ rows, onSelect }: { rows: ProcessRow[]; onSelect: (p: Pr
           </button>
         ) : null}
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--glass-bg)] text-[color:var(--muted-foreground)]">
+      <div className="overflow-x-auto p-2 dark:p-2.5">
+        <table className="w-full text-sm dark:border-separate dark:[border-spacing:0_4px]">
+          <thead className="bg-[var(--glass-bg)] dark:bg-transparent text-[color:var(--muted-foreground)]">
             <tr>
               {TABLE_COLS.map((c) => {
                 const active = sortKey === c.key;
@@ -423,57 +423,60 @@ function ProcessTable({ rows, onSelect }: { rows: ProcessRow[]; onSelect: (p: Pr
             </tr>
           </thead>
           <tbody>
-            {sorted.map((p) => (
+            {sorted.map((p) => {
+              const td = "dark:bg-[color:var(--surface-2)]";
+              return (
               <tr
                 key={p.id}
-                className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors cursor-pointer align-top"
+                className="border-t border-[var(--glass-border)] dark:border-0 hover:bg-[var(--glass-bg)] dark:hover:[&>td]:brightness-125 transition-colors cursor-pointer align-top"
                 onClick={() => onSelect(p)}
               >
-                <td className="px-3 py-2 font-medium text-[color:var(--foreground)] min-w-[200px] whitespace-normal break-words leading-snug" title={p.process_name}>
+                <td className={`px-3 py-2 font-medium text-[color:var(--foreground)] min-w-[200px] whitespace-normal break-words leading-snug dark:rounded-l-lg ${td}`} title={p.process_name}>
                   {p.process_name}
                   <div className="flex flex-wrap gap-1 mt-1"><Flags row={p} /></div>
                 </td>
-                <td className="px-3 py-2 text-[color:var(--foreground)] min-w-[140px] whitespace-normal break-words leading-snug">
+                <td className={`px-3 py-2 text-[color:var(--foreground)] dark:text-[color:var(--foreground-body)] min-w-[140px] whitespace-normal break-words leading-snug ${td}`}>
                   {p.customer_display_name}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">
+                <td className={`px-3 py-2 whitespace-nowrap ${td}`}>
                   <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--glass-border)]">{label(p.lifecycle)}</span>
                 </td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] min-w-[120px] whitespace-normal break-words leading-snug">
+                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] min-w-[120px] whitespace-normal break-words leading-snug ${td}`}>
                   {label(p.phase)}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">
+                <td className={`px-3 py-2 whitespace-nowrap ${td}`}>
                   {p.health ? (
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded border ${
                         p.health === "on_track"
-                          ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/25"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
                           : p.health === "at_risk"
-                            ? "bg-amber-500/10 text-amber-700 border-amber-500/25"
-                            : "bg-red-500/10 text-red-700 border-red-500/25"
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
+                            : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25"
                       }`}
                     >
                       {label(p.health)}
                     </span>
                   ) : "—"}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">{p.platform.toUpperCase()}</td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.fde_owner ?? "—"}</td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.partner ?? "—"}</td>
-                <td className="px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap">{p.complexity ?? "—"}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
+                <td className={`px-3 py-2 whitespace-nowrap dark:text-[color:var(--foreground-body)] ${td}`}>{p.platform.toUpperCase()}</td>
+                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.fde_owner ?? "—"}</td>
+                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.partner ?? "—"}</td>
+                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.complexity ?? "—"}</td>
+                <td className={`px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>
                   {p.total_effort_hours != null ? `${p.total_effort_hours}h` : "—"}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
+                <td className={`px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>
                   {p.ttv_days != null ? `${p.ttv_days}d` : "—"}
                 </td>
-                <td className="px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">{p.kickoff_date ?? "—"}</td>
-                <td className="px-3 py-2 tabular-nums font-medium text-[color:var(--foreground)] whitespace-nowrap">{p.go_live_date ?? "—"}</td>
-                <td className="px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap">
+                <td className={`px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.kickoff_date ?? "—"}</td>
+                <td className={`px-3 py-2 tabular-nums font-medium text-[color:var(--foreground)] whitespace-nowrap ${td}`}>{p.go_live_date ?? "—"}</td>
+                <td className={`px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap dark:rounded-r-lg ${td}`}>
                   {new Date(p.updated_at).toLocaleDateString("en-US")}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
