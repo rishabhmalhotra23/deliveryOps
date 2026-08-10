@@ -7,6 +7,15 @@
 
 import type { Process } from "@/lib/supabase/types";
 
+// V2 migration became a company-wide program in mid-June 2026 (Rishabh,
+// 2026-08-10) — a handful of pilot migrations (JBI, TTX, Plunkett, Norco,
+// Bradley & Beams) landed one at a time over the prior two years and predate
+// the program itself. Every All-Hands chart that plots "since the program
+// started" — migration progress and ticket velocity alike — shares this one
+// floor, so the two charts always cover the identical window and stay
+// visually comparable side by side.
+export const V2_PROGRAM_LAUNCH = new Date("2026-06-15T00:00:00Z");
+
 export interface ProgressPoint {
   weekStart: string; // ISO date, Monday of that week
   cumulativeAtOrPastParity: number;

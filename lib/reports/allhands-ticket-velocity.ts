@@ -21,8 +21,16 @@ function startOfIsoWeek(date: Date): Date {
 
 /** `tickets` should already be the in-scope population (loadTicketsBundle()'s
  *  open_tickets + closed_tickets, both already in_scope-filtered) — this
- *  function does no scope filtering of its own. */
-export function computeTicketVelocity(tickets: TicketRow[], asOf: Date): TicketVelocityPoint[] {
+ *  function does no scope filtering of its own.
+ *
+ *  `windowStart` sets where the chart's visible range begins — shared with
+ *  the migration-progress chart (see V2_PROGRAM_LAUNCH in
+ *  migration-progress.ts) so both charts cover the identical window.
+ *  Cumulative counts are seeded with everything before windowStart, so the
+ *  totals stay real cumulative-since-ever-created numbers (matching the
+ *  "N created" headline) — only the chart's visible starting point moves,
+ *  not what's being counted. */
+export function computeTicketVelocity(tickets: TicketRow[], windowStart: Date, asOf: Date): TicketVelocityPoint[] {
   if (tickets.length === 0) return [];
 
   const createdDates = tickets.map((t) => new Date(t.linear_created_at)).sort((a, b) => a.getTime() - b.getTime());
@@ -32,18 +40,18 @@ export function computeTicketVelocity(tickets: TicketRow[], asOf: Date): TicketV
     .map((d) => new Date(d))
     .sort((a, b) => a.getTime() - b.getTime());
 
-  let firstWeek = startOfIsoWeek(createdDates[0]);
-  if (firstWeek < createdDates[0]) {
+  let firstWeek = startOfIsoWeek(windowStart);
+  if (firstWeek < windowStart) {
     firstWeek = new Date(firstWeek);
     firstWeek.setUTCDate(firstWeek.getUTCDate() + 7);
   }
   const lastWeek = startOfIsoWeek(asOf);
 
   const points: TicketVelocityPoint[] = [];
-  let createdIdx = 0;
-  let closedIdx = 0;
-  let cumulativeCreated = 0;
-  let cumulativeClosed = 0;
+  let createdIdx = createdDates.filter((d) => d < firstWeek).length;
+  let closedIdx = closedDates.filter((d) => d < firstWeek).length;
+  let cumulativeCreated = createdIdx;
+  let cumulativeClosed = closedIdx;
 
   for (let week = new Date(firstWeek); week <= lastWeek; week.setUTCDate(week.getUTCDate() + 7)) {
     const weekEnd = new Date(week);

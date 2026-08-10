@@ -7,7 +7,7 @@ import { loadV2MigrationOverview, type V2MigrationOverview } from "@/lib/process
 import { loadTicketsBundle } from "@/lib/tickets/loader";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 import { resolveRange, type DateRange, type RangeRequest } from "@/lib/reports/date-range";
-import { computeMigrationProgramStart, computeCumulativeProgress, type ProgressPoint } from "@/lib/reports/migration-progress";
+import { computeMigrationProgramStart, computeCumulativeProgress, V2_PROGRAM_LAUNCH, type ProgressPoint } from "@/lib/reports/migration-progress";
 import { findRenewalSpotlight, findAtRiskMigratingCustomers, type RenewalSpotlight, type AtRiskMigratingEntry } from "@/lib/reports/allhands-signals";
 import { resolveBlockers, type BlockerItem } from "@/lib/reports/allhands-blockers";
 import {
@@ -224,7 +224,6 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   // computeMigrationProgramStart's per-process derivation (and the
   // "N of M tracked... since the program started" headline denominator,
   // which doesn't depend on this floor) are unaffected.
-  const V2_PROGRAM_LAUNCH = new Date("2026-06-15T00:00:00Z");
   const programStart = derivedProgramStart && derivedProgramStart > V2_PROGRAM_LAUNCH ? derivedProgramStart : V2_PROGRAM_LAUNCH;
   const cumulativeProgress = derivedProgramStart ? computeCumulativeProgress(trackedProcesses, programStart, range.end) : [];
 
@@ -238,7 +237,11 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   const ticketDomainBuckets = computeDomainBuckets(hardBlockerOpenTickets);
   const hardBlockerTicketsById = new Map(hardBlockerOpenTickets.map((t) => [t.id, t]));
   const customerTicketConcentration = computeCustomerTicketConcentration(customers, processesByCustomer, hardBlockerTicketsById);
-  const ticketVelocity = computeTicketVelocity(tickets.open_tickets.concat(tickets.closed_tickets), range.end);
+  // Shares V2_PROGRAM_LAUNCH with the migration-progress chart above so both
+  // charts cover the identical window (Rishabh, 2026-08-10) — cumulative
+  // totals still count everything ever created/closed, only the visible
+  // starting point is shared.
+  const ticketVelocity = computeTicketVelocity(tickets.open_tickets.concat(tickets.closed_tickets), V2_PROGRAM_LAUNCH, range.end);
 
   return {
     range,

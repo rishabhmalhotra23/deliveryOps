@@ -15,7 +15,7 @@ function ticket(overrides: Partial<TicketRow>): TicketRow {
 
 describe("computeTicketVelocity", () => {
   it("returns an empty array for no tickets", () => {
-    expect(computeTicketVelocity([], new Date("2026-08-10T00:00:00Z"))).toEqual([]);
+    expect(computeTicketVelocity([], new Date("2026-06-01T00:00:00Z"), new Date("2026-08-10T00:00:00Z"))).toEqual([]);
   });
 
   it("accumulates created and closed counts week over week, monotonically non-decreasing", () => {
@@ -24,7 +24,7 @@ describe("computeTicketVelocity", () => {
       ticket({ id: "B", linear_created_at: "2026-06-09T00:00:00Z", closed_at: "2026-06-16T00:00:00Z" }),
       ticket({ id: "C", linear_created_at: "2026-06-20T00:00:00Z", closed_at: null }),
     ];
-    const points = computeTicketVelocity(tickets, new Date("2026-06-23T00:00:00Z"));
+    const points = computeTicketVelocity(tickets, new Date("2026-06-01T00:00:00Z"), new Date("2026-06-23T00:00:00Z"));
 
     // Monotonic non-decreasing on both series.
     for (let i = 1; i < points.length; i++) {
@@ -42,15 +42,30 @@ describe("computeTicketVelocity", () => {
       ticket({ id: "A", linear_created_at: "2026-06-01T00:00:00Z", closed_at: "2026-06-02T00:00:00Z" }),
       ticket({ id: "B", linear_created_at: "2026-06-15T00:00:00Z", closed_at: null }),
     ];
-    const points = computeTicketVelocity(tickets, new Date("2026-06-20T00:00:00Z"));
+    const points = computeTicketVelocity(tickets, new Date("2026-06-01T00:00:00Z"), new Date("2026-06-20T00:00:00Z"));
     for (const p of points) {
       expect(p.cumulativeClosed).toBeLessThanOrEqual(p.cumulativeCreated);
     }
   });
 
-  it("starts from the first Monday at or after the earliest ticket's creation date", () => {
+  it("starts from the first Monday at or after windowStart, not the earliest ticket", () => {
     const tickets = [ticket({ id: "A", linear_created_at: "2026-06-03T00:00:00Z" })]; // a Wednesday
-    const points = computeTicketVelocity(tickets, new Date("2026-06-10T00:00:00Z"));
+    const points = computeTicketVelocity(tickets, new Date("2026-06-03T00:00:00Z"), new Date("2026-06-10T00:00:00Z"));
     expect(points[0].weekStart).toBe("2026-06-08"); // next Monday
+  });
+
+  it("seeds cumulative counts with everything created/closed before windowStart, without extending the visible range", () => {
+    const tickets = [
+      ticket({ id: "A", linear_created_at: "2025-01-01T00:00:00Z", closed_at: "2025-02-01T00:00:00Z" }),
+      ticket({ id: "B", linear_created_at: "2026-06-23T00:00:00Z", closed_at: null }), // second week
+    ];
+    // windowStart is well after A's creation/closure — A must still count
+    // toward the cumulative totals, but the chart shouldn't have a point
+    // reaching all the way back to 2025.
+    const points = computeTicketVelocity(tickets, new Date("2026-06-15T00:00:00Z"), new Date("2026-06-29T00:00:00Z"));
+    expect(points[0].weekStart).toBe("2026-06-15");
+    expect(points[0].cumulativeCreated).toBe(1); // A only, seeded
+    expect(points[0].cumulativeClosed).toBe(1); // A's closure, seeded
+    expect(points[points.length - 1].cumulativeCreated).toBe(2); // A + B
   });
 });

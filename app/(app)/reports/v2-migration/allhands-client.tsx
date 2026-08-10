@@ -737,6 +737,16 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           ))
         )}
       </div>
+      {/* Manually-maintained, deliberately not ticket-derived (Rishabh, 2026-08-10):
+          IDP experience is a recurring gap across several customers' migrations, not fully
+          captured as tracked tickets today — shown regardless of the current IDP ticket
+          count above. Revisit/remove once it's tracked as real tickets. */}
+      {!ticketDataError && (
+        <div className="text-[9px] italic px-1 -mt-3 mb-5" style={{ color: "var(--rt-fg-muted)" }}>
+          Known gap beyond what&apos;s tracked above — IDP experience is a recurring need across multiple customers&apos;
+          migrations (not fully captured as tracked tickets today).
+        </div>
+      )}
 
       <Caption>Hard blockers by migration — {ticketHealth.hardBlockers} total, no workarounds stated</Caption>
       <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
