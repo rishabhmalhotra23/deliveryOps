@@ -115,7 +115,7 @@ function CombinedProgressChart({
 }) {
   if (migrationPoints.length === 0 && ticketPoints.length === 0) {
     return (
-      <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
+      <div className="text-xs italic" style={{ color: "#A3A3A3" }}>
         Not enough data yet to chart progress.
       </div>
     );
@@ -175,24 +175,24 @@ function CombinedProgressChart({
   return (
     <div>
       <div className="flex justify-between items-baseline mb-1.5 flex-wrap gap-1">
-        <span className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
+        <span className="text-[10px]" style={{ color: "#A3A3A3" }}>
           Weekly, since {fmtShort(new Date(labelPoints[0].weekStart))}
         </span>
-        <span className="text-[11px]" style={{ color: "var(--rt-fg-muted)" }}>
-          <span className="font-bold" style={{ color: toGo === 0 ? "var(--rt-status-good)" : "var(--rt-fg)" }}>
+        <span className="text-[11px]" style={{ color: "#A3A3A3" }}>
+          <span className="font-bold" style={{ color: toGo === 0 ? "#4ADE80" : "var(--rt-fg)" }}>
             {toGo === 0 ? "Goal reached" : `${toGo} to go`}
           </span>
           {" · "}
           <span style={{ color: "var(--rt-fg)", fontWeight: 700 }}>{totalCreated}</span> created ·{" "}
-          <span style={{ color: "var(--rt-status-good)", fontWeight: 700 }}>{totalClosed}</span> resolved ·{" "}
+          <span style={{ color: "#4ADE80", fontWeight: 700 }}>{totalClosed}</span> resolved ·{" "}
           <span style={{ color: "var(--rt-status-warn)", fontWeight: 700 }}>{totalOpen}</span> open
         </span>
       </div>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
         <defs>
           <linearGradient id="cumulative-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" style={{ stopColor: "var(--rt-accent)", stopOpacity: 0.35 }} />
-            <stop offset="100%" style={{ stopColor: "var(--rt-accent)", stopOpacity: 0 }} />
+            <stop offset="0%" style={{ stopColor: "#F2FF70", stopOpacity: 0.35 }} />
+            <stop offset="100%" style={{ stopColor: "#F2FF70", stopOpacity: 0 }} />
           </linearGradient>
         </defs>
 
@@ -200,11 +200,11 @@ function CombinedProgressChart({
           const y = padTop + chartH - frac * chartH;
           return (
             <g key={frac}>
-              <line x1={padLeft} x2={W - padRight} y1={y} y2={y} strokeWidth="1" style={{ stroke: "var(--rt-surface-2)" }} />
-              <text x={padLeft - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" style={{ fill: "var(--rt-fg-muted)" }}>
+              <line x1={padLeft} x2={W - padRight} y1={y} y2={y} strokeWidth="1" style={{ stroke: "#1F1F1F" }} />
+              <text x={padLeft - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" style={{ fill: "#A3A3A3" }}>
                 {Math.round(frac * axisMaxLeft)}
               </text>
-              <text x={W - padRight + 8} y={y} textAnchor="start" dominantBaseline="middle" fontSize="9" style={{ fill: "var(--rt-fg-muted)" }}>
+              <text x={W - padRight + 8} y={y} textAnchor="start" dominantBaseline="middle" fontSize="9" style={{ fill: "#A3A3A3" }}>
                 {Math.round(frac * axisMaxRight)}
               </text>
             </g>
@@ -213,9 +213,9 @@ function CombinedProgressChart({
 
         {migratedCoords.length > 0 && (
           <>
-            <line x1={padLeft} x2={W - padRight} y1={goalY} y2={goalY} strokeWidth="1.5" strokeDasharray="4 3" style={{ stroke: "var(--rt-status-good)" }} />
+            <line x1={padLeft} x2={W - padRight} y1={goalY} y2={goalY} strokeWidth="1.5" strokeDasharray="4 3" style={{ stroke: "#4ADE80" }} />
             <path d={migratedAreaD} fill="url(#cumulative-gradient)" />
-            <path d={migratedLineD} fill="none" strokeWidth="2.5" style={{ stroke: "var(--rt-accent)" }} />
+            <path d={migratedLineD} fill="none" strokeWidth="2.5" style={{ stroke: "#F2FF70" }} />
             {migratedCoords.map(([x, y], i) => (
               <g key={migrationPoints[i].weekStart}>
                 <circle
@@ -224,8 +224,8 @@ function CombinedProgressChart({
                   r={i === migratedCoords.length - 1 ? 3.5 : 2.5}
                   strokeWidth="1.5"
                   style={{
-                    fill: i === migratedCoords.length - 1 ? "var(--rt-accent)" : "var(--rt-surface-1)",
-                    stroke: "var(--rt-accent)",
+                    fill: i === migratedCoords.length - 1 ? "#F2FF70" : "#262626",
+                    stroke: "#F2FF70",
                   }}
                 />
                 <text
@@ -234,7 +234,7 @@ function CombinedProgressChart({
                   textAnchor={i === migratedCoords.length - 1 ? "end" : "middle"}
                   fontSize="10"
                   fontWeight={i === migratedCoords.length - 1 ? "700" : "600"}
-                  style={{ fill: i === migratedCoords.length - 1 ? "var(--rt-fg)" : "var(--rt-fg-body)" }}
+                  style={{ fill: i === migratedCoords.length - 1 ? "var(--rt-fg)" : "#D4D4D4" }}
                 >
                   {migratedValues[i]}
                 </text>
@@ -245,8 +245,8 @@ function CombinedProgressChart({
 
         {createdWeekly.length > 0 && (
           <>
-            <path d={createdD} fill="none" strokeWidth="1.75" style={{ stroke: "var(--rt-fg-muted)" }} />
-            <path d={closedD} fill="none" strokeWidth="1.75" strokeDasharray="0" style={{ stroke: "var(--rt-status-good)" }} />
+            <path d={createdD} fill="none" strokeWidth="1.75" style={{ stroke: "#A3A3A3" }} />
+            <path d={closedD} fill="none" strokeWidth="1.75" strokeDasharray="0" style={{ stroke: "#4ADE80" }} />
             {createdWeekly.map((v, i) => (
               <circle
                 key={`c-${ticketPoints[i].weekStart}`}
@@ -254,7 +254,7 @@ function CombinedProgressChart({
                 cy={yAtRight(v)}
                 r="2"
                 strokeWidth="1.5"
-                style={{ fill: "var(--rt-surface-1)", stroke: "var(--rt-fg-muted)" }}
+                style={{ fill: "#262626", stroke: "#A3A3A3" }}
               />
             ))}
             {closedWeekly.map((v, i) => (
@@ -264,7 +264,7 @@ function CombinedProgressChart({
                 cy={yAtRight(v)}
                 r="2"
                 strokeWidth="1.5"
-                style={{ fill: "var(--rt-surface-1)", stroke: "var(--rt-status-good)" }}
+                style={{ fill: "#262626", stroke: "#4ADE80" }}
               />
             ))}
           </>
@@ -272,21 +272,21 @@ function CombinedProgressChart({
 
         {labelPoints.map((p, i) =>
           i % labelStep === 0 || i === labelPoints.length - 1 ? (
-            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="9" style={{ fill: "var(--rt-fg-muted)" }}>
+            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="9" style={{ fill: "#A3A3A3" }}>
               {fmtAxis(new Date(p.weekStart))}
             </text>
           ) : null
         )}
       </svg>
       <div className="flex gap-3 mt-1 flex-wrap">
-        <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-accent)" }} /> migrated to V2 (cumulative, left axis)
+        <span className="flex items-center gap-1 text-[10px]" style={{ color: "#A3A3A3" }}>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#F2FF70" }} /> migrated to V2 (cumulative, left axis)
         </span>
-        <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-fg-muted)" }} /> tickets created (per week, right axis)
+        <span className="flex items-center gap-1 text-[10px]" style={{ color: "#A3A3A3" }}>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#A3A3A3" }} /> tickets created (per week, right axis)
         </span>
-        <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-status-good)" }} /> tickets resolved (per week, right axis)
+        <span className="flex items-center gap-1 text-[10px]" style={{ color: "#A3A3A3" }}>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#4ADE80" }} /> tickets resolved (per week, right axis)
         </span>
       </div>
     </div>
