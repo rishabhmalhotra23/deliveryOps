@@ -4,13 +4,19 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { loadV2MigrationOverview, type V2MigrationOverview } from "@/lib/processes/loader";
-import { loadTicketsBundle, type DomainGroup } from "@/lib/tickets/loader";
+import { loadTicketsBundle } from "@/lib/tickets/loader";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 import { resolveRange, type DateRange, type RangeRequest } from "@/lib/reports/date-range";
 import { computeMigrationProgramStart, computeCumulativeProgress, type ProgressPoint } from "@/lib/reports/migration-progress";
 import { findRenewalSpotlight, findAtRiskMigratingCustomers, type RenewalSpotlight, type AtRiskMigratingEntry } from "@/lib/reports/allhands-signals";
 import { resolveBlockers, type BlockerItem } from "@/lib/reports/allhands-blockers";
-import { computeCustomerTicketConcentration, type CustomerTicketConcentration } from "@/lib/reports/allhands-ticket-buckets";
+import {
+  computeDomainBuckets,
+  computeCustomerTicketConcentration,
+  type DomainBucket,
+  type CustomerTicketConcentration,
+} from "@/lib/reports/allhands-ticket-buckets";
+import { computeTicketVelocity, type TicketVelocityPoint } from "@/lib/reports/allhands-ticket-velocity";
 import { TABLES, IN_FLIGHT_STAGES, type Process } from "@/lib/supabase/types";
 
 export interface AllHandsStatus {
@@ -18,6 +24,23 @@ export interface AllHandsStatus {
   activeCount: number;
   migratingNowCount: number;
   queuedCount: number;
+  /** live_on_v2 + migrated_pending_commercial — migration work genuinely
+   *  finished, whether or not the customer has signed off commercially yet.
+   *  migrationDoneCount + migratingNowCount == migrationGoalTotal, always —
+   *  same population, no other stage exists outside those two groups. */
+  migrationDoneCount: number;
+  /** Total processes ever in scope for the V2 migration program: every
+   *  migration_stage row except not_required (never in scope) and v2_native
+   *  (built directly on V2, nothing to migrate). This is the "Goal: N total
+   *  migrations" denominator everywhere on the report — the chart's goal
+   *  line, the stat tiles, and the headline caption all read this same
+   *  number so it's never possible for a chart's peak to exceed its own goal. */
+  migrationGoalTotal: number;
+  /** Processes in the migration-goal population with is_blocked = true, right
+   *  now. A single current snapshot, not a historical trend — there's no
+   *  point-in-time history of is_blocked to reconstruct a real trend line
+   *  from, so this is surfaced as a badge, not a chart series. */
+  migrationBlockedNowCount: number;
   byStage: V2MigrationOverview["counts"]["byStage"];
   /** group: "complete" for stages that are done migrating (live_on_v2,
    *  migrated_pending_commercial — shown for context), "in_progress" for the
@@ -30,24 +53,27 @@ export interface AllHandsReport {
   range: DateRange;
   generatedAt: string;
   status: AllHandsStatus;
+  /** Cumulative "at or past parity" count, weekly, over the SAME population
+   *  status.migrationGoalTotal counts — its final point can never exceed
+   *  migrationGoalTotal, since both are drawn from the same filtered set. */
   cumulativeProgress: ProgressPoint[];
-  /** Denominator for the cumulative-progress headline: how many V2-relevant
-   *  processes are tracked at all. Drawn from the SAME population the chart's
-   *  numerator is computed over (overview.rows), so "N of M at or past parity"
-   *  is always a true subset relationship — never two numbers from two
-   *  different filters added together. */
-  trackedMigrationTotal: number;
+  /** Weekly cumulative ticket-created vs ticket-closed counts, over all
+   *  in-scope Linear tickets (not just hard blockers — this chart is about
+   *  overall ticket velocity, not severity). */
+  ticketVelocity: TicketVelocityPoint[];
   renewalSpotlight: RenewalSpotlight | null;
   atRiskMigrating: AtRiskMigratingEntry[];
   blockers: BlockerItem[];
-  /** Open in-scope tickets grouped by domain (Quill, IDP, Browser, ...),
-   *  sorted by volume descending — "which category has the most tickets",
-   *  not filtered to hard blockers only. */
-  ticketDomainBuckets: DomainGroup[];
-  /** Open in-scope tickets grouped by the customer whose migrating process(es)
-   *  reference them, sorted by volume descending. Domain buckets alone hide
-   *  a single migration (e.g. Conectiv) that racks up tickets across several
-   *  domains at once — this surfaces that concentration directly. */
+  /** Open HARD BLOCKER tickets grouped by domain (Quill, IDP, Browser, ...),
+   *  sorted by volume descending. Deliberately hard_blocker only — mixing in
+   *  workaround_exists/just_a_bug tickets diluted "where are we actually
+   *  stuck" with general feedback-backlog volume. */
+  ticketDomainBuckets: DomainBucket[];
+  /** Open hard-blocker tickets grouped by the customer whose migrating
+   *  process(es) reference them, sorted by volume descending. Domain buckets
+   *  alone hide a single migration (e.g. Conectiv) that racks up blockers
+   *  across several domains at once — this surfaces that concentration
+   *  directly. */
   customerTicketConcentration: CustomerTicketConcentration[];
   ticketHealth: {
     openInScope: number;
@@ -156,6 +182,14 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   // is a broader view that legitimately includes a "Live on V2" column for
   // context (see the mockup), so it's built from its own filter, not this one.
   const migratingNowRows = overview.rows.filter((r) => IN_FLIGHT_STAGES.includes(r.migration_stage));
+  // The migration-goal population: every migration_stage row except
+  // not_required (never in scope for V2 at all) and v2_native (built
+  // directly on V2 — there's nothing to migrate). This is the SAME
+  // population computeCumulativeProgress charts, so the chart's peak and
+  // the goal line always agree — no two-different-filters mismatch.
+  const migrationTrackedRows = overview.rows.filter((r) => r.migration_stage !== "v2_native");
+  const migrationDoneRows = migrationTrackedRows.filter((r) => !IN_FLIGHT_STAGES.includes(r.migration_stage));
+  const migrationBlockedNowCount = migrationTrackedRows.filter((r) => r.is_blocked).length;
   const stageRows = STAGE_ORDER.map((stage) => {
     const rows = overview.rows.filter((r) => r.migration_stage === stage);
     return {
@@ -170,16 +204,15 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   }).filter((row) => row.count > 0);
 
   // ── Cumulative progress (all-time since program start, not per-quarter) ──
-  // Computed over overview.rows — the V2-relevant set (isV2Relevant() in
-  // lib/processes/loader.ts) — and NOT over every process row. The chart's
-  // headline reads "N of M tracked migrations at or past parity", so the
-  // numerator (N, the chart's final cumulative value) and the denominator
-  // (M = trackedMigrationTotal) have to come from one population. Using
-  // allProcesses for N previously let migration_stage='not_required' rows that
-  // happen to carry a milestone date inflate the numerator above a denominator
-  // built from the filtered rows. V2ProcessRow extends Process, so these carry
-  // every milestone field the derivation needs.
-  const trackedProcesses: Process[] = overview.rows;
+  // Computed over migrationTrackedRows — NOT overview.rows directly, and NOT
+  // every process row. The chart's peak has to stay <= the goal line, and the
+  // goal is migrationGoalTotal (migrationTrackedRows.length): using a
+  // differently-filtered population for either one previously let the chart
+  // read "46" against a goal of "45", or let migration_stage='not_required'
+  // rows that happen to carry a milestone date inflate the numerator.
+  // V2ProcessRow extends Process, so these carry every milestone field the
+  // derivation needs.
+  const trackedProcesses: Process[] = migrationTrackedRows;
   const derivedProgramStart = computeMigrationProgramStart(trackedProcesses);
   // V2 migration became a company-wide program in mid-June 2026 (Rishabh,
   // 2026-08-10) — a handful of pilot migrations (JBI, TTX, Plunkett, Norco,
@@ -201,9 +234,11 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
 
   // ── Blockers ──────────────────────────────────────────────────────────────
   const blockers = resolveBlockers(tickets.team_asks.now.concat(tickets.team_asks.soon));
-  const ticketDomainBuckets = [...tickets.domain_groups].sort((a, b) => b.total - a.total);
-  const openTicketsById = new Map(tickets.open_tickets.map((t) => [t.id, t]));
-  const customerTicketConcentration = computeCustomerTicketConcentration(customers, processesByCustomer, openTicketsById);
+  const hardBlockerOpenTickets = tickets.open_tickets.filter((t) => t.classification === "hard_blocker");
+  const ticketDomainBuckets = computeDomainBuckets(hardBlockerOpenTickets);
+  const hardBlockerTicketsById = new Map(hardBlockerOpenTickets.map((t) => [t.id, t]));
+  const customerTicketConcentration = computeCustomerTicketConcentration(customers, processesByCustomer, hardBlockerTicketsById);
+  const ticketVelocity = computeTicketVelocity(tickets.open_tickets.concat(tickets.closed_tickets), range.end);
 
   return {
     range,
@@ -213,11 +248,14 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
       activeCount,
       migratingNowCount: migratingNowRows.length,
       queuedCount,
+      migrationDoneCount: migrationDoneRows.length,
+      migrationGoalTotal: migrationTrackedRows.length,
+      migrationBlockedNowCount,
       byStage: overview.counts.byStage,
       stageRows,
     },
     cumulativeProgress,
-    trackedMigrationTotal: trackedProcesses.length,
+    ticketVelocity,
     renewalSpotlight,
     atRiskMigrating,
     blockers,

@@ -98,10 +98,10 @@ function StageColumn({ stage, label, count, processNames }: { stage: string; lab
   );
 }
 
-// ── Cumulative progress chart — SVG area/line with gridlines, weekly point
-//    markers, and a labeled y-axis so the scale and weekly movement are both
-//    readable, not just the overall shape. ────────────────────────────────────
-function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgress"] }) {
+// ── Migration-progress chart — SVG area/line with gridlines, a dashed goal
+//    line, and a value label above every weekly point (not just the latest),
+//    so the whole climb is readable, not just the final number. ─────────────
+function CumulativeChart({ points, goal }: { points: AllHandsReport["cumulativeProgress"]; goal: number }) {
   if (points.length === 0) {
     return (
       <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
@@ -111,19 +111,20 @@ function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgres
   }
 
   const W = 640;
-  const H = 150;
+  const H = 160;
   const padLeft = 28;
-  const padRight = 8;
-  const padTop = 16;
+  const padRight = 34;
+  const padTop = 20;
   const padBottom = 20;
   const chartW = W - padLeft - padRight;
   const chartH = H - padTop - padBottom;
 
   const values = points.map((p) => p.cumulativeAtOrPastParity);
-  const max = Math.max(...values, 1);
-  // Round the axis ceiling up to a "nice" multiple of 5 so gridline labels
-  // aren't jagged (e.g. 46 -> axis tops out at 50, not 46).
-  const axisMax = Math.max(5, Math.ceil(max / 5) * 5);
+  const latest = values[values.length - 1];
+  // The axis always shows the goal line, with a little headroom above it —
+  // the chart's peak can never exceed goal (same population, see
+  // AllHandsStatus.migrationGoalTotal), so goal is always the true ceiling.
+  const axisMax = Math.max(5, Math.ceil((goal * 1.08) / 5) * 5);
 
   const xAt = (i: number) => padLeft + (values.length === 1 ? chartW / 2 : (i / (values.length - 1)) * chartW);
   const yAt = (v: number) => padTop + chartH - (v / axisMax) * chartH;
@@ -134,8 +135,8 @@ function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgres
   const areaD = `${lineD} L${xAt(values.length - 1).toFixed(1)},${baseline} L${xAt(0).toFixed(1)},${baseline} Z`;
 
   const gridFractions = [0, 0.25, 0.5, 0.75, 1];
-  const latest = values[values.length - 1];
-  const delta = latest - values[0];
+  const goalY = yAt(goal);
+  const toGo = Math.max(0, goal - latest);
 
   // Thin out x-axis date labels so they don't overlap when there are many weeks.
   const maxLabels = 7;
@@ -147,11 +148,9 @@ function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgres
         <span className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
           Weekly, since {fmtShort(new Date(points[0].weekStart))}
         </span>
-        {delta > 0 && (
-          <span className="text-[10px] font-bold" style={{ color: "var(--rt-status-good)" }}>
-            +{delta} this window
-          </span>
-        )}
+        <span className="text-[10px] font-bold" style={{ color: toGo === 0 ? "var(--rt-status-good)" : "var(--rt-fg-muted)" }}>
+          {toGo === 0 ? "Goal reached" : `${toGo} to go`}
+        </span>
       </div>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
         <defs>
@@ -173,31 +172,36 @@ function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgres
           );
         })}
 
+        <line x1={padLeft} x2={W - padRight} y1={goalY} y2={goalY} stroke="var(--rt-status-good)" strokeWidth="1.5" strokeDasharray="4 3" />
+        <text x={W - padRight + 4} y={goalY} dominantBaseline="middle" fontSize="8" fontWeight="700" fill="var(--rt-status-good)">
+          {goal}
+        </text>
+
         <path d={areaD} fill="url(#cumulative-gradient)" />
         <path d={lineD} fill="none" stroke="var(--rt-accent)" strokeWidth="2.5" />
 
         {coords.map(([x, y], i) => (
-          <circle
-            key={points[i].weekStart}
-            cx={x}
-            cy={y}
-            r={i === coords.length - 1 ? 3.5 : 2.5}
-            fill={i === coords.length - 1 ? "var(--rt-accent)" : "var(--rt-surface-1)"}
-            stroke="var(--rt-accent)"
-            strokeWidth="1.5"
-          />
+          <g key={points[i].weekStart}>
+            <circle
+              cx={x}
+              cy={y}
+              r={i === coords.length - 1 ? 3.5 : 2.5}
+              fill={i === coords.length - 1 ? "var(--rt-accent)" : "var(--rt-surface-1)"}
+              stroke="var(--rt-accent)"
+              strokeWidth="1.5"
+            />
+            <text
+              x={x}
+              y={Math.max(padTop - 4, y - 8)}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight={i === coords.length - 1 ? "700" : "600"}
+              fill={i === coords.length - 1 ? "var(--rt-fg)" : "var(--rt-fg-body)"}
+            >
+              {values[i]}
+            </text>
+          </g>
         ))}
-
-        <text
-          x={xAt(coords.length - 1)}
-          y={Math.max(padTop - 2, yAt(latest) - 9)}
-          textAnchor="end"
-          fontSize="11"
-          fontWeight="700"
-          fill="var(--rt-fg)"
-        >
-          {latest}
-        </text>
 
         {points.map((p, i) =>
           i % labelStep === 0 || i === points.length - 1 ? (
@@ -207,6 +211,101 @@ function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgres
           ) : null
         )}
       </svg>
+    </div>
+  );
+}
+
+// ── Ticket velocity chart — cumulative created vs. closed, both series real
+//    historical counts (linear_created_at / closed_at), not a snapshot. ──────
+function TicketVelocityChart({ points }: { points: AllHandsReport["ticketVelocity"] }) {
+  if (points.length === 0) {
+    return (
+      <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
+        Not enough ticket history yet to chart velocity.
+      </div>
+    );
+  }
+
+  const W = 640;
+  const H = 150;
+  const padLeft = 28;
+  const padRight = 8;
+  const padTop = 16;
+  const padBottom = 20;
+  const chartW = W - padLeft - padRight;
+  const chartH = H - padTop - padBottom;
+
+  const created = points.map((p) => p.cumulativeCreated);
+  const closed = points.map((p) => p.cumulativeClosed);
+  const max = Math.max(...created, 1);
+  const axisMax = Math.max(5, Math.ceil(max / 10) * 10);
+
+  const xAt = (i: number) => padLeft + (points.length === 1 ? chartW / 2 : (i / (points.length - 1)) * chartW);
+  const yAt = (v: number) => padTop + chartH - (v / axisMax) * chartH;
+
+  const pathFor = (values: number[]) => values.map((v, i) => `${i === 0 ? "M" : "L"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+  const createdD = pathFor(created);
+  const closedD = pathFor(closed);
+
+  const gridFractions = [0, 0.25, 0.5, 0.75, 1];
+  const totalCreated = created[created.length - 1];
+  const totalClosed = closed[closed.length - 1];
+  const totalOpen = totalCreated - totalClosed;
+
+  const maxLabels = 7;
+  const labelStep = Math.max(1, Math.ceil(points.length / maxLabels));
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-1.5">
+        <span className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+          Weekly, since {fmtShort(new Date(points[0].weekStart))}
+        </span>
+        <span className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
+          <span style={{ color: "var(--rt-fg)", fontWeight: 700 }}>{totalCreated}</span> created ·{" "}
+          <span style={{ color: "var(--rt-status-good)", fontWeight: 700 }}>{totalClosed}</span> resolved ·{" "}
+          <span style={{ color: "var(--rt-status-warn)", fontWeight: 700 }}>{totalOpen}</span> open
+        </span>
+      </div>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        {gridFractions.map((frac) => {
+          const y = padTop + chartH - frac * chartH;
+          return (
+            <g key={frac}>
+              <line x1={padLeft} x2={W - padRight} y1={y} y2={y} stroke="var(--rt-surface-2)" strokeWidth="1" />
+              <text x={padLeft - 5} y={y} textAnchor="end" dominantBaseline="middle" fontSize="8" fill="var(--rt-fg-muted)">
+                {Math.round(frac * axisMax)}
+              </text>
+            </g>
+          );
+        })}
+
+        <path d={createdD} fill="none" stroke="var(--rt-fg-muted)" strokeWidth="2" />
+        <path d={closedD} fill="none" stroke="var(--rt-status-good)" strokeWidth="2" />
+
+        {created.map((v, i) => (
+          <circle key={`c-${points[i].weekStart}`} cx={xAt(i)} cy={yAt(v)} r="2" fill="var(--rt-surface-1)" stroke="var(--rt-fg-muted)" strokeWidth="1.5" />
+        ))}
+        {closed.map((v, i) => (
+          <circle key={`d-${points[i].weekStart}`} cx={xAt(i)} cy={yAt(v)} r="2" fill="var(--rt-surface-1)" stroke="var(--rt-status-good)" strokeWidth="1.5" />
+        ))}
+
+        {points.map((p, i) =>
+          i % labelStep === 0 || i === points.length - 1 ? (
+            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="8" fill="var(--rt-fg-muted)">
+              {fmtAxis(new Date(p.weekStart))}
+            </text>
+          ) : null
+        )}
+      </svg>
+      <div className="flex gap-3 mt-1">
+        <span className="flex items-center gap-1 text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-fg-muted)" }} /> created
+        </span>
+        <span className="flex items-center gap-1 text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-status-good)" }} /> resolved
+        </span>
+      </div>
     </div>
   );
 }
@@ -352,6 +451,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
   const {
     status,
     cumulativeProgress,
+    ticketVelocity,
     renewalSpotlight,
     atRiskMigrating,
     blockers,
@@ -361,13 +461,11 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
     ticketDataError,
   } = report;
 
-  // Numerator and denominator both come from the one V2-relevant population
-  // the loader builds the chart from (see AllHandsReport.trackedMigrationTotal).
-  // Never add the stage-board counts back in: live_on_v2 /
-  // migrated_pending_commercial processes have already reached parity, so
-  // adding them to the reached-parity total double-counts them.
+  // Numerator and denominator both come from the one migration-goal population
+  // (see AllHandsStatus.migrationGoalTotal). Never add the stage-board counts
+  // back in: live_on_v2/migrated_pending_commercial processes have already
+  // reached parity, so adding them to the reached-parity total double-counts them.
   const reachedParityTotal = cumulativeProgress.length > 0 ? cumulativeProgress[cumulativeProgress.length - 1].cumulativeAtOrPastParity : 0;
-  const trackedTotal = report.trackedMigrationTotal;
 
   const exportLabel =
     exportState === "loading" ? "Rendering…" : exportState === "done" ? "Saved ✓" : exportState === "error" ? "Failed" : "Download PNG";
@@ -403,17 +501,31 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         </div>
       </div>
 
-      {/* Section 1: merged portfolio & migration status */}
-      <Caption>Portfolio &amp; migration status</Caption>
+      {/* Section 1a: general delivery portfolio — lifecycle-based, not migration-specific */}
+      <Caption>Delivery portfolio</Caption>
+      <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
+        <div className="flex gap-4">
+          <StatTile value={status.liveCount} label="Live in production" />
+          <StatTile value={status.activeCount} label="Active work" />
+          <StatTile value={status.queuedCount} label="Queued" />
+        </div>
+      </div>
+
+      {/* Section 1b: V2 migration program — migration_stage-based, a fixed-size
+          goal population (migrationDoneCount + migratingNowCount == migrationGoalTotal,
+          always — see AllHandsStatus.migrationGoalTotal for why). */}
+      <Caption>V2 migration program — goal: {status.migrationGoalTotal} total migrations</Caption>
       <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
         <div
           className="flex gap-4 mb-3.5 pb-3.5"
           style={{ borderBottom: "1px solid var(--rt-surface-2)" }}
         >
-          <StatTile value={status.liveCount} label="Live in production" />
-          <StatTile value={status.activeCount} label="Active work" />
-          <StatTile value={status.migratingNowCount} label="Migrating to V2 now" color="var(--rt-accent)" />
-          <StatTile value={status.queuedCount} label="Queued" />
+          <StatTile value={status.migrationGoalTotal} label="Total in scope" />
+          <StatTile value={status.migrationDoneCount} label="Migrated to V2" color="var(--rt-status-good)" />
+          <StatTile value={status.migratingNowCount} label="Actively migrating" color="var(--rt-accent)" />
+          {status.migrationBlockedNowCount > 0 && (
+            <StatTile value={status.migrationBlockedNowCount} label="Blocked right now" color="var(--rt-status-bad)" />
+          )}
         </div>
         {(() => {
           const completeRows = status.stageRows.filter((r) => r.group === "complete");
@@ -454,11 +566,27 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
       {/* Section 2: cumulative progress since program start */}
       <Caption>Migration progress — cumulative since the program started</Caption>
       <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
-        <CumulativeChart points={cumulativeProgress} />
+        <CumulativeChart points={cumulativeProgress} goal={status.migrationGoalTotal} />
         <div className="text-[10px] mt-2" style={{ color: "var(--rt-fg-body)" }}>
-          {reachedParityTotal} of {trackedTotal} tracked migrations at or past parity since the program started. A running
-          total, not a weekly count — a quiet week flattens the line, it never looks like a step backward.
+          {reachedParityTotal} of {status.migrationGoalTotal} tracked migrations at or past parity since the program started. A
+          running total, not a weekly count — a quiet week flattens the line, it never looks like a step backward.
+          {status.migrationBlockedNowCount > 0 && (
+            <> {status.migrationBlockedNowCount} of those are blocked right now — a current snapshot, not a trend.</>
+          )}
         </div>
+      </div>
+
+      {/* Section 2b: ticket velocity — real historical created/closed counts,
+          not a point-in-time snapshot like the blocked-now badge above. */}
+      <Caption>Blocker ticket velocity — created vs. resolved</Caption>
+      <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
+        {ticketDataError ? (
+          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
+            Unavailable — ticket data could not be read (see above).
+          </div>
+        ) : (
+          <TicketVelocityChart points={ticketVelocity} />
+        )}
       </div>
 
       {/* Section 3: upcoming renewal spotlight — only when non-null */}
@@ -575,7 +703,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         </>
       )}
 
-      <Caption>Open tickets by category</Caption>
+      <Caption>Hard blockers by category — {ticketHealth.hardBlockers} total, no workarounds stated</Caption>
       <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
         {ticketDataError ? (
           <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
@@ -583,7 +711,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           </div>
         ) : ticketDomainBuckets.length === 0 ? (
           <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-fg-muted)" }}>
-            No open tickets.
+            No open hard blockers.
           </div>
         ) : (
           ticketDomainBuckets.map((bucket, i) => (
@@ -596,16 +724,13 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                 <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
                   {domainLabel(bucket.domain)}
                 </span>
-                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-fg)" }}>
-                  {bucket.total}
-                  {bucket.hard_blocker > 0 && (
-                    <span style={{ color: "var(--rt-status-bad)" }}> · {bucket.hard_blocker} hard</span>
-                  )}
+                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-status-bad)" }}>
+                  {bucket.count}
                 </span>
               </div>
-              {bucket.tickets.length > 0 && (
+              {bucket.sampleTitles.length > 0 && (
                 <div className="text-[9px] mt-1" style={{ color: "var(--rt-fg-muted)" }}>
-                  {bucket.tickets.slice(0, 3).map((t) => t.title).join(" · ")}
+                  {bucket.sampleTitles.join(" · ")}
                 </div>
               )}
             </div>
@@ -613,7 +738,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         )}
       </div>
 
-      <Caption>Open tickets by migration</Caption>
+      <Caption>Hard blockers by migration — {ticketHealth.hardBlockers} total, no workarounds stated</Caption>
       <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
         {ticketDataError ? (
           <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
@@ -621,7 +746,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           </div>
         ) : customerTicketConcentration.length === 0 ? (
           <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-fg-muted)" }}>
-            No open tickets linked to a specific migration.
+            No open hard blockers linked to a specific migration.
           </div>
         ) : (
           customerTicketConcentration.map((c, i) => (
@@ -634,11 +759,8 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                 <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
                   {c.customerName}
                 </span>
-                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-fg)" }}>
-                  {c.openTicketCount}
-                  {c.hardBlockerCount > 0 && (
-                    <span style={{ color: "var(--rt-status-bad)" }}> · {c.hardBlockerCount} hard</span>
-                  )}
+                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-status-bad)" }}>
+                  {c.ticketCount}
                 </span>
               </div>
               {c.sampleTitles.length > 0 && (
