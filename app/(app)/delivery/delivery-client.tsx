@@ -132,7 +132,7 @@ export function DeliveryClient({ overview }: DeliveryClientProps) {
       <DeliveryStatsRow counts={overview.counts} onSelectTab={setTab} />
 
       {/* Filter bar — applies to Delivered / Archive / All */}
-      <div className="glass-card p-3 flex flex-wrap items-center gap-2">
+      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-3 flex flex-wrap items-center gap-2">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -149,7 +149,7 @@ export function DeliveryClient({ overview }: DeliveryClientProps) {
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1 p-1 rounded-lg glass-card w-fit flex-wrap">
+      <div className="flex items-center gap-1 p-1 rounded-lg glass-card dark:bg-[color:var(--surface-1)] dark:border-0 w-fit flex-wrap">
         {TABS.map((t) => (
           <TabButton key={t} label={t} active={tab === t} onClick={() => setTab(t)} />
         ))}
@@ -227,7 +227,7 @@ function Board({
 
   if (total === 0) {
     return (
-      <div className="glass-card p-6 text-sm text-[color:var(--muted-foreground)]">
+      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-6 text-sm text-[color:var(--muted-foreground)]">
         No active processes yet — run the Monday-archive importer to populate this board.
       </div>
     );
@@ -375,7 +375,7 @@ function ProcessTable({ rows, onSelect }: { rows: ProcessRow[]; onSelect: (p: Pr
   }
 
   if (rows.length === 0) {
-    return <div className="glass-card p-6 text-sm text-[color:var(--muted-foreground)]">No processes match the current filters.</div>;
+    return <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-6 text-sm text-[color:var(--muted-foreground)]">No processes match the current filters.</div>;
   }
 
   return (
@@ -500,7 +500,7 @@ function QonQ({ overview }: { overview: ProcessesOverview }) {
 
   if (byQuarter.length === 0) {
     return (
-      <div className="glass-card p-6 text-sm text-[color:var(--muted-foreground)]">
+      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-6 text-sm text-[color:var(--muted-foreground)]">
         No processes with go-live or kickoff dates yet.
       </div>
     );
@@ -508,7 +508,7 @@ function QonQ({ overview }: { overview: ProcessesOverview }) {
 
   return (
     <div className="space-y-4">
-      <div className="glass-card p-5">
+      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-5">
         <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Processes by calendar quarter</div>
         <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
           Delivered vs in-flight vs at risk (all processes)
@@ -540,7 +540,7 @@ function QonQ({ overview }: { overview: ProcessesOverview }) {
       </div>
 
       {avgTtvByQuarter.length > 0 ? (
-        <div className="glass-card p-5">
+        <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-5">
           <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Average TTV</div>
           <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
             Days from kickoff to go-live · per quarter (lower is better) — from the generated ttv_days column
@@ -572,14 +572,14 @@ function QonQ({ overview }: { overview: ProcessesOverview }) {
       ) : null}
 
       {byCustomer.length > 0 ? (
-        <div className="glass-card overflow-hidden">
+        <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden">
           <div className="p-4 border-b border-[var(--glass-border)]">
             <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Delivered per customer</div>
             <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">Top 15, by quarter</div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[var(--glass-bg)] text-[color:var(--muted-foreground)]">
+          <div className="overflow-x-auto p-2 dark:p-2.5">
+            <table className="w-full text-sm dark:border-separate dark:[border-spacing:0_4px]">
+              <thead className="bg-[var(--glass-bg)] dark:bg-transparent text-[color:var(--muted-foreground)]">
                 <tr>
                   <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-left">Customer</th>
                   <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-right">Total</th>
@@ -592,11 +592,11 @@ function QonQ({ overview }: { overview: ProcessesOverview }) {
               </thead>
               <tbody>
                 {byCustomer.map((row) => (
-                  <tr key={row.customer} className="border-t border-[var(--glass-border)]">
-                    <td className="px-3 py-2 font-medium text-[color:var(--foreground)]">{row.customer}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-medium">{row.total}</td>
-                    {allQuarters.map((q) => (
-                      <td key={q} className="px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)]">
+                  <tr key={row.customer} className="border-t border-[var(--glass-border)] dark:border-0">
+                    <td className="px-3 py-2 font-medium text-[color:var(--foreground)] dark:bg-[color:var(--surface-2)] dark:rounded-l-lg">{row.customer}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-medium dark:bg-[color:var(--surface-2)]">{row.total}</td>
+                    {allQuarters.map((q, i) => (
+                      <td key={q} className={`px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] dark:bg-[color:var(--surface-2)] ${i === allQuarters.length - 1 ? "dark:rounded-r-lg" : ""}`}>
                         {row.byQ[q] ?? "—"}
                       </td>
                     ))}

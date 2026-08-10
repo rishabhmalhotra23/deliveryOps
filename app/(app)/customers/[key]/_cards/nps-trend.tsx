@@ -29,7 +29,7 @@ const CHART_CONFIG = {
 export function NpsTrend({ data, className }: { data: NpsTrendPoint[]; className?: string }) {
   if (data.length === 0) {
     return (
-      <Card className={className}>
+      <Card className={`dark:bg-[color:var(--surface-1)] dark:border-[rgba(255,255,255,0.08)] ${className ?? ""}`}>
         <CardHeader>
           <CardTitle>NPS trend</CardTitle>
         </CardHeader>
@@ -45,7 +45,7 @@ export function NpsTrend({ data, className }: { data: NpsTrendPoint[]; className
   }
 
   return (
-    <Card className={className}>
+    <Card className={`dark:bg-[color:var(--surface-1)] dark:border-[rgba(255,255,255,0.08)] ${className ?? ""}`}>
       <CardHeader>
         <CardTitle>NPS trend by quarter</CardTitle>
         <Text level="xSmall" color="muted">

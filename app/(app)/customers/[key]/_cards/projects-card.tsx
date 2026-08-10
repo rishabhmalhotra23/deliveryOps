@@ -126,7 +126,7 @@ export function ProjectsCard({
   }
   if (projects.length === 0) {
     return (
-      <div className={`glass-card glass-card-hover p-5 ${className ?? ""}`}>
+      <div className={`glass-card glass-card-hover dark:bg-[color:var(--surface-1)] dark:border-0 p-5 ${className ?? ""}`}>
         <div className="eyebrow text-[color:var(--muted-foreground)] mb-2">Projects</div>
         <EmptyState
           icon="FolderOpen"
@@ -172,7 +172,7 @@ export function ProjectsCard({
   ].filter(Boolean).join(" · ");
 
   return (
-    <div className={`glass-card glass-card-hover overflow-hidden ${className ?? ""}`}>
+    <div className={`glass-card glass-card-hover dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden ${className ?? ""}`}>
       <div className="px-5 py-4 border-b border-[var(--glass-border)] flex items-center justify-between">
         <div>
           <div className="eyebrow text-[color:var(--muted-foreground)]">Projects</div>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeliveryOps — Customer 360 restyle findings (Stage A proof page)</title>
+<style>
+  body{margin:0;background:#0a0a0a;color:#FAFAFA;font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.6;padding:30px 20px 80px}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 16px}
+  h2{font-size:14px;margin:28px 0 8px;color:#F2FF70}
+  p{color:#D4D4D4}
+  code{background:#000;padding:1px 5px;border-radius:4px;font-size:12px;color:#F2FF70}
+  .card{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px 20px;margin-bottom:14px}
+  .verdict{background:#1a2a1a;border:1px solid #2d4d2d;border-radius:10px;padding:16px 20px}
+  ul{margin:6px 0;padding-left:20px}
+  li{margin:4px 0;color:#D4D4D4}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Customer 360 — third Stage A proof page, findings before touching code</h1>
+
+  <p>Unlike Dashboard (needed a real IA merge) and Delivery (had two real illegible-dark-mode bugs), reading
+  through Customer 360's named components — <code>CustomerHero</code>, <code>StickyStatsRail</code>,
+  <code>CustomerTabs</code>, and the right-rail cards (<code>AccountSnapshot</code>, <code>K2MetricsCard</code>,
+  <code>ContactsCard</code>, <code>EventsTasksCard</code>, <code>MetadataCard</code>) — turned up a page that's
+  already in good shape:</p>
+
+  <div class="card">
+    <h2 style="margin-top:0">What's already correct, no change needed</h2>
+    <ul>
+      <li><code>CustomerHero</code> sits on <code>--card</code>, which the foundation-phase commit already
+        repointed to <code>--surface-1</code> (#262626) — it inherited the new palette for free.</li>
+      <li><code>AccountSnapshot</code> / <code>K2MetricsCard</code> use the app's own <code>glass-card</code>
+        utility, which already has a complete, correct <code>.dark</code> treatment (translucent surface,
+        proper <code>dark:text-emerald-400</code>-style tone colors on every status indicator).</li>
+      <li><code>ContactsCard</code>, <code>EventsTasksCard</code>, <code>MetadataCard</code>, and
+        <code>NpsTrend</code> are built on <strong>Kognitos Lattice's</strong> own <code>Card</code>/
+        <code>ChartContainer</code> components — a separate design system with its own complete, independent
+        dark theme (<code>node_modules/@kognitos/lattice/dist/theme.css</code>). The foundation-phase commit
+        already flipped <code>LatticeThemeProvider</code>'s default to dark, so these inherited a proper dark
+        palette automatically, with no styling work of ours involved.</li>
+      <li><code>CustomerTabs</code>' active-tab pill already uses the accent yellow consistently, same as
+        Delivery's tab bar.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">One real bug found — same class as Delivery's</h2>
+    <p><code>_cards/arr-trend.tsx</code> (the Overview tab's contract-ARR chart, visible by default) has its
+    own third copy of the <code>useChartTheme()</code> hook with the same stale constants already fixed twice
+    elsewhere (<code>#71717a</code> axis, <code>#18181b</code> tooltip bg, <code>#f4f4f5</code> text) —
+    retuning to <code>--foreground-muted</code> / <code>--surface-1</code> / <code>--foreground</code> for
+    consistency with the Trends tab and Delivery's Q-on-Q charts.</p>
+  </div>
+
+  <div class="verdict">
+    <h2 style="margin-top:0;color:#86efac">Recommendation: narrower scope than originally planned</h2>
+    <p>The plan said "cards move to <code>--surface-1</code> backgrounds with the new radius" for this page.
+    Having now read the actual components, I don't think that's the right call: this single page already
+    mixes the app's own <code>glass-card</code> system with Lattice's <code>Card</code> system, and both
+    already render correctly in dark mode via their own complete theming. Converting just
+    <code>AccountSnapshot</code>/<code>K2MetricsCard</code> to flat <code>--surface-1</code> while
+    <code>ContactsCard</code>/<code>EventsTasksCard</code>/<code>MetadataCard</code> stay on Lattice's own
+    dark palette would leave the right rail with <em>three</em> visually distinct card treatments instead of
+    two — more inconsistent, not less, and for no correctness gain (nothing here is actually broken).</p>
+    <p><strong>Proposing:</strong> fix the one genuine bug (ArrTrend's chart chrome) and leave everything
+    else as-is. A full glass → flat-surface unification across the whole customer page (including Lattice's
+    cards) is a bigger, separate design decision — reasonable to fold into Stage B once more of the app has
+    moved to the flat-surface system and there's a fuller picture of which convention should win app-wide.</p>
+  </div>
+
+  <p style="margin-top:24px;color:#888;font-size:12px">Reply "yes" to go with the narrower scope above, or
+  tell me to proceed with the full flat-surface conversion instead.</p>
+</div>
+</body>
+</html>

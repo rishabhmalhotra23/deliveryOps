@@ -16,7 +16,7 @@ import type { ContactsCardProps } from "@/lib/customers/view-model";
 
 export function ContactsCard({ contacts, className }: ContactsCardProps & { className?: string }) {
   return (
-    <Card className={className}>
+    <Card className={`dark:bg-[color:var(--surface-1)] dark:border-[rgba(255,255,255,0.08)] ${className ?? ""}`}>
       <CardHeader>
         <CardTitle>Contacts</CardTitle>
         <Text level="xSmall" color="muted">from Salesforce · {contacts.length} contact{contacts.length === 1 ? "" : "s"}</Text>

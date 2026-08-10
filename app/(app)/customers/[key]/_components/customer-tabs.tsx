@@ -77,7 +77,7 @@ export function CustomerTabs({
   return (
     <div className="space-y-4">
       {/* Tab bar */}
-      <div className="flex items-center gap-1 p-1 rounded-lg glass-card w-fit flex-wrap">
+      <div className="flex items-center gap-1 p-1 rounded-lg glass-card dark:bg-[color:var(--surface-1)] dark:border-0 w-fit flex-wrap">
         {TABS.map((tab) => (
           <TabButton
             key={tab}

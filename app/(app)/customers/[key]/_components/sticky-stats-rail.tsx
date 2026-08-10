@@ -61,7 +61,7 @@ export function StickyStatsRail({
           visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
         }`}
       >
-        <div className="glass-card rounded-none border-x-0 border-t-0 px-6 py-2.5 max-w-full">
+        <div className="glass-card dark:bg-[color:var(--surface-1)] rounded-none border-x-0 border-t-0 dark:border-b dark:border-[rgba(255,255,255,0.08)] px-6 py-2.5 max-w-full">
           <div className="max-w-[1400px] mx-auto flex items-center gap-4 overflow-x-auto">
             {/* Customer name */}
             <span className="text-sm font-semibold tracking-tighter text-[color:var(--foreground)] shrink-0 mr-2">

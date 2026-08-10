@@ -13,11 +13,11 @@ function useChartTheme() {
   useEffect(() => setMounted(true), []);
   const dark = mounted && resolvedTheme === "dark";
   return {
-    grid: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-    axis: dark ? "#71717a" : "#a1a1aa",
-    tooltipBg: dark ? "#18181b" : "#ffffff",
+    grid: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+    axis: dark ? "#A3A3A3" : "#a1a1aa",
+    tooltipBg: dark ? "#262626" : "#ffffff",
     tooltipBorder: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-    text: dark ? "#f4f4f5" : "#18181b",
+    text: dark ? "#FAFAFA" : "#18181b",
     // Brand yellow (#F2FF70) is illegible on white — use amber in light mode.
     openColor: dark ? "#F2FF70" : "#d97706",
   };
@@ -28,7 +28,7 @@ export function ArrTrend({ data, className }: { data: ArrPoint[]; className?: st
 
   if (data.length === 0) {
     return (
-      <div className={`glass-card glass-card-hover p-5 ${className ?? ""}`}>
+      <div className={`glass-card glass-card-hover dark:bg-[color:var(--surface-1)] dark:border-0 p-5 ${className ?? ""}`}>
         <div className="eyebrow text-[color:var(--muted-foreground)] mb-2">Contract history</div>
         <EmptyState
           icon="TrendingUp"
@@ -46,7 +46,7 @@ export function ArrTrend({ data, className }: { data: ArrPoint[]; className?: st
   const delta = prevArr != null ? currentArr - prevArr : null;
 
   return (
-    <div className={`glass-card glass-card-hover overflow-hidden ${className ?? ""}`}>
+    <div className={`glass-card glass-card-hover dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden ${className ?? ""}`}>
       {/* Header with KPI */}
       <div className="px-5 pt-5 pb-4 flex items-start justify-between border-b border-[var(--glass-border)]">
         <div>

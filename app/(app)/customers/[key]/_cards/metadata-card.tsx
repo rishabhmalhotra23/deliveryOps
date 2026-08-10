@@ -35,7 +35,7 @@ export function MetadataCard({
   className,
 }: MetadataCardProps & { className?: string }) {
   return (
-    <Card className={className}>
+    <Card className={`dark:bg-[color:var(--surface-1)] dark:border-[rgba(255,255,255,0.08)] ${className ?? ""}`}>
       <CardHeader>
         <CardTitle>Profile + technical IDs</CardTitle>
         <Text level="xSmall" color="muted">

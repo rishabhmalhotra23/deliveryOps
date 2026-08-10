@@ -48,7 +48,7 @@ export function OpportunitiesCard({
   const openCases = cases.filter((c) => !c.is_closed);
 
   return (
-    <Card className={className}>
+    <Card className={`dark:bg-[color:var(--surface-1)] dark:border-[rgba(255,255,255,0.08)] ${className ?? ""}`}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Salesforce</CardTitle>

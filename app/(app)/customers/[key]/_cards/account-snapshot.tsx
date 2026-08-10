@@ -20,7 +20,7 @@ export function AccountSnapshot({
       : "text-red-600 dark:text-red-400";
 
   return (
-    <div className={`scanning-line glass-card overflow-hidden ${className ?? ""}`}>
+    <div className={`scanning-line glass-card dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden ${className ?? ""}`}>
       <div className="px-4 py-3 border-b border-[var(--glass-border)]">
         <div className="eyebrow text-[color:var(--muted-foreground)]">Account snapshot</div>
       </div>

@@ -10,7 +10,7 @@ interface K2MetricsCardProps {
 export function K2MetricsCard({ metrics, className }: K2MetricsCardProps) {
   if (!metrics.enabled) {
     return (
-      <div className={`glass-card overflow-hidden ${className ?? ""}`}>
+      <div className={`glass-card dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden ${className ?? ""}`}>
         <div className="px-4 py-3 border-b border-[var(--glass-border)]">
           <div className="eyebrow text-[color:var(--muted-foreground)]">Automation health</div>
         </div>
@@ -29,7 +29,7 @@ export function K2MetricsCard({ metrics, className }: K2MetricsCardProps) {
         : "text-red-600 dark:text-red-400";
 
   return (
-    <div className={`glass-card overflow-hidden ${className ?? ""}`}>
+    <div className={`glass-card dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden ${className ?? ""}`}>
       <div className="px-4 py-3 border-b border-[var(--glass-border)]">
         <div className="flex items-center justify-between">
           <div className="eyebrow text-[color:var(--muted-foreground)]">Automation health</div>
