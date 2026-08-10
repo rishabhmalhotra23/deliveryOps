@@ -88,6 +88,7 @@ const ISSUES_QUERY = `
     issues(
       first: ${PAGE_SIZE}
       after: $after
+      includeArchived: true
       filter: {
         labels: { name: { in: ${JSON.stringify(SOURCE_LABELS)} } }
       }

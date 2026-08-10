@@ -563,11 +563,9 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           goal={status.migrationGoalTotal}
         />
         <div className="text-[10px] mt-2" style={{ color: "var(--rt-fg-body)" }}>
-          {migratedToV2Total} of {status.migrationGoalTotal} migrated to V2 so far. A running total, not a weekly count — a
-          quiet week flattens the line, it never looks like a step backward.
+          {migratedToV2Total} of {status.migrationGoalTotal} migrated to V2 so far.
           {status.migrationBlockedNowCount > 0 && (
-            <> {status.migrationBlockedNowCount} of the {status.migratingNowCount} still migrating are blocked right now — a
-              current snapshot, not a trend, and not part of this chart&apos;s count.</>
+            <> {status.migrationBlockedNowCount} of the {status.migratingNowCount} still migrating are engineering-blocked.</>
           )}
         </div>
       </div>
