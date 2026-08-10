@@ -5,10 +5,13 @@
 // (see supabase/migrations/0017_linear_tickets.sql).
 //
 // closed_at is stamped by this job the first time it observes a ticket in a
-// completed/canceled state — it is NOT copied from Linear's own
-// completedAt/canceledAt. Those reflect when Linear closed the ticket, not
-// "the day we noticed"; once stamped, later syncs never move it, even if
-// the ticket reopens and closes again.
+// completed/canceled/duplicate state, using Linear's own completedAt/
+// canceledAt when available (Linear stamps duplicate resolutions under
+// canceledAt too) — this is what any "closed in the last N days" velocity
+// metric needs to mean something. Falls back to "now" only if Linear has
+// neither (shouldn't happen for a genuinely closed ticket, but a sync
+// should never crash on a missing field). Once stamped, later syncs never
+// move it, even if the ticket reopens and closes again.
 
 import { requireAdmin } from "@/lib/supabase/server";
 import {
@@ -67,7 +70,7 @@ export async function syncLinearTickets(): Promise<LinearTicketsSyncResult> {
   for (const issue of issues) {
     const isClosed = CLOSED_TYPES.has(issue.statusType);
     const existingClosedAt = closedAtById.get(issue.identifier) ?? null;
-    const closed_at = existingClosedAt ?? (isClosed ? now : null);
+    const closed_at = existingClosedAt ?? (isClosed ? issue.completedAt ?? issue.canceledAt ?? now : null);
 
     const row = {
       id: issue.identifier,
