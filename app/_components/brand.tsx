@@ -265,15 +265,15 @@ export function StatBlock({
 }) {
   const baseClasses = `rounded-lg border p-5 text-left transition-all w-full ${
     emphasis
-      ? "bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] border-[color:var(--brand-night)] dark:bg-white/8 dark:border-white/15"
-      : "bg-white border-line dark:bg-white/6 dark:border-white/12"
+      ? "bg-[color:var(--brand-night)] text-[color:var(--brand-seasalt)] border-[color:var(--brand-night)] dark:bg-[color:var(--surface-1)] dark:border-[rgba(255,255,255,0.14)]"
+      : "bg-white border-line dark:bg-[color:var(--surface-1)] dark:border-[rgba(255,255,255,0.08)]"
   } ${onClick ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-[color:var(--brand-night)] dark:hover:border-white/30" : ""}`;
 
   const labelClasses = `text-[10px] uppercase tracking-[0.22em] font-medium ${
-    emphasis ? "text-[color:var(--brand-yellow)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
+    emphasis ? "text-[color:var(--brand-yellow)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--foreground-muted)]"
   }`;
   const hintClasses = `mt-1 text-xs ${
-    emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
+    emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--foreground-muted)]"
   }`;
 
   const inner = (
@@ -284,7 +284,7 @@ export function StatBlock({
           <span
             aria-hidden="true"
             className={`text-[10px] tabular-nums ${
-              emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--muted-foreground)]"
+              emphasis ? "text-[color:var(--brand-metal)]" : "text-[color:var(--brand-gray)] dark:text-[color:var(--foreground-muted)]"
             }`}
           >
             ↗

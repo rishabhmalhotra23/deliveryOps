@@ -13,11 +13,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="light"
+      defaultTheme="dark"
       enableSystem={false}
       disableTransitionOnChange
     >
-      <LatticeThemeProvider defaultTheme="light">
+      <LatticeThemeProvider defaultTheme="dark">
         <ChatProvider>
           <SidebarProvider>
             <SidebarInset>{children}</SidebarInset>
