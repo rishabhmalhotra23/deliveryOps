@@ -4,12 +4,13 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { loadV2MigrationOverview, type V2MigrationOverview } from "@/lib/processes/loader";
-import { loadTicketsBundle } from "@/lib/tickets/loader";
+import { loadTicketsBundle, type DomainGroup } from "@/lib/tickets/loader";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 import { resolveRange, type DateRange, type RangeRequest } from "@/lib/reports/date-range";
 import { computeMigrationProgramStart, computeCumulativeProgress, type ProgressPoint } from "@/lib/reports/migration-progress";
 import { findRenewalSpotlight, findAtRiskMigratingCustomers, type RenewalSpotlight, type AtRiskMigratingEntry } from "@/lib/reports/allhands-signals";
 import { resolveBlockers, type BlockerItem } from "@/lib/reports/allhands-blockers";
+import { computeCustomerTicketConcentration, type CustomerTicketConcentration } from "@/lib/reports/allhands-ticket-buckets";
 import { TABLES, IN_FLIGHT_STAGES, type Process } from "@/lib/supabase/types";
 
 export interface AllHandsStatus {
@@ -39,6 +40,15 @@ export interface AllHandsReport {
   renewalSpotlight: RenewalSpotlight | null;
   atRiskMigrating: AtRiskMigratingEntry[];
   blockers: BlockerItem[];
+  /** Open in-scope tickets grouped by domain (Quill, IDP, Browser, ...),
+   *  sorted by volume descending — "which category has the most tickets",
+   *  not filtered to hard blockers only. */
+  ticketDomainBuckets: DomainGroup[];
+  /** Open in-scope tickets grouped by the customer whose migrating process(es)
+   *  reference them, sorted by volume descending. Domain buckets alone hide
+   *  a single migration (e.g. Conectiv) that racks up tickets across several
+   *  domains at once — this surfaces that concentration directly. */
+  customerTicketConcentration: CustomerTicketConcentration[];
   ticketHealth: {
     openInScope: number;
     hardBlockers: number;
@@ -190,7 +200,10 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   const atRiskMigrating = findAtRiskMigratingCustomers(customers, processesByCustomer);
 
   // ── Blockers ──────────────────────────────────────────────────────────────
-  const blockers = resolveBlockers(tickets.team_asks.now.concat(tickets.team_asks.soon), tickets.open_tickets);
+  const blockers = resolveBlockers(tickets.team_asks.now.concat(tickets.team_asks.soon));
+  const ticketDomainBuckets = [...tickets.domain_groups].sort((a, b) => b.total - a.total);
+  const openTicketsById = new Map(tickets.open_tickets.map((t) => [t.id, t]));
+  const customerTicketConcentration = computeCustomerTicketConcentration(customers, processesByCustomer, openTicketsById);
 
   return {
     range,
@@ -208,6 +221,8 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
     renewalSpotlight,
     atRiskMigrating,
     blockers,
+    ticketDomainBuckets,
+    customerTicketConcentration,
     ticketHealth: {
       openInScope: tickets.totals.open,
       hardBlockers: tickets.open_tickets.filter((t) => t.classification === "hard_blocker").length,

@@ -4,6 +4,11 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { AllHandsReport } from "@/lib/reports/allhands-loader";
 import type { RangePreset } from "@/lib/reports/date-range";
+import { DOMAIN_LABELS, type TicketDomain } from "@/lib/tickets/types";
+
+function domainLabel(domain: TicketDomain | "unclassified"): string {
+  return domain === "unclassified" ? "Unclassified" : DOMAIN_LABELS[domain];
+}
 
 const PRESETS: Array<{ value: RangePreset; label: string }> = [
   { value: "week", label: "Week" },
@@ -30,6 +35,9 @@ const STAGE_COLORS: Record<string, string> = {
 
 function fmtShort(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+function fmtAxis(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 function fmtMoney(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
@@ -90,7 +98,9 @@ function StageColumn({ stage, label, count, processNames }: { stage: string; lab
   );
 }
 
-// ── Cumulative progress chart — SVG area/line, points scaled to data length ──
+// ── Cumulative progress chart — SVG area/line with gridlines, weekly point
+//    markers, and a labeled y-axis so the scale and weekly movement are both
+//    readable, not just the overall shape. ────────────────────────────────────
 function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgress"] }) {
   if (points.length === 0) {
     return (
@@ -100,38 +110,104 @@ function CumulativeChart({ points }: { points: AllHandsReport["cumulativeProgres
     );
   }
 
-  const W = 600;
-  const H = 90;
-  const padTop = 8;
-  const padBottom = 10;
+  const W = 640;
+  const H = 150;
+  const padLeft = 28;
+  const padRight = 8;
+  const padTop = 16;
+  const padBottom = 20;
+  const chartW = W - padLeft - padRight;
+  const chartH = H - padTop - padBottom;
+
   const values = points.map((p) => p.cumulativeAtOrPastParity);
   const max = Math.max(...values, 1);
+  // Round the axis ceiling up to a "nice" multiple of 5 so gridline labels
+  // aren't jagged (e.g. 46 -> axis tops out at 50, not 46).
+  const axisMax = Math.max(5, Math.ceil(max / 5) * 5);
 
-  const coords =
-    values.length === 1
-      ? [
-          [0, H - padBottom - (values[0] / max) * (H - padTop - padBottom)],
-          [W, H - padBottom - (values[0] / max) * (H - padTop - padBottom)],
-        ]
-      : values.map((v, i) => [
-          (i / (values.length - 1)) * W,
-          H - padBottom - (v / max) * (H - padTop - padBottom),
-        ]);
+  const xAt = (i: number) => padLeft + (values.length === 1 ? chartW / 2 : (i / (values.length - 1)) * chartW);
+  const yAt = (v: number) => padTop + chartH - (v / axisMax) * chartH;
 
+  const coords = values.map((v, i) => [xAt(i), yAt(v)]);
   const lineD = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const areaD = `${lineD} L${W},${H} L0,${H} Z`;
+  const baseline = padTop + chartH;
+  const areaD = `${lineD} L${xAt(values.length - 1).toFixed(1)},${baseline} L${xAt(0).toFixed(1)},${baseline} Z`;
+
+  const gridFractions = [0, 0.25, 0.5, 0.75, 1];
+  const latest = values[values.length - 1];
+  const delta = latest - values[0];
+
+  // Thin out x-axis date labels so they don't overlap when there are many weeks.
+  const maxLabels = 7;
+  const labelStep = Math.max(1, Math.ceil(points.length / maxLabels));
 
   return (
-    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
-      <defs>
-        <linearGradient id="cumulative-gradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--rt-accent)" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="var(--rt-accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaD} fill="url(#cumulative-gradient)" />
-      <path d={lineD} fill="none" stroke="var(--rt-accent)" strokeWidth="2.5" />
-    </svg>
+    <div>
+      <div className="flex justify-between items-baseline mb-1.5">
+        <span className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+          Weekly, since {fmtShort(new Date(points[0].weekStart))}
+        </span>
+        {delta > 0 && (
+          <span className="text-[10px] font-bold" style={{ color: "var(--rt-status-good)" }}>
+            +{delta} this window
+          </span>
+        )}
+      </div>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <defs>
+          <linearGradient id="cumulative-gradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--rt-accent)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="var(--rt-accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {gridFractions.map((frac) => {
+          const y = padTop + chartH - frac * chartH;
+          return (
+            <g key={frac}>
+              <line x1={padLeft} x2={W - padRight} y1={y} y2={y} stroke="var(--rt-surface-2)" strokeWidth="1" />
+              <text x={padLeft - 5} y={y} textAnchor="end" dominantBaseline="middle" fontSize="8" fill="var(--rt-fg-muted)">
+                {Math.round(frac * axisMax)}
+              </text>
+            </g>
+          );
+        })}
+
+        <path d={areaD} fill="url(#cumulative-gradient)" />
+        <path d={lineD} fill="none" stroke="var(--rt-accent)" strokeWidth="2.5" />
+
+        {coords.map(([x, y], i) => (
+          <circle
+            key={points[i].weekStart}
+            cx={x}
+            cy={y}
+            r={i === coords.length - 1 ? 3.5 : 2.5}
+            fill={i === coords.length - 1 ? "var(--rt-accent)" : "var(--rt-surface-1)"}
+            stroke="var(--rt-accent)"
+            strokeWidth="1.5"
+          />
+        ))}
+
+        <text
+          x={xAt(coords.length - 1)}
+          y={Math.max(padTop - 2, yAt(latest) - 9)}
+          textAnchor="end"
+          fontSize="11"
+          fontWeight="700"
+          fill="var(--rt-fg)"
+        >
+          {latest}
+        </text>
+
+        {points.map((p, i) =>
+          i % labelStep === 0 || i === points.length - 1 ? (
+            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="8" fill="var(--rt-fg-muted)">
+              {fmtAxis(new Date(p.weekStart))}
+            </text>
+          ) : null
+        )}
+      </svg>
+    </div>
   );
 }
 
@@ -273,7 +349,17 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
     }
   }
 
-  const { status, cumulativeProgress, renewalSpotlight, atRiskMigrating, blockers, ticketHealth, ticketDataError } = report;
+  const {
+    status,
+    cumulativeProgress,
+    renewalSpotlight,
+    atRiskMigrating,
+    blockers,
+    ticketDomainBuckets,
+    customerTicketConcentration,
+    ticketHealth,
+    ticketDataError,
+  } = report;
 
   // Numerator and denominator both come from the one V2-relevant population
   // the loader builds the chart from (see AllHandsReport.trackedMigrationTotal).
@@ -369,12 +455,6 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
       <Caption>Migration progress — cumulative since the program started</Caption>
       <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
         <CumulativeChart points={cumulativeProgress} />
-        {cumulativeProgress.length > 0 && (
-          <div className="flex justify-between text-[9px] mt-1" style={{ color: "var(--rt-fg-muted)" }}>
-            <span>{fmtShort(new Date(cumulativeProgress[0].weekStart))}</span>
-            <span>today</span>
-          </div>
-        )}
         <div className="text-[10px] mt-2" style={{ color: "var(--rt-fg-body)" }}>
           {reachedParityTotal} of {trackedTotal} tracked migrations at or past parity since the program started. A running
           total, not a weekly count — a quiet week flattens the line, it never looks like a step backward.
@@ -446,52 +526,124 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           once, above them, instead of rendering fabricated zeros. */}
       {ticketDataError && <TicketDataErrorBanner message={ticketDataError} />}
 
-      {/* Section 4: blockers */}
-      <Caption>This week&apos;s blockers</Caption>
+      {/* Section 4: blockers. Team-curated asks (if any are filed) show first;
+          the domain/customer breakdowns below always show — they're a volume
+          view, not conditional on whether anyone filed an ask this week. */}
+      {!ticketDataError && blockers.length > 0 && (
+        <>
+          <Caption>This week&apos;s blockers</Caption>
+          <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
+            {blockers.map((b, i) => (
+              <div
+                key={i}
+                className="py-2 px-1"
+                style={{ borderBottom: i < blockers.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
+                    {b.title}
+                  </span>
+                  <span
+                    className="text-[9px] font-bold rounded-full px-1.5 py-0.5 shrink-0"
+                    style={{
+                      background: b.priorityLabel === "NOW" ? "var(--rt-status-bad)" : "var(--rt-status-warn)",
+                      color: "var(--rt-bg)",
+                    }}
+                  >
+                    {b.priorityLabel}
+                  </span>
+                </div>
+                {b.linkedTicketIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {b.linkedTicketIds.map((id) => (
+                      <a
+                        key={id}
+                        href={LINEAR_ISSUE(id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] rounded-full px-2 py-0.5"
+                        style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg-muted)" }}
+                      >
+                        {id}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <Caption>Open tickets by category</Caption>
       <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
         {ticketDataError ? (
           <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
             Unavailable — ticket data could not be read (see above).
           </div>
-        ) : blockers.length === 0 ? (
+        ) : ticketDomainBuckets.length === 0 ? (
           <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-fg-muted)" }}>
-            No blockers reported this period.
+            No open tickets.
           </div>
         ) : (
-          blockers.map((b, i) => (
+          ticketDomainBuckets.map((bucket, i) => (
             <div
-              key={i}
+              key={bucket.domain}
               className="py-2 px-1"
-              style={{ borderBottom: i < blockers.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
+              style={{ borderBottom: i < ticketDomainBuckets.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
             >
-              <div className="flex justify-between items-start gap-2">
+              <div className="flex justify-between items-baseline gap-2">
                 <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
-                  {b.title}
+                  {domainLabel(bucket.domain)}
                 </span>
-                <span
-                  className="text-[9px] font-bold rounded-full px-1.5 py-0.5 shrink-0"
-                  style={{
-                    background: b.priorityLabel === "NOW" ? "var(--rt-status-bad)" : "var(--rt-status-warn)",
-                    color: "var(--rt-bg)",
-                  }}
-                >
-                  {b.priorityLabel}
+                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-fg)" }}>
+                  {bucket.total}
+                  {bucket.hard_blocker > 0 && (
+                    <span style={{ color: "var(--rt-status-bad)" }}> · {bucket.hard_blocker} hard</span>
+                  )}
                 </span>
               </div>
-              {b.linkedTicketIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {b.linkedTicketIds.map((id) => (
-                    <a
-                      key={id}
-                      href={LINEAR_ISSUE(id)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[10px] rounded-full px-2 py-0.5"
-                      style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg-muted)" }}
-                    >
-                      {id}
-                    </a>
-                  ))}
+              {bucket.tickets.length > 0 && (
+                <div className="text-[9px] mt-1" style={{ color: "var(--rt-fg-muted)" }}>
+                  {bucket.tickets.slice(0, 3).map((t) => t.title).join(" · ")}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      <Caption>Open tickets by migration</Caption>
+      <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
+        {ticketDataError ? (
+          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-status-bad)" }}>
+            Unavailable — ticket data could not be read (see above).
+          </div>
+        ) : customerTicketConcentration.length === 0 ? (
+          <div className="text-xs italic px-1 py-1" style={{ color: "var(--rt-fg-muted)" }}>
+            No open tickets linked to a specific migration.
+          </div>
+        ) : (
+          customerTicketConcentration.map((c, i) => (
+            <div
+              key={c.customerName}
+              className="py-2 px-1"
+              style={{ borderBottom: i < customerTicketConcentration.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
+            >
+              <div className="flex justify-between items-baseline gap-2">
+                <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
+                  {c.customerName}
+                </span>
+                <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--rt-fg)" }}>
+                  {c.openTicketCount}
+                  {c.hardBlockerCount > 0 && (
+                    <span style={{ color: "var(--rt-status-bad)" }}> · {c.hardBlockerCount} hard</span>
+                  )}
+                </span>
+              </div>
+              {c.sampleTitles.length > 0 && (
+                <div className="text-[9px] mt-1" style={{ color: "var(--rt-fg-muted)" }}>
+                  {c.sampleTitles.join(" · ")}
                 </div>
               )}
             </div>
