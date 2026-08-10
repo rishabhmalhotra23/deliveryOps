@@ -18,7 +18,11 @@ export interface AllHandsStatus {
   migratingNowCount: number;
   queuedCount: number;
   byStage: V2MigrationOverview["counts"]["byStage"];
-  stageRows: Array<{ stage: string; label: string; count: number; processNames: string[] }>;
+  /** group: "complete" for stages that are done migrating (live_on_v2,
+   *  migrated_pending_commercial — shown for context), "in_progress" for the
+   *  IN_FLIGHT_STAGES that migratingNowCount actually sums. Lets the UI split
+   *  the two groups visually instead of implying all rows sum to one count. */
+  stageRows: Array<{ stage: string; label: string; count: number; processNames: string[]; group: "complete" | "in_progress" }>;
 }
 
 export interface AllHandsReport {
@@ -52,16 +56,26 @@ export interface AllHandsReport {
 }
 
 // Only the stages in STAGE_ORDER below are ever looked up here.
-// `migrated_pending_commercial` deliberately has no entry: it's folded into
-// the `live_on_v2` column by the filter in stageRows, never labelled directly.
+// `migrated_pending_commercial` gets its own row — migration work is
+// genuinely finished, the customer just hasn't signed off commercially yet.
+// Folding it into `live_on_v2` previously hid a bucket that was, in
+// production, larger than any single in-flight stage.
 const STAGE_LABELS: Record<string, string> = {
   live_on_v2: "Live on V2",
+  migrated_pending_commercial: "Migrated, pending commercial",
   customer_validation: "Customer validation",
   parity_testing: "Parity testing",
   engg_pending: "Engg pending",
   in_development: "In development",
 };
-const STAGE_ORDER = ["live_on_v2", "customer_validation", "parity_testing", "engg_pending", "in_development"];
+const STAGE_ORDER = [
+  "live_on_v2",
+  "migrated_pending_commercial",
+  "customer_validation",
+  "parity_testing",
+  "engg_pending",
+  "in_development",
+];
 
 /**
  * Loads the whole All-Hands report.
@@ -133,8 +147,16 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   // context (see the mockup), so it's built from its own filter, not this one.
   const migratingNowRows = overview.rows.filter((r) => IN_FLIGHT_STAGES.includes(r.migration_stage));
   const stageRows = STAGE_ORDER.map((stage) => {
-    const rows = overview.rows.filter((r) => (stage === "live_on_v2" ? r.migration_stage === "live_on_v2" || r.migration_stage === "migrated_pending_commercial" : r.migration_stage === stage));
-    return { stage, label: STAGE_LABELS[stage], count: rows.length, processNames: rows.map((r) => r.process_name) };
+    const rows = overview.rows.filter((r) => r.migration_stage === stage);
+    return {
+      stage,
+      label: STAGE_LABELS[stage],
+      count: rows.length,
+      processNames: rows.map((r) => r.process_name),
+      group: (IN_FLIGHT_STAGES.includes(stage as Process["migration_stage"]) ? "in_progress" : "complete") as
+        | "complete"
+        | "in_progress",
+    };
   }).filter((row) => row.count > 0);
 
   // ── Cumulative progress (all-time since program start, not per-quarter) ──

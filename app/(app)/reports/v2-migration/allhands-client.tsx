@@ -21,6 +21,7 @@ const LINEAR_ISSUE = (id: string) => `https://linear.app/kognitos/issue/${id}`;
 // "customer validation" the way the mockup's illustrative blue (#60A5FA) did.
 const STAGE_COLORS: Record<string, string> = {
   live_on_v2: "var(--rt-status-good)",
+  migrated_pending_commercial: "var(--rt-status-good)",
   customer_validation: "var(--rt-accent)",
   parity_testing: "var(--rt-status-warn)",
   engg_pending: "var(--rt-status-bad)",
@@ -336,20 +337,40 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           <StatTile value={status.migratingNowCount} label="Migrating to V2 now" color="var(--rt-accent)" />
           <StatTile value={status.queuedCount} label="Queued" />
         </div>
-        <div className="text-[9px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
-          The {status.migratingNowCount} migrating now, by stage:
-        </div>
-        {status.stageRows.length === 0 ? (
-          <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
-            Nothing actively migrating right now.
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {status.stageRows.map((row) => (
-              <StageColumn key={row.stage} stage={row.stage} label={row.label} count={row.count} processNames={row.processNames} />
-            ))}
-          </div>
-        )}
+        {(() => {
+          const completeRows = status.stageRows.filter((r) => r.group === "complete");
+          const inProgressRows = status.stageRows.filter((r) => r.group === "in_progress");
+          return (
+            <>
+              {completeRows.length > 0 && (
+                <>
+                  <div className="text-[9px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
+                    Already migrated (not counted in the {status.migratingNowCount} below):
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {completeRows.map((row) => (
+                      <StageColumn key={row.stage} stage={row.stage} label={row.label} count={row.count} processNames={row.processNames} />
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="text-[9px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
+                The {status.migratingNowCount} actively migrating, by stage:
+              </div>
+              {inProgressRows.length === 0 ? (
+                <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
+                  Nothing actively migrating right now.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {inProgressRows.map((row) => (
+                    <StageColumn key={row.stage} stage={row.stage} label={row.label} count={row.count} processNames={row.processNames} />
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Section 2: cumulative progress since program start */}
