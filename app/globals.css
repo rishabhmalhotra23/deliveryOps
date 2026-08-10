@@ -230,7 +230,7 @@
   color-scheme: dark;
 }
 
-/* Dark glass cards: lift the background a notch above the page (#0d0d12)
+/* Dark glass cards: lift the background a notch above the page (#171717)
    so cards have presence without going stark white. */
 .dark .glass-card {
   background: rgba(255, 255, 255, 0.055);
@@ -244,7 +244,7 @@
 }
 
 /* Native form controls — dark mode browsers render these with light
-   defaults that vanish against #0d0d12.  Pin explicit values. */
+   defaults that vanish against #171717.  Pin explicit values. */
 .dark select,
 .dark input[type="text"],
 .dark input[type="search"],
@@ -254,19 +254,22 @@
 .dark input[type="date"],
 .dark textarea {
   background-color: rgba(255, 255, 255, 0.07) !important;
-  color: #ECECF1 !important;
+  color: var(--foreground) !important;
   border-color: rgba(255, 255, 255, 0.16) !important;
 }
 .dark select option {
   background-color: #1e1e28;
-  color: #ECECF1;
+  color: var(--foreground);
 }
 
 /* ─── Report theme — scoped dark palette for the two live reports (All-Hands,
-   Weekly Delivery Review). Deliberately NOT merged into `.dark` above: that
-   class is the app's existing generic dark-mode toggle with different literal
-   values (#0d0d12 bg, #ECECF1 fg) and touching it would reskin every page a
-   user has toggled to dark, which is Stage A's job, not this report's.
+   Weekly Delivery Review). Deliberately NOT merged into `.dark` above, even
+   though Stage A brought both onto the same literal values: `.report-theme`
+   must render dark unconditionally (these are meeting-snapshot artifacts,
+   presented from a screen every week, regardless of the viewer's own
+   light/dark toggle), while `.dark` only applies when a user opts in. Keeping
+   separate token namespaces (`--rt-*` vs the base tokens) means a future
+   change to one can't accidentally reskin the other.
    Approved direction: docs/superpowers/specs/2026-08-07-app-design-foundation-design.md,
    validated against real UI in docs/mockups/2026-08-07-visual-direction-approved.html. */
 .report-theme {
@@ -286,7 +289,7 @@
 }
 
 /* Tone chips that ship with light backgrounds (FEF2F2, ECFDF5, …) need
-   a dark-mode treatment — the pale fills wash to near-white on #0d0d12.
+   a dark-mode treatment — the pale fills wash to near-white on #171717.
    Swap for tinted overlays that match the dark-theme colour story. */
 .dark .tone-high-risk   { background: rgba(239, 68, 68, 0.15);  color: #FCA5A5; border-color: rgba(239, 68, 68, 0.35); }
 .dark .tone-renewal     { background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: rgba(245, 158, 11, 0.35); }
@@ -296,8 +299,8 @@
 .dark .tone-pov         { background: rgba(242, 255, 112, 0.15); color: #F2FF70; border-color: rgba(242, 255, 112, 0.40); }
 .dark .tone-evaluation  { background: rgba(99, 102, 241, 0.18); color: #C7D2FE; border-color: rgba(99, 102, 241, 0.40); }
 .dark .tone-todrop      { background: rgba(239, 68, 68, 0.15); color: #FCA5A5; border-color: rgba(239, 68, 68, 0.35); }
-.dark .tone-churned     { background: rgba(255, 255, 255, 0.06); color: #b4b4c4; border-color: rgba(255, 255, 255, 0.14); }
-.dark .tone-other       { background: rgba(255, 255, 255, 0.05); color: #b4b4c4; border-color: rgba(255, 255, 255, 0.12); }
+.dark .tone-churned     { background: rgba(255, 255, 255, 0.06); color: var(--foreground-muted); border-color: rgba(255, 255, 255, 0.14); }
+.dark .tone-other       { background: rgba(255, 255, 255, 0.05); color: var(--foreground-muted); border-color: rgba(255, 255, 255, 0.12); }
 
 /* Sparkle marker turns yellow in dark mode so it doesn't disappear. */
 .dark .sparkle::before { color: var(--brand-yellow); }
