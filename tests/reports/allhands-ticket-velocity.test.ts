@@ -68,4 +68,20 @@ describe("computeTicketVelocity", () => {
     expect(points[0].cumulativeClosed).toBe(1); // A's closure, seeded
     expect(points[points.length - 1].cumulativeCreated).toBe(2); // A + B
   });
+
+  it("reports createdThisWeek/closedThisWeek as non-cumulative per-week deltas, seeded tickets excluded", () => {
+    const tickets = [
+      ticket({ id: "A", linear_created_at: "2025-01-01T00:00:00Z", closed_at: "2025-02-01T00:00:00Z" }), // seeded, before window
+      ticket({ id: "B", linear_created_at: "2026-06-16T00:00:00Z", closed_at: null }), // week 1
+      ticket({ id: "C", linear_created_at: "2026-06-17T00:00:00Z", closed_at: "2026-06-24T00:00:00Z" }), // created week 1, closed week 2
+    ];
+    const points = computeTicketVelocity(tickets, new Date("2026-06-15T00:00:00Z"), new Date("2026-06-29T00:00:00Z"));
+    expect(points[0].createdThisWeek).toBe(2); // B + C, not the seeded A
+    expect(points[0].closedThisWeek).toBe(0);
+    expect(points[1].createdThisWeek).toBe(0);
+    expect(points[1].closedThisWeek).toBe(1); // C's closure
+    // Per-week deltas sum to the cumulative total, minus the seed.
+    const totalCreatedThisWindow = points.reduce((sum, p) => sum + p.createdThisWeek, 0);
+    expect(totalCreatedThisWindow).toBe(2);
+  });
 });

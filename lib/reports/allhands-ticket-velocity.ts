@@ -10,6 +10,13 @@ export interface TicketVelocityPoint {
   weekStart: string; // ISO date, Monday of that week
   cumulativeCreated: number;
   cumulativeClosed: number;
+  /** Non-cumulative — how many were created/closed in THIS week alone. Shows
+   *  direction (is resolution keeping pace with new tickets, or falling
+   *  behind?) in a way a monotonically-rising cumulative line can't: two
+   *  cumulative lines both always go up, so "are we winning" isn't visible
+   *  from their shapes alone. */
+  createdThisWeek: number;
+  closedThisWeek: number;
 }
 
 function startOfIsoWeek(date: Date): Date {
@@ -56,15 +63,19 @@ export function computeTicketVelocity(tickets: TicketRow[], windowStart: Date, a
   for (let week = new Date(firstWeek); week <= lastWeek; week.setUTCDate(week.getUTCDate() + 7)) {
     const weekEnd = new Date(week);
     weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
+    let createdThisWeek = 0;
+    let closedThisWeek = 0;
     while (createdIdx < createdDates.length && createdDates[createdIdx] < weekEnd) {
       cumulativeCreated++;
+      createdThisWeek++;
       createdIdx++;
     }
     while (closedIdx < closedDates.length && closedDates[closedIdx] < weekEnd) {
       cumulativeClosed++;
+      closedThisWeek++;
       closedIdx++;
     }
-    points.push({ weekStart: week.toISOString().slice(0, 10), cumulativeCreated, cumulativeClosed });
+    points.push({ weekStart: week.toISOString().slice(0, 10), cumulativeCreated, cumulativeClosed, createdThisWeek, closedThisWeek });
   }
   return points;
 }

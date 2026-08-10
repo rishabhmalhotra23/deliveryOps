@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeMigrationProgramStart, computeCumulativeProgress } from "@/lib/reports/migration-progress";
+import { computeMigrationProgramStart, computeMigratedToV2Progress } from "@/lib/reports/migration-progress";
 import type { Process } from "@/lib/supabase/types";
 
 function proc(overrides: Partial<Process>): Process {
@@ -78,26 +78,56 @@ describe("computeMigrationProgramStart", () => {
   });
 });
 
-describe("computeCumulativeProgress", () => {
-  it("counts a process from the week it first reaches any parity-or-later milestone", () => {
+describe("computeMigratedToV2Progress", () => {
+  it("counts a process from the week its migration_stage is live_on_v2, using went_live_at", () => {
     const programStart = new Date("2026-01-01T00:00:00Z");
     const asOf = new Date("2026-01-22T00:00:00Z"); // 3 full weeks
     const processes = [
-      proc({ date_parity_complete: "2026-01-05" }), // week 1
-      proc({ date_customer_handover: "2026-01-12" }), // week 2 (handover implies parity already passed)
-      proc({}), // never reached parity — not counted at all
+      proc({ migration_stage: "live_on_v2", went_live_at: "2026-01-05" }), // week 1
+      proc({ migration_stage: "migrated_pending_commercial", date_parity_complete: "2026-01-12" }), // week 2
+      proc({ migration_stage: "customer_validation", date_parity_complete: "2026-01-06" }), // NOT done — excluded even though it has a parity date
     ];
-    const points = computeCumulativeProgress(processes, programStart, asOf);
-    expect(points.map((p) => p.cumulativeAtOrPastParity)).toEqual([1, 2, 2]);
+    const points = computeMigratedToV2Progress(processes, programStart, asOf);
+    expect(points.map((p) => p.cumulativeMigratedToV2)).toEqual([1, 2, 2]);
+  });
+
+  it("prefers went_live_at over date_parity_complete when a live_on_v2 process has both", () => {
+    const programStart = new Date("2026-01-05T00:00:00Z"); // a Monday
+    const asOf = new Date("2026-01-15T00:00:00Z"); // within week 2, before its Monday boundary
+    const processes = [
+      proc({ migration_stage: "live_on_v2", date_parity_complete: "2026-01-06", went_live_at: "2026-01-13" }),
+    ];
+    const points = computeMigratedToV2Progress(processes, programStart, asOf);
+    // Counted in week 2 (went_live_at, Jan 13), not week 1 (date_parity_complete, Jan 6) — went_live_at wins.
+    expect(points.map((p) => p.cumulativeMigratedToV2)).toEqual([0, 1]);
+  });
+
+  it("falls back to date_parity_complete for migrated_pending_commercial, which never gets went_live_at", () => {
+    const programStart = new Date("2026-01-01T00:00:00Z");
+    const asOf = new Date("2026-01-08T00:00:00Z");
+    const processes = [proc({ migration_stage: "migrated_pending_commercial", date_parity_complete: "2026-01-03" })];
+    const points = computeMigratedToV2Progress(processes, programStart, asOf);
+    expect(points.map((p) => p.cumulativeMigratedToV2)).toEqual([1]);
+  });
+
+  it("excludes a done process with no usable date at all", () => {
+    const programStart = new Date("2026-01-01T00:00:00Z");
+    const asOf = new Date("2026-01-08T00:00:00Z");
+    const processes = [proc({ migration_stage: "live_on_v2" })]; // no went_live_at, no date_parity_complete
+    const points = computeMigratedToV2Progress(processes, programStart, asOf);
+    expect(points.map((p) => p.cumulativeMigratedToV2)).toEqual([0]);
   });
 
   it("never decreases week over week even with a quiet week in between", () => {
     const programStart = new Date("2026-01-01T00:00:00Z");
     const asOf = new Date("2026-01-29T00:00:00Z"); // 4 weeks
-    const processes = [proc({ date_parity_complete: "2026-01-03" }), proc({ went_live_at: "2026-01-24" })];
-    const points = computeCumulativeProgress(processes, programStart, asOf);
+    const processes = [
+      proc({ migration_stage: "migrated_pending_commercial", date_parity_complete: "2026-01-03" }),
+      proc({ migration_stage: "live_on_v2", went_live_at: "2026-01-24" }),
+    ];
+    const points = computeMigratedToV2Progress(processes, programStart, asOf);
     for (let i = 1; i < points.length; i++) {
-      expect(points[i].cumulativeAtOrPastParity).toBeGreaterThanOrEqual(points[i - 1].cumulativeAtOrPastParity);
+      expect(points[i].cumulativeMigratedToV2).toBeGreaterThanOrEqual(points[i - 1].cumulativeMigratedToV2);
     }
   });
 });

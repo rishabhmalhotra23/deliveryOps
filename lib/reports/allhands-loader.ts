@@ -7,7 +7,7 @@ import { loadV2MigrationOverview, type V2MigrationOverview } from "@/lib/process
 import { loadTicketsBundle } from "@/lib/tickets/loader";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 import { resolveRange, type DateRange, type RangeRequest } from "@/lib/reports/date-range";
-import { computeMigrationProgramStart, computeCumulativeProgress, V2_PROGRAM_LAUNCH, type ProgressPoint } from "@/lib/reports/migration-progress";
+import { computeMigrationProgramStart, computeMigratedToV2Progress, V2_PROGRAM_LAUNCH, type ProgressPoint } from "@/lib/reports/migration-progress";
 import { findRenewalSpotlight, findAtRiskMigratingCustomers, type RenewalSpotlight, type AtRiskMigratingEntry } from "@/lib/reports/allhands-signals";
 import { resolveBlockers, type BlockerItem } from "@/lib/reports/allhands-blockers";
 import {
@@ -53,9 +53,9 @@ export interface AllHandsReport {
   range: DateRange;
   generatedAt: string;
   status: AllHandsStatus;
-  /** Cumulative "at or past parity" count, weekly, over the SAME population
-   *  status.migrationGoalTotal counts — its final point can never exceed
-   *  migrationGoalTotal, since both are drawn from the same filtered set. */
+  /** Cumulative "migrated to V2" count, weekly — status.migrationDoneCount's
+   *  own classification, tracked over time, so this chart's final point
+   *  always equals that tile's number exactly. */
   cumulativeProgress: ProgressPoint[];
   /** Weekly cumulative ticket-created vs ticket-closed counts, over all
    *  in-scope Linear tickets (not just hard blockers — this chart is about
@@ -184,9 +184,7 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   const migratingNowRows = overview.rows.filter((r) => IN_FLIGHT_STAGES.includes(r.migration_stage));
   // The migration-goal population: every migration_stage row except
   // not_required (never in scope for V2 at all) and v2_native (built
-  // directly on V2 — there's nothing to migrate). This is the SAME
-  // population computeCumulativeProgress charts, so the chart's peak and
-  // the goal line always agree — no two-different-filters mismatch.
+  // directly on V2 — there's nothing to migrate).
   const migrationTrackedRows = overview.rows.filter((r) => r.migration_stage !== "v2_native");
   const migrationDoneRows = migrationTrackedRows.filter((r) => !IN_FLIGHT_STAGES.includes(r.migration_stage));
   const migrationBlockedNowCount = migrationTrackedRows.filter((r) => r.is_blocked).length;
@@ -204,12 +202,13 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   }).filter((row) => row.count > 0);
 
   // ── Cumulative progress (all-time since program start, not per-quarter) ──
-  // Computed over migrationTrackedRows — NOT overview.rows directly, and NOT
-  // every process row. The chart's peak has to stay <= the goal line, and the
-  // goal is migrationGoalTotal (migrationTrackedRows.length): using a
-  // differently-filtered population for either one previously let the chart
-  // read "46" against a goal of "45", or let migration_stage='not_required'
-  // rows that happen to carry a milestone date inflate the numerator.
+  // Computed over migrationTrackedRows so the chart's peak can never exceed
+  // migrationGoalTotal — the goal line's own population.
+  // computeMigratedToV2Progress further restricts to migration_stage IN
+  // (live_on_v2, migrated_pending_commercial) internally (Rishabh, 2026-08-10:
+  // the prior "reached any parity-adjacent date" metric was populated on 44 of
+  // 45 rows regardless of actual stage, so its cumulative total didn't
+  // reconcile with any visible tile — see migratedToV2Date's doc comment).
   // V2ProcessRow extends Process, so these carry every milestone field the
   // derivation needs.
   const trackedProcesses: Process[] = migrationTrackedRows;
@@ -225,7 +224,7 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
   // "N of M tracked... since the program started" headline denominator,
   // which doesn't depend on this floor) are unaffected.
   const programStart = derivedProgramStart && derivedProgramStart > V2_PROGRAM_LAUNCH ? derivedProgramStart : V2_PROGRAM_LAUNCH;
-  const cumulativeProgress = derivedProgramStart ? computeCumulativeProgress(trackedProcesses, programStart, range.end) : [];
+  const cumulativeProgress = derivedProgramStart ? computeMigratedToV2Progress(trackedProcesses, programStart, range.end) : [];
 
   // ── Renewal spotlight + at-risk cross-signal ─────────────────────────────
   const renewalSpotlight = findRenewalSpotlight(customers, arrByCustomer, processesByCustomer, range.end);

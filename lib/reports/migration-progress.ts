@@ -1,9 +1,12 @@
-// Cumulative "processes at or past parity" chart for the All-Hands report.
+// Cumulative "processes migrated to V2" chart for the All-Hands report.
 // Deliberately all-time-since-program-start, not reset per fiscal quarter —
 // the migration program is one continuous effort, and a quarter boundary
 // would be an arbitrary reset (Rishabh, 2026-08-07). Deliberately cumulative,
 // not a per-week count — a running total can't look like a step backward on
-// a quiet week the way a discrete weekly bar can.
+// a quiet week the way a discrete weekly bar can. The chart's own final value
+// always equals AllHandsStatus.migrationDoneCount (see migratedToV2Date below
+// for why) — no separate population that can silently drift out of sync with
+// the tile it sits next to.
 
 import type { Process } from "@/lib/supabase/types";
 
@@ -18,7 +21,7 @@ export const V2_PROGRAM_LAUNCH = new Date("2026-06-15T00:00:00Z");
 
 export interface ProgressPoint {
   weekStart: string; // ISO date, Monday of that week
-  cumulativeAtOrPastParity: number;
+  cumulativeMigratedToV2: number;
 }
 
 /** A process counts as "real V2 migration evidence" using the same rule as
@@ -104,14 +107,39 @@ function startOfIsoWeek(date: Date): Date {
   return d;
 }
 
+/** The date a process actually became "done" — live_on_v2 or
+ *  migrated_pending_commercial, matching AllHandsStatus.migrationDoneCount's
+ *  own classification exactly, so this chart's final value always equals that
+ *  tile's number.
+ *
+ *  date_parity_complete/date_customer_handover/date_customer_validation are
+ *  NOT usable as a general "reached done" signal (Rishabh, 2026-08-10,
+ *  investigating why the chart's peak didn't reconcile with any visible
+ *  tile): production has one of those dates set on 44 of the 45
+ *  migration-goal processes — including ones still in in_development or
+ *  engg_pending — so they're populated early/broadly, not stamped
+ *  specifically on completion. went_live_at is the one field that's clean:
+ *  all 9 live_on_v2 rows have it, and it's stamped once, specifically on
+ *  entering that stage (see MIGRATION_DONE_STAGE in lib/supabase/types.ts).
+ *  migrated_pending_commercial rows don't go through that flow, but all 12 in
+ *  production have date_parity_complete set — reliable for THIS narrower
+ *  population because migration_stage already gates membership; the same
+ *  field is unreliable as a general population filter but fine as a "when"
+ *  once you already know "which". */
+function migratedToV2Date(p: Process): Date | null {
+  if (p.migration_stage !== "live_on_v2" && p.migration_stage !== "migrated_pending_commercial") return null;
+  const raw = p.went_live_at ?? p.date_parity_complete;
+  return raw ? new Date(raw) : null;
+}
+
 /** One point per week from the first Monday at or after programStart through asOf,
- *  each a running total of how many processes had reached parity-or-later by that week.
- *  Weeks with no new milestones simply repeat the previous total. If programStart is
+ *  each a running total of how many processes had become "done" by that week.
+ *  Weeks with no new completions simply repeat the previous total. If programStart is
  *  not a Monday, the first data point represents the next Monday; this ensures all
  *  points represent full ISO weeks. */
-export function computeCumulativeProgress(processes: Process[], programStart: Date, asOf: Date): ProgressPoint[] {
+export function computeMigratedToV2Progress(processes: Process[], programStart: Date, asOf: Date): ProgressPoint[] {
   const reachedDates = processes
-    .map(parityReachedDate)
+    .map(migratedToV2Date)
     .filter((d): d is Date => d != null)
     .sort((a, b) => a.getTime() - b.getTime());
 
@@ -133,7 +161,7 @@ export function computeCumulativeProgress(processes: Process[], programStart: Da
       cumulative++;
       reachedIdx++;
     }
-    points.push({ weekStart: week.toISOString().slice(0, 10), cumulativeAtOrPastParity: cumulative });
+    points.push({ weekStart: week.toISOString().slice(0, 10), cumulativeMigratedToV2: cumulative });
   }
   return points;
 }
