@@ -49,7 +49,7 @@ function fmtMoney(v: number): string {
 function Caption({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="text-[10px] uppercase tracking-[0.06em] mb-2"
+      className="text-[11px] uppercase tracking-[0.06em] mb-2"
       style={{ color: "var(--rt-fg-muted)" }}
     >
       {children}
@@ -61,10 +61,10 @@ function Caption({ children }: { children: React.ReactNode }) {
 function StatTile({ value, label, color }: { value: number | string; label: string; color?: string }) {
   return (
     <div>
-      <div className="text-lg font-extrabold" style={{ color: color ?? "var(--rt-fg)" }}>
+      <div className="text-xl font-extrabold" style={{ color: color ?? "var(--rt-fg)" }}>
         {value}
       </div>
-      <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+      <div className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
         {label}
       </div>
     </div>
@@ -86,10 +86,10 @@ function StageColumn({ stage, label, count, processNames }: { stage: string; lab
   const lines = summarizeNames(processNames);
   return (
     <div className="flex-1 min-w-[130px] rounded-[10px] p-2.5" style={{ background: "var(--rt-surface-2)" }}>
-      <div className="text-[10px] font-bold mb-1.5" style={{ color: STAGE_COLORS[stage] ?? "var(--rt-fg)" }}>
+      <div className="text-[11px] font-bold mb-1.5" style={{ color: STAGE_COLORS[stage] ?? "var(--rt-fg)" }}>
         {label} · {count}
       </div>
-      <div className="text-[9px] leading-relaxed" style={{ color: "var(--rt-fg-body)" }}>
+      <div className="text-[10px] leading-relaxed" style={{ color: "var(--rt-fg-body)" }}>
         {lines.map((line, i) => (
           <div key={i}>{line}</div>
         ))}
@@ -175,10 +175,10 @@ function CombinedProgressChart({
   return (
     <div>
       <div className="flex justify-between items-baseline mb-1.5 flex-wrap gap-1">
-        <span className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+        <span className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
           Weekly, since {fmtShort(new Date(labelPoints[0].weekStart))}
         </span>
-        <span className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
+        <span className="text-[11px]" style={{ color: "var(--rt-fg-muted)" }}>
           <span className="font-bold" style={{ color: toGo === 0 ? "var(--rt-status-good)" : "var(--rt-fg)" }}>
             {toGo === 0 ? "Goal reached" : `${toGo} to go`}
           </span>
@@ -201,10 +201,10 @@ function CombinedProgressChart({
           return (
             <g key={frac}>
               <line x1={padLeft} x2={W - padRight} y1={y} y2={y} stroke="var(--rt-surface-2)" strokeWidth="1" />
-              <text x={padLeft - 5} y={y} textAnchor="end" dominantBaseline="middle" fontSize="8" fill="var(--rt-fg-muted)">
+              <text x={padLeft - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" fill="var(--rt-fg-muted)">
                 {Math.round(frac * axisMaxLeft)}
               </text>
-              <text x={W - padRight + 5} y={y} textAnchor="start" dominantBaseline="middle" fontSize="8" fill="var(--rt-fg-muted)">
+              <text x={W - padRight + 8} y={y} textAnchor="start" dominantBaseline="middle" fontSize="9" fill="var(--rt-fg-muted)">
                 {Math.round(frac * axisMaxRight)}
               </text>
             </g>
@@ -229,8 +229,8 @@ function CombinedProgressChart({
                 <text
                   x={x}
                   y={Math.max(padTop - 4, y - 8)}
-                  textAnchor="middle"
-                  fontSize="9"
+                  textAnchor={i === migratedCoords.length - 1 ? "end" : "middle"}
+                  fontSize="10"
                   fontWeight={i === migratedCoords.length - 1 ? "700" : "600"}
                   fill={i === migratedCoords.length - 1 ? "var(--rt-fg)" : "var(--rt-fg-body)"}
                 >
@@ -256,20 +256,20 @@ function CombinedProgressChart({
 
         {labelPoints.map((p, i) =>
           i % labelStep === 0 || i === labelPoints.length - 1 ? (
-            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="8" fill="var(--rt-fg-muted)">
+            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="9" fill="var(--rt-fg-muted)">
               {fmtAxis(new Date(p.weekStart))}
             </text>
           ) : null
         )}
       </svg>
       <div className="flex gap-3 mt-1 flex-wrap">
-        <span className="flex items-center gap-1 text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+        <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
           <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-accent)" }} /> migrated to V2 (cumulative, left axis)
         </span>
-        <span className="flex items-center gap-1 text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+        <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
           <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-fg-muted)" }} /> tickets created (per week, right axis)
         </span>
-        <span className="flex items-center gap-1 text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+        <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
           <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--rt-status-good)" }} /> tickets resolved (per week, right axis)
         </span>
       </div>
@@ -286,7 +286,7 @@ function CombinedProgressChart({
 function TicketDataErrorBanner({ message }: { message: string }) {
   return (
     <div
-      className="rounded-[14px] px-3.5 py-3 mb-3 text-[11px] leading-relaxed"
+      className="rounded-[14px] px-3.5 py-3 mb-3 text-[12px] leading-relaxed"
       style={{
         border: "1px solid var(--rt-status-bad)",
         background: "rgba(248,113,113,0.08)",
@@ -333,7 +333,7 @@ function PresetPicker({ range }: { range: AllHandsReport["range"] }) {
   return (
     <div className="flex flex-col items-end gap-2">
       <div
-        className="flex rounded-[10px] p-[3px] text-[10px]"
+        className="flex rounded-[10px] p-[3px] text-[11px]"
         style={{ background: "var(--rt-surface-1)" }}
       >
         {PRESETS.map((p) => {
@@ -362,10 +362,10 @@ function PresetPicker({ range }: { range: AllHandsReport["range"] }) {
             value={fromDraft}
             onChange={(e) => setFromDraft(e.target.value)}
             max={toDraft || undefined}
-            className="rounded-lg px-2 py-1 text-[10px]"
+            className="rounded-lg px-2 py-1 text-[11px]"
             style={{ background: "var(--rt-surface-1)", color: "var(--rt-fg)", border: "1px solid var(--rt-surface-2)" }}
           />
-          <span className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
+          <span className="text-[11px]" style={{ color: "var(--rt-fg-muted)" }}>
             to
           </span>
           <input
@@ -373,13 +373,13 @@ function PresetPicker({ range }: { range: AllHandsReport["range"] }) {
             value={toDraft}
             onChange={(e) => setToDraft(e.target.value)}
             min={fromDraft || undefined}
-            className="rounded-lg px-2 py-1 text-[10px]"
+            className="rounded-lg px-2 py-1 text-[11px]"
             style={{ background: "var(--rt-surface-1)", color: "var(--rt-fg)", border: "1px solid var(--rt-surface-2)" }}
           />
           <button
             onClick={() => pushParams({ preset: "custom", from: fromDraft, to: toDraft })}
             disabled={isPending || !fromDraft || !toDraft}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold disabled:opacity-50"
+            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold disabled:opacity-50"
             style={{ background: "var(--rt-accent)", color: "var(--rt-bg)" }}
           >
             Apply
@@ -447,10 +447,10 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
       {/* Header */}
       <div className="flex justify-between items-start mb-5 flex-wrap gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.06em] mb-1" style={{ color: "var(--rt-fg-muted)" }}>
+          <div className="text-[11px] uppercase tracking-[0.06em] mb-1" style={{ color: "var(--rt-fg-muted)" }}>
             All-Hands · Delivery &amp; Customer Success
           </div>
-          <div className="text-xl font-extrabold tracking-tight" style={{ color: "var(--rt-fg)" }}>
+          <div className="text-2xl font-extrabold tracking-tight" style={{ color: "var(--rt-fg)" }}>
             {report.range.label}
           </div>
         </div>
@@ -459,7 +459,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           <button
             onClick={downloadPng}
             disabled={exportState === "loading"}
-            className="rounded-[10px] px-3 py-1.5 text-[10px] font-semibold disabled:opacity-50 transition-opacity"
+            className="rounded-[10px] px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50 transition-opacity"
             style={{ background: "var(--rt-surface-1)", color: "var(--rt-fg)" }}
           >
             {exportLabel}
@@ -495,11 +495,11 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         </div>
         {status.migrationBlockedProcesses.length > 0 && (
           <div className="mb-3.5 pb-3.5" style={{ borderBottom: "1px solid var(--rt-surface-2)" }}>
-            <div className="text-[9px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
               Engineering-blocked (excludes customer-pending and commercial-discussion waits, already visible above):
             </div>
             {status.migrationBlockedProcesses.map((p) => (
-              <div key={`${p.account}-${p.processName}`} className="text-[10px] mb-1" style={{ color: "var(--rt-fg-body)" }}>
+              <div key={`${p.account}-${p.processName}`} className="text-[11px] mb-1" style={{ color: "var(--rt-fg-body)" }}>
                 <span className="font-bold" style={{ color: "var(--rt-status-bad)" }}>
                   {p.processName}
                 </span>
@@ -516,7 +516,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
             <>
               {completeRows.length > 0 && (
                 <>
-                  <div className="text-[9px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
+                  <div className="text-[10px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
                     Already migrated (not counted in the {status.migratingNowCount} below):
                   </div>
                   <div className="flex flex-wrap gap-2 mb-3">
@@ -526,7 +526,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                   </div>
                 </>
               )}
-              <div className="text-[9px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
+              <div className="text-[10px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
                 The {status.migratingNowCount} actively migrating, by stage:
               </div>
               {inProgressRows.length === 0 ? (
@@ -562,7 +562,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           ticketPoints={ticketDataError ? [] : ticketVelocity}
           goal={status.migrationGoalTotal}
         />
-        <div className="text-[10px] mt-2" style={{ color: "var(--rt-fg-body)" }}>
+        <div className="text-[11px] mt-2" style={{ color: "var(--rt-fg-body)" }}>
           {migratedToV2Total} of {status.migrationGoalTotal} migrated to V2 so far.
           {status.migrationBlockedNowCount > 0 && (
             <> {status.migrationBlockedNowCount} of the {status.migratingNowCount} still migrating are engineering-blocked.</>
@@ -582,12 +582,12 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
             }}
           >
             <div className="flex justify-between items-baseline mb-2 gap-2">
-              <div className="text-[13px] font-extrabold" style={{ color: "var(--rt-fg)" }}>
+              <div className="text-[14px] font-extrabold" style={{ color: "var(--rt-fg)" }}>
                 {renewalSpotlight.customerName} renews in {renewalSpotlight.renewalInDays} days
               </div>
               {spotlightRenewalDate && (
                 <span
-                  className="text-[9px] font-bold rounded-full px-2 py-0.5"
+                  className="text-[10px] font-bold rounded-full px-2 py-0.5"
                   style={{ background: "var(--rt-accent)", color: "var(--rt-bg)" }}
                 >
                   {fmtShort(spotlightRenewalDate)}
@@ -600,7 +600,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
               <StatTile value={renewalSpotlight.migratingProcessCount} label="Migrating now" />
             </div>
             {spotlightAlsoAtRisk && (
-              <div className="text-[10px]" style={{ color: "var(--rt-status-bad)" }}>
+              <div className="text-[11px]" style={{ color: "var(--rt-status-bad)" }}>
                 Also flagged At Risk — see below.
               </div>
             )}
@@ -619,10 +619,10 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                 className="flex justify-between items-center py-1.5"
                 style={{ borderBottom: "1px solid var(--rt-surface-2)" }}
               >
-                <span className="text-[11px] font-medium" style={{ color: "var(--rt-fg)" }}>
+                <span className="text-[12px] font-medium" style={{ color: "var(--rt-fg)" }}>
                   {entry.customerName}
                 </span>
-                <span className="text-[10px]" style={{ color: "var(--rt-status-bad)" }}>
+                <span className="text-[11px]" style={{ color: "var(--rt-status-bad)" }}>
                   {entry.migratingProcessCount} migrating
                 </span>
               </div>
@@ -649,11 +649,11 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                 style={{ borderBottom: i < blockers.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
               >
                 <div className="flex justify-between items-start gap-2">
-                  <span className="text-[11px] font-bold" style={{ color: "var(--rt-fg)" }}>
+                  <span className="text-[12px] font-bold" style={{ color: "var(--rt-fg)" }}>
                     {b.title}
                   </span>
                   <span
-                    className="text-[9px] font-bold rounded-full px-1.5 py-0.5 shrink-0"
+                    className="text-[10px] font-bold rounded-full px-1.5 py-0.5 shrink-0"
                     style={{
                       background: b.priorityLabel === "NOW" ? "var(--rt-status-bad)" : "var(--rt-status-warn)",
                       color: "var(--rt-bg)",
@@ -670,7 +670,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                         href={LINEAR_ISSUE(id)}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[10px] rounded-full px-2 py-0.5"
+                        className="text-[11px] rounded-full px-2 py-0.5"
                         style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg-muted)" }}
                       >
                         {id}
@@ -690,10 +690,10 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           /reports/v2-migration/tickets, linked below since this page has no
           other pointer to it (Rishabh, 2026-08-10). */}
       <div className="flex justify-between items-baseline mb-2">
-        <div className="text-[10px] uppercase tracking-[0.06em]" style={{ color: "var(--rt-fg-muted)" }}>
+        <div className="text-[11px] uppercase tracking-[0.06em]" style={{ color: "var(--rt-fg-muted)" }}>
           Hard blockers — {ticketHealth.hardBlockers} total
         </div>
-        <a href="/reports/v2-migration/tickets" className="text-[9px] font-semibold" style={{ color: "var(--rt-accent)" }}>
+        <a href="/reports/v2-migration/tickets" className="text-[10px] font-semibold" style={{ color: "var(--rt-accent)" }}>
           Manage tickets &amp; refresh from Linear →
         </a>
       </div>
@@ -704,7 +704,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           </div>
         ) : (
           <>
-            <div className="text-[9px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
               By category:
             </div>
             {ticketDomainBuckets.length === 0 ? (
@@ -716,7 +716,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                 {ticketDomainBuckets.map((bucket) => (
                   <span
                     key={bucket.domain}
-                    className="text-[10px] rounded-full px-2 py-1"
+                    className="text-[11px] rounded-full px-2 py-1"
                     style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg)" }}
                   >
                     {domainLabel(bucket.domain)} · <span style={{ color: "var(--rt-status-bad)", fontWeight: 700 }}>{bucket.count}</span>
@@ -724,7 +724,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                 ))}
               </div>
             )}
-            <div className="text-[9px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
               By migration:
             </div>
             {customerTicketConcentration.length === 0 ? (
@@ -736,7 +736,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
                 {customerTicketConcentration.map((c) => (
                   <span
                     key={c.customerName}
-                    className="text-[10px] rounded-full px-2 py-1"
+                    className="text-[11px] rounded-full px-2 py-1"
                     style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg)" }}
                   >
                     {c.customerName} · <span style={{ color: "var(--rt-status-bad)", fontWeight: 700 }}>{c.ticketCount}</span>
@@ -747,7 +747,7 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
             {/* Manually-maintained, deliberately not ticket-derived (Rishabh, 2026-08-10):
                 IDP experience is a recurring gap across several customers' migrations, not
                 fully captured as tracked tickets today. Revisit/remove once it is. */}
-            <div className="text-[9px] italic mt-3" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px] italic mt-3" style={{ color: "var(--rt-fg-muted)" }}>
               Known gap beyond what&apos;s tracked above: IDP experience is a recurring need across multiple customers&apos;
               migrations.
             </div>
@@ -770,34 +770,34 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
       ) : (
         <div className="flex gap-2">
           <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-base font-extrabold" style={{ color: "var(--rt-fg)" }}>
+            <div className="text-lg font-extrabold" style={{ color: "var(--rt-fg)" }}>
               {ticketHealth.openInScope}
             </div>
-            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
               open, in scope
             </div>
           </div>
           <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-base font-extrabold" style={{ color: "var(--rt-status-bad)" }}>
+            <div className="text-lg font-extrabold" style={{ color: "var(--rt-status-bad)" }}>
               {ticketHealth.hardBlockers}
             </div>
-            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
               hard blockers
             </div>
           </div>
           <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-base font-extrabold" style={{ color: "var(--rt-status-good)" }}>
+            <div className="text-lg font-extrabold" style={{ color: "var(--rt-status-good)" }}>
               +{ticketHealth.closedLast7Days}
             </div>
-            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
               closed, last 7 days
             </div>
           </div>
           <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-base font-extrabold" style={{ color: "var(--rt-fg)" }}>
+            <div className="text-lg font-extrabold" style={{ color: "var(--rt-fg)" }}>
               +{ticketHealth.newLast7Days}
             </div>
-            <div className="text-[9px]" style={{ color: "var(--rt-fg-muted)" }}>
+            <div className="text-[10px]" style={{ color: "var(--rt-fg-muted)" }}>
               new, last 7 days
             </div>
           </div>
