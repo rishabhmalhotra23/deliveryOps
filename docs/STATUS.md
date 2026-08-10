@@ -1,28 +1,40 @@
 # DeliveryOps — current state
 
-Last updated: 2026-07-22
+Last updated: 2026-08-10
 
-This is the canonical current-state snapshot. For the forward plan see [DELIVERYOPS-CONSOLIDATION-PLAN.md](./DELIVERYOPS-CONSOLIDATION-PLAN.md). For the long-form why see [VISION.md](./VISION.md).
+This is the canonical current-state snapshot. For the forward plan see [DELIVERYOPS-CONSOLIDATION-PLAN.md](./DELIVERYOPS-CONSOLIDATION-PLAN.md) (historical — Monday retirement it describes is now done, see below). For the long-form why see [VISION.md](./VISION.md).
 
 ## Where things stand
 
-Production is live at https://delivery-ops-delta.vercel.app on Supabase Cloud (`prnakdaxcpzagntgvaqf`). Auth is Auth0 session middleware plus RLS restricting tables to @kognitos.com users; `internal_profiles` is service-role only. Two Vercel Hobby crons run: `daily-sync` at 02:30 UTC (pulls Salesforce, Monday, Kognitos v2, and Linear into the cache tables) and `run-tasks` at 08:00 UTC (dispatches due `tasks`).
+Production is live at https://delivery-ops-delta.vercel.app on Supabase Cloud (`prnakdaxcpzagntgvaqf`). Auth is Auth0 session middleware plus RLS restricting tables to @kognitos.com users; `internal_profiles` is service-role only. Two Vercel Hobby crons run: `daily-sync` at 02:30 UTC (Salesforce, Monday, Kognitos v2, Linear tickets into the cache tables) and `run-tasks` at 08:00 UTC (dispatches due `tasks`).
 
-The app is well past its original Phase 2. Already built and running: the customer 360 page (`app/(app)/customers/[key]` with hero, stats rail, and cards for account snapshot, ARR, NPS, projects, K2 metrics, opportunities, contacts, activity log, events/tasks, documents, profile, rules), the agent (`lib/agent`, 20-plus tools), the Slack-gated human-approval queue (`pending_approvals`), the document ingestion pipeline, all five connectors, and the native tables.
+The app is well past its original Phase 2. Already built and running: the customer 360 page (`app/(app)/customers/[key]` with hero, stats rail, and cards for account snapshot, ARR, NPS, projects, K2 metrics, opportunities, contacts, activity log, events/tasks, documents, profile, rules), the agent (`lib/agent`, 20-plus tools), the Slack-gated human-approval queue (`pending_approvals`), the document ingestion pipeline, all five connectors, and the native `processes` table.
 
-## What the 2026-07-22 audit found
+## Monday retirement for reporting: done
 
-Roughly 80% of the "one hub" vision is already built. The reason DeliveryOps feels stale is specific, not vague:
+The 2026-07-22 audit below was the diagnosis; it's since been fixed. `processes` (migration 0021, widened from `migration_processes`) is now the single native record for both delivery lifecycle and V2 migration state, and every report reads it directly:
 
-- The all-hands weekly report (`lib/reports/weekly-loader.ts`) still reads the Monday cache (`monday_projects`) and the curated arrays in `lib/reports/v2-migrations.ts` plus `MANUAL_V2_MIGRATIONS`. The native `migration_processes` table (migration 0019) was created but never wired into the report. That single unfinished wire is why Monday is still load-bearing.
-- "Value" is a modelled estimate (`TIER_HOURS` times a labour rate), which the code itself flags as a placeholder. Real usage sits unused in `k2_runs`.
-- The app only produces the weekly report, so no FDE has a daily reason to open it.
+- **All-Hands** (`/reports/v2-migration`) — company-wide weekly report: delivery portfolio + V2 migration-goal stats (migrated/actively-migrating/engineering-blocked, reconciled by construction), a combined migrated-to-V2-vs-ticket-velocity chart, hard-blocker ticket breakdowns, renewal spotlight. Replaced 1,247 lines of hand-maintained content (`lib/reports/v2-migration-allhands.ts`, deleted) plus the Monday-backed `weekly-loader.ts` V2 tile.
+- **Weekly Delivery Review** (`/reports/delivery-review`) — Delivery/CS-only, customer-grouped, per-process Done/Coming Up/Blocked detail. Replaced the old `/reports/weekly` page (deleted).
+- `lib/sync/linear-tickets.ts` syncs raw Linear ticket fields daily; a separate classification layer (`in_scope`/`classification`/`domain`, human or Claude-assisted) gates what a report shows. `LINEAR_API_TOKEN` was only wired into Vercel on 2026-08-10 — before that the sync had never actually run in production, so `linear_tickets` was a one-time hand-seeded snapshot. Also fixed same day: the sync's GraphQL query wasn't requesting archived issues, undercounting older completed/canceled tickets.
+- `monday_projects` is no longer read anywhere. `monday_activities`/`monday_nps_responses` are still synced daily, but only `monday_activities` still has a live reader (the customer-360 Activity tab — no native replacement was planned; removing that tab is a pending UI decision, see `MONDAY-DECOMMISSION-LOG.md`).
+
+Remaining loose end from the original audit: "value" is still a modelled estimate (`TIER_HOURS` × labour rate); real usage sits unused in `k2_runs`. Not addressed yet.
+
+## What the 2026-07-22 audit found (historical)
+
+Roughly 80% of the "one hub" vision is already built. The reason DeliveryOps felt stale at the time was specific, not vague:
+
+- The all-hands weekly report (`lib/reports/weekly-loader.ts`) read the Monday cache (`monday_projects`) and curated arrays. **Fixed — see above.**
+- "Value" is a modelled estimate. **Still open.**
+- The app only produced the weekly report, so no FDE had a daily reason to open it. Two live reports now exist; daily-surface adoption is still open.
 
 Monday is fully backed up before any migration. The `monday-backup/` folder (gitignored) holds a complete inventory of 492 boards / 7,759 items (`board-inventory.csv`/`.json`) and a full export of the 6 report-critical boards, ~142 rows, which live in the Delivery Planning workspace (13889621). Note: workspace 8906635 (25 boards, unmapped) is almost certainly Norco.
 
-## The plan (summary)
+## Next up (per Rishabh, 2026-08-10)
 
-Finish and adopt, do not rebuild. Phase 0 backup is done. Phase 1 builds one native `processes` table, imports the ~140 report rows, auto-fills runs/dates/state from `k2_runs`, rewires the report off Monday, and turns the sync off. Phase 2 makes the customer page the daily surface and gives FDEs logins. Phase 3 adds self-updating (Slack/email into events, a suggestion queue via `pending_approvals`, a weekly customer digest as a `tasks` row) and outbound email. Phase 4 builds agents on the single data spine. Full detail and the open decisions are in the consolidation plan.
+1. Finish verifying Weekly Delivery Review against production (in progress — see the SDD ledger under `.superpowers/sdd/` if resuming that plan).
+2. Other reports, then a frontend pass. Context for that pass: the app defaults to light mode app-wide (`app/providers.tsx`, `defaultTheme="light"`) — only the sidebar nav and report pages (`.report-theme`) are dark today, by fixed component styling, not a global theme. The approved Stage A "Bold Brand-Forward" dark-primary direction (nav/IA merge + visual tokens, see `docs/mockups/`) was designed but never applied app-wide.
 
 ## Still blocked or pending (external)
 
