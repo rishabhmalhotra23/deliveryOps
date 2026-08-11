@@ -32,13 +32,13 @@ function fdeLabel(raw: string | null): string {
 
 const STAGE_BADGE: Record<MigrationStage, string> = {
   not_required: "border-[var(--glass-border)] text-[color:var(--muted-foreground)]",
-  in_development: "bg-indigo-500/10 text-indigo-700 border-indigo-500/25",
-  engg_pending: "bg-orange-500/10 text-orange-700 border-orange-500/25",
-  parity_testing: "bg-blue-500/10 text-blue-700 border-blue-500/25",
-  customer_validation: "bg-amber-500/10 text-amber-700 border-amber-500/25",
-  live_on_v2: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
-  v2_native: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
-  migrated_pending_commercial: "bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-500/25",
+  in_development: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/25",
+  engg_pending: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/25",
+  parity_testing: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  customer_validation: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  live_on_v2: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  v2_native: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  migrated_pending_commercial: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400 border-fuchsia-500/25",
 };
 
 function StageBadge({ stage }: { stage: MigrationStage }) {
@@ -311,7 +311,7 @@ export function V2MigrationClient({ overview }: V2MigrationClientProps) {
                         </div>
                         <div className="font-medium text-[color:var(--foreground)] mt-0.5">{p.process_name}</div>
                         {p.blockers ? (
-                          <div className="text-[11px] text-red-700 mt-1 line-clamp-2" title={p.blockers}>
+                          <div className="text-[11px] text-red-700 dark:text-red-400 mt-1 line-clamp-2" title={p.blockers}>
                             ⚑ {p.blockers}
                           </div>
                         ) : null}
