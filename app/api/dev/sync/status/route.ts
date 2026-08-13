@@ -9,14 +9,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const sb = requireAdmin();
 
-  const [runs, sf, opps, cases, projects, activities, nps, k2Procs, k2Runs, k2Ws] = await Promise.all([
+  const [runs, sf, opps, cases, k2Procs, k2Runs, k2Ws] = await Promise.all([
     sb.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(20),
     sb.from("sf_accounts").select("id", { count: "exact", head: true }),
     sb.from("sf_opportunities").select("id", { count: "exact", head: true }),
     sb.from("sf_cases").select("id", { count: "exact", head: true }),
-    sb.from("monday_projects").select("id", { count: "exact", head: true }),
-    sb.from("monday_activities").select("id", { count: "exact", head: true }),
-    sb.from("monday_nps_responses").select("id", { count: "exact", head: true }),
     sb.from("k2_processes").select("id", { count: "exact", head: true }),
     sb.from("k2_runs").select("id", { count: "exact", head: true }),
     sb.from("k2_workspaces").select("id", { count: "exact", head: true }),
@@ -28,9 +25,6 @@ export async function GET() {
       sf_accounts: sf.count ?? 0,
       sf_opportunities: opps.count ?? 0,
       sf_cases: cases.count ?? 0,
-      monday_projects: projects.count ?? 0,
-      monday_activities: activities.count ?? 0,
-      monday_nps_responses: nps.count ?? 0,
       k2_workspaces: k2Ws.count ?? 0,
       k2_processes: k2Procs.count ?? 0,
       k2_runs: k2Runs.count ?? 0,
