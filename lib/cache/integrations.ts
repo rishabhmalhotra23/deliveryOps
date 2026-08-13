@@ -76,23 +76,6 @@ export interface MondayProjectCache {
   latest_update: string | null;
 }
 
-export interface MondayActivityCache {
-  monday_item_id: string;
-  name: string;
-  group_title: string | null;
-  state: string | null;
-  monday_updated_at: string | null;
-  // Lifted from raw_columns for sorting/filtering in the UI
-  priority: string | null;
-  status: string | null;
-  due_date: string | null;
-  created_date: string | null;
-  resolved_date: string | null;
-  ai_summary: string | null;
-  source_link: string | null;
-  meeting_excerpt: string | null;
-}
-
 export interface MondayNpsCache {
   monday_item_id: string;
   respondent: string;
@@ -111,27 +94,12 @@ export interface CustomerEnrichment {
   opportunities: SfOpportunityCache[];
   cases: SfCaseCache[];
   projects: MondayProjectCache[];
-  activities: MondayActivityCache[];
   nps: MondayNpsCache[];
   freshness: {
     salesforce_synced_at: string | null;
     monday_synced_at: string | null;
   };
 }
-
-// Monday Activity Log column IDs for lifting fields out of raw_columns.
-// Captured from the live board on 2026-04-30; if the columns are renamed
-// in Monday these stay valid (column IDs are stable).
-const ACTIVITY_COLS = {
-  priority: "color_mm01d100",
-  status: "color_mm01fb9d",
-  due_date: "date_mm01r1zn",
-  created_date: "date_mm01bkxq",
-  resolved_date: "date_mm01vncb",
-  ai_summary: "text_mm01867a",
-  source_link: "link_mm01egt",
-  raw_content: "long_text_mm016mph",
-};
 
 import { unionPeopleColumns, legacyFieldsFromProcess } from "@/lib/delivery/taxonomy";
 import { TABLES, npsCategory, type Process, type NpsResponse } from "@/lib/supabase/types";
@@ -140,18 +108,10 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-interface RawColumns {
-  [columnId: string]: { type: string; text: string | null; value: string | null } | undefined;
-}
-
-function txt(cols: RawColumns | null | undefined, id: string): string | null {
-  return cols?.[id]?.text?.trim() || null;
-}
-
 export async function loadCustomerEnrichment(customerId: string): Promise<CustomerEnrichment> {
   const sb = requireAdmin();
 
-  const [acc, opps, cases, processes, activities, nps] = await Promise.all([
+  const [acc, opps, cases, processes, nps] = await Promise.all([
     sb.from("sf_accounts").select("*").eq("customer_id", customerId).maybeSingle(),
     sb
       .from("sf_opportunities")
@@ -169,12 +129,6 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     // historical per-FY-board duplication, so no ordering/filter games needed
     // beyond the go-live sort applied client-side below.
     sb.from(TABLES.processes).select("*").eq("customer_id", customerId),
-    sb
-      .from("monday_activities")
-      .select("*")
-      .eq("customer_id", customerId)
-      .order("monday_updated_at", { ascending: false })
-      .limit(100),
     sb.from(TABLES.npsResponses).select("*").eq("customer_id", customerId),
   ]);
 
@@ -216,44 +170,6 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     })
     .sort((a, b) => (b.go_live_date ?? "").localeCompare(a.go_live_date ?? ""));
 
-  type ActivityRow = {
-    monday_item_id: string;
-    name: string;
-    group_title: string | null;
-    state: string | null;
-    monday_updated_at: string | null;
-    raw_columns: RawColumns;
-  };
-  const activityCache: MondayActivityCache[] = (
-    (activities.data as ActivityRow[] | null) ?? []
-  ).map((a) => {
-    const cols = a.raw_columns ?? {};
-    const raw = txt(cols, ACTIVITY_COLS.raw_content);
-    // Pull 280 chars of meeting context, stripped of the redundant
-    // "Customer: X / Meeting: Y / Owner: Z" header that prefixes Fireflies
-    // output.
-    let excerpt: string | null = null;
-    if (raw) {
-      const stripped = raw.replace(/^(?:customer:|meeting:|owner:).*$/gim, "").trim();
-      excerpt = stripped.length > 280 ? stripped.slice(0, 280) + "…" : stripped;
-    }
-    return {
-      monday_item_id: a.monday_item_id,
-      name: a.name,
-      group_title: a.group_title,
-      state: a.state,
-      monday_updated_at: a.monday_updated_at,
-      priority: txt(cols, ACTIVITY_COLS.priority),
-      status: txt(cols, ACTIVITY_COLS.status),
-      due_date: txt(cols, ACTIVITY_COLS.due_date),
-      created_date: txt(cols, ACTIVITY_COLS.created_date),
-      resolved_date: txt(cols, ACTIVITY_COLS.resolved_date),
-      ai_summary: txt(cols, ACTIVITY_COLS.ai_summary),
-      source_link: txt(cols, ACTIVITY_COLS.source_link),
-      meeting_excerpt: excerpt,
-    };
-  });
-
   const npsCache: MondayNpsCache[] = ((nps.data as NpsResponse[] | null) ?? []).map((n) => ({
     monday_item_id: n.id,
     respondent: n.respondent_name,
@@ -283,7 +199,6 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     opportunities: (opps.data as SfOpportunityCache[] | null) ?? [],
     cases: (cases.data as SfCaseCache[] | null) ?? [],
     projects: projectCache,
-    activities: activityCache,
     nps: npsCache,
     freshness: {
       salesforce_synced_at: (acc.data as SfAccountCache | null)?.synced_at ?? null,

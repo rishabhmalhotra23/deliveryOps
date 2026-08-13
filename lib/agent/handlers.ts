@@ -94,8 +94,6 @@ export async function executeTool(
       return await toolListCustomerOpportunities(toolInput, ctx);
     case "list_customer_cases":
       return await toolListCustomerCases(toolInput, ctx);
-    case "list_customer_activities":
-      return await toolListCustomerActivities(toolInput, ctx);
     case "list_customer_events":
       return await toolListCustomerEvents(toolInput, ctx);
     default:
@@ -626,33 +624,6 @@ async function toolListCustomerCases(
       `- ${c.case_number ?? "?"} · ${truncate(c.subject ?? "—", 120)} · ${c.status ?? "—"}${c.priority ? ` · ${c.priority}` : ""}${c.origin ? ` · ${c.origin}` : ""}`
   );
   return `${cases.length} ${includeClosed ? "" : "open "}case${cases.length === 1 ? "" : "s"}.\n${lines.join("\n")}`;
-}
-
-async function toolListCustomerActivities(
-  input: Record<string, unknown>,
-  ctx: HandlerContext
-): Promise<string> {
-  const includeResolved = input.include_resolved === true;
-  const limit = clamp(Number(input.limit ?? 20), 1, 50);
-  const customer = await requireCustomerByKey(ctx.customerKey);
-  const enrichment = await loadCustomerEnrichment(customer.id);
-  const activities = enrichment.activities.filter((a) => {
-    if (includeResolved) return true;
-    const status = (a.status ?? "").toLowerCase();
-    return status !== "closed" && status !== "resolved" && !a.resolved_date;
-  });
-  if (activities.length === 0) return includeResolved ? "No activities on file." : "No open activities.";
-  const lines = activities.slice(0, limit).map((a) => {
-    const meta = [
-      a.status ?? null,
-      a.priority ?? null,
-      a.due_date ? `due ${a.due_date}` : null,
-    ].filter(Boolean);
-    const summary = a.ai_summary ? `\n   ${truncate(a.ai_summary, 200)}` : "";
-    return `- ${a.name}${meta.length ? `\n   ${meta.join(" · ")}` : ""}${summary}`;
-  });
-  const more = activities.length > limit ? `\n… ${activities.length - limit} more not shown.` : "";
-  return `${activities.length} activit${activities.length === 1 ? "y" : "ies"}.\n${lines.join("\n")}${more}`;
 }
 
 async function toolListCustomerEvents(

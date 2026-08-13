@@ -18,7 +18,6 @@ import {
   buildNpsTrendPoints,
   buildOpportunitiesCardProps,
   buildProjectsCardProps,
-  buildActivityLogCardProps,
   buildEventsTasksCardProps,
   buildMetadataCardProps,
 } from "@/lib/customers/view-model";
@@ -92,7 +91,6 @@ export default async function CustomerPage({ params }: Props) {
   const npsTrendPoints = buildNpsTrendPoints(npsResponses);
   const opportunitiesCardProps = buildOpportunitiesCardProps(customer, enrichment ?? null);
   const projectsCardProps = buildProjectsCardProps(customer, enrichment ?? null);
-  const activityLogProps = buildActivityLogCardProps(customer, enrichment ?? null);
   const eventsTasksProps = buildEventsTasksCardProps(events, tasks);
   const metadataProps = buildMetadataCardProps(customer, profile);
 
@@ -127,7 +125,6 @@ export default async function CustomerPage({ params }: Props) {
               projectsCardProps={projectsCardProps}
               npsResponses={npsResponses}
               contacts={profile?.contacts ?? []}
-              activityLogProps={activityLogProps}
               eventsTasksProps={eventsTasksProps}
             />
           </div>

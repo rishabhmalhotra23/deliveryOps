@@ -336,18 +336,6 @@ export const DELIVERY_OPS_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "list_customer_activities",
-    description:
-      "Monday activity-log entries for this customer (tickets, meeting notes, follow-ups).  Each entry has status, priority, due date, AI summary, and a Monday source link.",
-    input_schema: {
-      type: "object",
-      properties: {
-        include_resolved: { type: "boolean", description: "Default false." },
-        limit: { type: "number", description: "Default 20." },
-      },
-    },
-  },
-  {
     name: "list_customer_events",
     description:
       "Read this customer's event timeline — every emails sent, Slack thread, profile edit, project change, escalation.  Filter by event_type or limit window.  Use when the question is 'what happened recently?' or 'when did X change?'.",

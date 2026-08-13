@@ -6,7 +6,6 @@ import { NpsTrend } from "../_cards/nps-trend";
 import { OpportunitiesCard } from "../_cards/opportunities-card";
 import { ProjectsCard } from "../_cards/projects-card";
 import { NpsResponsesCard } from "../_cards/nps-responses-card";
-import { ActivityLogCard } from "../_cards/activity-log-card";
 import { TasksTab } from "../_cards/tasks-tab";
 import { DocumentsTab } from "../_cards/documents-tab";
 import { ProfileTab } from "../_cards/profile-tab";
@@ -16,7 +15,6 @@ import type {
   NpsTrendPoint,
   OpportunitiesCardProps,
   ProjectsCardProps,
-  ActivityLogCardProps,
   EventsTasksCardProps,
   NpsResponsesCardProps,
 } from "@/lib/customers/view-model";
@@ -32,7 +30,6 @@ const TABS = [
   "Tasks",
   "Profile",
   "Rules",
-  "Activity",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -44,7 +41,6 @@ interface CustomerTabsProps {
   projectsCardProps: ProjectsCardProps;
   npsResponses: NpsResponse[];
   contacts: ContactRow[];
-  activityLogProps: ActivityLogCardProps;
   eventsTasksProps: EventsTasksCardProps;
 }
 
@@ -70,7 +66,6 @@ export function CustomerTabs({
   opportunitiesCardProps,
   projectsCardProps,
   npsResponses,
-  activityLogProps,
 }: CustomerTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
 
@@ -114,10 +109,6 @@ export function CustomerTabs({
         {activeTab === "Tasks" && <TasksTab customerKey={customerKey} />}
         {activeTab === "Profile" && <ProfileTab customerKey={customerKey} />}
         {activeTab === "Rules" && <RulesTab customerKey={customerKey} />}
-
-        {activeTab === "Activity" && (
-          <ActivityLogCard {...activityLogProps} className="glass-card-hover" />
-        )}
       </div>
     </div>
   );

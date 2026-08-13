@@ -38,7 +38,6 @@ You have read access to every data source DeliveryOps already shows on the custo
 | Customer sentiment — NPS scores + verbatim feedback | \`list_customer_nps\` |
 | Pipeline — open Salesforce opportunities (renewal / expansion / new) | \`list_customer_opportunities\` |
 | Support — open Salesforce cases | \`list_customer_cases\` |
-| Day-to-day work — Monday activity log (tickets, meetings, follow-ups) | \`list_customer_activities\` |
 | Recent history — emails sent, profile edits, project changes | \`list_customer_events\` |
 | Documents on file (contracts, SOWs, meeting notes, SOPs) | \`search_customer_docs\` |
 | Slack conversation context | \`get_slack_history\` |
@@ -80,7 +79,7 @@ export function buildSystemPrompt(input: {
     c.slack_channel ? `**Slack channel:** #${c.slack_channel}` : null,
     c.email_alias ? `**Email alias:** ${c.email_alias}` : null,
     "",
-    "Call the right read tool for live data — `get_customer_profile` for the contract/contacts snapshot, `list_customer_projects` for delivery work + FDE roster, `list_customer_nps` for sentiment, `list_customer_opportunities` for pipeline, `list_customer_cases` for support cases, `list_customer_activities` for the Monday activity log, `list_customer_events` for recent history.  All of them always return the latest values.",
+    "Call the right read tool for live data — `get_customer_profile` for the contract/contacts snapshot, `list_customer_projects` for delivery work + FDE roster, `list_customer_nps` for sentiment, `list_customer_opportunities` for pipeline, `list_customer_cases` for support cases, `list_customer_events` for recent history.  All of them always return the latest values.",
   ]
     .filter(Boolean)
     .join("\n");

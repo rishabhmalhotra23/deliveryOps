@@ -5,7 +5,7 @@
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 import { categoryFromCustomer } from "@/app/_components/brand";
 import type { Customer, Profile, InternalProfile, CuratorTask, CuratorEvent } from "@/lib/supabase/types";
-import type { CustomerEnrichment, MondayActivityCache } from "@/lib/cache/integrations";
+import type { CustomerEnrichment } from "@/lib/cache/integrations";
 
 // ─── Formatters (shared across view-model builders) ────────────────────
 export function fmtMoney(n: number | null | undefined): string {
@@ -505,25 +505,6 @@ export interface ContactsCardProps {
     phone: string;
     notes: string;
   }>;
-}
-
-// ─── Row 6: Audit ─────────────────────────────────────────────────────────
-
-export interface ActivityLogCardProps {
-  customerName: string;
-  activities: MondayActivityCache[];
-  openCount: number;
-}
-
-export function buildActivityLogCardProps(
-  customer: Customer,
-  enrichment: CustomerEnrichment | null
-): ActivityLogCardProps {
-  const activities = enrichment?.activities ?? [];
-  const openCount = activities.filter(
-    (a) => (a.status ?? "").toLowerCase() !== "closed" && !a.resolved_date
-  ).length;
-  return { customerName: customer.display_name, activities, openCount };
 }
 
 export interface EventsTasksCardProps {
