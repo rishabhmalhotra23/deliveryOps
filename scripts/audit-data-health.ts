@@ -111,7 +111,7 @@ function sb() {
 
 async function loadAll() {
   const s = sb();
-  const [customers, profiles, internalProfiles, rules, sfAcc, sfOpps, sfCases, mProj, mAct, mNps, events, tasks, syncRuns] =
+  const [customers, profiles, internalProfiles, rules, sfAcc, sfOpps, sfCases, events, tasks, syncRuns] =
     await Promise.all([
       s.from("customers").select("*").is("deleted_at", null),
       s.from("profiles").select("customer_id, industry, arr, renewal_date, tier, deployment_stage, contacts, business_objectives"),
@@ -120,14 +120,11 @@ async function loadAll() {
       s.from("sf_accounts").select("customer_id, sf_id, name, synced_at, annual_revenue, number_of_employees, industry"),
       s.from("sf_opportunities").select("customer_id, sf_id, is_closed, is_won, amount"),
       s.from("sf_cases").select("customer_id, sf_id, is_closed"),
-      s.from("monday_projects").select("customer_id, monday_item_id"),
-      s.from("monday_activities").select("customer_id, monday_item_id"),
-      s.from("monday_nps_responses").select("customer_id, monday_item_id"),
       s.from("events").select("customer_id"),
       s.from("tasks").select("customer_id, status").is("deleted_at", null),
       s.from("sync_runs").select("source, started_at, finished_at, status, rows_synced").order("started_at", { ascending: false }).limit(40),
     ]);
-  for (const r of [customers, profiles, internalProfiles, rules, sfAcc, sfOpps, sfCases, mProj, mAct, mNps, events, tasks, syncRuns]) {
+  for (const r of [customers, profiles, internalProfiles, rules, sfAcc, sfOpps, sfCases, events, tasks, syncRuns]) {
     if (r.error) throw r.error;
   }
   return {
@@ -161,9 +158,6 @@ async function loadAll() {
     }>,
     sfOpps: sfOpps.data as Array<{ customer_id: string; sf_id: string; is_closed: boolean; is_won: boolean; amount: number | null }>,
     sfCases: sfCases.data as Array<{ customer_id: string; sf_id: string; is_closed: boolean }>,
-    mProj: mProj.data as Array<{ customer_id: string; monday_item_id: string }>,
-    mAct: mAct.data as Array<{ customer_id: string; monday_item_id: string }>,
-    mNps: mNps.data as Array<{ customer_id: string; monday_item_id: string }>,
     events: events.data as Array<{ customer_id: string }>,
     tasks: tasks.data as Array<{ customer_id: string; status: string }>,
     syncRuns: syncRuns.data as Array<{ source: string; started_at: string; finished_at: string | null; status: string; rows_synced: number }>,
@@ -208,12 +202,6 @@ async function main() {
     list.push(o);
     casesByC.set(o.customer_id, list);
   }
-  const projByC = new Map<string, number>();
-  for (const r of data.mProj) projByC.set(r.customer_id, (projByC.get(r.customer_id) ?? 0) + 1);
-  const actByC = new Map<string, number>();
-  for (const r of data.mAct) actByC.set(r.customer_id, (actByC.get(r.customer_id) ?? 0) + 1);
-  const npsByC = new Map<string, number>();
-  for (const r of data.mNps) npsByC.set(r.customer_id, (npsByC.get(r.customer_id) ?? 0) + 1);
   const eventsByC = new Map<string, number>();
   for (const r of data.events) eventsByC.set(r.customer_id, (eventsByC.get(r.customer_id) ?? 0) + 1);
   const tasksByC = new Map<string, number>();
@@ -244,9 +232,6 @@ async function main() {
     sf_cases: number;
     monday_mapped: boolean;
     monday_workspace: boolean;
-    monday_projects: number;
-    monday_activities: number;
-    monday_nps: number;
     has_slack: boolean;
     has_email_alias: boolean;
     has_drive_folder: boolean;
@@ -274,8 +259,6 @@ async function main() {
     if (sfAcc && cust.salesforce_account_id !== sfAcc.sf_id) issues.push("SF cache row sf_id ≠ customers.salesforce_account_id");
     if (KNOWN_WRONG.has(cust.display_name)) issues.push("SF mapping flagged wrong");
     if (KNOWN_UNMAPPED.has(cust.display_name)) issues.push("no SF mapping");
-    if (cust.monday_item_id && !projByC.get(cust.id) && !actByC.get(cust.id) && !npsByC.get(cust.id))
-      issues.push("Monday item mapped but no Monday data cached");
     if (!profile) issues.push("no profile row");
     else if (!profile.arr && !profile.renewal_date) issues.push("profile is empty (arr=0, no renewal date)");
     if (!internal) issues.push("no internal_profile row");
@@ -291,9 +274,6 @@ async function main() {
       sf_cases: casesByC.get(cust.id)?.length ?? 0,
       monday_mapped: !!cust.monday_item_id,
       monday_workspace: !!cust.monday_workspace_id,
-      monday_projects: projByC.get(cust.id) ?? 0,
-      monday_activities: actByC.get(cust.id) ?? 0,
-      monday_nps: npsByC.get(cust.id) ?? 0,
       has_slack: !!cust.slack_channel,
       has_email_alias: !!cust.email_alias,
       has_drive_folder: !!cust.drive_folder_id,
@@ -364,7 +344,7 @@ async function main() {
   console.log("─".repeat(100));
   console.log("PER-CUSTOMER (grouped by category)");
   console.log("─".repeat(100));
-  console.log("Columns: SF=mapped/synced  M=monday item/projects  Slack/Email/Drive/K1/K2  Pro/IPro/Rul  Issues");
+  console.log("Columns: SF=mapped/synced  M=monday item mapped  Slack/Email/Drive/K1/K2  Pro/IPro/Rul  Issues");
   console.log("");
 
   const order = ["At Risk", "Upcoming Renewals", "Strategic Growth", "Active", "Partner Managed", "POV", "Churned", "(uncategorised)"];
@@ -384,7 +364,7 @@ async function main() {
       const sfTag = s.sf_mapped
         ? `SF:${pad(s.sf_name ?? "?", 28)} ${s.sf_synced_ago ? "(synced " + s.sf_synced_ago + " ago)" : "(uncached)"}`
         : "SF:—";
-      const mondayTag = `M:${s.monday_mapped ? "✓" : "—"}/p${s.monday_projects}/a${s.monday_activities}/n${s.monday_nps}`;
+      const mondayTag = `M:${s.monday_mapped ? "✓" : "—"}`;
       const idTag = `${s.has_slack ? "S" : "_"}${s.has_email_alias ? "E" : "_"}${s.has_drive_folder ? "D" : "_"}${s.has_kognitos_v1 ? "1" : "_"}${s.has_kognitos_v2 ? "2" : "_"}`;
       const pgTag = `${s.has_profile ? "P" : "_"}${s.has_internal_profile ? "I" : "_"}${s.has_rules ? "R" : "_"}`;
       const issuesTag = s.issues.length ? `⚠ ${s.issues.join("; ")}` : "✓ clean";

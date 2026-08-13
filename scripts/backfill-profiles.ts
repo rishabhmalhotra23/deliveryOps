@@ -16,7 +16,7 @@
 //   profile.contacts          ← SF Contact records for the account
 //
 //   internal_profile.health_score   ← inferred from custom_category
-//   internal_profile.nps_score      ← from cached monday_nps_responses if any
+//   internal_profile.nps_score      ← averaged from native nps_responses
 //   internal_profile.churn_risk     ← inferred from custom_category
 //   internal_profile.next_qbr_date  ← today + 90 days (default; agent updates later)
 //
@@ -134,11 +134,6 @@ interface SfOppCache {
   probability: number | null;
   is_closed: boolean;
   is_won: boolean;
-}
-
-interface MondayNpsCache {
-  customer_id: string;
-  raw_columns: Record<string, { text: string | null }>;
 }
 
 // ─── Derivations ──────────────────────────────────────────────────────
@@ -264,7 +259,7 @@ async function main() {
     s.from("customers").select("id, key, display_name, salesforce_account_id, custom_category").is("deleted_at", null),
     s.from("sf_accounts").select("customer_id, sf_id, name, industry, number_of_employees, annual_revenue, website, billing_city, billing_country, owner_name"),
     s.from("sf_opportunities").select("customer_id, name, stage_name, amount, close_date, probability, is_closed, is_won"),
-    s.from("monday_nps_responses").select("customer_id, raw_columns"),
+    s.from("nps_responses").select("customer_id, score"),
     s.from("profiles").select("customer_id, last_updated_by"),
     s.from("internal_profiles").select("customer_id, last_updated_by"),
   ]);
@@ -274,7 +269,7 @@ async function main() {
   const customers = (custRes.data as CustomerRow[]) ?? [];
   const accounts = (accRes.data as SfAccountCache[]) ?? [];
   const opps = (oppRes.data as SfOppCache[]) ?? [];
-  const nps = (npsRes.data as MondayNpsCache[]) ?? [];
+  const nps = (npsRes.data as Array<{ customer_id: string; score: number }>) ?? [];
   const existingProfiles = new Map(
     ((existProfRes.data as Array<{ customer_id: string; last_updated_by: string | null }>) ?? []).map(
       (p) => [p.customer_id, p.last_updated_by]
@@ -293,7 +288,7 @@ async function main() {
     list.push(o);
     oppsByC.set(o.customer_id, list);
   }
-  const npsByC = new Map<string, MondayNpsCache[]>();
+  const npsByC = new Map<string, Array<{ customer_id: string; score: number }>>();
   for (const n of nps) {
     const list = npsByC.get(n.customer_id) ?? [];
     list.push(n);
@@ -346,14 +341,10 @@ async function main() {
       last_updated_by: BACKFILL_TAG,
     };
 
-    // NPS: take the most recent score from cache if present.
+    // NPS: average of every native nps_responses row for this customer.
     let npsScore = 0;
-    const scoreCol = "numeric_mm0aqvk3"; // captured in lib/cache/integrations.ts
     if (accNps.length > 0) {
-      const scores = accNps
-        .map((n) => Number(n.raw_columns?.[scoreCol]?.text ?? ""))
-        .filter((n) => Number.isFinite(n));
-      if (scores.length > 0) npsScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+      npsScore = Math.round(accNps.reduce((sum, n) => sum + n.score, 0) / accNps.length);
     }
     const internal = {
       customer_id: cust.id,

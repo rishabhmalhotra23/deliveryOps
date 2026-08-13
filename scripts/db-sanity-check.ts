@@ -29,8 +29,6 @@ const EXPECTED_MIN: Record<string, number> = {
   profiles: 35,
   internal_profiles: 35,
   sf_accounts: 30,
-  monday_projects: 20,
-  monday_nps_responses: 50,
 };
 
 export interface SanityReport {
