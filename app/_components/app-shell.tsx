@@ -61,11 +61,10 @@ function ThemeToggle() {
 
 interface SyncStatus {
   sf: string | null;
-  monday: string | null;
 }
 
 function useSyncStatus() {
-  const [status, setStatus] = useState<SyncStatus>({ sf: null, monday: null });
+  const [status, setStatus] = useState<SyncStatus>({ sf: null });
   useEffect(() => {
     fetch("/api/dev/sync/status")
       .then((r) => r.json())
@@ -73,9 +72,7 @@ function useSyncStatus() {
         if (!d?.runs) return;
         const sfRun = (d.runs as Array<{ source: string; status: string; finished_at: string }>)
           .find((r) => r.source === "salesforce" && r.status === "ok");
-        const monRun = (d.runs as Array<{ source: string; status: string; finished_at: string }>)
-          .find((r) => r.source === "monday" && r.status === "ok");
-        setStatus({ sf: sfRun?.finished_at ?? null, monday: monRun?.finished_at ?? null });
+        setStatus({ sf: sfRun?.finished_at ?? null });
       })
       .catch(() => {});
   }, []);
@@ -191,7 +188,6 @@ export function AppShell({
         <div className="mt-auto px-3 py-4 space-y-3 border-t border-[rgba(255,255,255,0.06)]">
           <div className="px-2 space-y-1.5">
             <SyncDot label="Salesforce" time={syncStatus.sf} />
-            <SyncDot label="Monday" time={syncStatus.monday} />
           </div>
           {userEmail ? <UserPill email={userEmail} picture={userPicture} /> : null}
           <div className="flex items-center justify-between px-2">

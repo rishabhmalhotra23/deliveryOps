@@ -38,7 +38,7 @@ export function NpsResponsesCard({ responses, className }: NpsResponsesCardProps
           <EmptyState
             icon="MessageSquare"
             title="No NPS data yet"
-            description="NPS responses appear here once linked via the Customer column on Monday's NPS Tracking board. Run a sync after populating that column."
+            description="No NPS responses recorded yet for this customer. Responses live natively in the nps_responses table and appear here once added."
           />
         </CardContent>
       </Card>

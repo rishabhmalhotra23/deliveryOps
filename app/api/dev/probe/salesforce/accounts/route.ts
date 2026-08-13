@@ -8,8 +8,8 @@ export const maxDuration = 30;
 //   ?search=<prefix>   (case-sensitive Name LIKE prefix%)
 //   ?limit=N           (default 25, max 100)
 //
-// Used as a lookup tool, not a roster source — Monday is the customer
-// roster, Salesforce is enrichment.
+// Used as a lookup tool, not a roster source — the `customers` table is the
+// native customer roster, Salesforce is enrichment.
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const search = url.searchParams.get("search") ?? undefined;
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       accounts,
       count: accounts.length,
-      note: "This is a search probe. Salesforce holds 78k+ accounts including prospects; the customer roster comes from Monday.",
+      note: "This is a search probe. Salesforce holds 78k+ accounts including prospects; the customer roster is the native `customers` table.",
     });
   } catch (err) {
     return NextResponse.json(

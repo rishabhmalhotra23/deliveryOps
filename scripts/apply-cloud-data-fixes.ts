@@ -10,11 +10,11 @@
 //   npx tsx scripts/apply-cloud-data-fixes.ts             # dry-run preview
 //   npx tsx scripts/apply-cloud-data-fixes.ts --apply     # write to cloud
 
-// Load .env.local first (gets SALESFORCE_*, MONDAY_API_TOKEN, etc — Vercel
-// hides those as encrypted secrets so vercel env pull can't fetch them),
-// then layer .env.cloud on top for the Supabase URL + service-role key.
+// Load .env.local first (gets SALESFORCE_*, etc — Vercel hides those as
+// encrypted secrets so vercel env pull can't fetch them), then layer
+// .env.cloud on top for the Supabase URL + service-role key.
 // `override: true` on the second load means cloud Supabase wins for the
-// keys it provides while everything else (SF, Monday) stays from local.
+// keys it provides while everything else (SF) stays from local.
 //
 // This must run BEFORE any import that touches lib/supabase since the
 // admin client is created at module-load time and caches credentials.

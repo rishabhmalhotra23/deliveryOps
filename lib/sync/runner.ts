@@ -1,5 +1,5 @@
-// Combined sync runner — orchestrates Salesforce + Monday + Kognitos v2
-// syncs with audit logging into the sync_runs table.
+// Combined sync runner — orchestrates Salesforce + Kognitos v2 + Linear
+// tickets syncs with audit logging into the sync_runs table.
 //
 // Used by both /api/dev/sync/run (manual trigger) and /api/cron/daily-sync
 // (daily 08:00 IST Vercel Cron). Each source is wrapped in `runOne` which

@@ -225,7 +225,7 @@ export interface PortfolioSummary {
   total_open_cases: number;
   with_salesforce: number;
   with_monday_workspace: number;
-  last_sync: { salesforce: string | null; monday: string | null };
+  last_sync: { salesforce: string | null };
 }
 
 export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
@@ -250,7 +250,7 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   // dynamic rules (renewal-in-90-days → Upcoming Renewals, revenue>$20M →
   // Strategic Growth).  Without these the dashboard chip counts would
   // diverge from what /customers shows.
-  const [allOppsForArr, accountsForCat, openOppsCount, cases, lastSf, lastMon, profilesForCat] = await Promise.all([
+  const [allOppsForArr, accountsForCat, openOppsCount, cases, lastSf, profilesForCat] = await Promise.all([
     // All SF opps needed to compute confirmed ARR (closed-won, close_date ≤ today)
     // and renewal dates.
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
@@ -258,7 +258,6 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     sb.from("sf_opportunities").select("id", { count: "exact", head: true }).eq("is_closed", false),
     sb.from("sf_cases").select("id", { count: "exact", head: true }).eq("is_closed", false),
     sb.from("sync_runs").select("finished_at").eq("source", "salesforce").eq("status", "ok").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
-    sb.from("sync_runs").select("finished_at").eq("source", "monday").eq("status", "ok").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
     sb.from("profiles").select("customer_id, renewal_date"),
   ]);
 
@@ -340,7 +339,6 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
     with_monday_workspace: list.filter((c) => c.monday_workspace_id).length,
     last_sync: {
       salesforce: (lastSf.data as { finished_at: string } | null)?.finished_at ?? null,
-      monday: (lastMon.data as { finished_at: string } | null)?.finished_at ?? null,
     },
   };
 }

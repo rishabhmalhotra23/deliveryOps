@@ -71,7 +71,7 @@ export interface AnalyticsBundle {
   value_by_domain: Array<{ domain: string; count: number; annual_hours: number; fte: number; value_mid: number }>;
   /** Modelled value by customer account (top accounts by value). */
   value_by_customer: Array<{ customer: string; count: number; annual_hours: number; value_mid: number }>;
-  last_sync: { salesforce: string | null; monday: string | null };
+  last_sync: { salesforce: string | null };
   /**
    * Per-bar drill-down items.  Keys mirror the chart's series keys exactly
    * so a click on a bar can look up the underlying rows in O(1).
@@ -174,7 +174,6 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     openOpps,
     openCases,
     lastSf,
-    lastMon,
   ] = await Promise.all([
     sb
       .from("customers")
@@ -193,14 +192,6 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       .from("sync_runs")
       .select("finished_at")
       .eq("source", "salesforce")
-      .eq("status", "ok")
-      .order("finished_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    sb
-      .from("sync_runs")
-      .select("finished_at")
-      .eq("source", "monday")
       .eq("status", "ok")
       .order("finished_at", { ascending: false })
       .limit(1)
@@ -727,7 +718,6 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     },
     last_sync: {
       salesforce: (lastSf.data as { finished_at: string } | null)?.finished_at ?? null,
-      monday: (lastMon.data as { finished_at: string } | null)?.finished_at ?? null,
     },
   };
 }

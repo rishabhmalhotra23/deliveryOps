@@ -32,7 +32,7 @@ export async function DashboardTrends() {
   ]);
   const { totals } = bundle;
 
-  const lastSynced = bundle.last_sync.monday ?? bundle.last_sync.salesforce;
+  const lastSynced = bundle.last_sync.salesforce;
 
   return (
     <div className="space-y-8">

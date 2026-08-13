@@ -11,7 +11,6 @@ import { loadFdesByCustomerId } from "@/lib/dashboard/stats-drilldown";
 import { deriveCustomerDomain } from "@/app/_components/customer-domain";
 import {
   PageHeader,
-  formatTimeAgo,
   categoryFromCustomer,
   zoneForCategory,
 } from "@/app/_components/brand";
@@ -64,11 +63,7 @@ export default async function CustomersPage() {
       <PageHeader
         eyebrow="Customers"
         title="Customers"
-        subtitle={
-          summary?.last_sync.monday
-            ? `Your portfolio across Focus, Pipeline, Evaluation, and Closed. Monday synced ${formatTimeAgo(summary.last_sync.monday)}.`
-            : "Your portfolio across Focus, Pipeline, Evaluation, and Closed. Monday hasn't synced yet."
-        }
+        subtitle="Your portfolio across Focus, Pipeline, Evaluation, and Closed."
         actions={
           <Link
             href="/operations"

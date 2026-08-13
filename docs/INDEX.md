@@ -21,6 +21,6 @@ A map of every doc so a new session (or engineer) knows what to read.
 | [supabase-schema-full.sql](./supabase-schema-full.sql) | Full schema dump, migrations 0001 to 0019. **Stale**: does not include 0020 or 0021. Regenerate before trusting it. | 2026-05-26 |
 | [ux-improvement-plan.md](./ux-improvement-plan.md) | UX improvement notes. | 2026-06-11 |
 | `../monday-backup/` | Legacy ad-hoc Monday snapshot: 492-board inventory plus 6 boards. Missing column definitions, updates and relation links, so status labels cannot be decoded from it. Superseded by the dated backups. Gitignored (real customer data). | 2026-07-22 |
-| `../monday-backup-<date>/` | Full-fidelity Monday archive produced by `scripts/monday-full-backup.ts`. Read its `SUMMARY.md` and `_manifest.json` first. Gitignored (real customer data). | per run |
+| `../monday-backup-<date>/` | Full-fidelity Monday archive from a one-time backup pass ahead of the Monday decommission. The script that produced it (`scripts/monday-full-backup.ts`) has since been deleted — this folder is a historical snapshot only, nothing regenerates it. Read its `SUMMARY.md` and `_manifest.json` first. Gitignored (real customer data). | per run |
 
 Repo entry point for Claude: [../CLAUDE.md](../CLAUDE.md).

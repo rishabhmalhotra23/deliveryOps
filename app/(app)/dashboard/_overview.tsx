@@ -102,7 +102,7 @@ export async function DashboardOverview() {
       <RevealItem>
         <p className="text-sm text-[color:var(--muted-foreground)]">
           Salesforce {summary?.last_sync.salesforce ? formatTimeAgo(summary.last_sync.salesforce) : "never"} ·
-          Monday {summary?.last_sync.monday ? formatTimeAgo(summary.last_sync.monday) : "never"} · Kognitos live.
+          Kognitos live.
         </p>
       </RevealItem>
 

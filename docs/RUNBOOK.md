@@ -53,28 +53,11 @@ If a scenario isn't here and you fix it, add it.
    npx tsx scripts/safe-migrate.ts
    ```
 
-4. **Re-import the customer portfolio from Monday:**
+4. **Re-import the customer portfolio — MONDAY-BASED IMPORT NO LONGER EXISTS.**
 
-   ```bash
-   curl -s http://localhost:4001/api/dev/import/preview | \
-     python3 -c "
-   import sys, json
-   data = json.load(sys.stdin)
-   sel = [{
-     'monday_item_id': c['monday']['item_id'],
-     'monday_workspace_id': (c['workspace'] or {}).get('id') if c['workspace'] else None,
-     'display_name': c['monday']['name'],
-     'proposed_key': c['proposed_key'],
-     'salesforce_account_id': (c['salesforce_candidates'][0]['Id'] if c['salesforce_candidates'] else None),
-     'partner': c['monday'].get('partner'),
-     'ae_owner': c['monday'].get('ae_owner'),
-     'lifecycle_group': c['monday'].get('group'),
-   } for c in data['candidates']]
-   json.dump({'selections': sel, 'drop_seed': True}, open('/tmp/import.json','w'))
-   "
-   curl -s -X POST http://localhost:4001/api/dev/import/run \
-     -H "Content-Type: application/json" -d @/tmp/import.json | python3 -m json.tool
-   ```
+   `/api/dev/import/preview` and `/api/dev/import/run` (the Monday-sourced import wizard this step used to describe) were deleted as part of the 2026-08 Monday.com decommission — Monday is no longer a source of truth for the customer roster. There is currently no automated re-import path.
+
+   If the `customers` table is empty or partially missing, restoring it is a manual/seed operation: rebuild the roster from the most recent backup (see `monday-backup-<date>/` if one exists locally, or a Supabase point-in-time-recovery snapshot) and insert directly into `customers`, or reconstruct rows by hand from Salesforce account data. There's no scripted replacement for this step yet — treat `customers` as the thing that needs manual attention here before continuing to step 5.
 
 5. **Re-apply the curated SF mapping fixes:**
 
@@ -87,7 +70,7 @@ If a scenario isn't here and you fix it, add it.
    ```bash
    curl -s -X POST http://localhost:4001/api/dev/sync/run \
      -H "Content-Type: application/json" \
-     -d '{"sources":["salesforce","monday"]}' | python3 -m json.tool
+     -d '{"sources":["salesforce","kognitos-v2","linear-tickets"]}' | python3 -m json.tool
    ```
 
 7. **Backfill profiles + internal_profiles:**

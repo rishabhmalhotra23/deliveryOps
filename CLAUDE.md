@@ -9,7 +9,7 @@ Start here: [docs/INDEX.md](./docs/INDEX.md) maps every doc. The current plan an
 - `app/(app)/` — routes: `dashboard` (Overview + Trends tabs — Trends is the former `/analytics`, folded in 2026-08-10; `/analytics` now redirects), `customers` and `customers/[key]` (the customer 360), `delivery`, `reports`, `operations`.
 - `app/api/` — backend routes, including `cron/` (daily-sync, run-tasks, monthly-digest), `slack/`, `gmail/`, `jobs/`, `chat/`.
 - `lib/` — business logic: `agent/` (runner + 20-plus tools), `integrations/` (salesforce, kognitos, linear, google), `sync/` (per-source runners), `ingestion/` (doc pipeline), `approvals/` (Slack-gated human approval), `reports/` (`allhands-loader.ts`, `delivery-review.ts`, `migration-progress.ts`, `weekly-loader.ts`), `customers/`, `commercials/`, `supabase/`.
-- `supabase/migrations/` — schema (0001 to 0023). Full dump at `docs/supabase-schema-full.sql` (stale — predates 0020+, regenerate before trusting it).
+- `supabase/migrations/` — schema (0001 to 0024). Full dump at `docs/supabase-schema-full.sql` (stale — predates 0020+, regenerate before trusting it).
 
 ## Data model in one breath
 

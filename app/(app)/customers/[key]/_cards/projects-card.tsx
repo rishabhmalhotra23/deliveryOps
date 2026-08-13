@@ -131,7 +131,7 @@ export function ProjectsCard({
         <EmptyState
           icon="FolderOpen"
           title="No projects yet"
-          description="Projects from Monday appear here once matched to this customer."
+          description="Projects appear here once a process is created and matched to this customer."
         />
       </div>
     );

@@ -69,7 +69,6 @@ export interface DeliveryBundle {
     delivered_all_time: number;
     delivered_this_quarter: number;
   };
-  last_sync: string | null;
 }
 
 interface CustomerRow {
@@ -100,20 +99,12 @@ function isDelivered(p: DeliveryProject): boolean {
 export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
   const sb = requireAdmin();
 
-  const [processesRes, customers, lastSync] = await Promise.all([
+  const [processesRes, customers] = await Promise.all([
     sb.from(TABLES.processes).select("*").order("go_live_date", { ascending: false, nullsFirst: false }),
     sb
       .from("customers")
       .select("id, key, display_name, ae_owner, partner, custom_category, lifecycle_group")
       .is("deleted_at", null),
-    sb
-      .from("sync_runs")
-      .select("finished_at")
-      .eq("source", "monday")
-      .eq("status", "ok")
-      .order("finished_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
 
   const custById = new Map<string, CustomerRow>();
@@ -206,7 +197,7 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
     ).length,
   };
 
-  return { projects: rows, facets, totals, last_sync: (lastSync.data as { finished_at: string | null } | null)?.finished_at ?? null };
+  return { projects: rows, facets, totals };
 }
 
 function dedup(arr: string[]): string[] {
