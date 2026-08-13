@@ -32,7 +32,6 @@ const STATIC_COMMANDS = [
   { id: "agent", label: "Agent Chat", href: "/chat", group: "Navigate" },
   { id: "sync", label: "Sync Status", href: "/dev/sync", group: "Tools" },
   { id: "integrations", label: "Integrations", href: "/dev/integrations", group: "Tools" },
-  { id: "import", label: "Import Customers", href: "/dev/import", group: "Tools" },
 ];
 
 export function CommandPalette() {

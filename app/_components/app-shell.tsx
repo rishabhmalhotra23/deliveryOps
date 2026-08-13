@@ -26,7 +26,6 @@ const PRIMARY_NAV: NavItem[] = [
 const SECONDARY_NAV: NavItem[] = [
   { href: "/dev", label: "Dev console" },
   { href: "/dev/integrations", label: "Integrations" },
-  { href: "/dev/import", label: "Import customers" },
   { href: "/dev/sync", label: "Sync status" },
 ];
 

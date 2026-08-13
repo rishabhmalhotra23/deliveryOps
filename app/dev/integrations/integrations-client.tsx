@@ -4,237 +4,17 @@ import { useState } from "react";
 
 interface Props {
   salesforceLive: boolean;
-  mondayLive: boolean;
   kognitosLive: boolean;
 }
 
-export function IntegrationsClient({ salesforceLive, mondayLive, kognitosLive }: Props) {
+export function IntegrationsClient({ salesforceLive, kognitosLive }: Props) {
   return (
     <div className="space-y-8">
-      <MondaySection live={mondayLive} />
       <SalesforceSection live={salesforceLive} />
       <KognitosV2Section live={kognitosLive} />
       <KognitosV1Placeholder />
       <SlackHistoryPlaceholder />
     </div>
-  );
-}
-
-// ─── Monday ────────────────────────────────────────────────────────────────
-
-interface MondayBoardsResponse {
-  boards: Array<{
-    id: string;
-    name: string;
-    description: string | null;
-    state: string;
-    items_count: number | null;
-    workspace?: { id: string; name: string } | null;
-    owners?: Array<{ id: string; name: string }>;
-    updated_at: string;
-  }>;
-  workspaces: Array<{ id: string; name: string; kind?: string; description?: string | null }>;
-  summary: {
-    boards_count: number;
-    workspaces_count: number;
-    biggest_board: { name: string; items_count: number | null } | null;
-  };
-}
-
-interface MondayBoardDetail {
-  board: MondayBoardsResponse["boards"][number];
-  items: Array<{
-    id: string;
-    name: string;
-    state: string;
-    group: { id: string; title: string };
-    creator: { id: string; name: string } | null;
-    updated_at: string;
-    column_values: Array<{ id: string; type: string; text: string | null; value: string | null }>;
-  }>;
-  count: number;
-}
-
-function MondaySection({ live }: { live: boolean }) {
-  const [data, setData] = useState<MondayBoardsResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [openBoard, setOpenBoard] = useState<MondayBoardDetail | null>(null);
-  const [openBoardId, setOpenBoardId] = useState<string | null>(null);
-
-  async function fetchBoards() {
-    setBusy(true);
-    setError(null);
-    setOpenBoard(null);
-    try {
-      const res = await fetch("/api/dev/probe/monday/boards?limit=50");
-      const json = (await res.json()) as MondayBoardsResponse | { error: string };
-      if (!res.ok) throw new Error("error" in json ? json.error : `HTTP ${res.status}`);
-      setData(json as MondayBoardsResponse);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function fetchBoard(id: string) {
-    setOpenBoardId(id);
-    setOpenBoard(null);
-    try {
-      const res = await fetch(`/api/dev/probe/monday/board/${id}?limit=50`);
-      const json = (await res.json()) as MondayBoardDetail | { error: string };
-      if (!res.ok) throw new Error("error" in json ? json.error : `HTTP ${res.status}`);
-      setOpenBoard(json as MondayBoardDetail);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  return (
-    <Section
-      title="Monday — customer roster source"
-      subtitle="The canonical list of customers comes from here. Everything else is enrichment."
-      live={live}
-    >
-      {!live ? (
-        <NotLiveHint env="MONDAY_API_TOKEN" />
-      ) : (
-        <>
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <Button onClick={fetchBoards} busy={busy} primary>
-              {data ? "Refresh boards" : "List boards + workspaces"}
-            </Button>
-            {data ? (
-              <span className="text-xs text-[color:var(--brand-gray)]">
-                {data.summary.boards_count} boards · {data.summary.workspaces_count} workspaces
-                {data.summary.biggest_board
-                  ? ` · biggest: "${data.summary.biggest_board.name}" (${data.summary.biggest_board.items_count} items)`
-                  : ""}
-              </span>
-            ) : null}
-          </div>
-
-          {error ? <ErrorBlock message={error} /> : null}
-
-          {data ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div>
-                <h4 className="text-xs uppercase tracking-wider text-[color:var(--brand-gray)] mb-2">
-                  Workspaces ({data.workspaces.length})
-                </h4>
-                {data.workspaces.length === 0 ? (
-                  <Empty text="No workspaces visible to this token (free tier may not expose them)." />
-                ) : (
-                  <ul className="space-y-1 text-sm">
-                    {data.workspaces.map((w) => (
-                      <li
-                        key={w.id}
-                        className="rounded-md border border-[color:var(--brand-metal)] bg-white p-2"
-                      >
-                        <div className="font-medium">{w.name}</div>
-                        <div className="text-xs text-[color:var(--brand-gray)]">
-                          id {w.id} · {w.kind ?? "?"}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div>
-                <h4 className="text-xs uppercase tracking-wider text-[color:var(--brand-gray)] mb-2">
-                  Boards ({data.boards.length})
-                </h4>
-                <p className="text-xs text-[color:var(--brand-gray)] mb-2">
-                  Click a board to load its items. Look for one named &ldquo;Customers&rdquo; / &ldquo;Live
-                  Accounts&rdquo; / similar — that&rsquo;s the customer roster.
-                </p>
-                <ul className="space-y-1 text-sm">
-                  {data.boards.map((b) => (
-                    <li key={b.id}>
-                      <button
-                        onClick={() => fetchBoard(b.id)}
-                        className={`w-full text-left rounded-md border p-2 transition-colors ${
-                          openBoardId === b.id
-                            ? "border-[color:var(--brand-night)] bg-[color:var(--brand-yellow)]/30"
-                            : "border-[color:var(--brand-metal)] bg-white hover:border-[color:var(--brand-night)]"
-                        }`}
-                      >
-                        <div className="font-medium">{b.name}</div>
-                        <div className="text-xs text-[color:var(--brand-gray)]">
-                          {b.items_count ?? "?"} items
-                          {b.workspace ? ` · ${b.workspace.name}` : ""} · id {b.id}
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : null}
-
-          {openBoardId ? (
-            <div className="mt-6 rounded-md border border-[color:var(--brand-night)] bg-[color:var(--brand-seasalt)] p-4">
-              <h4 className="font-medium mb-2">
-                Board {openBoardId}
-                {openBoard ? ` — ${openBoard.board.name}` : "…"}
-              </h4>
-              {!openBoard ? (
-                <div className="text-xs text-[color:var(--brand-gray)]">Loading…</div>
-              ) : openBoard.items.length === 0 ? (
-                <Empty text="Board has no items." />
-              ) : (
-                <>
-                  <p className="text-xs text-[color:var(--brand-gray)] mb-3">
-                    First {openBoard.count} items. The first column is usually the row name; the rest
-                    are status/owner/dates per the board&rsquo;s schema.
-                  </p>
-                  <ul className="space-y-1 text-sm">
-                    {openBoard.items.slice(0, 25).map((it) => (
-                      <li
-                        key={it.id}
-                        className="rounded-md border border-[color:var(--brand-metal)] bg-white p-2"
-                      >
-                        <div className="font-medium">{it.name}</div>
-                        <div className="text-xs text-[color:var(--brand-gray)]">
-                          group {it.group.title}
-                          {it.creator ? ` · creator ${it.creator.name}` : ""}
-                          {" · "}id {it.id}
-                        </div>
-                        {it.column_values.some((c) => c.text) ? (
-                          <details className="mt-1">
-                            <summary className="text-xs cursor-pointer text-[color:var(--brand-gray)]">
-                              column values
-                            </summary>
-                            <ul className="mt-1 text-xs space-y-0.5">
-                              {it.column_values
-                                .filter((c) => c.text)
-                                .map((c) => (
-                                  <li key={c.id}>
-                                    <span className="text-[color:var(--brand-gray)]">{c.id}</span>
-                                    {": "}
-                                    {c.text}
-                                  </li>
-                                ))}
-                            </ul>
-                          </details>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                  {openBoard.items.length > 25 ? (
-                    <div className="text-xs text-[color:var(--brand-gray)] mt-2">
-                      … {openBoard.items.length - 25} more not shown.
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
-          ) : null}
-        </>
-      )}
-    </Section>
   );
 }
 
@@ -451,7 +231,7 @@ function KognitosV1Placeholder() {
         </p>
         <p className="text-[color:var(--brand-gray)]">
           The v1 client + per-customer probe will land alongside the customer-import flow once we
-          know the structure of your Monday roster (see the Monday section above).
+          know the structure of your customer roster.
         </p>
       </div>
     </Section>

@@ -12,13 +12,12 @@ export default async function IntegrationsPage() {
       <div className="rounded-md border border-[color:var(--brand-metal)] bg-white p-4 text-sm">
         <h2 className="font-medium mb-1">Phase 2 probe panel</h2>
         <p className="text-[color:var(--brand-gray)]">
-          Live data from <strong>Monday</strong> (the customer roster), <strong>Salesforce</strong> (enrichment), and <strong>Kognitos v2</strong> (automation usage). Click into anything that looks like the customer list — once we know which Monday board / workspace holds &ldquo;real customers&rdquo;, we wire the per-customer sync.
+          Live data from <strong>Salesforce</strong> (enrichment) and <strong>Kognitos v2</strong> (automation usage).
         </p>
       </div>
 
       <IntegrationsClient
         salesforceLive={m("Salesforce")}
-        mondayLive={m("Monday.com")}
         kognitosLive={m("Kognitos v2")}
       />
     </div>

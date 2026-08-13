@@ -55,12 +55,6 @@ export function salesforceEnabled(): boolean {
   return has("SALESFORCE_CLIENT_ID", "SALESFORCE_CLIENT_SECRET", "SALESFORCE_INSTANCE_URL");
 }
 
-export function mondayEnabled(): boolean {
-  if (overrideFlag() === "on") return false;
-  if (overrideFlag() === "off") return true;
-  return has("MONDAY_API_TOKEN");
-}
-
 export function kognitosV2Enabled(): boolean {
   if (overrideFlag() === "on") return false;
   if (overrideFlag() === "off") return true;
@@ -109,11 +103,6 @@ export function integrationStatus(): IntegrationStatus[] {
       name: "Salesforce",
       live: salesforceEnabled(),
       hint: "Set SALESFORCE_CLIENT_ID + SALESFORCE_CLIENT_SECRET + SALESFORCE_INSTANCE_URL. Powers Phase 2 sf_accounts / sf_opportunities / sf_cases sync.",
-    },
-    {
-      name: "Monday.com",
-      live: mondayEnabled(),
-      hint: "Set MONDAY_API_TOKEN. Powers Phase 2 customer-board sync into monday_items.",
     },
     {
       name: "Kognitos v2",
