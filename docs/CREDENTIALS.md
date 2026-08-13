@@ -459,7 +459,7 @@ The DeliveryOps app enforces `@kognitos.com` server-side regardless of this sett
 - Refuses to render any page in the `(app)` route group without a valid Supabase session via root `middleware.ts`.
 - Sign-in lives at `/login` with both Google OAuth and email magic-link options.
 - The OAuth callback at `/auth/callback` validates the email domain after exchange — sign-ins from non-kognitos.com Google accounts are signed back out and bounced with `?error=domain`.
-- Webhook + cron + internal job routes (`/api/slack/`, `/api/gmail/`, `/api/cron/`, `/api/jobs/`, `/api/monday/`) bypass the gate — they're authenticated by signature/secret.
+- Webhook + cron + internal job routes (`/api/slack/`, `/api/gmail/`, `/api/cron/`, `/api/jobs/`) bypass the gate — they're authenticated by signature/secret.
 
 After running migration `0015_auth_rls_kognitos_domain.sql` (via `npx tsx scripts/safe-migrate.ts`), every customer-data table requires either a service-role JWT or a JWT whose email ends in `@kognitos.com`. The `internal_profiles` table denies all authenticated reads — only the service-role bypasses RLS, so a misconfigured server component can never accidentally leak internal notes.
 
