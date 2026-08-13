@@ -12,7 +12,6 @@ If a scenario isn't here and you fix it, add it.
 - [Applying a new migration](#applying-a-new-migration)
 - [Stale `.next` cache after running `npm run build` with dev still on](#stale-next-cache-after-running-npm-run-build-with-dev-still-on)
 - [Salesforce sync returning stale data](#salesforce-sync-returning-stale-data)
-- [Monday sync 0 matches for a board](#monday-sync-0-matches-for-a-board)
 - [Background job didn't run](#background-job-didnt-run)
 - [Colima / Docker not running (Supabase containers down)](#colima--docker-not-running-supabase-containers-down)
 
@@ -152,23 +151,6 @@ curl -s -X POST http://localhost:4001/api/dev/sync/run \
 ```
 
 If that fails: check `SALESFORCE_*` env vars (`grep -E "^SALESFORCE_" .env.local`), confirm the Connected App still has Client Credentials enabled.
-
----
-
-## Monday sync 0 matches for a board
-
-**Symptom:** `monday/<board>` shows `matched: 0` even though items exist.
-
-Most common cause: the relation column on the source board isn't being read via the `BoardRelationValue.linked_item_ids` GraphQL fragment.
-
-Verify by probing the board directly:
-
-```bash
-# Edit script to point at the board ID in question, then:
-npx tsx scripts/inspect-projects-board.ts
-```
-
-If the typed fragment returns `linked_items` correctly, the sync should pick it up automatically. If not, the column isn't populated in Monday — populate it there.
 
 ---
 
