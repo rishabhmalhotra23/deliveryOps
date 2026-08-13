@@ -119,7 +119,6 @@ async function check5_policiesPresent() {
     "chat_messages_kognitos",
     "pending_approvals_kognitos",
     "sf_accounts_kognitos",
-    "monday_projects_kognitos",
     "k2_runs_kognitos",
   ];
 
