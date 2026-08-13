@@ -6,7 +6,7 @@ This is the canonical current-state snapshot. For the forward plan see [DELIVERY
 
 ## Where things stand
 
-Production is live at https://delivery-ops-delta.vercel.app on Supabase Cloud (`prnakdaxcpzagntgvaqf`). Auth is Auth0 session middleware plus RLS restricting tables to @kognitos.com users; `internal_profiles` is service-role only. Two Vercel Hobby crons run: `daily-sync` at 02:30 UTC (Salesforce, Monday, Kognitos v2, Linear tickets into the cache tables) and `run-tasks` at 08:00 UTC (dispatches due `tasks`).
+Production is live at https://delivery-ops-delta.vercel.app on Supabase Cloud (`prnakdaxcpzagntgvaqf`). Auth is Auth0 session middleware plus RLS restricting tables to @kognitos.com users; `internal_profiles` is service-role only. Two Vercel Hobby crons run: `daily-sync` at 02:30 UTC (Salesforce, Kognitos v2, Linear tickets into the cache tables) and `run-tasks` at 08:00 UTC (dispatches due `tasks`).
 
 The app is well past its original Phase 2. Already built and running: the customer 360 page (`app/(app)/customers/[key]` with hero, stats rail, and cards for account snapshot, ARR, NPS, projects, K2 metrics, opportunities, contacts, activity log, events/tasks, documents, profile, rules), the agent (`lib/agent`, 20-plus tools), the Slack-gated human-approval queue (`pending_approvals`), the document ingestion pipeline, all five connectors, and the native `processes` table.
 
@@ -17,7 +17,7 @@ The 2026-07-22 audit below was the diagnosis; it's since been fixed. `processes`
 - **All-Hands** (`/reports/v2-migration`) — company-wide weekly report: delivery portfolio + V2 migration-goal stats (migrated/actively-migrating/engineering-blocked, reconciled by construction), a combined migrated-to-V2-vs-ticket-velocity chart, hard-blocker ticket breakdowns, renewal spotlight. Replaced 1,247 lines of hand-maintained content (`lib/reports/v2-migration-allhands.ts`, deleted) plus the Monday-backed `weekly-loader.ts` V2 tile.
 - **Weekly Delivery Review** (`/reports/delivery-review`) — Delivery/CS-only, customer-grouped, per-process Done/Coming Up/Blocked detail. Replaced the old `/reports/weekly` page (deleted).
 - `lib/sync/linear-tickets.ts` syncs raw Linear ticket fields daily; a separate classification layer (`in_scope`/`classification`/`domain`, human or Claude-assisted) gates what a report shows. `LINEAR_API_TOKEN` was only wired into Vercel on 2026-08-10 — before that the sync had never actually run in production, so `linear_tickets` was a one-time hand-seeded snapshot. Also fixed same day: the sync's GraphQL query wasn't requesting archived issues, undercounting older completed/canceled tickets.
-- `monday_projects` is no longer read anywhere. `monday_activities`/`monday_nps_responses` are still synced daily, but only `monday_activities` still has a live reader (the customer-360 Activity tab — no native replacement was planned; removing that tab is a pending UI decision, see `MONDAY-DECOMMISSION-LOG.md`).
+- Monday is fully decommissioned: the nightly sync no longer includes it, the Activity tab (its last live UI reader) was removed, and `monday_projects`/`monday_activities`/`monday_nps_responses` were dropped. See `MONDAY-DECOMMISSION-LOG.md` for the full history.
 
 Remaining loose end from the original audit: "value" is still a modelled estimate (`TIER_HOURS` × labour rate); real usage sits unused in `k2_runs`. Not addressed yet.
 

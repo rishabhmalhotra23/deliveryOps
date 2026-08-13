@@ -12,7 +12,6 @@ Until you've completed Tier 0, the agent can't think. Until you've completed Tie
   - [2. Google Cloud — OAuth + APIs + Pub/Sub](#2-google-cloud--oauth--apis--pubsub)
   - [3. Salesforce — Connected App](#3-salesforce--connected-app)
   - [4. Kognitos v2 — Personal Access Token](#4-kognitos-v2--personal-access-token)
-  - [5. Monday.com — API token](#5-mondaycom--api-token)
 - [Tier 2 — production deploy](#tier-2--production-deploy)
   - [6. Supabase Cloud](#6-supabase-cloud)
   - [7. Background jobs (no external service)](#7-background-jobs--no-external-service-needed)
@@ -413,31 +412,6 @@ The `sync-kognitos-v2` runner runs nightly via `/api/cron/daily-sync`. The dashb
 - The PAT inherits *your* permissions. If you're an admin of the workspace, the token is too — be careful where you store it. Treat it like a password.
 - The base URL differs by region. `us-1` is the default; if you're on a different cluster, find the right URL by going to your Kognitos console and looking at the URL bar.
 
-## 5. Monday.com — API token
-
-~5 min. Included in your monday.com plan.
-
-### 5a. Generate the token
-
-- [ ] Open <https://monday.com>, sign in
-- [ ] Bottom-left avatar → **Developers** → **My access tokens**
-- [ ] Click **Show** under your existing API v2 Token, or **Generate new** if it doesn't exist
-- [ ] Copy the token
-
-### 5b. Set the env var
-
-- [ ] Paste into `.env.local`:
-  ```
-  MONDAY_API_TOKEN=eyJhbGciOiJIUzI1NiJ9.…
-  ```
-
-**Verify:**
-Once Phase 2 `sync-monday` ships, the customer overview gets a "Pending items" panel showing dev + CS items with status, owner, due date.
-
-**Gotchas:**
-- The token inherits your monday.com permissions. To sync a customer's project board, you need at least viewer access to that board.
-- Monday rate-limits API calls fairly aggressively — the sync function uses GraphQL batching to stay under the limits. You won't hit them in dev.
-
 ---
 
 # Tier 2 — production deploy
@@ -552,7 +526,6 @@ Nothing to configure here. Background jobs scale with your Vercel plan's functio
   KOGNITOS_V2_BASE_URL
   KOGNITOS_V2_ORG_ID
   KOGNITOS_V2_WORKSPACE_ID
-  MONDAY_API_TOKEN
   SESSION_SECRET                    # generate fresh
   CRON_SECRET                       # generate fresh
   ALLOWED_EMAIL_DOMAIN=kognitos.com
@@ -726,9 +699,6 @@ KOGNITOS_V2_WORKSPACE_ID=…
 KOGNITOS_V1_API_KEY=
 KOGNITOS_V1_BASE_URL=https://rest-api.app.kognitos.com
 
-# Monday.com
-MONDAY_API_TOKEN=eyJhbGc…
-
 # App
 SESSION_SECRET=<openssl rand -hex 32>
 CRON_SECRET=<openssl rand -hex 32>
@@ -745,13 +715,12 @@ DELIVERY_OPS_DEV_MODE=auto
 When you're ready to ship, in this order:
 
 - [ ] Tier 0 done (Anthropic key)
-- [ ] Tier 1 integrations done (Slack + Google + Salesforce + Kognitos + Monday)
+- [ ] Tier 1 integrations done (Slack + Google + Salesforce + Kognitos)
 - [ ] All `/dev` page integrations show **live** locally
 - [ ] Pilot customer named, mapped to:
   - [ ] Salesforce account ID
   - [ ] Kognitos workspace ID
   - [ ] Primary contact email + calendar
-  - [ ] Monday board ID
   - [ ] Slack channel name
   - [ ] Drive folder ID
   - [ ] Email alias (set up the alias in Gmail "send mail as" first)

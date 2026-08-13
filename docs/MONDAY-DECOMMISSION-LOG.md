@@ -896,3 +896,30 @@ mockup and sign-off per the project's UI-change rule. Flagged for Rishabh, not d
 **Next session:** get a human to eyeball the weekly report and `/analytics` side by side against the pre-cutover
 Monday-based version for one real week of data (the actual 1.9 gate), decide on the `monday_activities` tab
 removal, then 1.10 (turn off the Monday sync in `vercel.json`).
+
+## 2026-08-12 — Full decommission complete
+
+Closes out the work this log has tracked since its first entry. Per Rishabh: "let's be self
+sufficient now and be independent of monday entirely."
+
+- **1.10 done**: Monday removed from `DEFAULT_SOURCES` in `lib/sync/runner.ts` and from the
+  `daily-sync` cron's `sources` list. `lib/sync/monday.ts` and `lib/integrations/monday.ts` deleted.
+- **`monday_activities` resolved**: the Activity tab (customer-360) was removed outright, not
+  migrated — confirmed with Rishabh that it's a Fireflies-transcript-derived ticket workflow with no
+  native equivalent, and building one is out of scope for this pass.
+- All three cache tables (`monday_projects`, `monday_activities`, `monday_nps_responses`) dropped via
+  `supabase/migrations/0024_drop_monday_tables.sql`.
+- Dead code removed: the Monday-only sync/integration modules, the "Import Customers from Monday" dev
+  wizard, ~13 one-off `scripts/*monday*` scripts and their JSON state files, `lib/import/
+  monday-customers.ts`. `lib/import/monday-taxonomy.ts` and `lib/delivery/taxonomy.ts`'s
+  `legacyFieldsFromProcess()` were kept — both are naming-legacy shims for native `processes` data,
+  not Monday API dependencies.
+- `MONDAY_API_TOKEN` removed from `.env.example` and `docs/CREDENTIALS.md`. Manual follow-up (outside
+  this repo): revoke the token in Monday's admin panel and remove it from Vercel's project env vars.
+- Row-for-row verification (1.9) was never fully completed before this — noted here in case a report
+  discrepancy surfaces later and someone needs to know Monday is no longer available to diff against.
+
+**Not touched, intentionally out of scope**: the local gitignored `monday-backup*/` folders (real
+customer data snapshots, never committed — Rishabh's to manage); `customers.monday_item_id` /
+`monday_workspace_id` columns (legacy mapping IDs on the customers table itself, a separate schema
+surface from the three cache tables this pass targeted).
