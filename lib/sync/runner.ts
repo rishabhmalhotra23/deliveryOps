@@ -10,20 +10,18 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { syncSalesforce, type SalesforceSyncResult } from "./salesforce";
-import { syncMonday, type MondaySyncResult } from "./monday";
 import { syncKognitosV2, type KognitosV2SyncResult } from "./kognitos-v2";
 import { syncLinearTickets, type LinearTicketsSyncResult } from "./linear-tickets";
 import { logger, errorCtx } from "@/lib/logger";
 
 const log = logger("sync/runner");
 
-export type SyncSource = "salesforce" | "monday" | "kognitos-v2" | "linear-tickets";
+export type SyncSource = "salesforce" | "kognitos-v2" | "linear-tickets";
 
 export interface CombinedSyncResult {
   ok: boolean;
   duration_ms: number;
   salesforce?: SalesforceSyncResult;
-  monday?: MondaySyncResult;
   kognitos_v2?: KognitosV2SyncResult;
   linear_tickets?: LinearTicketsSyncResult;
   errors: string[];
@@ -34,7 +32,7 @@ interface SyncOptions {
   customerKey?: string;
 }
 
-const DEFAULT_SOURCES: SyncSource[] = ["salesforce", "monday", "kognitos-v2", "linear-tickets"];
+const DEFAULT_SOURCES: SyncSource[] = ["salesforce", "kognitos-v2", "linear-tickets"];
 
 export async function runFullSync(opts: SyncOptions = {}): Promise<CombinedSyncResult> {
   const start = Date.now();
@@ -52,20 +50,6 @@ export async function runFullSync(opts: SyncOptions = {}): Promise<CombinedSyncR
       return { rows, details: r as unknown as Record<string, unknown> };
     }).catch((err) => {
       result.errors.push(`salesforce: ${err instanceof Error ? err.message : String(err)}`);
-    });
-  }
-
-  if (sources.includes("monday")) {
-    await runOne("monday", "all", async () => {
-      const r = await syncMonday();
-      result.monday = r;
-      const rows = r.projects.inserted + r.activities.inserted + r.nps.inserted;
-      if (r.errors.length > 0) {
-        for (const e of r.errors) result.errors.push(`monday/${e.board}: ${e.error}`);
-      }
-      return { rows, details: r as unknown as Record<string, unknown> };
-    }).catch((err) => {
-      result.errors.push(`monday: ${err instanceof Error ? err.message : String(err)}`);
     });
   }
 

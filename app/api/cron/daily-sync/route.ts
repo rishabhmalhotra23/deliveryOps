@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 import { runFullSync } from "@/lib/sync/runner";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 min — covers ~40 customers across SF + Monday + K2.
+export const maxDuration = 300; // 5 min — covers ~40 customers across SF + K2.
 
 // Daily sync entrypoint — pulls the latest from every Phase 2 integration
-// (Salesforce + Monday + Kognitos v2 + Linear tickets) into the *_cache
+// (Salesforce + Kognitos v2 + Linear tickets) into the *_cache
 // tables. Wired to Vercel Cron at 02:30 UTC = 08:00 IST every day (see
 // vercel.json).
 //
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
   const startedAt = new Date().toISOString();
   const result = await runFullSync({
-    sources: ["salesforce", "monday", "kognitos-v2", "linear-tickets"],
+    sources: ["salesforce", "kognitos-v2", "linear-tickets"],
   });
 
   return NextResponse.json(
@@ -53,7 +53,6 @@ export async function GET(request: Request) {
       started_at: startedAt,
       duration_ms: result.duration_ms,
       salesforce: result.salesforce ?? null,
-      monday: result.monday ?? null,
       kognitos_v2: result.kognitos_v2 ?? null,
       linear_tickets: result.linear_tickets ?? null,
       errors: result.errors,
