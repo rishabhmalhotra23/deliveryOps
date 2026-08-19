@@ -4,6 +4,7 @@ import { listCustomers } from "@/lib/customers";
 import {
   loadCustomerCommercialsMap,
   loadCustomerDomainMap,
+  loadCustomerStaleCounts,
   loadPortfolioSummary,
   type CustomerCommercials,
 } from "@/lib/cache/integrations";
@@ -20,12 +21,13 @@ import type { Customer } from "@/lib/supabase/types";
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  const [customers, summary, sfDomains, commercialsMap, fdesByCustomer] = await Promise.all([
+  const [customers, summary, sfDomains, commercialsMap, fdesByCustomer, staleCounts] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
     loadCustomerCommercialsMap().catch(() => new Map<string, CustomerCommercials>()),
     loadFdesByCustomerId().catch(() => new Map<string, string[]>()),
+    loadCustomerStaleCounts().catch(() => new Map<string, number>()),
   ]);
 
   // Resolve a domain per customer with a graceful fallback chain so favicon
@@ -55,6 +57,7 @@ export default async function CustomersPage() {
       arr: commercials?.arr ?? null,
       renewalDate: commercials?.renewal_date ?? null,
       editedCount: c.deliveryops_protected_fields?.length ?? 0,
+      staleCount: staleCounts.get(c.id) ?? 0,
     };
   });
 

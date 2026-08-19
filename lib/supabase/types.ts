@@ -8,6 +8,11 @@ export type ChurnRisk = "low" | "medium" | "high";
 export type CustomerUserRole = "owner" | "csm" | "viewer";
 export type TaskStatus = "active" | "paused" | "completed" | "failed";
 
+// Per-field edit stamp — who last touched a field and when. Shared shape
+// across every table that tracks field-level provenance (processes,
+// customers, profiles, internal_profiles).
+export type FieldProvenance = Record<string, { by: string; at: string }>;
+
 export interface Customer {
   id: string;
   key: string;
@@ -27,6 +32,7 @@ export interface Customer {
   custom_category: string | null;        // DeliveryOps-owned bucket, the operational truth
   deliveryops_protected_fields: string[]; // field names locked from sync overwrite
   last_manually_edited_at: string | null;
+  field_provenance: FieldProvenance;
   brand_color: string | null;  // hex e.g. "#E2231A" — drives hero accent
   logo_url: string | null;     // manual logo override; falls back to Clearbit
   created_at: string;
@@ -83,6 +89,7 @@ export interface Profile {
   target_roi: string;
   custom: Record<string, unknown>;
   last_updated_by: string | null;
+  field_provenance: FieldProvenance;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -101,6 +108,7 @@ export interface InternalProfile {
   internal_notes: string;
   last_updated_by: string | null;
   custom: Record<string, unknown>;
+  field_provenance: FieldProvenance;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -467,7 +475,7 @@ export interface Process extends Omit<MigrationProcess, "platform"> {
 
   reviewed_at: string | null;
   reviewed_by: string | null;
-  field_provenance: Record<string, { by: string; at: string }>;
+  field_provenance: FieldProvenance;
 
   source_system: string | null;
   source_item_id: string | null;

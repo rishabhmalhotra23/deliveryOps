@@ -57,9 +57,11 @@ export async function POST(request: Request, ctx: Ctx) {
   if (value === "") value = null;
 
   try {
-    const customer = await updateCustomerManually(key, {
-      [field]: value,
-    } as Parameters<typeof updateCustomerManually>[1]);
+    const customer = await updateCustomerManually(
+      key,
+      { [field]: value } as Parameters<typeof updateCustomerManually>[1],
+      { updatedBy: "dashboard-inline" }
+    );
 
     // Audit event
     try {

@@ -187,7 +187,8 @@ export async function upsertCustomer(input: CreateCustomerInput): Promise<Custom
 // Used by the operations chat + dashboard inline edits.
 export async function updateCustomerManually(
   key: string,
-  updates: Partial<Pick<Customer, "ae_owner" | "partner" | "custom_category" | "lifecycle_group" | "slack_channel" | "email_alias" | "display_name">>
+  updates: Partial<Pick<Customer, "ae_owner" | "partner" | "custom_category" | "lifecycle_group" | "slack_channel" | "email_alias" | "display_name">>,
+  opts: { updatedBy?: string } = {}
 ): Promise<Customer> {
   const existing = await requireCustomerByKey(key);
   const sb = requireAdmin();
@@ -199,12 +200,20 @@ export async function updateCustomerManually(
     }
   }
 
+  const now = new Date().toISOString();
+  const actor = opts.updatedBy ?? "dashboard";
+  const fieldProvenance = { ...(existing.field_provenance ?? {}) };
+  for (const field of Object.keys(updates)) {
+    fieldProvenance[field] = { by: actor, at: now };
+  }
+
   const { data, error } = await sb
     .from(TABLES.customers)
     .update({
       ...updates,
       deliveryops_protected_fields: Array.from(protectedSet),
-      last_manually_edited_at: new Date().toISOString(),
+      last_manually_edited_at: now,
+      field_provenance: fieldProvenance,
     })
     .eq("id", existing.id)
     .select("*")
@@ -225,9 +234,11 @@ export async function bulkUpdateCustomerField<K extends keyof Customer>(
 
   const updated: Customer[] = [];
   for (const key of customerKeys) {
-    const next = await updateCustomerManually(key, {
-      [field]: value,
-    } as unknown as Parameters<typeof updateCustomerManually>[1]);
+    const next = await updateCustomerManually(
+      key,
+      { [field]: value } as unknown as Parameters<typeof updateCustomerManually>[1],
+      { updatedBy: "agent" }
+    );
     updated.push(next);
   }
   return updated;

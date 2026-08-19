@@ -5,6 +5,7 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer as brandCategoryFromCustomer } from "@/app/_components/brand";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
+import { computeStaleFields, CUSTOMER_FRESHNESS_FIELDS } from "@/lib/customers/staleness";
 
 export interface SfAccountCache {
   sf_id: string;
@@ -102,7 +103,7 @@ export interface CustomerEnrichment {
 }
 
 import { unionPeopleColumns, legacyFieldsFromProcess } from "@/lib/delivery/taxonomy";
-import { TABLES, npsCategory, type Process, type NpsResponse } from "@/lib/supabase/types";
+import { TABLES, npsCategory, type Process, type NpsResponse, type FieldProvenance } from "@/lib/supabase/types";
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -415,6 +416,46 @@ export async function loadCustomerCommercialsMap(): Promise<
     });
   }
   return map;
+}
+
+// Bulk-load a stale-field count per customer for the portfolio-wide "needs
+// attention" view (the /customers list). Reads only the two columns
+// computeStaleFields needs from each table — no full profile fetch per
+// customer. Keyed by customer_id, same as the other bulk loaders here.
+export async function loadCustomerStaleCounts(): Promise<Map<string, number>> {
+  const sb = requireAdmin();
+  const [customersRes, profilesRes, internalRes] = await Promise.all([
+    sb.from(TABLES.customers).select("id, field_provenance, updated_at").is("deleted_at", null),
+    sb.from(TABLES.profiles).select("customer_id, field_provenance, updated_at").is("deleted_at", null),
+    sb.from(TABLES.internalProfiles).select("customer_id, field_provenance, updated_at").is("deleted_at", null),
+  ]);
+
+  type Row = { field_provenance: FieldProvenance | null; updated_at: string };
+  const customerById = new Map(
+    ((customersRes.data ?? []) as Array<Row & { id: string }>).map((r) => [r.id, r])
+  );
+  const profileByCustomerId = new Map(
+    ((profilesRes.data ?? []) as Array<Row & { customer_id: string }>).map((r) => [r.customer_id, r])
+  );
+  const internalByCustomerId = new Map(
+    ((internalRes.data ?? []) as Array<Row & { customer_id: string }>).map((r) => [r.customer_id, r])
+  );
+
+  const now = new Date();
+  const counts = new Map<string, number>();
+  for (const [customerId, customer] of customerById) {
+    const stale = computeStaleFields(
+      CUSTOMER_FRESHNESS_FIELDS,
+      {
+        customer,
+        profile: profileByCustomerId.get(customerId),
+        internalProfile: internalByCustomerId.get(customerId),
+      },
+      now
+    );
+    counts.set(customerId, stale.length);
+  }
+  return counts;
 }
 
 // Bulk lookup of Salesforce-derived domains keyed by customer_id. Used by the

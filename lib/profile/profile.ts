@@ -28,6 +28,7 @@ const DEFAULT_PROFILE: Omit<Profile, "id" | "customer_id" | "created_at" | "upda
   target_roi: "",
   custom: {},
   last_updated_by: null,
+  field_provenance: {},
 };
 
 const DEFAULT_INTERNAL: Omit<
@@ -44,6 +45,7 @@ const DEFAULT_INTERNAL: Omit<
   internal_notes: "",
   last_updated_by: null,
   custom: {},
+  field_provenance: {},
 };
 
 export async function getProfile(customerKey: string): Promise<Profile> {
@@ -125,12 +127,20 @@ export async function updateProfile(
     }
   }
 
+  const now = new Date().toISOString();
+  const actor = opts.updatedBy ?? "dashboard";
+  const fieldProvenance = { ...(profile.field_provenance ?? {}) };
+  for (const key of Object.keys(patch)) {
+    fieldProvenance[key] = { by: actor, at: now };
+  }
+
   const { data, error } = await sb
     .from(TABLES.profiles)
     .update({
       ...patch,
       custom: customPatch,
       last_updated_by: opts.updatedBy ?? null,
+      field_provenance: fieldProvenance,
     })
     .eq("id", profile.id)
     .select("*")
@@ -184,12 +194,20 @@ export async function updateInternalProfile(
     }
   }
 
+  const now = new Date().toISOString();
+  const actor = opts.updatedBy ?? "dashboard";
+  const fieldProvenance = { ...(profile.field_provenance ?? {}) };
+  for (const key of Object.keys(patch)) {
+    fieldProvenance[key] = { by: actor, at: now };
+  }
+
   const { data, error } = await sb
     .from(TABLES.internalProfiles)
     .update({
       ...patch,
       custom: customPatch,
       last_updated_by: opts.updatedBy ?? null,
+      field_provenance: fieldProvenance,
     })
     .eq("id", profile.id)
     .select("*")

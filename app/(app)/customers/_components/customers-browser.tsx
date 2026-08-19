@@ -26,6 +26,7 @@ export interface CustomerRow {
   arr: number | null;
   renewalDate: string | null;
   editedCount: number;
+  staleCount: number;
 }
 
 type SortKey = "name" | "arr" | "renew";
@@ -159,6 +160,14 @@ function CustomerStrip({ row }: { row: CustomerRow }) {
       ) : null}
 
       <div className="flex items-center gap-1.5 shrink-0">
+        {row.staleCount > 0 ? (
+          <span
+            title={`${row.staleCount} field(s) haven't been confirmed recently`}
+            className="data-label px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+          >
+            {row.staleCount} stale
+          </span>
+        ) : null}
         {row.editedCount > 0 ? (
           <span
             title={`${row.editedCount} field(s) manually edited`}
@@ -186,6 +195,7 @@ export function CustomersBrowser({ rows }: { rows: CustomerRow[] }) {
   const [zoneFilter, setZoneFilter] = useState<Zone | "all">("all");
   const [sort, setSort] = useState<SortKey>("name");
   const [collapsed, setCollapsed] = useState<Partial<Record<Zone, boolean>>>({});
+  const [attentionOnly, setAttentionOnly] = useState(false);
 
   // Unfiltered per-zone counts for the filter chips.
   const zoneCounts = useMemo(() => {
@@ -193,6 +203,8 @@ export function CustomersBrowser({ rows }: { rows: CustomerRow[] }) {
     for (const r of rows) counts[r.zone] = (counts[r.zone] ?? 0) + 1;
     return counts;
   }, [rows]);
+
+  const attentionCount = useMemo(() => rows.filter((r) => r.staleCount > 0).length, [rows]);
 
   const matches = (r: CustomerRow, q: string) => {
     if (!q) return true;
@@ -217,12 +229,14 @@ export function CustomersBrowser({ rows }: { rows: CustomerRow[] }) {
   const visibleZones = useMemo(() => {
     return ZONE_ORDER.filter((z) => zoneFilter === "all" || zoneFilter === z)
       .map((zone) => {
-        const zoneRows = rows.filter((r) => r.zone === zone && matches(r, q)).sort(sortRows);
+        const zoneRows = rows
+          .filter((r) => r.zone === zone && matches(r, q) && (!attentionOnly || r.staleCount > 0))
+          .sort(sortRows);
         return { zone, zoneRows };
       })
       .filter(({ zoneRows }) => zoneRows.length > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, zoneFilter, q, sort]);
+  }, [rows, zoneFilter, q, sort, attentionOnly]);
 
   const anyResults = visibleZones.length > 0;
 
@@ -279,6 +293,19 @@ export function CustomersBrowser({ rows }: { rows: CustomerRow[] }) {
             onClick={() => setZoneFilter(z)}
           />
         ))}
+        {attentionCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setAttentionOnly((v) => !v)}
+            className={`data-label px-2.5 py-1 rounded-full border transition-colors ${
+              attentionOnly
+                ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40"
+                : "bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--glass-border)] hover:text-[color:var(--foreground)]"
+            }`}
+          >
+            Needs attention · {attentionCount}
+          </button>
+        ) : null}
       </div>
 
       {/* Zones */}
