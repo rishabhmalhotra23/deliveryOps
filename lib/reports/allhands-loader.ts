@@ -147,6 +147,7 @@ const FRESH_BUILD_LIFECYCLE_LABELS: Record<ProcessLifecycle, string> = {
   in_development: "In development",
   uat: "UAT",
   on_hold: "On hold",
+  needs_triage: "Needs triage",
   live: "Live",
   cancelled: "Cancelled",
   churned: "Churned",

@@ -299,7 +299,7 @@ export function deriveState(row: MondayRowInput): DerivedState {
 
 export function viewForLifecycle(l: ProcessLifecycle): "active" | "delivered" | "archive" {
   if (l === "live") return "delivered";
-  if (l === "cancelled" || l === "churned" || l === "retired") return "archive";
+  if (l === "cancelled" || l === "churned" || l === "retired" || l === "needs_triage") return "archive";
   return "active";
 }
 

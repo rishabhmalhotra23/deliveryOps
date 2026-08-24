@@ -73,6 +73,22 @@ describe("deriveComplexity", () => {
   });
 });
 
+describe("viewForLifecycle", () => {
+  it("routes needs_triage to archive, not active", () => {
+    // needs_triage (2026-08-24) is active-shaped work that hasn't been
+    // reviewed against the current source of truth — it must not count
+    // toward "active" stats until a human reclassifies it.
+    expect(viewForLifecycle("needs_triage")).toBe("archive");
+  });
+
+  it("still routes on_hold to active", () => {
+    // Regression guard: on_hold and needs_triage look similar in spirit but
+    // must land in different views — on_hold is genuinely active work,
+    // paused for a real reason.
+    expect(viewForLifecycle("on_hold")).toBe("active");
+  });
+});
+
 describe("deriveState — lifecycle", () => {
   it("maps the six Project Status values", () => {
     const s = (project_status: string, current_phase: string | null = null) =>

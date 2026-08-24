@@ -383,6 +383,7 @@ export const PROCESS_LIFECYCLES = [
   "uat",
   "live",
   "on_hold",
+  "needs_triage",
   "cancelled",
   "churned",
   "retired",
@@ -434,7 +435,12 @@ export const ACTIVE_LIFECYCLES: ProcessLifecycle[] = [
   "on_hold",
 ];
 export const DELIVERED_LIFECYCLES: ProcessLifecycle[] = ["live"];
-export const ARCHIVE_LIFECYCLES: ProcessLifecycle[] = ["cancelled", "churned", "retired"];
+// needs_triage lives here, not in ACTIVE_LIFECYCLES — it's active-shaped work
+// that hasn't been reviewed against the current source of truth yet, so it
+// shouldn't count toward "active" stats until someone reclassifies it. The
+// three-view model has no fourth bucket, so Archive is the closest fit
+// (see viewForLifecycle in lib/import/monday-taxonomy.ts).
+export const ARCHIVE_LIFECYCLES: ProcessLifecycle[] = ["needs_triage", "cancelled", "churned", "retired"];
 
 export type ProcessView = "active" | "delivered" | "archive";
 
