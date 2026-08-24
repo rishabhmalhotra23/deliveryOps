@@ -356,6 +356,28 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
         })()}
       </div>
 
+      {/* Section 1.5: fresh V2 builds — net-new work built directly on V2,
+          never migrated from V1. Excluded from every migration-goal/stage
+          number above by design (they're not migrations); this is the
+          report's only visibility into that work. Mirrors /delivery's
+          Active view filtered to v2-native, so it's exactly as refined as
+          Delivery's data currently is — no separate classification here. */}
+      {status.freshV2Builds.count > 0 && (
+        <>
+          <Caption>Fresh V2 builds in progress (net-new, not migrations)</Caption>
+          <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
+            <div className="text-[12px] mb-2" style={{ color: "var(--rt-fg-muted)" }}>
+              {status.freshV2Builds.count} active, by stage:
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {status.freshV2Builds.rows.map((row) => (
+                <StageColumn key={row.lifecycle} stage={row.lifecycle} label={row.label} count={row.count} processNames={row.processNames} />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Section 3: upcoming renewal spotlight — only when non-null */}
       {renewalSpotlight && (
         <>

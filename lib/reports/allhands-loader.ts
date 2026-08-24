@@ -17,7 +17,7 @@ import {
   type CustomerTicketConcentration,
 } from "@/lib/reports/allhands-ticket-buckets";
 import { computeTicketVelocity, type TicketVelocityPoint } from "@/lib/reports/allhands-ticket-velocity";
-import { TABLES, IN_FLIGHT_STAGES, type Process } from "@/lib/supabase/types";
+import { TABLES, IN_FLIGHT_STAGES, ACTIVE_LIFECYCLES, type Process, type ProcessLifecycle } from "@/lib/supabase/types";
 
 export interface AllHandsStatus {
   liveCount: number;
@@ -54,6 +54,16 @@ export interface AllHandsStatus {
    *  IN_FLIGHT_STAGES that migratingNowCount actually sums. Lets the UI split
    *  the two groups visually instead of implying all rows sum to one count. */
   stageRows: Array<{ stage: string; label: string; count: number; processNames: string[]; group: "complete" | "in_progress" }>;
+  /** Active processes built directly on V2 with no V1 history — net-new
+   *  work, not migrations. Excluded from every migration-goal/stage number
+   *  above by design (see the FRESH_BUILD_* comment in the loader); this is
+   *  the report's only visibility into that work. Mirrors /delivery's
+   *  Active view filtered to v2_native, so it reflects whatever Delivery
+   *  currently calls active — refining Delivery's data refines this too. */
+  freshV2Builds: {
+    count: number;
+    rows: Array<{ lifecycle: string; label: string; count: number; processNames: string[] }>;
+  };
 }
 
 export interface AllHandsReport {
@@ -118,6 +128,37 @@ const STAGE_ORDER = [
   "parity_testing",
   "engg_pending",
   "in_development",
+];
+
+// Fresh V2 builds: processes built directly on V2 with no V1 history
+// (migration_stage v2_native) that are currently active. isV2Relevant()
+// in lib/processes/loader.ts deliberately excludes almost all of these from
+// the migration tracker (`overview.rows`) — they have no migration evidence
+// (parity dates, linked tickets) because they were never migrations, so the
+// stage/funnel numbers above never see them. That's correct for the
+// migration-goal math, but it meant the report had zero visibility into
+// this work (Rishabh, 2026-08-24). Grouped by lifecycle, same active-stage
+// vocabulary as the /delivery page, since that's the source of truth this
+// mirrors — not a new classification.
+const FRESH_BUILD_LIFECYCLE_LABELS: Record<ProcessLifecycle, string> = {
+  backlog: "Backlog",
+  upcoming: "Upcoming",
+  discovery: "Discovery",
+  in_development: "In development",
+  uat: "UAT",
+  on_hold: "On hold",
+  live: "Live",
+  cancelled: "Cancelled",
+  churned: "Churned",
+  retired: "Retired",
+};
+const FRESH_BUILD_LIFECYCLE_ORDER: ProcessLifecycle[] = [
+  "in_development",
+  "uat",
+  "discovery",
+  "upcoming",
+  "backlog",
+  "on_hold",
 ];
 
 /**
@@ -254,6 +295,23 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
     };
   }).filter((row) => row.count > 0);
 
+  // ── Fresh V2 builds (active, never migrated) ──────────────────────────────
+  // Sourced from allProcesses (the raw, unfiltered processes table already
+  // fetched above), not overview.rows — that's the whole point, see the
+  // FRESH_BUILD_* comment above.
+  const freshV2BuildRows = allProcesses.filter(
+    (p) => p.migration_stage === "v2_native" && (ACTIVE_LIFECYCLES as ProcessLifecycle[]).includes(p.lifecycle)
+  );
+  const freshV2BuildStageRows = FRESH_BUILD_LIFECYCLE_ORDER.map((lifecycle) => {
+    const rows = freshV2BuildRows.filter((p) => p.lifecycle === lifecycle);
+    return {
+      lifecycle,
+      label: FRESH_BUILD_LIFECYCLE_LABELS[lifecycle],
+      count: rows.length,
+      processNames: rows.map((p) => p.process_name),
+    };
+  }).filter((row) => row.count > 0);
+
   // ── Cumulative progress (all-time since program start, not per-quarter) ──
   // Computed over migrationTrackedRows so the chart's peak can never exceed
   // migrationGoalTotal — the goal line's own population.
@@ -307,6 +365,7 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
       migrationBlockedProcesses,
       byStage: overview.counts.byStage,
       stageRows,
+      freshV2Builds: { count: freshV2BuildRows.length, rows: freshV2BuildStageRows },
     },
     cumulativeProgress,
     ticketVelocity,
