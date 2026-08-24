@@ -283,6 +283,8 @@
   --rt-status-good:    #4ADE80;
   --rt-status-warn:    #FB923C;
   --rt-status-bad:     #F87171;
+  --rt-status-info:    #38BDF8;
+  --rt-violet:         #A78BFA;
   background: var(--rt-bg);
   color: var(--rt-fg);
   color-scheme: dark;

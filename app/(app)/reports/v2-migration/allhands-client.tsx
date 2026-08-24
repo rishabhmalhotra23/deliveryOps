@@ -31,14 +31,23 @@ const STAGE_COLORS: Record<string, string> = {
   parity_testing: "var(--rt-status-warn)",
   engg_pending: "var(--rt-status-bad)",
   in_development: "var(--rt-fg-muted)",
-  // Fresh-V2-build lifecycle stages (StageColumn is shared between the
-  // migration funnel above and the fresh-builds section) — a rough
-  // earliest-to-latest progression, not a health signal like the migration
-  // stages above.
-  backlog: "var(--rt-fg-muted)",
-  upcoming: "var(--rt-fg-body)",
-  discovery: "var(--rt-status-warn)",
-  uat: "var(--rt-status-good)",
+};
+
+// Fresh-V2-build lifecycle stages — a separate map from STAGE_COLORS (not
+// just a different set of keys on the same one) because "in_development"
+// means something different in each place: here it's a lifecycle stage that
+// should read as active/in-progress (yellow), but STAGE_COLORS' in_development
+// is a migration stage that's deliberately muted so it doesn't compete with
+// customer_validation's accent yellow in the same funnel. Reusing one map for
+// both would force them to the same color. Green is reserved for "live" states
+// elsewhere in this report, so it's not reused here even though on_hold/uat
+// could otherwise read as "good."
+const FRESH_BUILD_STAGE_COLORS: Record<string, string> = {
+  backlog: "var(--rt-status-warn)",
+  upcoming: "var(--rt-violet)",
+  discovery: "var(--rt-fg-muted)",
+  in_development: "var(--rt-accent)",
+  uat: "var(--rt-status-info)",
   on_hold: "var(--rt-status-bad)",
 };
 
@@ -88,11 +97,23 @@ function summarizeNames(names: string[]): string[] {
     .sort((a, b) => a.localeCompare(b));
 }
 
-function StageColumn({ stage, label, count, processNames }: { stage: string; label: string; count: number; processNames: string[] }) {
+function StageColumn({
+  stage,
+  label,
+  count,
+  processNames,
+  colorMap = STAGE_COLORS,
+}: {
+  stage: string;
+  label: string;
+  count: number;
+  processNames: string[];
+  colorMap?: Record<string, string>;
+}) {
   const lines = summarizeNames(processNames);
   return (
     <div className="flex-1 min-w-[130px] rounded-[10px] p-2.5" style={{ background: "var(--rt-surface-2)" }}>
-      <div className="text-[13px] font-bold mb-1.5" style={{ color: STAGE_COLORS[stage] ?? "var(--rt-fg)" }}>
+      <div className="text-[13px] font-bold mb-1.5" style={{ color: colorMap[stage] ?? "var(--rt-fg)" }}>
         {label} · {count}
       </div>
       <div className="text-[12px] leading-relaxed" style={{ color: "var(--rt-fg-body)" }}>
@@ -314,7 +335,14 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
             </div>
             <div className="flex flex-wrap gap-2">
               {status.freshV2Builds.rows.map((row) => (
-                <StageColumn key={row.lifecycle} stage={row.lifecycle} label={row.label} count={row.count} processNames={row.processNames} />
+                <StageColumn
+                  key={row.lifecycle}
+                  stage={row.lifecycle}
+                  label={row.label}
+                  count={row.count}
+                  processNames={row.processNames}
+                  colorMap={FRESH_BUILD_STAGE_COLORS}
+                />
               ))}
             </div>
           </div>
