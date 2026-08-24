@@ -36,9 +36,6 @@ const STAGE_COLORS: Record<string, string> = {
 function fmtShort(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
-function fmtAxis(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-}
 function fmtMoney(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
@@ -93,201 +90,6 @@ function StageColumn({ stage, label, count, processNames }: { stage: string; lab
         {lines.map((line, i) => (
           <div key={i}>{line}</div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Combined progress chart — ONE chart, ONE shared weekly x-axis, dual y-axes:
-//    left = cumulative "migrated to V2" (matches the Migrated to V2 tile exactly,
-//    dashed goal line + a value label on every point), right = ticket velocity
-//    PER WEEK, not cumulative (created vs. resolved, so direction is visible —
-//    two cumulative lines both only ever go up, which hides whether resolution
-//    is keeping pace). ──────────────────────────────────────────────────────
-function CombinedProgressChart({
-  migrationPoints,
-  ticketPoints,
-  goal,
-}: {
-  migrationPoints: AllHandsReport["cumulativeProgress"];
-  ticketPoints: AllHandsReport["ticketVelocity"];
-  goal: number;
-}) {
-  if (migrationPoints.length === 0 && ticketPoints.length === 0) {
-    return (
-      <div className="text-xs italic" style={{ color: "#A3A3A3" }}>
-        Not enough data yet to chart progress.
-      </div>
-    );
-  }
-
-  const W = 640;
-  const H = 190;
-  const padLeft = 28;
-  const padRight = 30;
-  const padTop = 20;
-  const padBottom = 20;
-  const chartW = W - padLeft - padRight;
-  const chartH = H - padTop - padBottom;
-  const n = Math.max(migrationPoints.length, ticketPoints.length);
-  const labelPoints = migrationPoints.length >= ticketPoints.length ? migrationPoints : ticketPoints;
-
-  const migratedValues = migrationPoints.map((p) => p.cumulativeMigratedToV2);
-  const latestMigrated = migratedValues[migratedValues.length - 1] ?? 0;
-  // The left axis always shows the goal line, with a little headroom above it —
-  // the migration line's peak can never exceed goal (same population, see
-  // AllHandsStatus.migrationGoalTotal), so goal is always the true ceiling.
-  const axisMaxLeft = Math.max(5, Math.ceil((goal * 1.08) / 5) * 5);
-
-  const createdWeekly = ticketPoints.map((p) => p.createdThisWeek);
-  const closedWeekly = ticketPoints.map((p) => p.closedThisWeek);
-  const maxWeekly = Math.max(...createdWeekly, ...closedWeekly, 1);
-  const axisMaxRight = Math.max(5, Math.ceil((maxWeekly * 1.15) / 5) * 5);
-
-  const totalCreated = ticketPoints[ticketPoints.length - 1]?.cumulativeCreated ?? 0;
-  const totalClosed = ticketPoints[ticketPoints.length - 1]?.cumulativeClosed ?? 0;
-  const totalOpen = totalCreated - totalClosed;
-
-  const xAt = (i: number) => padLeft + (n === 1 ? chartW / 2 : (i / (n - 1)) * chartW);
-  const yAtLeft = (v: number) => padTop + chartH - (v / axisMaxLeft) * chartH;
-  const yAtRight = (v: number) => padTop + chartH - (v / axisMaxRight) * chartH;
-
-  const migratedCoords = migratedValues.map((v, i) => [xAt(i), yAtLeft(v)]);
-  const migratedLineD = migratedCoords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const baseline = padTop + chartH;
-  const migratedAreaD =
-    migratedCoords.length > 0
-      ? `${migratedLineD} L${xAt(migratedValues.length - 1).toFixed(1)},${baseline} L${xAt(0).toFixed(1)},${baseline} Z`
-      : "";
-
-  const pathForRight = (values: number[]) => values.map((v, i) => `${i === 0 ? "M" : "L"}${xAt(i).toFixed(1)},${yAtRight(v).toFixed(1)}`).join(" ");
-  const createdD = pathForRight(createdWeekly);
-  const closedD = pathForRight(closedWeekly);
-
-  const gridFractions = [0, 0.25, 0.5, 0.75, 1];
-  const goalY = yAtLeft(goal);
-  const toGo = Math.max(0, goal - latestMigrated);
-
-  // Thin out x-axis date labels so they don't overlap when there are many weeks.
-  const maxLabels = 7;
-  const labelStep = Math.max(1, Math.ceil(n / maxLabels));
-
-  return (
-    <div>
-      <div className="flex justify-between items-baseline mb-1.5 flex-wrap gap-1">
-        <span className="text-[12px]" style={{ color: "#A3A3A3" }}>
-          Weekly, since {fmtShort(new Date(labelPoints[0].weekStart))}
-        </span>
-        <span className="text-[13px]" style={{ color: "#A3A3A3" }}>
-          <span className="font-bold" style={{ color: toGo === 0 ? "#4ADE80" : "var(--rt-fg)" }}>
-            {toGo === 0 ? "Goal reached" : `${toGo} to go`}
-          </span>
-          {" · "}
-          <span style={{ color: "var(--rt-fg)", fontWeight: 700 }}>{totalCreated}</span> created ·{" "}
-          <span style={{ color: "#4ADE80", fontWeight: 700 }}>{totalClosed}</span> resolved ·{" "}
-          <span style={{ color: "var(--rt-status-warn)", fontWeight: 700 }}>{totalOpen}</span> open
-        </span>
-      </div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
-        <defs>
-          <linearGradient id="cumulative-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" style={{ stopColor: "#F2FF70", stopOpacity: 0.35 }} />
-            <stop offset="100%" style={{ stopColor: "#F2FF70", stopOpacity: 0 }} />
-          </linearGradient>
-        </defs>
-
-        {gridFractions.map((frac) => {
-          const y = padTop + chartH - frac * chartH;
-          return (
-            <g key={frac}>
-              <line x1={padLeft} x2={W - padRight} y1={y} y2={y} strokeWidth="1" style={{ stroke: "#1F1F1F" }} />
-              <text x={padLeft - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="11" style={{ fill: "#A3A3A3" }}>
-                {Math.round(frac * axisMaxLeft)}
-              </text>
-              <text x={W - padRight + 8} y={y} textAnchor="start" dominantBaseline="middle" fontSize="11" style={{ fill: "#A3A3A3" }}>
-                {Math.round(frac * axisMaxRight)}
-              </text>
-            </g>
-          );
-        })}
-
-        {migratedCoords.length > 0 && (
-          <>
-            <line x1={padLeft} x2={W - padRight} y1={goalY} y2={goalY} strokeWidth="1.5" strokeDasharray="4 3" style={{ stroke: "#4ADE80" }} />
-            <path d={migratedAreaD} fill="url(#cumulative-gradient)" />
-            <path d={migratedLineD} fill="none" strokeWidth="2.5" style={{ stroke: "#F2FF70" }} />
-            {migratedCoords.map(([x, y], i) => (
-              <g key={migrationPoints[i].weekStart}>
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={i === migratedCoords.length - 1 ? 3.5 : 2.5}
-                  strokeWidth="1.5"
-                  style={{
-                    fill: i === migratedCoords.length - 1 ? "#F2FF70" : "#262626",
-                    stroke: "#F2FF70",
-                  }}
-                />
-                <text
-                  x={x}
-                  y={Math.max(padTop - 4, y - 8)}
-                  textAnchor={i === migratedCoords.length - 1 ? "end" : "middle"}
-                  fontSize="12"
-                  fontWeight={i === migratedCoords.length - 1 ? "700" : "600"}
-                  style={{ fill: i === migratedCoords.length - 1 ? "var(--rt-fg)" : "#D4D4D4" }}
-                >
-                  {migratedValues[i]}
-                </text>
-              </g>
-            ))}
-          </>
-        )}
-
-        {createdWeekly.length > 0 && (
-          <>
-            <path d={createdD} fill="none" strokeWidth="1.75" style={{ stroke: "#A3A3A3" }} />
-            <path d={closedD} fill="none" strokeWidth="1.75" strokeDasharray="0" style={{ stroke: "#4ADE80" }} />
-            {createdWeekly.map((v, i) => (
-              <circle
-                key={`c-${ticketPoints[i].weekStart}`}
-                cx={xAt(i)}
-                cy={yAtRight(v)}
-                r="2"
-                strokeWidth="1.5"
-                style={{ fill: "#262626", stroke: "#A3A3A3" }}
-              />
-            ))}
-            {closedWeekly.map((v, i) => (
-              <circle
-                key={`d-${ticketPoints[i].weekStart}`}
-                cx={xAt(i)}
-                cy={yAtRight(v)}
-                r="2"
-                strokeWidth="1.5"
-                style={{ fill: "#262626", stroke: "#4ADE80" }}
-              />
-            ))}
-          </>
-        )}
-
-        {labelPoints.map((p, i) =>
-          i % labelStep === 0 || i === labelPoints.length - 1 ? (
-            <text key={p.weekStart} x={xAt(i)} y={H - 5} textAnchor="middle" fontSize="11" style={{ fill: "#A3A3A3" }}>
-              {fmtAxis(new Date(p.weekStart))}
-            </text>
-          ) : null
-        )}
-      </svg>
-      <div className="flex gap-3 mt-1 flex-wrap">
-        <span className="flex items-center gap-1 text-[12px]" style={{ color: "#A3A3A3" }}>
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#F2FF70" }} /> migrated to V2 (cumulative, left axis)
-        </span>
-        <span className="flex items-center gap-1 text-[12px]" style={{ color: "#A3A3A3" }}>
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#A3A3A3" }} /> tickets created (per week, right axis)
-        </span>
-        <span className="flex items-center gap-1 text-[12px]" style={{ color: "#A3A3A3" }}>
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#4ADE80" }} /> tickets resolved (per week, right axis)
-        </span>
       </div>
     </div>
   );
@@ -433,8 +235,6 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
 
   const {
     status,
-    cumulativeProgress,
-    ticketVelocity,
     renewalSpotlight,
     atRiskMigrating,
     blockers,
@@ -443,11 +243,6 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
     ticketHealth,
     ticketDataError,
   } = report;
-
-  // The chart's own final value — always equals status.migrationDoneCount
-  // exactly (same classification, see migratedToV2Date's doc comment in
-  // migration-progress.ts), so this and the "Migrated to V2" tile never drift.
-  const migratedToV2Total = cumulativeProgress.length > 0 ? cumulativeProgress[cumulativeProgress.length - 1].cumulativeMigratedToV2 : 0;
 
   const exportLabel =
     exportState === "loading" ? "Rendering…" : exportState === "done" ? "Saved ✓" : exportState === "error" ? "Failed" : "Download PNG";
@@ -559,31 +354,6 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
             </>
           );
         })()}
-      </div>
-
-      {/* Section 2: migration + ticket progress, one combined chart, one shared
-          weekly x-axis. Migration (left axis, cumulative) and ticket velocity
-          (right axis, per-week) stay on separate axes deliberately — a
-          cumulative count and a per-week delta plotted on one axis would make
-          one of the two illegible. */}
-      <Caption>Progress — migrated to V2 vs. ticket velocity</Caption>
-      <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
-        {ticketDataError && (
-          <div className="text-xs italic px-1 py-1 mb-2" style={{ color: "var(--rt-status-bad)" }}>
-            Ticket data unavailable for this run (see above) — showing migration progress only.
-          </div>
-        )}
-        <CombinedProgressChart
-          migrationPoints={cumulativeProgress}
-          ticketPoints={ticketDataError ? [] : ticketVelocity}
-          goal={status.migrationGoalTotal}
-        />
-        <div className="text-[13px] mt-2" style={{ color: "var(--rt-fg-body)" }}>
-          {migratedToV2Total} of {status.migrationGoalTotal} migrated to V2 so far.
-          {status.migrationBlockedNowCount > 0 && (
-            <> {status.migrationBlockedNowCount} of the {status.migratingNowCount} still migrating are engineering-blocked.</>
-          )}
-        </div>
       </div>
 
       {/* Section 3: upcoming renewal spotlight — only when non-null */}
