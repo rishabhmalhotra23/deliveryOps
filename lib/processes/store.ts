@@ -18,6 +18,10 @@ import {
   ARCHIVE_LIFECYCLES,
   type Process,
   type ProcessView,
+  type ProcessLifecycle,
+  type ProcessPlatform,
+  type ProcessPhase,
+  type MigrationStage,
 } from "@/lib/supabase/types";
 
 export class ProcessNotFoundError extends Error {
@@ -26,6 +30,8 @@ export class ProcessNotFoundError extends Error {
     this.name = "ProcessNotFoundError";
   }
 }
+
+export class InvalidProcessInputError extends Error {}
 
 // Fields the drawer may set. Deliberately excludes identity (account,
 // process_name, customer_id/key), generated columns (ttv_days), import
@@ -71,6 +77,78 @@ function pickEditable(patch: Partial<Process>): Record<string, unknown> {
     if (f in patch && patch[f] !== undefined) out[f as string] = patch[f];
   }
   return out;
+}
+
+// ─── Cross-field derivation ─────────────────────────────────────────────────
+// lifecycle, phase and migration_stage overlap in what they're describing —
+// the team shouldn't have to set the same "where is this at" answer three
+// times. When one of them moves, fill in the others *if the caller didn't
+// already say something about them*, so an explicit multi-field edit is
+// always trusted over a guess.
+//
+// Only the most common, unambiguous mappings are covered here — anything not
+// listed (e.g. migration_stage: not_required, or phase's m5_exception_handling)
+// is left alone rather than guessed at.
+
+// A migration moving through these stages is, from the Delivery board's
+// point of view, simply "this process is in development" or "in UAT" or
+// "live" — not_required is deliberately absent, since it carries no
+// delivery-status signal at all.
+const MIGRATION_STAGE_TO_LIFECYCLE: Partial<Record<MigrationStage, ProcessLifecycle>> = {
+  in_development: "in_development",
+  engg_pending: "in_development",
+  parity_testing: "uat",
+  customer_validation: "uat",
+  live_on_v2: "live",
+  migrated_pending_commercial: "live",
+  v2_native: "live",
+};
+
+const LIFECYCLE_TO_PHASE: Partial<Record<ProcessLifecycle, ProcessPhase>> = {
+  backlog: "pre_kickoff",
+  upcoming: "pre_kickoff",
+  discovery: "m1_discovery",
+  in_development: "m2_development",
+  uat: "m3_testing_uat",
+  live: "m4_deployment",
+};
+
+// Auto-derivation only ever moves a process forward through its normal flow —
+// it never overrides a hold or terminal state a human deliberately set.
+const FLOW_LIFECYCLES = new Set<ProcessLifecycle>([
+  "backlog",
+  "upcoming",
+  "discovery",
+  "in_development",
+  "uat",
+  "live",
+]);
+
+/** Pure: fills in lifecycle/phase from a migration_stage or lifecycle change
+ *  already present in `update`, without touching anything the caller set
+ *  explicitly. Exported for unit testing. */
+export function withDerivedFields(
+  existing: Process,
+  update: Record<string, unknown>
+): Record<string, unknown> {
+  const next = { ...update };
+
+  if (
+    "migration_stage" in next &&
+    !("lifecycle" in next) &&
+    FLOW_LIFECYCLES.has(existing.lifecycle)
+  ) {
+    const derived = MIGRATION_STAGE_TO_LIFECYCLE[next.migration_stage as MigrationStage];
+    if (derived && derived !== existing.lifecycle) next.lifecycle = derived;
+  }
+
+  const effectiveLifecycle = (next.lifecycle as ProcessLifecycle | undefined) ?? existing.lifecycle;
+  if ("lifecycle" in next && !("phase" in next) && FLOW_LIFECYCLES.has(effectiveLifecycle)) {
+    const derivedPhase = LIFECYCLE_TO_PHASE[effectiveLifecycle];
+    if (derivedPhase && derivedPhase !== existing.phase) next.phase = derivedPhase;
+  }
+
+  return next;
 }
 
 // ─── Reads ────────────────────────────────────────────────────────────────
@@ -125,8 +203,9 @@ export async function updateProcess(
   const existing = await getProcess(id);
   if (!existing) throw new ProcessNotFoundError(id);
 
-  const update = pickEditable(patch);
+  let update = pickEditable(patch);
   if (Object.keys(update).length === 0) return existing;
+  update = withDerivedFields(existing, update);
 
   const now = new Date().toISOString();
   const provenance = { ...existing.field_provenance };
@@ -142,6 +221,56 @@ export async function updateProcess(
     .eq("id", id)
     .select("*")
     .single();
+  if (error) throw error;
+  return data as Process;
+}
+
+export interface CreateProcessInput {
+  process_name: string;
+  /** Either an existing customer's display name (when customer_id is set) or
+   *  free text for a not-yet-onboarded account — `account` is the NOT NULL
+   *  denormalized label on the row either way. */
+  account: string;
+  customer_id?: string | null;
+  lifecycle?: ProcessLifecycle;
+  platform?: ProcessPlatform;
+  fde_owner?: string | null;
+}
+
+// New processes are always delivery work, not migration work, by definition —
+// migration_stage only ever becomes something else via a drawer edit, the
+// same mechanism used to move a process off the V2 Migration report.
+const NEW_PROCESS_MIGRATION_STAGE = "not_required" as const;
+const DEFAULT_LIFECYCLE: ProcessLifecycle = "backlog";
+const DEFAULT_PLATFORM: ProcessPlatform = "v2";
+
+/** Pure: validates and shapes the insert row. Split out from createProcess so
+ *  the validation/defaulting rules are unit-testable without Supabase. */
+export function buildCreateProcessRow(
+  input: CreateProcessInput,
+  actor: string
+): Record<string, unknown> {
+  const process_name = input.process_name.trim();
+  const account = input.account.trim();
+  if (!process_name) throw new InvalidProcessInputError("Process name is required.");
+  if (!account) throw new InvalidProcessInputError("Account is required.");
+
+  return {
+    process_name,
+    account,
+    customer_id: input.customer_id || null,
+    lifecycle: input.lifecycle ?? DEFAULT_LIFECYCLE,
+    platform: input.platform ?? DEFAULT_PLATFORM,
+    migration_stage: NEW_PROCESS_MIGRATION_STAGE,
+    fde_owner: input.fde_owner || null,
+    updated_by: actor,
+  };
+}
+
+export async function createProcess(input: CreateProcessInput, actor: string): Promise<Process> {
+  const sb = requireAdmin();
+  const row = buildCreateProcessRow(input, actor);
+  const { data, error } = await sb.from(TABLES.processes).insert(row).select("*").single();
   if (error) throw error;
   return data as Process;
 }

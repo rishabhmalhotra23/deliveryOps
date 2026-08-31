@@ -9,7 +9,7 @@
 // rather than ProjectDetailPanel, which is hardcoded to the Monday shape and
 // is being retired, not extended.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DrillDownPanel } from "@/app/_components/drilldown-panel";
@@ -80,6 +80,14 @@ function FieldRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
+
+  // Another field's save can change this one too — a migration_stage edit
+  // auto-derives lifecycle/phase server-side (see withDerivedFields in
+  // lib/processes/store.ts). Without this, the field would keep showing its
+  // stale pre-edit value until the drawer is closed and reopened.
+  useEffect(() => {
+    setDraft(value ?? "");
+  }, [value]);
 
   async function commit(next: string | number | null) {
     if (next === (value ?? "")) return;
@@ -505,6 +513,9 @@ export function ProcessDrawer({
         options={MIGRATION_STAGES.map((v) => ({ value: v, label: MIGRATION_STAGE_LABELS[v] }))}
         onCommit={(v) => saveField("migration_stage", v)}
       />
+      <div className="text-[11px] text-[color:var(--muted-foreground)] -mt-1 mb-1 ml-[144px]">
+        Moving this to an in-flight or live stage also updates Lifecycle and Phase above, unless you've set those yourself.
+      </div>
 
       <GroupHeader title="V2 migration" />
       <FieldRow

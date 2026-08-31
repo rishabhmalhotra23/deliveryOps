@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Legend, AreaChart, Area,
@@ -10,7 +11,10 @@ import {
 import type { ProcessesOverview, ProcessRow } from "@/lib/processes/loader";
 import { ACTIVE_LANES, ACTIVE_LANE_LABELS, viewForLifecycle } from "@/lib/processes/loader";
 import { ProcessDrawer } from "@/app/_components/process-drawer";
+import { PageHeader } from "@/app/_components/brand";
+import type { Process } from "@/lib/supabase/types";
 import { DeliveryStatsRow } from "./_components/delivery-stats-row";
+import { NewProcessModal } from "./_components/new-process-modal";
 
 interface DeliveryClientProps {
   overview: ProcessesOverview;
@@ -98,12 +102,27 @@ function Flags({ row }: { row: ProcessRow }) {
 // ── Main client component ─────────────────────────────────────────────────────
 
 export function DeliveryClient({ overview }: DeliveryClientProps) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("Active Work");
   const [customer, setCustomer] = useState("");
   const [fde, setFde] = useState("");
   const [partner, setPartner] = useState("");
   const [search, setSearch] = useState("");
   const [selectedProcess, setSelectedProcess] = useState<ProcessRow | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  function handleCreated(process: Process) {
+    setCreating(false);
+    // The board/tables are a server-fetched snapshot; refresh so the new
+    // process shows up in its lane once the drawer closes.
+    router.refresh();
+    setSelectedProcess({
+      ...process,
+      customer_display_name: process.account,
+      open_suggestion_count: 0,
+      needs_classification: false,
+    });
+  }
 
   // Filters apply to the table views (Delivered / Archive / All), not to the
   // Active board — the board's four lanes are already a small, fixed set and
@@ -128,7 +147,22 @@ export function DeliveryClient({ overview }: DeliveryClientProps) {
   const archive = useMemo(() => filtered.filter((p) => viewForLifecycle(p.lifecycle) === "archive"), [filtered]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Delivery"
+        title="Every process, every customer, every quarter."
+        subtitle={`${overview.counts.total} processes, native to DeliveryOps — no Monday dependency on this page.`}
+        actions={
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="btn-primary rounded-full px-4 py-2 text-sm font-semibold"
+          >
+            New process
+          </button>
+        }
+      />
+
       <DeliveryStatsRow counts={overview.counts} onSelectTab={setTab} />
 
       {/* Filter bar — applies to Delivered / Archive / All */}
@@ -182,6 +216,14 @@ export function DeliveryClient({ overview }: DeliveryClientProps) {
           customerDisplayName={selectedProcess.customer_display_name}
           facets={overview.facets}
           onClose={() => setSelectedProcess(null)}
+        />
+      ) : null}
+
+      {creating ? (
+        <NewProcessModal
+          customerOptions={overview.facets.customerOptions}
+          onClose={() => setCreating(false)}
+          onCreated={handleCreated}
         />
       ) : null}
     </div>
