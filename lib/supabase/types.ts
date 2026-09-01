@@ -128,7 +128,11 @@ export type EventType =
   | "TASK_EXECUTED"
   | "TASK_FAILED"
   | "PROFILE_UPDATED"
-  | "RULES_UPDATED";
+  | "RULES_UPDATED"
+  | "NPS_SURVEY_SENT"
+  | "NPS_REMINDER_SENT"
+  | "NPS_SEND_FAILED"
+  | "NPS_RESPONSE_RECEIVED";
 
 export interface CuratorEvent {
   id: string;
@@ -252,6 +256,9 @@ export const TABLES = {
   processes: "processes",
   processSuggestions: "process_suggestions",
   npsResponses: "nps_responses",
+  npsCampaigns: "nps_campaigns",
+  npsCampaignRecipients: "nps_campaign_recipients",
+  npsResponseDetails: "nps_response_details",
 } as const;
 
 // ── pending_approvals ──────────────────────────────────────────────────────
@@ -556,6 +563,90 @@ export function npsCategory(score: number): NpsCategory {
   if (score >= 9) return "promoter";
   if (score >= 7) return "passive";
   return "detractor";
+}
+
+// The 5 labels the 84 historical nps_responses.product_satisfaction rows use
+// (confirmed via `select distinct product_satisfaction from nps_responses`),
+// keyed by the survey's 1-5 scale so new self-submitted responses store
+// identical text.
+export const PRODUCT_SATISFACTION_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "Very unsatisfied",
+  2: "Somewhat unsatisfied",
+  3: "Neutral",
+  4: "Somewhat satisfied",
+  5: "Very satisfied",
+};
+
+// ── nps_campaigns / nps_campaign_recipients / nps_response_details (0027) ────
+// Quarterly bulk NPS send + automatic/manual reminder tracking. See
+// supabase/migrations/0027_nps_campaigns.sql for full column comments.
+
+export const NPS_CAMPAIGN_STATUSES = ["draft", "sending", "active", "closed"] as const;
+export type NpsCampaignStatus = (typeof NPS_CAMPAIGN_STATUSES)[number];
+
+export interface NpsCampaign {
+  id: string;
+  quarter: string;
+  invite_subject: string;
+  invite_body: string;
+  reminder_subject: string;
+  reminder_body: string;
+  status: NpsCampaignStatus;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const NPS_CAMPAIGN_RECIPIENT_STATUSES = ["queued", "sent", "responded", "failed"] as const;
+export type NpsCampaignRecipientStatus = (typeof NPS_CAMPAIGN_RECIPIENT_STATUSES)[number];
+
+export interface NpsCampaignRecipient {
+  id: string;
+  campaign_id: string;
+  customer_id: string;
+  email: string;
+  respondent_name: string | null;
+  respondent_type: string | null;
+  survey_token: string;
+  status: NpsCampaignRecipientStatus;
+  sent_at: string | null;
+  reminder_count: number;
+  last_reminder_at: string | null;
+  quick_score: number | null;
+  quick_score_at: string | null;
+  response_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const AUTOMATION_TARGET_RANGES = ["1-5", "6-10", "11-25", "26-50", "50+"] as const;
+export type AutomationTargetRange = (typeof AUTOMATION_TARGET_RANGES)[number];
+
+export const AUTOMATION_FUNCTIONS = [
+  "Finance",
+  "Operations",
+  "HR",
+  "IT",
+  "Customer Support",
+  "Sales/Marketing",
+  "Other",
+] as const;
+
+export interface NpsResponseDetails {
+  id: string;
+  nps_response_id: string;
+  company_name_submitted: string;
+  automation_target_range: AutomationTargetRange;
+  automation_functions: string[];
+  automation_functions_other: string | null;
+  ease_creating_automation: number;
+  ease_business_user_acceptance: number;
+  ease_business_case: number;
+  ease_identifying_processes: number;
+  ease_self_sufficiency: number;
+  ease_support_guidance: number;
+  journey_success_agreement: number;
+  created_at: string;
 }
 
 // ── customers / internal_profiles additions (0021) ──────────────────────────

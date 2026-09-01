@@ -61,6 +61,15 @@ export async function GET(request: Request) {
     }
   }
 
+  // NPS reminders aren't a `tasks` row (a campaign spans many customers, but
+  // tasks.customer_id is NOT NULL) — they ride this same once-daily tick
+  // instead of a third vercel.json cron slot. See lib/nps/reminders.ts.
+  try {
+    await dispatchJob("send-nps-reminders", { mode: "auto" });
+  } catch (err) {
+    console.warn("[cron] failed to dispatch NPS reminder sweep:", err);
+  }
+
   return NextResponse.json({
     ok: true,
     now: now.toISOString(),

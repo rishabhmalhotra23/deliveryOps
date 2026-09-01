@@ -11,6 +11,9 @@
 //   /api/gmail/            — webhook, token-authed
 //   /api/cron/             — Vercel cron, CRON_SECRET-authed
 //   /api/jobs/             — internal fire-and-forget, JOBS_SECRET-authed
+//   /nps/respond/          — public NPS survey page, survey_token-authed
+//   /api/nps/respond/      — public NPS survey submit route, survey_token-authed
+//   /api/nps/quick/        — public in-email one-click score, survey_token-authed
 //   /_next/, /favicon.ico  — static assets
 
 import { type NextRequest, NextResponse } from "next/server";
@@ -23,6 +26,9 @@ const PUBLIC_PREFIXES = [
   "/api/gmail/",
   "/api/cron/",
   "/api/jobs/",
+  "/nps/respond/",
+  "/api/nps/respond/",
+  "/api/nps/quick/",
   "/_next/",
   "/favicon.ico",
 ];

@@ -28,7 +28,9 @@ const log = logger("jobs.dispatch");
 export type JobName =
   | "ingest-document"
   | "run-task"
-  | "process-email";
+  | "process-email"
+  | "send-nps-campaign"
+  | "send-nps-reminders";
 
 interface DispatchOptions {
   /** Optional override of where to POST. Defaults to VERCEL_URL or NEXT_PUBLIC_APP_URL. */
