@@ -80,7 +80,8 @@ export function NewProcessModal({
       onClick={onClose}
     >
       <div
-        className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 w-full max-w-md p-5 space-y-3"
+        className="w-full max-w-md rounded-2xl border p-5 space-y-3 shadow-2xl"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">
