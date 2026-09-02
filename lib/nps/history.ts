@@ -9,6 +9,7 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
 import { TABLES, npsCategory, type NpsResponse } from "@/lib/supabase/types";
+import { quarterSortKey } from "./constants";
 
 export interface NpsQuarterStat {
   quarter: string;
@@ -33,18 +34,6 @@ export interface NpsHistory {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// nps_responses.quarter is stored "<quarter-digit>Q<2-digit-year>" (e.g.
-// "4Q25", "1Q26") — same format lib/analytics/loader.ts,
-// lib/dashboard/stats-drilldown.ts, and lib/customers/view-model.ts already
-// sort by. lib/nps/campaigns.ts composes new campaigns' quarter values in
-// this exact format (see the New Campaign modal's quarter+year picker) so
-// historical and campaign-sourced responses sort together correctly.
-/** Pure. Exported for unit testing (tests/nps/history.test.ts). */
-export function quarterSortKey(s: string): number {
-  const m = /^(\d)Q(\d{2})$/.exec(s);
-  return m ? Number(m[2]) * 10 + Number(m[1]) : 0;
 }
 
 const NPS_CAT_ORDER = ["Promoter", "Passive", "Detractor"];

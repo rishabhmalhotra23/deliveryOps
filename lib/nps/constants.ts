@@ -71,3 +71,34 @@ export function renderQuickScoreLinksMarkdown(token: string, appUrl: string): st
   const promoters = [linkFor(9), linkFor(10)].join(" ");
   return `😞 ${detractors}   😐 ${passives}   😊 ${promoters}`;
 }
+
+// nps_responses.quarter is stored "<quarter-digit>Q<2-digit-year>" (e.g.
+// "4Q25", "1Q26") — same format lib/analytics/loader.ts,
+// lib/dashboard/stats-drilldown.ts, and lib/customers/view-model.ts already
+// sort by. Lives here (not lib/nps/history.ts, which imports the server-only
+// Supabase admin client) so the client-side New Campaign modal can import it
+// without pulling service-role code into the browser bundle.
+/** Pure. Exported for unit testing. */
+export function quarterSortKey(s: string): number {
+  const m = /^(\d)Q(\d{2})$/.exec(s);
+  return m ? Number(m[2]) * 10 + Number(m[1]) : 0;
+}
+
+// Kognitos's fiscal year runs Feb-Jan, named after the calendar year it ends
+// in (FY26 = Feb 2025-Jan 2026). Q1=Feb-Apr, Q2=May-Jul, Q3=Aug-Oct,
+// Q4=Nov-Jan. This is the exact rule the 2026-09-02 historical backfill used
+// (relabeling 2Q24-4Q24 -> 2Q25-4Q25 and splitting a mixed "4Q26" bucket
+// into 4Q26/1Q27/2Q27 by response_date) — mirrored here so the New Campaign
+// modal's quarter picker defaults to the fiscal quarter Kognitos is
+// currently in, instead of a raw calendar year that would immediately
+// reintroduce the same mislabeling for the next campaign.
+/** Pure. Exported for unit testing. */
+export function currentFiscalQuarter(now: Date = new Date()): { quarterNum: 1 | 2 | 3 | 4; year: number } {
+  const month = now.getMonth() + 1; // 1-12
+  const year = now.getFullYear();
+  if (month === 1) return { quarterNum: 4, year };
+  if (month === 11 || month === 12) return { quarterNum: 4, year: year + 1 };
+  if (month <= 4) return { quarterNum: 1, year: year + 1 };
+  if (month <= 7) return { quarterNum: 2, year: year + 1 };
+  return { quarterNum: 3, year: year + 1 };
+}

@@ -636,15 +636,20 @@ export interface NpsResponseDetails {
   id: string;
   nps_response_id: string;
   company_name_submitted: string;
-  automation_target_range: AutomationTargetRange;
+  // Nullable: some historical backfilled responses used a coarser "more
+  // than 10" bucket that doesn't map to one of these 5 values. The live
+  // survey form always populates it.
+  automation_target_range: AutomationTargetRange | null;
   automation_functions: string[];
   automation_functions_other: string | null;
-  ease_creating_automation: number;
-  ease_business_user_acceptance: number;
-  ease_business_case: number;
-  ease_identifying_processes: number;
-  ease_self_sufficiency: number;
-  ease_support_guidance: number;
+  // Nullable: historical backfilled responses could answer "N/A" (not
+  // applicable yet). The live survey form always populates these.
+  ease_creating_automation: number | null;
+  ease_business_user_acceptance: number | null;
+  ease_business_case: number | null;
+  ease_identifying_processes: number | null;
+  ease_self_sufficiency: number | null;
+  ease_support_guidance: number | null;
   journey_success_agreement: number;
   created_at: string;
 }

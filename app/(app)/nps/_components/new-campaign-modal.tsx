@@ -14,6 +14,7 @@ import {
   DEFAULT_INVITE_BODY,
   DEFAULT_REMINDER_SUBJECT,
   DEFAULT_REMINDER_BODY,
+  currentFiscalQuarter,
 } from "@/lib/nps/constants";
 
 const inputClass =
@@ -32,8 +33,16 @@ interface UploadResult {
 // lib/nps/history.ts) parses. A free-text field here previously let an
 // admin type "Q1'26", which none of those sort correctly -- composing it
 // from two selects makes the wrong format unreachable.
-const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
+//
+// The year in "year" is Kognitos's FISCAL year (Feb-Jan, named after the
+// year it ends in), not the raw calendar year -- defaulting to
+// currentFiscalQuarter() means the common case (today's quarter) needs no
+// mental math; the 2026-09-02 historical backfill exists precisely because
+// an earlier version of this picker defaulted to calendar year instead and
+// silently produced a quarter label a full FY off for anything after
+// January.
+const DEFAULT_FQ = currentFiscalQuarter();
+const YEAR_OPTIONS = [DEFAULT_FQ.year - 1, DEFAULT_FQ.year, DEFAULT_FQ.year + 1];
 
 export function NewCampaignModal({
   onClose,
@@ -42,8 +51,8 @@ export function NewCampaignModal({
   onClose: () => void;
   onContinue: (campaignId: string) => void;
 }) {
-  const [quarterNum, setQuarterNum] = useState(1);
-  const [year, setYear] = useState(CURRENT_YEAR);
+  const [quarterNum, setQuarterNum] = useState<number>(DEFAULT_FQ.quarterNum);
+  const [year, setYear] = useState(DEFAULT_FQ.year);
   const quarter = `${quarterNum}Q${String(year).slice(-2)}`;
   const [file, setFile] = useState<File | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -147,6 +156,9 @@ export function NewCampaignModal({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="text-[11px] text-[color:var(--muted-foreground)]">
+                Kognitos fiscal year (Feb–Jan) — defaults to the current quarter.
               </div>
             </div>
 
