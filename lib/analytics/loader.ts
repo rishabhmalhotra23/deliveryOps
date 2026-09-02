@@ -47,6 +47,8 @@ export interface AnalyticsBundle {
     projects_in_progress: number;
     projects_delivered: number;
     nps_average: number | null;
+    /** The actual Net Promoter Score (%Promoters - %Detractors, -100 to 100) -- see computeNpsScore(). Distinct from nps_average. */
+    nps_score: number | null;
     nps_responses: number;
     open_opportunities: number;
     open_cases: number;
@@ -62,7 +64,7 @@ export interface AnalyticsBundle {
   projects_by_status: Array<{ status: string; count: number }>;
   projects_by_phase: Array<{ phase: string; count: number }>;
   nps_distribution: Array<{ category: string; count: number }>; // Promoter / Passive / Detractor
-  nps_by_quarter: Array<{ quarter: string; average: number; count: number; promoter: number; passive: number; detractor: number }>;
+  nps_by_quarter: Array<{ quarter: string; average: number; nps_score: number | null; count: number; promoter: number; passive: number; detractor: number }>;
   nps_by_customer_category: Array<{ category: string; average: number; responses: number }>;
   deliveries_over_time: Array<{ month: string; count: number }>; // YYYY-MM
   /** Modelled value of the live portfolio (estimate — complexity × $35/hr). */
@@ -127,7 +129,7 @@ interface AccountRow {
 // Column IDs + helpers come from the canonical taxonomy. See
 // lib/delivery/taxonomy.ts — adding a new column ID here is a smell.
 import { peopleNames, isDelivered, legacyFieldsFromProcess } from "@/lib/delivery/taxonomy";
-import { TABLES, npsCategory, type Process, type NpsResponse } from "@/lib/supabase/types";
+import { TABLES, npsCategory, computeNpsScore, type Process, type NpsResponse } from "@/lib/supabase/types";
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -596,11 +598,18 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     count: npsDistAgg.get(cat) ?? 0,
   })).filter((d) => d.count > 0);
 
+  const npsScore = computeNpsScore({
+    promoter: npsDistAgg.get("Promoter") ?? 0,
+    detractor: npsDistAgg.get("Detractor") ?? 0,
+    total: npsList.length,
+  });
+
   // Sort quarters chronologically (e.g. "2Q24", "3Q24", "4Q24", "1Q25"…).
   const nps_by_quarter = [...npsByQuarterAgg.entries()]
     .map(([quarter, v]) => ({
       quarter,
       average: Math.round((v.sum / v.count) * 10) / 10,
+      nps_score: computeNpsScore({ promoter: v.promoter, detractor: v.detractor, total: v.count }),
       count: v.count,
       promoter: v.promoter,
       passive: v.passive,
@@ -690,6 +699,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       projects_in_progress: projectsInProgress,
       projects_delivered: projectsDelivered,
       nps_average: npsAverage,
+      nps_score: npsScore,
       nps_responses: npsList.length,
       open_opportunities: openOpps.count ?? 0,
       open_cases: openCases.count ?? 0,

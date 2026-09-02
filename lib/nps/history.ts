@@ -8,12 +8,14 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { listCustomers } from "@/lib/customers";
-import { TABLES, npsCategory, type NpsResponse } from "@/lib/supabase/types";
+import { TABLES, npsCategory, computeNpsScore, type NpsResponse } from "@/lib/supabase/types";
 import { quarterSortKey } from "./constants";
 
 export interface NpsQuarterStat {
   quarter: string;
   average: number;
+  /** The actual Net Promoter Score for this quarter (%Promoters - %Detractors, -100 to 100) -- see computeNpsScore(). */
+  npsScore: number | null;
   count: number;
   promoter: number;
   passive: number;
@@ -27,6 +29,8 @@ export interface NpsDistributionStat {
 
 export interface NpsHistory {
   totalAverage: number | null;
+  /** The actual Net Promoter Score, all-time (%Promoters - %Detractors, -100 to 100) -- see computeNpsScore(). */
+  totalNpsScore: number | null;
   totalResponses: number;
   byQuarter: NpsQuarterStat[];
   distribution: NpsDistributionStat[];
@@ -75,6 +79,7 @@ export async function loadNpsHistory(): Promise<NpsHistory> {
     .map(([quarter, v]) => ({
       quarter,
       average: Math.round((v.sum / v.count) * 10) / 10,
+      npsScore: computeNpsScore({ promoter: v.promoter, detractor: v.detractor, total: v.count }),
       count: v.count,
       promoter: v.promoter,
       passive: v.passive,
@@ -82,8 +87,12 @@ export async function loadNpsHistory(): Promise<NpsHistory> {
     }))
     .sort((a, b) => quarterSortKey(a.quarter) - quarterSortKey(b.quarter));
 
+  const totalPromoter = distAgg.get("Promoter") ?? 0;
+  const totalDetractor = distAgg.get("Detractor") ?? 0;
+
   return {
     totalAverage: rows.length > 0 ? Math.round((sum / rows.length) * 10) / 10 : null,
+    totalNpsScore: computeNpsScore({ promoter: totalPromoter, detractor: totalDetractor, total: rows.length }),
     totalResponses: rows.length,
     byQuarter,
     distribution,

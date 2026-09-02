@@ -111,14 +111,14 @@ export async function DashboardTrends() {
         <>
           <Chart
             title="NPS trend by quarter"
-            subtitle={`How customer sentiment is changing — ${totals.nps_responses} responses total, avg ${totals.nps_average?.toFixed(1) ?? "—"}`}
+            subtitle={`How customer sentiment is changing — ${totals.nps_responses} responses total, NPS ${totals.nps_score == null ? "—" : totals.nps_score > 0 ? `+${totals.nps_score}` : totals.nps_score}, avg score ${totals.nps_average?.toFixed(1) ?? "—"}`}
             featured
           >
             <NpsByQuarterChart data={bundle.nps_by_quarter} />
           </Chart>
           <div className="grid gap-6 lg:grid-cols-3">
-            <Chart title="NPS health score" subtitle="Portfolio-wide average">
-              <NpsGauge score={totals.nps_average} count={totals.nps_responses} />
+            <Chart title="NPS health score" subtitle="Portfolio-wide">
+              <NpsGauge score={totals.nps_average} count={totals.nps_responses} npsScore={totals.nps_score} />
             </Chart>
             <Chart title="Promoters vs Detractors" subtitle="All-time distribution">
               <NpsDistributionChart data={bundle.nps_distribution} />

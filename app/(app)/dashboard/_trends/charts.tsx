@@ -316,7 +316,18 @@ export function DeliveriesOverTimeChart({ data }: { data: Array<{ month: string;
 
 // ── NPS Gauge ────────────────────────────────────────────────────────────────
 
-export function NpsGauge({ score, count }: { score: number | null; count: number }) {
+export function NpsGauge({
+  score,
+  count,
+  npsScore,
+}: {
+  score: number | null;
+  count: number;
+  /** The actual Net Promoter Score (%Promoters - %Detractors, -100 to 100)
+   *  -- lib/supabase/types.ts's computeNpsScore(). Distinct from `score`,
+   *  which is the raw 0-10 average and not "NPS" in the standard sense. */
+  npsScore?: number | null;
+}) {
   const t = useChartTheme();
   if (score == null) {
     return (
@@ -355,6 +366,11 @@ export function NpsGauge({ score, count }: { score: number | null; count: number
           {score.toFixed(1)}
         </div>
         <div className="text-sm mt-1 font-medium" style={{ color }}>{label}</div>
+        {npsScore != null ? (
+          <div className="text-sm mt-1.5 font-semibold tabular-nums" style={{ color: t.text }}>
+            NPS {npsScore > 0 ? "+" : ""}{npsScore}
+          </div>
+        ) : null}
         <div className="text-xs mt-1" style={{ color: t.muted }}>{count} responses</div>
       </div>
     </div>
@@ -366,39 +382,65 @@ export function NpsGauge({ score, count }: { score: number | null; count: number
 export function NpsByQuarterChart({
   data,
 }: {
-  data: Array<{ quarter: string; average: number; promoter: number; passive: number; detractor: number }>;
+  data: Array<{
+    quarter: string;
+    average: number;
+    /** The actual NPS score for this quarter (-100 to 100) -- see
+     *  computeNpsScore(). Shown as a strip below the chart rather than a
+     *  fourth line: it's a different scale (-100..100) from both the
+     *  score axis (0-10) and the count axis (0..N responses). */
+    nps_score?: number | null;
+    promoter: number;
+    passive: number;
+    detractor: number;
+  }>;
 }) {
   const t = useChartTheme();
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id="npsGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#818cf8" stopOpacity={0.2} />
-            <stop offset="100%" stopColor="#818cf8" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-        <XAxis dataKey="quarter" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} />
-        <YAxis yAxisId="score" domain={[0, 10]} tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} width={28} />
-        <YAxis yAxisId="count" orientation="right" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
-        <Tooltip contentStyle={t.tooltipStyle} />
-        <Legend wrapperStyle={{ fontSize: 11, color: t.axis }} />
-        <ReferenceLine yAxisId="score" y={7} stroke="#34d399" strokeDasharray="4 2" strokeWidth={1} />
-        <Line
-          yAxisId="score"
-          type="monotone"
-          dataKey="average"
-          name="Avg score"
-          stroke="#818cf8"
-          strokeWidth={3}
-          dot={{ fill: "#818cf8", r: 4, strokeWidth: 0 }}
-          activeDot={{ r: 6, stroke: t.bg, strokeWidth: 2 }}
-        />
-        <Line yAxisId="count" type="monotone" dataKey="promoter" name="Promoters" stroke={NPS_COLORS.Promoter} strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 2" />
-        <Line yAxisId="count" type="monotone" dataKey="detractor" name="Detractors" stroke={NPS_COLORS.Detractor} strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 2" />
-      </LineChart>
-    </ResponsiveContainer>
+    <div className="space-y-2">
+      <ResponsiveContainer width="100%" height={240}>
+        <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="npsGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#818cf8" stopOpacity={0.2} />
+              <stop offset="100%" stopColor="#818cf8" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+          <XAxis dataKey="quarter" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} />
+          <YAxis yAxisId="score" domain={[0, 10]} tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} width={28} />
+          <YAxis yAxisId="count" orientation="right" tick={{ fontSize: 10, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+          <Tooltip contentStyle={t.tooltipStyle} />
+          <Legend wrapperStyle={{ fontSize: 11, color: t.axis }} />
+          <ReferenceLine yAxisId="score" y={7} stroke="#34d399" strokeDasharray="4 2" strokeWidth={1} />
+          <Line
+            yAxisId="score"
+            type="monotone"
+            dataKey="average"
+            name="Avg score"
+            stroke="#818cf8"
+            strokeWidth={3}
+            dot={{ fill: "#818cf8", r: 4, strokeWidth: 0 }}
+            activeDot={{ r: 6, stroke: t.bg, strokeWidth: 2 }}
+          />
+          <Line yAxisId="count" type="monotone" dataKey="promoter" name="Promoters" stroke={NPS_COLORS.Promoter} strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 2" />
+          <Line yAxisId="count" type="monotone" dataKey="detractor" name="Detractors" stroke={NPS_COLORS.Detractor} strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 2" />
+        </LineChart>
+      </ResponsiveContainer>
+      {data.some((d) => d.nps_score != null) ? (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {data.map((d) => (
+            <span
+              key={d.quarter}
+              className="text-[11px] px-2 py-1 rounded-full border tabular-nums"
+              style={{ borderColor: t.grid, color: t.text }}
+            >
+              {d.quarter}: NPS {d.nps_score == null ? "—" : d.nps_score > 0 ? `+${d.nps_score}` : d.nps_score}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

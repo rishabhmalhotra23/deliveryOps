@@ -41,18 +41,21 @@ export function ScoreHistory({ history }: { history: NpsHistory }) {
     );
   }
 
+  const npsScoreLabel =
+    history.totalNpsScore == null ? "—" : history.totalNpsScore > 0 ? `+${history.totalNpsScore}` : history.totalNpsScore;
+
   return (
     <div className="space-y-4">
       <Card
         title="NPS trend by quarter"
-        subtitle={`${history.totalResponses} responses all-time · avg ${history.totalAverage?.toFixed(1) ?? "—"}`}
+        subtitle={`${history.totalResponses} responses all-time · NPS ${npsScoreLabel} · avg score ${history.totalAverage?.toFixed(1) ?? "—"}`}
         featured
       >
-        <NpsByQuarterChart data={history.byQuarter} />
+        <NpsByQuarterChart data={history.byQuarter.map((q) => ({ ...q, nps_score: q.npsScore }))} />
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="NPS health score" subtitle="All-time average">
-          <NpsGauge score={history.totalAverage} count={history.totalResponses} />
+        <Card title="NPS health score" subtitle="All-time">
+          <NpsGauge score={history.totalAverage} count={history.totalResponses} npsScore={history.totalNpsScore} />
         </Card>
         <Card title="Promoters vs Detractors" subtitle="All-time distribution">
           <NpsDistributionChart data={history.distribution} />

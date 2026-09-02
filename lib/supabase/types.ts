@@ -565,6 +565,18 @@ export function npsCategory(score: number): NpsCategory {
   return "detractor";
 }
 
+/**
+ * The actual Net Promoter Score: %Promoters - %Detractors, an integer from
+ * -100 to 100. Distinct from the raw 0-10 average score — averaging the
+ * underlying scores is a different (and less standard) number. Passives
+ * count toward the total but contribute to neither side, matching the
+ * standard NPS definition.
+ */
+export function computeNpsScore(counts: { promoter: number; detractor: number; total: number }): number | null {
+  if (counts.total === 0) return null;
+  return Math.round(((counts.promoter - counts.detractor) / counts.total) * 100);
+}
+
 // The 5 labels the 84 historical nps_responses.product_satisfaction rows use
 // (confirmed via `select distinct product_satisfaction from nps_responses`),
 // keyed by the survey's 1-5 scale so new self-submitted responses store
