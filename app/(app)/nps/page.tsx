@@ -2,14 +2,19 @@ import { BackButton } from "@/app/_components/back-button";
 import { PageHeader } from "@/app/_components/brand";
 import { DevOutboxBanner } from "@/app/_components/dev-outbox-banner";
 import { listCampaigns, listRecipients } from "@/lib/nps/campaigns";
-import { loadNpsHistory } from "@/lib/nps/history";
+import { loadNpsHistory, listAllNpsResponses } from "@/lib/nps/history";
 import { NpsClient } from "./nps-client";
 import { ScoreHistory } from "./_components/score-history";
+import { AllResponsesTable } from "./_components/all-responses-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function NpsPage() {
-  const [campaigns, history] = await Promise.all([listCampaigns(), loadNpsHistory()]);
+  const [campaigns, history, responses] = await Promise.all([
+    listCampaigns(),
+    loadNpsHistory(),
+    listAllNpsResponses(),
+  ]);
   const withCounts = await Promise.all(
     campaigns.map(async (campaign) => {
       const recipients = await listRecipients(campaign.id);
@@ -36,6 +41,7 @@ export default async function NpsPage() {
       />
       <DevOutboxBanner />
       <ScoreHistory history={history} />
+      <AllResponsesTable responses={responses} />
       <NpsClient campaigns={withCounts} />
     </div>
   );

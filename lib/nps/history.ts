@@ -7,7 +7,8 @@
 // sort so the two stay visually consistent.
 
 import { requireAdmin } from "@/lib/supabase/server";
-import { TABLES, npsCategory } from "@/lib/supabase/types";
+import { listCustomers } from "@/lib/customers";
+import { TABLES, npsCategory, type NpsResponse } from "@/lib/supabase/types";
 
 export interface NpsQuarterStat {
   quarter: string;
@@ -98,4 +99,54 @@ export async function loadNpsHistory(): Promise<NpsHistory> {
     byQuarter,
     distribution,
   };
+}
+
+// ─── Every individual response ─────────────────────────────────────────────
+// A flat audit list, one row per response, for the /nps page's "All
+// responses" table. Distinct from loadNpsResponses() in
+// lib/dashboard/stats-drilldown.ts (used by the dashboard drilldown), which
+// deliberately omits product_satisfaction/response_date/respondent_type —
+// fields this audit view needs but that loader's callers don't.
+
+export interface NpsResponseListRow {
+  id: string;
+  customerDisplayName: string;
+  respondentName: string;
+  respondentType: string | null;
+  quarter: string;
+  responseDate: string;
+  score: number;
+  category: string;
+  productSatisfaction: string | null;
+  feedback: string | null;
+}
+
+export async function listAllNpsResponses(): Promise<NpsResponseListRow[]> {
+  const sb = requireAdmin();
+  const [{ data, error }, customers] = await Promise.all([
+    sb.from(TABLES.npsResponses).select("*"),
+    listCustomers(),
+  ]);
+  if (error) throw error;
+  const custById = new Map(customers.map((c) => [c.id, c]));
+  const rows = (data as NpsResponse[]) ?? [];
+
+  return rows
+    .map((r) => ({
+      id: r.id,
+      customerDisplayName: custById.get(r.customer_id)?.display_name ?? "Unknown customer",
+      respondentName: r.respondent_name,
+      respondentType: r.respondent_type,
+      quarter: r.quarter,
+      responseDate: r.response_date,
+      score: r.score,
+      category: capitalize(npsCategory(r.score)),
+      productSatisfaction: r.product_satisfaction,
+      feedback: r.feedback,
+    }))
+    .sort((a, b) => {
+      const byQuarter = quarterSortKey(b.quarter) - quarterSortKey(a.quarter);
+      if (byQuarter !== 0) return byQuarter;
+      return b.responseDate.localeCompare(a.responseDate);
+    });
 }
