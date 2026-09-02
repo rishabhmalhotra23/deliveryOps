@@ -25,6 +25,16 @@ interface UploadResult {
   errors: string[];
 }
 
+// nps_responses.quarter is stored "<quarter-digit>Q<2-digit-year>" (e.g.
+// "4Q25", "1Q26") -- the format the 84 historical rows already use and
+// every existing quarter-sort helper (lib/analytics/loader.ts,
+// lib/dashboard/stats-drilldown.ts, lib/customers/view-model.ts,
+// lib/nps/history.ts) parses. A free-text field here previously let an
+// admin type "Q1'26", which none of those sort correctly -- composing it
+// from two selects makes the wrong format unreachable.
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
+
 export function NewCampaignModal({
   onClose,
   onContinue,
@@ -32,7 +42,9 @@ export function NewCampaignModal({
   onClose: () => void;
   onContinue: (campaignId: string) => void;
 }) {
-  const [quarter, setQuarter] = useState("");
+  const [quarterNum, setQuarterNum] = useState(1);
+  const [year, setYear] = useState(CURRENT_YEAR);
+  const quarter = `${quarterNum}Q${String(year).slice(-2)}`;
   const [file, setFile] = useState<File | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [inviteSubject, setInviteSubject] = useState(DEFAULT_INVITE_SUBJECT);
@@ -44,12 +56,12 @@ export function NewCampaignModal({
   const [result, setResult] = useState<UploadResult | null>(null);
 
   async function submit() {
-    if (busy || !quarter.trim() || !file) return;
+    if (busy || !file) return;
     setBusy(true);
     setError(null);
     try {
       const form = new FormData();
-      form.set("quarter", quarter.trim());
+      form.set("quarter", quarter);
       form.set("file", file);
       form.set("inviteSubject", inviteSubject);
       form.set("inviteBody", inviteBody);
@@ -116,12 +128,26 @@ export function NewCampaignModal({
               <label className="text-[11px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold">
                 Quarter
               </label>
-              <input
-                value={quarter}
-                onChange={(e) => setQuarter(e.target.value)}
-                placeholder="e.g. Q1'26"
-                className={inputClass}
-              />
+              <div className="flex gap-2">
+                <select
+                  value={quarterNum}
+                  onChange={(e) => setQuarterNum(Number(e.target.value))}
+                  className={inputClass}
+                >
+                  {[1, 2, 3, 4].map((q) => (
+                    <option key={q} value={q}>
+                      Q{q}
+                    </option>
+                  ))}
+                </select>
+                <select value={year} onChange={(e) => setYear(Number(e.target.value))} className={inputClass}>
+                  {YEAR_OPTIONS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -200,7 +226,7 @@ export function NewCampaignModal({
               <button
                 type="button"
                 onClick={submit}
-                disabled={busy || !quarter.trim() || !file}
+                disabled={busy || !file}
                 className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
               >
                 {busy ? "Uploading…" : "Upload & preview"}

@@ -2,12 +2,14 @@ import { BackButton } from "@/app/_components/back-button";
 import { PageHeader } from "@/app/_components/brand";
 import { DevOutboxBanner } from "@/app/_components/dev-outbox-banner";
 import { listCampaigns, listRecipients } from "@/lib/nps/campaigns";
+import { loadNpsHistory } from "@/lib/nps/history";
 import { NpsClient } from "./nps-client";
+import { ScoreHistory } from "./_components/score-history";
 
 export const dynamic = "force-dynamic";
 
 export default async function NpsPage() {
-  const campaigns = await listCampaigns();
+  const [campaigns, history] = await Promise.all([listCampaigns(), loadNpsHistory()]);
   const withCounts = await Promise.all(
     campaigns.map(async (campaign) => {
       const recipients = await listRecipients(campaign.id);
@@ -33,6 +35,7 @@ export default async function NpsPage() {
         subtitle="Upload a recipient list, send the survey, and track responses and reminders per quarter."
       />
       <DevOutboxBanner />
+      <ScoreHistory history={history} />
       <NpsClient campaigns={withCounts} />
     </div>
   );
