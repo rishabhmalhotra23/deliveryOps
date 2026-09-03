@@ -158,9 +158,50 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   const [openId, setOpenId] = useState<string | null>(null);
   const [configureOpen, setConfigureOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createSeed, setCreateSeed] = useState<Partial<Process> | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [sortKey, setSortKey] = useState<ColKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  // Escape dismisses the centre overlay only. In split mode the panel is part
+  // of the layout, not a modal, so Escape deliberately leaves it open.
+  useEffect(() => {
+    if (!openId || prefs.pattern !== "overlay") return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenId(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [openId, prefs.pattern]);
+
+  // One document-level handler dismisses any open toolbar popover on outside
+  // click or Escape.
+  //
+  // The exemption for a popover's own subtree is a `closest()` test, NOT
+  // stopPropagation: React's App Router attaches its delegated listeners to
+  // `document` too, and the DOM stop-propagation flag is only consulted
+  // between nodes in the path — it never suppresses a sibling listener on the
+  // same node. With stopPropagation this handler still ran and tore the menu
+  // down on mousedown, so the click never landed on the option and no filter
+  // could ever be applied.
+  useEffect(() => {
+    if (!openPopover) return;
+    function onDown(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-dops-popover]")) return;
+      setOpenPopover(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenPopover(null);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openPopover]);
 
   const view = viewBySection[section];
   const baseRows: DetailProcess[] = section === "v2" ? v2Rows : allRows;
@@ -176,6 +217,17 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     return [...filtered].sort((a, b) => sign * compareBy(sortKey, a, b));
   }, [filtered, sortKey, sortDir]);
 
+  // Keep the selection to rows the user can actually see: a bulk action must
+  // never silently hit a row hidden by the current filter or search.
+  useEffect(() => {
+    setSelected((cur) => {
+      if (cur.size === 0) return cur;
+      const visible = new Set(sorted.map((r) => r.id));
+      const next = new Set(Array.from(cur).filter((id) => visible.has(id)));
+      return next.size === cur.size ? cur : next;
+    });
+  }, [sorted]);
+
   function onSort(key: ColKey) {
     if (sortKey === key) {
       if (sortDir === "asc") setSortDir("desc");
@@ -189,20 +241,40 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     }
   }
 
-  function applyUpdate(updated: Process) {
+  // `router.refresh()` re-runs both loaders (two full-table reads), so it
+  // fires once per user action — not once per updated row, which turned a
+  // 40-row bulk patch into 40 refetches of the whole page payload.
+  function applyUpdate(updated: Process, opts: { refresh?: boolean } = {}) {
     setAllRows((cur) => cur.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
     setV2Rows((cur) => cur.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
-    router.refresh();
+    if (opts.refresh !== false) router.refresh();
   }
 
+  // Throws on failure so callers can revert their own draft state. A
+  // non-JSON body means something upstream intercepted the request (usually
+  // an expired session), which `res.json()` would otherwise turn into an
+  // opaque "Unexpected token '<'".
   async function saveField(id: string, patch: Partial<Process>): Promise<Process> {
     const res = await fetch(`/api/processes/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
+    if (!(res.headers.get("content-type") ?? "").includes("application/json")) {
+      const message =
+        res.status === 401 || res.status === 403
+          ? "Your session expired — refresh the page and log in again."
+          : `Unexpected response (HTTP ${res.status}) — try refreshing the page.`;
+      setActionError(message);
+      throw new Error(message);
+    }
     const json = await res.json();
-    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    if (!res.ok) {
+      const message = (json as { error?: string }).error || `HTTP ${res.status}`;
+      setActionError(message);
+      throw new Error(message);
+    }
+    setActionError(null);
     applyUpdate(json.process as Process);
     return json.process as Process;
   }
@@ -219,43 +291,71 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     router.refresh();
   }
 
-  async function bulkPatch(ids: string[], patch: Partial<Process>): Promise<BulkResult> {
+  // The bulk endpoint answers `{error}` with no updated/failed arrays on 400
+  // (over the id cap) and 500, so the status has to be checked before the
+  // shape is trusted.
+  async function bulkRequest(body: Record<string, unknown>): Promise<BulkResult> {
     const res = await fetch("/api/processes", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids, patch }),
+      body: JSON.stringify(body),
     });
-    const json = (await res.json()) as BulkResult;
-    for (const p of json.updated ?? []) applyUpdate(p);
-    return json;
+    const json = (await res.json().catch(() => ({}))) as Partial<BulkResult> & { error?: string };
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    return { updated: json.updated ?? [], failed: json.failed ?? [] };
   }
 
-  async function bulkArchive(ids: string[]) {
-    await fetch("/api/processes", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids, action: "delete" }),
-    });
-    removeRows(ids);
+  async function bulkPatch(ids: string[], patch: Partial<Process>): Promise<BulkResult> {
+    const result = await bulkRequest({ ids, patch });
+    for (const p of result.updated) applyUpdate(p, { refresh: false });
+    router.refresh();
+    return result;
   }
 
-  async function bulkNote(ids: string[], body: string, kind: ProcessNoteKind) {
+  // Only the rows the server actually archived are removed — on a partial
+  // failure the rest stay put rather than vanishing and then reappearing on
+  // the next refresh, which reads as data loss.
+  async function bulkArchive(ids: string[]): Promise<BulkResult> {
+    const result = await bulkRequest({ ids, action: "delete" });
+    removeRows(result.updated.map((p) => p.id));
+    return result;
+  }
+
+  async function bulkNote(ids: string[], body: string, kind: ProcessNoteKind): Promise<BulkResult> {
+    const failed: { id: string; error: string }[] = [];
+    const updated: Process[] = [];
     await Promise.all(
-      ids.map((id) =>
-        fetch(`/api/processes/${id}/notes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body, kind }),
-        })
-      )
+      ids.map(async (id) => {
+        try {
+          const res = await fetch(`/api/processes/${id}/notes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ body, kind }),
+          });
+          if (!res.ok) {
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            failed.push({ id, error: json.error || `HTTP ${res.status}` });
+          }
+        } catch (err) {
+          failed.push({ id, error: err instanceof Error ? err.message : String(err) });
+        }
+      })
     );
+    // A blocker note mirrors into processes.blockers server-side, so the row's
+    // ⚑ indicator only appears once the page data is refetched.
+    router.refresh();
+    return { updated, failed };
   }
 
   function handleCreated(process: Process) {
     setCreating(false);
-    router.refresh();
+    setCreateSeed(null);
+    // Only `allRows` gets the optimistic insert: a new process is always
+    // created with migration_stage 'not_required' (see buildCreateProcessRow),
+    // which isV2Relevant filters out of the V2 lens by definition.
     const asRow = { ...process, customer_display_name: process.account, open_suggestion_count: 0, needs_classification: false };
     setAllRows((cur) => [asRow, ...cur]);
+    router.refresh();
   }
 
   const visibleCols = openId && prefs.pattern === "split" ? NARROW_COLS : prefs.cols;
@@ -263,7 +363,12 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
 
   const openProcess = openId ? sorted.find((r) => r.id === openId) ?? baseRows.find((r) => r.id === openId) ?? null : null;
 
-  const columnCountLabel = view === "table" ? `${visibleCols.length} columns` : "Card fields";
+  const columnCountLabel =
+    view === "board"
+      ? "Card fields"
+      : narrow
+        ? `${NARROW_COLS.length} of ${prefs.cols.length} columns`
+        : `${prefs.cols.length} columns`;
 
   return (
     <div className="space-y-4">
@@ -318,7 +423,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search processes…"
-          className="rounded-md border px-3 py-1.5 text-sm bg-[var(--glass-bg)] text-[color:var(--foreground)] w-56"
+          className="dops-input px-3 py-1.5 text-sm w-56"
           style={{ borderColor: "var(--glass-border)" }}
         />
 
@@ -345,12 +450,12 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
           />
         ))}
 
-        <div className="relative">
+        <div className="relative" data-dops-popover>
           <button
             type="button"
             onClick={() => setOpenPopover((cur) => (cur === "add" ? null : "add"))}
             className="rounded-md border border-dashed px-2.5 py-1.5 text-[12.5px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
-            style={{ borderColor: "var(--glass-border)" }}
+            style={{ borderColor: "var(--brand-metal-line)" }}
           >
             + Filter
           </button>
@@ -377,12 +482,12 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
         </div>
 
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+          <div className="inline-flex shrink-0 rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
             <button
               type="button"
               onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "table" }))}
               className="px-2.5 py-1 rounded-full text-[11.5px]"
-              style={view === "table" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+              style={view === "table" ? { background: "var(--yellow-soft)" } : undefined}
             >
               Table
             </button>
@@ -390,7 +495,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               type="button"
               onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "board" }))}
               className="px-2.5 py-1 rounded-full text-[11.5px]"
-              style={view === "board" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+              style={view === "board" ? { background: "var(--yellow-soft)" } : undefined}
             >
               Board
             </button>
@@ -400,18 +505,19 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
             ⚙
           </button>
 
-          <div className="relative">
+          <div className="relative" data-dops-popover>
             <button
               type="button"
               onClick={() => setOpenPopover((cur) => (cur === "fields" ? null : "fields"))}
               className="rounded-md border px-2.5 py-1.5 text-[12.5px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
-              style={{ borderColor: "var(--glass-border)" }}
+              style={{ borderColor: "var(--brand-metal-line)" }}
             >
               {columnCountLabel}
             </button>
             {openPopover === "fields" ? (
               <FieldsMenu
                 view={view}
+                narrow={narrow}
                 cols={prefs.cols}
                 cardFields={prefs.cardFields}
                 onToggle={(key) => {
@@ -439,12 +545,12 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
 
           <div className="w-px h-5" style={{ background: "var(--glass-border)" }} />
 
-          <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+          <div className="inline-flex shrink-0 rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
             <button
               type="button"
               onClick={() => setPrefs((cur) => ({ ...cur, pattern: "split" }))}
               className="px-2.5 py-1 rounded-full text-[11.5px]"
-              style={prefs.pattern === "split" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+              style={prefs.pattern === "split" ? { background: "var(--yellow-soft)" } : undefined}
             >
               Split panel
             </button>
@@ -452,7 +558,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               type="button"
               onClick={() => setPrefs((cur) => ({ ...cur, pattern: "overlay" }))}
               className="px-2.5 py-1 rounded-full text-[11.5px]"
-              style={prefs.pattern === "overlay" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+              style={prefs.pattern === "overlay" ? { background: "var(--yellow-soft)" } : undefined}
             >
               Overlay
             </button>
@@ -466,7 +572,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
             <span
               key={k}
               className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border"
-              style={{ background: "rgba(242,255,112,0.10)", borderColor: "rgba(242,255,112,0.35)" }}
+              style={{ background: "var(--yellow-soft)", borderColor: "var(--yellow-line)" }}
             >
               {FILTER_LABEL[k]} · {optionLabel(k, v)}
               <button
@@ -490,8 +596,14 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
         </div>
       ) : null}
 
-      {/* Body */}
-      <div className={openId && prefs.pattern === "split" ? "grid gap-3" : ""} style={openId && prefs.pattern === "split" ? { gridTemplateColumns: "minmax(560px,1fr) minmax(360px,420px)" } : undefined}>
+      {/* Body. The list track is minmax(0,1fr), not minmax(560px,1fr): the
+          table owns its own horizontal scrollport, so a floor wider than the
+          viewport would blow the grid out and scroll the whole page sideways
+          instead of scrolling the table. */}
+      <div
+        className={openId && prefs.pattern === "split" ? "grid gap-3 items-start" : ""}
+        style={openId && prefs.pattern === "split" ? { gridTemplateColumns: "minmax(0,1fr) minmax(320px,420px)" } : undefined}
+      >
         <div className="min-w-0">
           {view === "table" ? (
             <ProcessTable
@@ -530,13 +642,22 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               colorMap={prefs.colorMap}
               onSave={saveField}
               onOpenDetail={setOpenId}
-              onCreateInLane={() => setCreating(true)}
+              onCreateInLane={(seed) => {
+                setCreateSeed(seed);
+                setCreating(true);
+              }}
             />
           )}
         </div>
 
         {openId && prefs.pattern === "split" && openProcess ? (
-          <div className="rounded-xl border sticky self-start" style={{ top: 132, maxHeight: "calc(100vh - 148px)", borderColor: "var(--glass-border)", background: "var(--surface-1, var(--card))" }}>
+          // flex column + overflow hidden so ProcessDetail's own `flex-1
+          // overflow-y-auto` body gets a definite height to scroll inside,
+          // instead of spilling past maxHeight.
+          <div
+            className="rounded-xl border sticky self-start flex flex-col overflow-hidden"
+            style={{ top: 132, maxHeight: "calc(100vh - 148px)", borderColor: "var(--brand-metal-line)", background: "var(--surface-1, var(--card))" }}
+          >
             <ProcessDetail
               process={openProcess}
               list={sorted}
@@ -544,6 +665,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
               onUpdated={applyUpdate}
               onArchived={(id) => removeRows([id])}
+              onDataChanged={() => router.refresh()}
               onClose={() => setOpenId(null)}
               onAddColumn={(col) => setPrefs((cur) => ({ ...cur, cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col], cardFields: cur.cardFields.includes(col) ? cur.cardFields : [...cur.cardFields, col] }))}
             />
@@ -552,14 +674,13 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
       </div>
 
       {openId && prefs.pattern === "overlay" && openProcess ? (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 grid place-items-start justify-center overflow-y-auto py-16 px-4"
-          onClick={() => setOpenId(null)}
-          onKeyDown={(e) => e.key === "Escape" && setOpenId(null)}
-        >
+        // Flex centring, not `grid place-items`: a single auto-sized grid
+        // track sizes from the child's content, so a percentage-width child
+        // collapses instead of centring at its intended 880px.
+        <div className="fixed inset-0 z-40 bg-black/50 flex justify-center overflow-y-auto py-16 px-4" onClick={() => setOpenId(null)}>
           <div
-            className="dops-rise-in w-full rounded-xl border shadow-2xl"
-            style={{ maxWidth: 880, borderColor: "var(--glass-border)", background: "var(--surface-1, var(--card))", maxHeight: "calc(100vh - 128px)" }}
+            className="dops-rise-in rounded-xl border shadow-2xl self-start flex flex-col overflow-hidden"
+            style={{ width: "min(880px, 100%)", borderColor: "var(--brand-metal-line)", background: "var(--surface-1, var(--card))", maxHeight: "calc(100vh - 128px)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <ProcessDetail
@@ -569,10 +690,23 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
               onUpdated={applyUpdate}
               onArchived={(id) => removeRows([id])}
+              onDataChanged={() => router.refresh()}
               onClose={() => setOpenId(null)}
               onAddColumn={(col) => setPrefs((cur) => ({ ...cur, cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col], cardFields: cur.cardFields.includes(col) ? cur.cardFields : [...cur.cardFields, col] }))}
             />
           </div>
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <div
+          className="dops-rise-in-centred fixed left-1/2 bottom-6 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-[12px] shadow-lg flex items-center gap-3"
+          style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--status-bad)", color: "var(--status-bad)" }}
+        >
+          {actionError}
+          <button type="button" onClick={() => setActionError(null)} className="opacity-70 hover:opacity-100">
+            ×
+          </button>
         </div>
       ) : null}
 
@@ -589,7 +723,15 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
       ) : null}
 
       {creating ? (
-        <NewProcessModal customerOptions={processesOverview.facets.customerOptions} onClose={() => setCreating(false)} onCreated={handleCreated} />
+        <NewProcessModal
+          customerOptions={processesOverview.facets.customerOptions}
+          seedLifecycle={createSeed?.lifecycle ?? undefined}
+          onClose={() => {
+            setCreating(false);
+            setCreateSeed(null);
+          }}
+          onCreated={handleCreated}
+        />
       ) : null}
     </div>
   );
@@ -613,18 +755,26 @@ function FilterChip({
   onRemove: () => void;
 }) {
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={onToggleOpen}
-        className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] text-[color:var(--foreground)]"
-        style={{ borderColor: "var(--glass-border)" }}
+    <div className="relative" data-dops-popover>
+      <div
+        className="flex items-center rounded-md border text-[12.5px] text-[color:var(--foreground)]"
+        style={{ borderColor: value ? "var(--yellow-line)" : "var(--brand-metal-line)" }}
       >
-        {FILTER_LABEL[fieldKey]} · {value ? optionLabel(fieldKey, value) : "any"}
-        <span onClick={(e) => { e.stopPropagation(); onRemove(); }} className="opacity-50 hover:opacity-100">
+        <button type="button" onClick={onToggleOpen} className="flex items-center gap-1.5 pl-2.5 py-1.5">
+          {FILTER_LABEL[fieldKey]} · {value ? optionLabel(fieldKey, value) : "any"}
+        </button>
+        {/* A sibling button, not a span inside the trigger — nested
+            interactive elements aren't focusable, so this filter could only
+            be removed with a mouse. */}
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${FILTER_LABEL[fieldKey]} filter`}
+          className="px-2 py-1.5 opacity-50 hover:opacity-100"
+        >
           ×
-        </span>
-      </button>
+        </button>
+      </div>
       {open ? (
         <div
           className="dops-rise-in absolute z-30 mt-1 w-52 max-h-64 overflow-auto rounded-md border shadow-lg py-1"
@@ -646,6 +796,7 @@ function FilterChip({
 
 function FieldsMenu({
   view,
+  narrow,
   cols,
   cardFields,
   onToggle,
@@ -653,6 +804,7 @@ function FieldsMenu({
   hasCustomWidths,
 }: {
   view: ViewMode;
+  narrow: boolean;
   cols: ColKey[];
   cardFields: ColKey[];
   onToggle: (key: ColKey) => void;
@@ -669,6 +821,12 @@ function FieldsMenu({
       <div className="px-3 py-1 text-[10.5px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
         {view === "table" ? "Show as columns" : "Show on cards"}
       </div>
+      {view === "table" && narrow ? (
+        <div className="px-3 pb-1.5 text-[10.5px] leading-snug text-[color:var(--muted-foreground)]">
+          The detail panel is open, so the table is showing its narrow set. These
+          take effect when you close the panel.
+        </div>
+      ) : null}
       <div className="max-h-64 overflow-auto">
         {universe.map((def) => (
           <button key={def.key} type="button" onClick={() => onToggle(def.key)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)]">

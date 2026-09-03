@@ -27,17 +27,21 @@ interface CustomerOption {
 
 export function NewProcessModal({
   customerOptions,
+  seedLifecycle,
   onClose,
   onCreated,
 }: {
   customerOptions: CustomerOption[];
+  /** Pre-selects the initial stage — set when creating from a board lane's
+   *  "+" so the process lands in the lane you clicked. */
+  seedLifecycle?: (typeof PROCESS_LIFECYCLES)[number];
   onClose: () => void;
   onCreated: (process: Process) => void;
 }) {
   const [processName, setProcessName] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [freeAccount, setFreeAccount] = useState("");
-  const [lifecycle, setLifecycle] = useState<(typeof PROCESS_LIFECYCLES)[number]>("backlog");
+  const [lifecycle, setLifecycle] = useState<(typeof PROCESS_LIFECYCLES)[number]>(seedLifecycle ?? "backlog");
   const [platform, setPlatform] = useState<(typeof PROCESS_PLATFORMS)[number]>("v2");
   const [fdeOwner, setFdeOwner] = useState("");
   const [busy, setBusy] = useState(false);

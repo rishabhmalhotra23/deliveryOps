@@ -191,9 +191,21 @@
  * pale fill). */
 :root {
   --yellow-ink: #5F6B00;
+  /* Light mode needs a much heavier yellow wash than dark — the same 0.14
+   * alpha that reads as a clear tint on #262626 is invisible on white. */
+  --yellow-soft: rgba(242, 255, 112, 0.45);
+  --yellow-line: rgba(163, 175, 40, 0.5);
   --field: #F7F7F5;
+  /* Light values for the surface ramp. Previously only `.dark` defined these,
+   * so light mode fell through to `var(--card)`/`var(--muted)` fallbacks —
+   * these are the mockup's actual light values, so no guessing. */
+  --surface-1: #FFFFFF;
+  --surface-2: #FAFAFA;
   --surface-3: #F1F1EF;
   --row-open-bg: #FBFFE0;
+  /* Opaque on purpose: these paint sticky table cells, and a translucent
+   * value lets horizontally-scrolled content smear through underneath. */
+  --row-selected-bg: #FEFFF2;
   --status-good: #16A34A;
   --status-warn: #C2620C;
   --status-bad: #DC2626;
@@ -230,9 +242,12 @@
    * hue" (vs. light's "deep ink on a pale fill"), same pattern `.dark
    * .tone-*` already uses below. */
   --yellow-ink: #F2FF70;
+  --yellow-soft: rgba(242, 255, 112, 0.14);
+  --yellow-line: rgba(242, 255, 112, 0.45);
   --field: rgba(255, 255, 255, 0.06);
   --surface-3: #2F2F2F;
   --row-open-bg: #3a3a1f;
+  --row-selected-bg: #2c2c22;
 
   --st-neutral-fg: #A3A3A3;  --st-neutral-bg: rgba(163,163,163,.14);  --st-neutral-bd: rgba(163,163,163,.32);
   --st-indigo-fg:  #818CF8;  --st-indigo-bg:  rgba(129,140,248,.14);  --st-indigo-bd:  rgba(129,140,248,.32);
@@ -311,6 +326,63 @@
   background-color: #1e1e28;
   color: var(--foreground);
 }
+
+/* ─── Delivery workspace controls ─────────────────────────────────────────
+ * The `.dark select / input / textarea` block above has to use !important
+ * (dark-mode browsers render native controls with light defaults that vanish
+ * on #171717) — but an !important stylesheet declaration also beats a React
+ * inline style. That silently flattened every value-driven chip and every
+ * flat table cell in this workspace to the same translucent grey, which is
+ * exactly the bug these classes exist to fix. Colours come in through inline
+ * custom properties (--chip-fg/bg/bd), so a per-value hue still works while
+ * the declaration itself is strong enough to win in dark mode.
+ * MUST stay after the `.dark select` block — order is what makes it win. */
+.dops-chip {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--chip-bg) !important;
+  color: var(--chip-fg) !important;
+  border: 1px solid var(--chip-bd) !important;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  width: 100%;
+  cursor: pointer;
+}
+.dops-chip:focus { outline: none; box-shadow: 0 0 0 2px rgba(242, 255, 112, 0.35); }
+
+/* Flat, borderless-until-hover cell control — the table's default editing
+ * affordance. Reads as plain text until you reach for it. */
+.dops-field {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent !important;
+  color: var(--foreground) !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px;
+  width: 100%;
+  padding: 1px 4px;
+}
+.dops-field:hover { border-color: var(--brand-metal-line) !important; }
+.dops-field:focus { outline: none; border-color: var(--yellow-ink) !important; }
+/* 1200ms post-save flash. Instant on/off by design — no transition here. */
+.dops-field-saved,
+.dops-chip-saved { border-color: rgba(242, 255, 112, 0.55) !important; }
+
+/* Filled field — dialogs, composers, search boxes, the roster type-ahead. */
+.dops-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--field) !important;
+  color: var(--foreground) !important;
+  border: 1px solid var(--brand-metal-line) !important;
+  border-radius: 8px;
+}
+.dops-input:focus { outline: none; border-color: var(--yellow-ink) !important; }
+.dops-input-accent { border-color: var(--yellow-ink) !important; }
+.dops-input-dashed { border-style: dashed !important; background: transparent !important; }
 
 /* ─── Report theme — scoped dark palette for the two live reports (All-Hands,
    Weekly Delivery Review). Deliberately NOT merged into `.dark` above, even
@@ -425,7 +497,7 @@
 @keyframes dopsRowIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dopsCardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes dopsRiseInCentred { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
-@keyframes dopsLaneGlow { 0%, 100% { border-color: var(--yellow-line, rgba(242,255,112,0.45)); } 50% { border-color: var(--brand-yellow); } }
+@keyframes dopsLaneGlow { 0%, 100% { border-color: var(--yellow-line, var(--yellow-line)); } 50% { border-color: var(--brand-yellow); } }
 
 .dops-row-in { animation: dopsRowIn 300ms cubic-bezier(.2,.8,.3,1) both; }
 .dops-card-in { animation: dopsCardIn 280ms cubic-bezier(.2,.8,.3,1) both; }

@@ -23,6 +23,18 @@ export function hueStyle(hue: Hue): React.CSSProperties {
   };
 }
 
+/** Chip colours for a native control (`<select>`), fed in as custom
+ *  properties so `.dops-chip`'s !important declarations can consume them —
+ *  see the comment on `.dops-chip` in app/globals.css for why a plain inline
+ *  colour loses in dark mode. */
+export function chipVars(hue: Hue): React.CSSProperties {
+  return {
+    ["--chip-fg" as string]: `var(--st-${hue}-fg)`,
+    ["--chip-bg" as string]: `var(--st-${hue}-bg)`,
+    ["--chip-bd" as string]: `var(--st-${hue}-bd)`,
+  } as React.CSSProperties;
+}
+
 export function hueDotStyle(hue: Hue): React.CSSProperties {
   return { background: `var(--st-${hue}-fg)` };
 }
@@ -48,15 +60,18 @@ const DEFAULT_HEALTH_HUE: Record<ProcessHealth, Hue> = {
   off_track: "red",
 };
 
+// Lifecycle ships uncoloured, matching the approved mockup: it renders as a
+// plain select in the table, not a chip, so a hue only ever shows up here
+// once someone assigns one in Configure → Colours.
 const DEFAULT_LIFECYCLE_HUE: Record<ProcessLifecycle, Hue> = {
   backlog: "neutral",
   upcoming: "neutral",
-  discovery: "indigo",
-  in_development: "indigo",
-  uat: "blue",
-  live: "emerald",
-  on_hold: "orange",
-  needs_triage: "red",
+  discovery: "neutral",
+  in_development: "neutral",
+  uat: "neutral",
+  live: "neutral",
+  on_hold: "neutral",
+  needs_triage: "neutral",
   cancelled: "neutral",
   churned: "neutral",
   retired: "neutral",

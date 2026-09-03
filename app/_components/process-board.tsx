@@ -18,11 +18,18 @@ import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delive
 import { resolveHue, hueStyle, hueDotStyle, type ColorMap, type Hue } from "@/lib/delivery/hues";
 import type { DetailProcess } from "@/app/_components/process-detail";
 
+// Lane dot colours, verbatim from the approved mockup's DELIVERY_LANES.
+// Stuck deliberately uses the semantic status token rather than one of the 8
+// chip hues — it isn't a per-value colour and isn't user-recolourable.
 const ACTIVE_LANE_HUE: Record<ActiveLane, Hue> = {
   pipeline: "neutral",
   building: "indigo",
-  validating: "blue",
+  validating: "amber",
   stuck: "red",
+};
+
+const ACTIVE_LANE_DOT: Partial<Record<ActiveLane, string>> = {
+  stuck: "var(--status-bad)",
 };
 
 const ACTIVE_LANE_TO_LIFECYCLE: Record<ActiveLane, ProcessLifecycle> = {
@@ -36,6 +43,8 @@ interface LaneDef {
   key: string;
   label: string;
   hue: Hue;
+  /** Explicit dot colour, when the lane isn't coloured by a chip hue. */
+  dot?: string;
 }
 
 export interface ProcessBoardProps {
@@ -50,7 +59,12 @@ export interface ProcessBoardProps {
 
 function bucketRows(mode: "active" | "v2", rows: DetailProcess[]): { lanes: LaneDef[]; byLane: Map<string, DetailProcess[]> } {
   if (mode === "active") {
-    const lanes: LaneDef[] = ACTIVE_LANES.map((l) => ({ key: l, label: ACTIVE_LANE_LABELS[l], hue: ACTIVE_LANE_HUE[l] }));
+    const lanes: LaneDef[] = ACTIVE_LANES.map((l) => ({
+      key: l,
+      label: ACTIVE_LANE_LABELS[l],
+      hue: ACTIVE_LANE_HUE[l],
+      dot: ACTIVE_LANE_DOT[l],
+    }));
     const byLane = new Map<string, DetailProcess[]>(lanes.map((l) => [l.key, []]));
     for (const row of rows) {
       const lane = laneFor(row.lifecycle, row.blocked_on);
@@ -85,16 +99,35 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
   }
 
   async function commitMove(id: string, laneKey: string) {
+    // Only ids that belong to a card actually on this board — a drop carries
+    // whatever `text/plain` the drag source set, and dragging e.g. the detail
+    // panel's permalink onto a lane would otherwise PATCH a bogus id.
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+
     if (mode === "v2") {
+      if (row.migration_stage === laneKey) return;
       await onSave(id, { migration_stage: laneKey as Process["migration_stage"] });
       return;
     }
+
     const lane = laneKey as ActiveLane;
+    // Releasing a card back into the lane it came from is a no-op, not an
+    // edit. Without this it stamped field_provenance and rewrote lifecycle.
+    if (laneFor(row.lifecycle, row.blocked_on) === lane) return;
     if (lane === "stuck") {
       setPendingStuck({ id });
       return;
     }
-    await onSave(id, { lifecycle: ACTIVE_LANE_TO_LIFECYCLE[lane], blocked_on: "none" });
+    // The lane -> lifecycle map is lossy: Pipeline holds both backlog and
+    // upcoming, Building holds both discovery and in_development. Only rewrite
+    // lifecycle when clearing blocked_on wouldn't already land the row in the
+    // target lane, so a nudge can't silently downgrade upcoming -> backlog.
+    const patch: Partial<Process> = { blocked_on: "none" };
+    if (laneFor(row.lifecycle, "none") !== lane) {
+      patch.lifecycle = ACTIVE_LANE_TO_LIFECYCLE[lane];
+    }
+    await onSave(id, patch);
   }
 
   async function saveStuckMove() {
@@ -112,11 +145,11 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
         return (
           <div
             key={lane.key}
-            className="rounded-xl border transition-[flex-basis] duration-200 shrink-0"
+            className={`rounded-xl border transition-[flex-basis] duration-200 shrink-0 ${isDragOver ? "dops-lane-glow" : ""}`}
             style={{
               flexBasis: isCollapsed ? 52 : 268,
               width: isCollapsed ? 52 : 268,
-              borderColor: isDragOver ? "var(--brand-yellow)" : "var(--glass-border)",
+              borderColor: isDragOver ? "var(--brand-yellow)" : "var(--brand-metal-line)",
               background: "var(--surface-1, var(--card))",
             }}
             onDragOver={(e) => {
@@ -138,10 +171,10 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
                 className="w-full h-full flex flex-col items-center gap-2 py-3"
                 title={`${lane.label} (${laneRows.length})`}
               >
-                <span className="w-2 h-2 rounded-full" style={hueDotStyle(lane.hue)} />
+                <span className="w-2 h-2 rounded-full" style={lane.dot ? { background: lane.dot } : hueDotStyle(lane.hue)} />
                 <span
-                  className="text-[11px] font-medium text-[color:var(--foreground)]"
-                  style={{ writingMode: "vertical-rl" }}
+                  className="text-[11px] font-medium text-[color:var(--foreground)] truncate"
+                  style={{ writingMode: "vertical-rl", maxHeight: 180 }}
                 >
                   {lane.label}
                 </span>
@@ -149,23 +182,24 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
               </button>
             ) : (
               <>
-                <div className="flex items-center gap-1.5 px-2.5 py-2 border-b" style={{ borderColor: "var(--glass-border)" }}>
+                <div className="flex items-center gap-1.5 px-2.5 py-2 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
                   <button type="button" onClick={() => toggleCollapsed(lane.key)} className="text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]">
                     ‹
                   </button>
-                  <span className="w-2 h-2 rounded-full shrink-0" style={hueDotStyle(lane.hue)} />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={lane.dot ? { background: lane.dot } : hueDotStyle(lane.hue)} />
                   <span className="text-[12.5px] font-semibold tracking-tight text-[color:var(--foreground)] truncate">{lane.label}</span>
                   <span className="text-[11px] text-[color:var(--muted-foreground)] tabular-nums ml-auto">{laneRows.length}</span>
-                  <button
-                    type="button"
-                    title="New process in this lane"
-                    onClick={() =>
-                      onCreateInLane(mode === "v2" ? { migration_stage: lane.key as Process["migration_stage"] } : { lifecycle: ACTIVE_LANE_TO_LIFECYCLE[lane.key as ActiveLane] })
-                    }
-                    className="w-5 h-5 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
-                  >
-                    +
-                  </button>
+                  {mode === "active" ? (
+                    <button
+                      type="button"
+                      title={`New process in ${lane.label}`}
+                      aria-label={`New process in ${lane.label}`}
+                      onClick={() => onCreateInLane({ lifecycle: ACTIVE_LANE_TO_LIFECYCLE[lane.key as ActiveLane] })}
+                      className="w-5 h-5 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
+                    >
+                      +
+                    </button>
+                  ) : null}
                 </div>
                 <div className="p-2 space-y-2 min-h-[80px]">
                   {laneRows.map((row, i) => (
@@ -174,7 +208,7 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
                   {isDragOver ? (
                     <div
                       className="dops-row-in rounded-lg border border-dashed px-3 py-4 text-center text-[11px]"
-                      style={{ borderColor: "rgba(242,255,112,0.55)", color: "var(--yellow-ink)" }}
+                      style={{ borderColor: "var(--yellow-line)", color: "var(--yellow-ink)" }}
                     >
                       Drop to move here
                     </div>
@@ -187,13 +221,13 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
       })}
       {pendingStuck ? (
         <div className="fixed inset-0 z-40" onClick={() => setPendingStuck(null)}>
-          <div className="dops-rise-in-centred fixed left-1/2 bottom-10 z-50 w-80 rounded-xl border shadow-2xl p-3" style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--glass-border)" }} onClick={(e) => e.stopPropagation()}>
+          <div className="dops-rise-in-centred fixed left-1/2 bottom-10 z-50 w-80 rounded-xl border shadow-2xl p-3" style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--brand-metal-line)" }} onClick={(e) => e.stopPropagation()}>
             <div className="text-[12.5px] font-medium text-[color:var(--foreground)] mb-2">What's blocking this process?</div>
             <select
               value={blockedReason}
               onChange={(e) => setBlockedReason(e.target.value as ProcessBlockedOn)}
-              className="w-full rounded-md border px-2 py-1.5 text-[13px] bg-[var(--glass-bg)] text-[color:var(--foreground)] mb-3"
-              style={{ borderColor: "var(--glass-border)" }}
+              className="dops-input w-full px-2 py-1.5 text-[13px] mb-3"
+              style={{ borderColor: "var(--brand-metal-line)" }}
             >
               {PROCESS_BLOCKED_ON.filter((v) => v !== "none").map((v) => (
                 <option key={v} value={v}>
@@ -242,9 +276,9 @@ function Card({
       onClick={() => onOpenDetail(row.id)}
       className="dops-card-in rounded-lg border p-2.5 cursor-pointer transition-transform hover:-translate-y-0.5"
       style={{
-        borderColor: "var(--glass-border)",
+        borderColor: "var(--brand-metal-line)",
         borderTopWidth: 2,
-        borderTopColor: HEALTH_BORDER[row.health ?? ""] ?? "var(--glass-border)",
+        borderTopColor: HEALTH_BORDER[row.health ?? ""] ?? "var(--brand-metal-line)",
         background: "var(--surface-2, var(--muted))",
         animationDelay: `${Math.min(index, 10) * 20}ms`,
       }}
@@ -287,7 +321,7 @@ function CardChip({ colKey, row, colorMap }: { colKey: ColKey; row: DetailProces
         </span>
       );
     case "platform":
-      return <span className="text-[10px] px-1.5 py-0.5 rounded border text-[color:var(--muted-foreground)]" style={{ borderColor: "var(--glass-border)" }}>{row.platform.toUpperCase()}</span>;
+      return <span className="text-[10px] px-1.5 py-0.5 rounded border text-[color:var(--muted-foreground)]" style={{ borderColor: "var(--brand-metal-line)" }}>{row.platform.toUpperCase()}</span>;
     case "pct":
       return row.completion_pct != null ? (
         <span className="text-[10.5px] font-mono text-[color:var(--muted-foreground)]">{Math.round(row.completion_pct * 100)}%</span>
@@ -305,7 +339,7 @@ function CardChip({ colKey, row, colorMap }: { colKey: ColKey; row: DetailProces
       return (
         <span
           className="text-[10px] px-1.5 py-0.5 rounded border"
-          style={{ borderColor: "var(--glass-border)", color: days > 30 ? "var(--status-bad)" : days > 14 ? "var(--status-warn)" : "var(--muted-foreground)" }}
+          style={{ borderColor: "var(--brand-metal-line)", color: days > 30 ? "var(--status-bad)" : days > 14 ? "var(--status-warn)" : "var(--muted-foreground)" }}
         >
           {days}d
         </span>

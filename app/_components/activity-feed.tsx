@@ -20,7 +20,17 @@ function initials(name: string): string {
   return s || base.slice(0, 2).toUpperCase();
 }
 
-export function ActivityFeed({ processId, compact = false }: { processId: string; compact?: boolean }) {
+export function ActivityFeed({
+  processId,
+  compact = false,
+  onPosted,
+}: {
+  processId: string;
+  compact?: boolean;
+  /** A blocker post mirrors into processes.blockers server-side, so the
+   *  caller needs a chance to refresh surfaces that read that column. */
+  onPosted?: () => void;
+}) {
   const [notes, setNotes] = useState<ProcessNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [kind, setKind] = useState<ProcessNoteKind>("note");
@@ -28,20 +38,25 @@ export function ActivityFeed({ processId, compact = false }: { processId: string
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/processes/${processId}/notes`);
-      const json = await res.json();
-      setNotes(json.notes ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  // Guarded against out-of-order responses when the parent switches records
+  // faster than the requests resolve.
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/processes/${processId}/notes`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (!cancelled) setNotes(json.notes ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setNotes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [processId]);
 
   async function post() {
@@ -58,6 +73,7 @@ export function ActivityFeed({ processId, compact = false }: { processId: string
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setNotes((prev) => [json.note as ProcessNote, ...prev]);
       setDraft("");
+      onPosted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -81,7 +97,7 @@ export function ActivityFeed({ processId, compact = false }: { processId: string
       className="rounded-lg border"
       style={{
         background: compact ? "transparent" : "var(--surface-1, var(--card))",
-        borderColor: compact ? "var(--glass-border)" : "var(--glass-border)",
+        borderColor: compact ? "var(--brand-metal-line)" : "var(--brand-metal-line)",
       }}
     >
       <div className="p-2.5 space-y-2">
@@ -101,17 +117,17 @@ export function ActivityFeed({ processId, compact = false }: { processId: string
                 ? "What is blocking this, and on whom?"
                 : "Add a note — what changed, what you decided, what you are waiting on."
             }
-            className="flex-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-[var(--glass-bg)] text-[color:var(--foreground)] resize-y focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-yellow)]"
-            style={{ borderColor: "var(--glass-border)" }}
+            className="dops-input flex-1 px-2.5 py-1.5 text-[13px] resize-y"
+            style={{ borderColor: "var(--brand-metal-line)" }}
           />
         </div>
         <div className="flex items-center gap-2 pl-[34px] flex-wrap">
-          <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+          <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--brand-metal-line)" }}>
             <button
               type="button"
               onClick={() => setKind("note")}
               className="px-2 py-0.5 rounded-full text-[11px]"
-              style={kind === "note" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+              style={kind === "note" ? { background: "var(--yellow-soft)" } : undefined}
             >
               Note
             </button>
@@ -119,7 +135,7 @@ export function ActivityFeed({ processId, compact = false }: { processId: string
               type="button"
               onClick={() => setKind("blocker")}
               className="px-2 py-0.5 rounded-full text-[11px]"
-              style={kind === "blocker" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+              style={kind === "blocker" ? { background: "var(--yellow-soft)" } : undefined}
             >
               Blocker
             </button>
@@ -140,14 +156,14 @@ export function ActivityFeed({ processId, compact = false }: { processId: string
         </div>
         {error ? <div className="pl-[34px] text-[11px] text-red-600">{error}</div> : null}
       </div>
-      <div className="border-t overflow-auto" style={{ borderColor: "var(--glass-border)", maxHeight: compact ? 280 : 520 }}>
+      <div className="border-t overflow-auto" style={{ borderColor: "var(--brand-metal-line)", maxHeight: compact ? 280 : 520 }}>
         {loading ? (
           <div className="p-3 text-[12px] text-[color:var(--muted-foreground)]">Loading…</div>
         ) : notes.length === 0 ? (
           <div className="p-3 text-[12px] text-[color:var(--muted-foreground)] italic">No activity yet.</div>
         ) : (
           notes.map((n) => (
-            <div key={n.id} className="flex gap-2 px-2.5 py-2 border-t first:border-t-0" style={{ borderColor: "var(--glass-border)" }}>
+            <div key={n.id} className="flex gap-2 px-2.5 py-2 border-t first:border-t-0" style={{ borderColor: "var(--brand-metal-line)" }}>
               <span
                 className="shrink-0 flex items-center justify-center rounded-full text-[10px] font-semibold"
                 style={{ width: 26, height: 26, background: "var(--surface-3, var(--muted))" }}

@@ -6,7 +6,7 @@
 // Approved design: 2026-09-03-v2-delivery-redesign.html, Delivery workspace
 // panel (bulk-select bar).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   MIGRATION_STAGES,
   MIGRATION_STAGE_LABELS,
@@ -32,37 +32,61 @@ export function BulkActionBar({
   selectedIds: string[];
   onClearSelection: () => void;
   onBulkPatch: (ids: string[], patch: Partial<Process>) => Promise<BulkResult>;
-  onBulkArchive: (ids: string[]) => Promise<void>;
-  onBulkNote: (ids: string[], body: string, kind: ProcessNoteKind) => Promise<void>;
+  onBulkArchive: (ids: string[]) => Promise<BulkResult>;
+  onBulkNote: (ids: string[], body: string, kind: ProcessNoteKind) => Promise<BulkResult>;
 }) {
   const [dialog, setDialog] = useState<null | "owner" | "stage" | "health" | "note">(null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteKind, setNoteKind] = useState<ProcessNoteKind>("note");
 
+  // The bar unmounts its own output when the selection empties, but the state
+  // lives on — without this, an abandoned "Add note" dialog (and its draft)
+  // reappeared the next time any row was selected.
+  useEffect(() => {
+    if (selectedIds.length === 0) {
+      setDialog(null);
+      setNoteDraft("");
+      setBanner(null);
+      setError(null);
+    }
+  }, [selectedIds.length]);
+
   if (selectedIds.length === 0) return null;
+
+  function report(result: BulkResult, verb: string) {
+    setBanner(
+      result.failed.length > 0
+        ? `${verb} ${result.updated.length}, ${result.failed.length} failed.`
+        : `${verb} ${result.updated.length}.`
+    );
+    setTimeout(() => setBanner(null), 3600);
+  }
 
   async function patch(p: Partial<Process>) {
     setBusy(true);
+    setError(null);
     try {
-      const result = await onBulkPatch(selectedIds, p);
-      setBanner(
-        result.failed.length > 0
-          ? `Updated ${result.updated.length}, ${result.failed.length} failed.`
-          : `Updated ${result.updated.length}.`
-      );
+      report(await onBulkPatch(selectedIds, p), "Updated");
       setDialog(null);
-      setTimeout(() => setBanner(null), 3600);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
   }
 
   async function archive() {
+    const n = selectedIds.length;
+    if (!window.confirm(`Archive ${n} process${n > 1 ? "es" : ""}? This can be undone per row.`)) return;
     setBusy(true);
+    setError(null);
     try {
-      await onBulkArchive(selectedIds);
+      report(await onBulkArchive(selectedIds), "Archived");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -71,12 +95,19 @@ export function BulkActionBar({
   async function postNote() {
     if (!noteDraft.trim()) return;
     setBusy(true);
+    setError(null);
     try {
-      await onBulkNote(selectedIds, noteDraft.trim(), noteKind);
+      const result = await onBulkNote(selectedIds, noteDraft.trim(), noteKind);
+      setBanner(
+        result.failed.length > 0
+          ? `Posted to ${selectedIds.length - result.failed.length}, ${result.failed.length} failed.`
+          : `Posted to ${selectedIds.length} process${selectedIds.length > 1 ? "es" : ""}.`
+      );
+      setTimeout(() => setBanner(null), 3600);
       setNoteDraft("");
       setDialog(null);
-      setBanner(`Posted to ${selectedIds.length} process${selectedIds.length > 1 ? "es" : ""}.`);
-      setTimeout(() => setBanner(null), 3600);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -86,13 +117,13 @@ export function BulkActionBar({
     <>
       <div
         className="dops-rise-in-centred fixed left-1/2 bottom-6 z-40 -translate-x-1/2 rounded-xl border shadow-2xl px-3 py-2 flex items-center gap-2"
-        style={{ background: "var(--surface-1, var(--card))", borderColor: "var(--glass-border)" }}
+        style={{ background: "var(--surface-1, var(--card))", borderColor: "var(--brand-metal-line)" }}
       >
         <span className="text-[12.5px] font-mono font-semibold" style={{ color: "var(--yellow-ink)" }}>
           {selectedIds.length}
         </span>
         <span className="text-[12px] text-[color:var(--muted-foreground)]">selected</span>
-        <div className="w-px h-4" style={{ background: "var(--glass-border)" }} />
+        <div className="w-px h-4" style={{ background: "var(--brand-metal-line)" }} />
         <BarButton onClick={() => setDialog("owner")}>Change owner</BarButton>
         <BarButton onClick={() => setDialog("stage")}>Change stage</BarButton>
         <BarButton onClick={() => setDialog("health")}>Change health</BarButton>
@@ -105,12 +136,16 @@ export function BulkActionBar({
         </button>
       </div>
 
-      {banner ? (
+      {banner || error ? (
         <div
           className="dops-rise-in-centred fixed left-1/2 bottom-20 z-40 -translate-x-1/2 rounded-full border px-4 py-2 text-[12px] shadow-lg"
-          style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--glass-border)", color: "var(--foreground)" }}
+          style={{
+            background: "var(--surface-3, var(--card))",
+            borderColor: error ? "var(--status-bad)" : "var(--brand-metal-line)",
+            color: error ? "var(--status-bad)" : "var(--foreground)",
+          }}
         >
-          {banner}
+          {error ?? banner}
         </div>
       ) : null}
 
@@ -171,11 +206,11 @@ export function BulkActionBar({
             {dialog === "note" ? (
               <>
                 <div className="text-sm font-semibold text-[color:var(--foreground)]">Add a note to {selectedIds.length} processes</div>
-                <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
-                  <button type="button" onClick={() => setNoteKind("note")} className="px-2 py-0.5 rounded-full text-[11px]" style={noteKind === "note" ? { background: "rgba(242,255,112,0.18)" } : undefined}>
+                <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--brand-metal-line)" }}>
+                  <button type="button" onClick={() => setNoteKind("note")} className="px-2 py-0.5 rounded-full text-[11px]" style={noteKind === "note" ? { background: "var(--yellow-soft)" } : undefined}>
                     Note
                   </button>
-                  <button type="button" onClick={() => setNoteKind("blocker")} className="px-2 py-0.5 rounded-full text-[11px]" style={noteKind === "blocker" ? { background: "rgba(242,255,112,0.18)" } : undefined}>
+                  <button type="button" onClick={() => setNoteKind("blocker")} className="px-2 py-0.5 rounded-full text-[11px]" style={noteKind === "blocker" ? { background: "var(--yellow-soft)" } : undefined}>
                     Blocker
                   </button>
                 </div>
@@ -185,8 +220,8 @@ export function BulkActionBar({
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                   placeholder="Posted identically to every selected process's activity feed."
-                  className="w-full rounded-md border px-2.5 py-1.5 text-[13px] bg-[var(--glass-bg)] text-[color:var(--foreground)]"
-                  style={{ borderColor: "var(--glass-border)" }}
+                  className="dops-input w-full px-2.5 py-1.5 text-[13px]"
+                  style={{ borderColor: "var(--brand-metal-line)" }}
                 />
               </>
             ) : null}

@@ -40,7 +40,10 @@ export function RosterPicker({
   const [results, setResults] = useState<RosterHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
 
   useEffect(() => {
     if (!editing) return;
@@ -74,9 +77,41 @@ export function RosterPicker({
     };
   }, [editing]);
 
+  // The results panel is position:fixed, measured off the input: inside a
+  // table cell an absolutely-positioned panel gets clipped by the table's
+  // own overflow:auto scrollport. Any scroll dismisses it rather than leaving
+  // it stranded away from its input.
+  useEffect(() => {
+    if (!editing) {
+      setMenuPos(null);
+      return;
+    }
+    function place() {
+      const el = inputRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = 288;
+      setMenuPos({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        top: Math.min(rect.bottom + 4, window.innerHeight - 300),
+      });
+    }
+    place();
+    function onScroll() {
+      setEditing(false);
+    }
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [editing]);
+
   async function addToRoster() {
     const display_name = query.trim() || (kind === "person" ? "New teammate" : "New partner");
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch("/api/roster", {
         method: "POST",
@@ -84,11 +119,22 @@ export function RosterPicker({
         body: JSON.stringify({ kind, display_name, roles: role ? [role] : [] }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // A 409 means the name exists but didn't match this picker's role
+      // filter — surface it instead of leaving the dropdown sitting there.
+      if (!res.ok) {
+        setError(
+          res.status === 409
+            ? `"${display_name}" is already in the roster — it may not hold the ${role ?? "required"} role.`
+            : json.error || `HTTP ${res.status}`
+        );
+        return;
+      }
       onPick(json.entry as RosterEntry);
       setJustAdded(true);
       setEditing(false);
       setQuery("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -104,7 +150,7 @@ export function RosterPicker({
           type="button"
           onClick={() => setEditing(true)}
           className={`flex items-center gap-1.5 min-w-0 flex-1 text-left rounded transition-colors hover:bg-[var(--glass-bg)] ${
-            dense ? "px-1 py-0.5" : "px-2 py-1.5 border border-transparent hover:border-[var(--glass-border)]"
+            dense ? "px-1 py-0.5" : "px-2 py-1.5 border border-transparent hover:border-[var(--brand-metal-line)]"
           }`}
         >
           {valueLabel ? (
@@ -121,6 +167,11 @@ export function RosterPicker({
             <span className="text-[color:var(--muted-foreground)]">—</span>
           )}
         </button>
+        {justAdded ? (
+          <span className="shrink-0 text-[10px]" style={{ color: "var(--yellow-ink)" }} title="Available on every process from now on">
+            added
+          </span>
+        ) : null}
         {valueLabel && onClear ? (
           <button
             type="button"
@@ -138,17 +189,29 @@ export function RosterPicker({
   return (
     <div ref={wrapRef} className="relative">
       <input
+        ref={inputRef}
         autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={kind === "person" ? 'Search people — try "karthik n"' : "Search partner organisations"}
-        className="w-full min-w-[180px] rounded-md border px-2 py-1 text-[13px] bg-[var(--glass-bg)] text-[color:var(--foreground)] focus:outline-none"
-        style={{ borderColor: "rgba(242,255,112,0.55)" }}
+        className="dops-input dops-input-accent w-full min-w-[180px] px-2 py-1 text-[13px]"
+        style={{ borderColor: "var(--yellow-line)" }}
       />
       <div
-        className="dops-rise-in absolute z-30 mt-1 w-72 max-h-72 overflow-auto rounded-md border shadow-lg"
-        style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--glass-border)" }}
+        className="dops-rise-in fixed z-50 w-72 max-h-72 overflow-auto rounded-md border shadow-lg"
+        style={{
+          left: menuPos?.left ?? 0,
+          top: menuPos?.top ?? 0,
+          visibility: menuPos ? "visible" : "hidden",
+          background: "var(--surface-3, var(--card))",
+          borderColor: "var(--brand-metal-line)",
+        }}
       >
+        {error ? (
+          <div className="px-2.5 py-2 text-[11.5px]" style={{ color: "var(--status-bad)" }}>
+            {error}
+          </div>
+        ) : null}
         {results.length === 0 && !busy ? (
           <div className="px-2.5 py-2 text-[12px] text-[color:var(--muted-foreground)]">
             Nobody in the roster matches &quot;{query}&quot;.
@@ -190,11 +253,11 @@ export function RosterPicker({
           onClick={addToRoster}
           disabled={busy}
           className="w-full flex items-center gap-2 px-2.5 py-2 text-left border-t disabled:opacity-60"
-          style={{ borderColor: "var(--glass-border)", background: "var(--field)" }}
+          style={{ borderColor: "var(--brand-metal-line)", background: "var(--field)" }}
         >
           <span
             className="shrink-0 flex items-center justify-center border border-dashed rounded text-[12px]"
-            style={{ width: 24, height: 24, borderColor: "var(--glass-border)" }}
+            style={{ width: 24, height: 24, borderColor: "var(--brand-metal-line)" }}
           >
             +
           </span>

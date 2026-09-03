@@ -8,7 +8,7 @@
 // pass (no per-user Supabase row yet) — same tradeoff the mockup itself made.
 
 import { useEffect, useState } from "react";
-import { DEFAULT_CARD_FIELDS, DEFAULT_COLS, type ColKey } from "./columns";
+import { CARD_FIELDS, COLDEFS, DEFAULT_CARD_FIELDS, DEFAULT_COLS, type ColKey } from "./columns";
 import type { ColorMap } from "./hues";
 
 export type FilterField = "stage" | "owner" | "customer" | "health" | "partner" | "platform" | "lifecycle" | "phase" | "tam";
@@ -26,6 +26,49 @@ export interface ViewPrefs {
 
 const STORAGE_KEY = "dops.viewPrefs";
 
+const KNOWN_COLS = new Set<string>(COLDEFS.map((c) => c.key));
+const KNOWN_CARD_FIELDS = new Set<string>(CARD_FIELDS);
+const KNOWN_FILTERS = new Set<string>(["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam"]);
+
+/** Anything persisted is untrusted input: a renamed column key or a
+ *  half-written value used to throw on render (`COLDEF_BY_KEY[key].narrowW`
+ *  on undefined) on every single load, with no way out but clearing storage
+ *  by hand. Unknown keys and wrong types are dropped instead. */
+function sanitize(raw: unknown): ViewPrefs {
+  const saved = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<ViewPrefs>;
+
+  const cols = Array.isArray(saved.cols) ? saved.cols.filter((c): c is ColKey => KNOWN_COLS.has(c as string)) : [];
+  const cardFields = Array.isArray(saved.cardFields)
+    ? saved.cardFields.filter((c): c is ColKey => KNOWN_CARD_FIELDS.has(c as string))
+    : [];
+  const filterKeys = Array.isArray(saved.filterKeys)
+    ? saved.filterKeys.filter((f): f is FilterField => KNOWN_FILTERS.has(f as string))
+    : [];
+
+  const colW: Record<string, number> = {};
+  if (typeof saved.colW === "object" && saved.colW !== null) {
+    for (const [k, v] of Object.entries(saved.colW)) {
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) colW[k] = v;
+    }
+  }
+
+  const colorMap: ColorMap = {};
+  if (typeof saved.colorMap === "object" && saved.colorMap !== null) {
+    for (const [k, v] of Object.entries(saved.colorMap)) {
+      if (typeof v === "string") colorMap[k] = v as ColorMap[string];
+    }
+  }
+
+  return {
+    cols: cols.length > 0 ? cols : DEFAULTS.cols,
+    colW,
+    cardFields: cardFields.length > 0 ? cardFields : DEFAULTS.cardFields,
+    colorMap,
+    filterKeys: filterKeys.length > 0 ? filterKeys : DEFAULTS.filterKeys,
+    pattern: saved.pattern === "overlay" ? "overlay" : "split",
+  };
+}
+
 const DEFAULTS: ViewPrefs = {
   cols: DEFAULT_COLS,
   colW: {},
@@ -42,7 +85,7 @@ export function useViewPrefs(): [ViewPrefs, (next: ViewPrefs | ((prev: ViewPrefs
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setPrefs({ ...DEFAULTS, ...(JSON.parse(raw) as Partial<ViewPrefs>) });
+      if (raw) setPrefs(sanitize(JSON.parse(raw)));
     } catch {
       /* corrupt or unavailable storage — fall back to defaults */
     }

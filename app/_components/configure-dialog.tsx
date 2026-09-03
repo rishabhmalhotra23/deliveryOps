@@ -72,7 +72,14 @@ export function ConfigureDialog({
     const res = await fetch("/api/roster", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: rosterKind, display_name }),
+      // Both owner pickers filter by role (`?role=fde` / `?role=tam`), so a
+      // person added with no roles would be invisible in exactly the places
+      // this tab exists to populate.
+      body: JSON.stringify({
+        kind: rosterKind,
+        display_name,
+        roles: rosterKind === "person" ? ["fde", "tam"] : [],
+      }),
     });
     const json = await res.json();
     if (res.ok) {
@@ -98,7 +105,7 @@ export function ConfigureDialog({
       >
         <div className="px-4 pt-4">
           <div className="text-sm font-semibold text-[color:var(--foreground)] mb-2">Configure</div>
-          <div className="flex gap-4 border-b" style={{ borderColor: "var(--glass-border)" }}>
+          <div className="flex gap-4 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
             {(["stages", "lifecycle", "roster", "colours"] as Tab[]).map((t) => (
               <button
                 key={t}
@@ -138,12 +145,12 @@ export function ConfigureDialog({
 
           {tab === "roster" ? (
             <div className="space-y-2">
-              <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+              <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--brand-metal-line)" }}>
                 <button
                   type="button"
                   onClick={() => setRosterKind("person")}
                   className="px-2.5 py-0.5 rounded-full text-[11px]"
-                  style={rosterKind === "person" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+                  style={rosterKind === "person" ? { background: "var(--yellow-soft)" } : undefined}
                 >
                   People
                 </button>
@@ -151,7 +158,7 @@ export function ConfigureDialog({
                   type="button"
                   onClick={() => setRosterKind("partner_org")}
                   className="px-2.5 py-0.5 rounded-full text-[11px]"
-                  style={rosterKind === "partner_org" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+                  style={rosterKind === "partner_org" ? { background: "var(--yellow-soft)" } : undefined}
                 >
                   Partners
                 </button>
@@ -177,8 +184,8 @@ export function ConfigureDialog({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder={rosterKind === "person" ? "Add a person…" : "Add a partner organisation…"}
-                  className="flex-1 rounded-md border border-dashed px-2.5 py-1.5 text-[13px] bg-transparent text-[color:var(--foreground)]"
-                  style={{ borderColor: "var(--glass-border)" }}
+                  className="dops-input dops-input-dashed flex-1 px-2.5 py-1.5 text-[13px]"
+                  style={{ borderColor: "var(--brand-metal-line)" }}
                 />
                 <button type="button" onClick={addRosterEntry} disabled={!newName.trim()} className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60">
                   Add
@@ -192,14 +199,14 @@ export function ConfigureDialog({
 
           {tab === "colours" ? (
             <div className="space-y-2">
-              <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+              <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--brand-metal-line)" }}>
                 {COLOR_FIELDS.map((f) => (
                   <button
                     key={f.key}
                     type="button"
                     onClick={() => setColorField(f.key)}
                     className="px-2.5 py-0.5 rounded-full text-[11px]"
-                    style={colorField === f.key ? { background: "rgba(242,255,112,0.18)" } : undefined}
+                    style={colorField === f.key ? { background: "var(--yellow-soft)" } : undefined}
                   >
                     {f.label}
                   </button>
@@ -244,7 +251,7 @@ export function ConfigureDialog({
           ) : null}
         </div>
 
-        <div className="px-4 py-3 border-t flex justify-end" style={{ borderColor: "var(--glass-border)" }}>
+        <div className="px-4 py-3 border-t flex justify-end" style={{ borderColor: "var(--brand-metal-line)" }}>
           <button type="button" onClick={onClose} className="btn-primary rounded-full px-4 py-1.5 text-xs font-semibold">
             Done
           </button>
