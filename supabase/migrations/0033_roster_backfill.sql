@@ -1,3 +1,7 @@
+-- ALLOW_DESTRUCTIVE: the only DROP TABLE below drops a same-script scratch
+-- temp table (normalized_names) this file creates and populates itself for
+-- its own two inserts — no persistent data is touched.
+--
 -- Conservative, reviewable backfill: mechanical case/whitespace folding plus
 -- the already-known duplicate-name pairs (from FDE_ALIASES in
 -- v2-migration-client.tsx) folded in by hand. Every other distinct string
@@ -9,9 +13,13 @@
 -- Idempotent: every insert is `on conflict do nothing`, so this is safe to
 -- re-run. It never writes the original text columns, only the new
 -- roster_entries/roster_aliases rows and the new *_id FK columns.
+--
+-- A temp table, not a CTE, holds the normalized (raw, canonical) pairs --
+-- a `with` clause is scoped to a single statement, and this needs the same
+-- set of pairs across two inserts.
 
-with normalized(raw, canonical) as (
-  select btrim(fde_owner),
+create temp table normalized_names as
+  select btrim(fde_owner) as raw,
     case lower(btrim(fde_owner))
       when 'ayush' then 'Ayush'
       when 'ayush ghosh' then 'Ayush'
@@ -21,7 +29,7 @@ with normalized(raw, canonical) as (
       when 'rishabh' then 'Rishabh'
       when 'rishabh malhotra' then 'Rishabh'
       else btrim(fde_owner)
-    end
+    end as canonical
   from processes where fde_owner is not null and btrim(fde_owner) <> ''
   union all
   select btrim(tam_owner),
@@ -48,20 +56,22 @@ with normalized(raw, canonical) as (
       when 'rishabh malhotra' then 'Rishabh'
       else btrim(engg_owner)
     end
-  from processes where engg_owner is not null and btrim(engg_owner) <> ''
-)
+  from processes where engg_owner is not null and btrim(engg_owner) <> '';
+
 insert into roster_entries (kind, display_name)
-select distinct 'person', canonical from normalized
+select distinct 'person'::roster_kind, canonical from normalized_names
 on conflict (kind, lower(display_name)) do nothing;
 
 insert into roster_aliases (alias, roster_entry_id)
 select distinct lower(n.raw), r.id
-from normalized n
+from normalized_names n
 join roster_entries r on r.kind = 'person' and lower(r.display_name) = lower(n.canonical)
 on conflict (alias) do nothing;
 
+drop table normalized_names;
+
 insert into roster_entries (kind, display_name)
-select distinct 'partner_org', btrim(partner) from processes
+select distinct 'partner_org'::roster_kind, btrim(partner) from processes
 where partner is not null and btrim(partner) <> ''
 on conflict (kind, lower(display_name)) do nothing;
 
