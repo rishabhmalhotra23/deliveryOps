@@ -10,6 +10,16 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { laneFor, viewForLifecycle, type ActiveLane } from "@/lib/import/monday-taxonomy";
 import { TABLES, MIGRATION_STAGES, MIGRATION_STAGE_LABELS, type Process, type ProcessView, type MigrationStage } from "@/lib/supabase/types";
 import { getConfirmedArrForCustomer, type OppForConfirmedArr } from "@/lib/commercials/confirmed-arr";
+import { listRosterEntries } from "@/lib/roster/store";
+import type { RosterEntry } from "@/lib/supabase/types";
+
+/** Roster-backed replacement for the old dedupSorted(map(r => r.fde_owner))
+ *  facets — those only ever listed whatever distinct strings already existed
+ *  on the table (duplicates and all). Split by kind/role so a picker can ask
+ *  for just the people who hold a given role, or just partner orgs. */
+async function loadRosterOptions(): Promise<RosterEntry[]> {
+  return listRosterEntries({ active: true });
+}
 
 // Full Process row plus fields the UI needs that aren't on the table itself:
 // the resolved customer name, the open-suggestion count, and whether this
@@ -77,6 +87,8 @@ export interface ProcessesOverview {
     partners: string[];
     /** {id, display_name} pairs, for the drawer's customer-reassignment select. */
     customerOptions: { id: string; display_name: string }[];
+    /** Roster-backed owner/partner picker options — see loadRosterOptions. */
+    rosterOptions: RosterEntry[];
   };
 }
 
@@ -136,7 +148,10 @@ async function fetchAllProcessRows(): Promise<{
 }
 
 export async function loadProcessesOverview(): Promise<ProcessesOverview> {
-  const { all, custById } = await fetchAllProcessRows();
+  const [{ all, custById }, rosterOptions] = await Promise.all([
+    fetchAllProcessRows(),
+    loadRosterOptions(),
+  ]);
 
   // ─── Lanes (Active view) ────────────────────────────────────────────────
   const lanes: Record<ActiveLane, ProcessRow[]> = {
@@ -227,6 +242,7 @@ export async function loadProcessesOverview(): Promise<ProcessesOverview> {
       tamOwners: dedupSorted(all.map((r) => r.tam_owner)),
       partners: dedupSorted(all.map((r) => r.partner)),
       customerOptions: Array.from(custById.values()).sort((a, b) => a.display_name.localeCompare(b.display_name)),
+      rosterOptions,
     },
   };
 }
@@ -338,11 +354,15 @@ export interface V2MigrationOverview {
     tamOwners: string[];
     partners: string[];
     customerOptions: { id: string; display_name: string }[];
+    rosterOptions: RosterEntry[];
   };
 }
 
 export async function loadV2MigrationOverview(): Promise<V2MigrationOverview> {
-  const { all, custById } = await fetchAllProcessRows();
+  const [{ all, custById }, rosterOptions] = await Promise.all([
+    fetchAllProcessRows(),
+    loadRosterOptions(),
+  ]);
   const relevant = all.filter(isV2Relevant);
 
   const sb = requireAdmin();
@@ -382,6 +402,7 @@ export async function loadV2MigrationOverview(): Promise<V2MigrationOverview> {
       customerOptions: Array.from(custById.values()).sort((a, b) =>
         a.display_name.localeCompare(b.display_name)
       ),
+      rosterOptions,
     },
   };
 }

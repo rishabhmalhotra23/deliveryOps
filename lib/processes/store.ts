@@ -22,7 +22,9 @@ import {
   type ProcessPlatform,
   type ProcessPhase,
   type MigrationStage,
+  type RosterKind,
 } from "@/lib/supabase/types";
+import { resolveOrCreateRosterEntry, getRosterEntry } from "@/lib/roster/store";
 
 export class ProcessNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -55,6 +57,10 @@ const EDITABLE_FIELDS: (keyof Process)[] = [
   "tam_owner",
   "engg_owner",
   "partner",
+  "fde_owner_id",
+  "tam_owner_id",
+  "engg_owner_id",
+  "partner_id",
   "value_minutes_saved_per_run",
   "value_basis",
   "blockers",
@@ -151,6 +157,49 @@ export function withDerivedFields(
   return next;
 }
 
+// ─── Roster resolution ──────────────────────────────────────────────────────
+// Every owner/partner field on `processes` has a paired text column and *_id
+// FK (0032). A caller can send either half:
+//   - the *_id (a picker that already resolved to a roster entry) -- the
+//     text column is re-derived from the entry so it never drifts, or
+//   - the plain text field (the "+ add new" free-text path, or any legacy
+//     caller/script) -- resolveOrCreateRosterEntry finds-or-creates the
+//     canonical entry, and both halves get set from its result.
+// This runs on every updateProcess() call, not just from the drawer, so the
+// roster can never silently fall out of sync going forward.
+
+const OWNER_FIELD_ROSTER: { textField: string; idField: string; kind: RosterKind }[] = [
+  { textField: "fde_owner", idField: "fde_owner_id", kind: "person" },
+  { textField: "tam_owner", idField: "tam_owner_id", kind: "person" },
+  { textField: "engg_owner", idField: "engg_owner_id", kind: "person" },
+  { textField: "partner", idField: "partner_id", kind: "partner_org" },
+];
+
+async function resolveRosterFields(update: Record<string, unknown>): Promise<void> {
+  for (const { textField, idField, kind } of OWNER_FIELD_ROSTER) {
+    if (idField in update) {
+      const id = update[idField] as string | null;
+      if (id) {
+        const entry = await getRosterEntry(id);
+        if (entry) update[textField] = entry.display_name;
+      } else {
+        update[textField] = null;
+      }
+      continue;
+    }
+    if (textField in update) {
+      const raw = update[textField] as string | null;
+      if (raw && raw.trim()) {
+        const entry = await resolveOrCreateRosterEntry(kind, raw);
+        update[idField] = entry.id;
+        update[textField] = entry.display_name;
+      } else {
+        update[idField] = null;
+      }
+    }
+  }
+}
+
 // ─── Reads ────────────────────────────────────────────────────────────────
 
 export interface ProcessFilter {
@@ -211,6 +260,7 @@ export async function updateProcess(
   let update = pickEditable(patch);
   if (Object.keys(update).length === 0) return existing;
   update = withDerivedFields(existing, update);
+  await resolveRosterFields(update);
 
   const now = new Date().toISOString();
   const provenance = { ...existing.field_provenance };
@@ -275,6 +325,9 @@ export function buildCreateProcessRow(
 export async function createProcess(input: CreateProcessInput, actor: string): Promise<Process> {
   const sb = requireAdmin();
   const row = buildCreateProcessRow(input, actor);
+  // fde_owner on creation goes through the same roster resolution as a
+  // drawer edit, so a brand-new process never bypasses the roster.
+  await resolveRosterFields(row);
   const { data, error } = await sb.from(TABLES.processes).insert(row).select("*").single();
   if (error) throw error;
   return data as Process;

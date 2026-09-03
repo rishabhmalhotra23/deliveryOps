@@ -22,6 +22,7 @@ function proc(overrides: Partial<Process>): Process {
     field_provenance: {}, source_system: null, source_item_id: null, source_raw: {},
     needs_attention: false, needs_attention_reason: null,
     deleted_at: null, deleted_by: null,
+    fde_owner_id: null, tam_owner_id: null, partner_id: null, engg_owner_id: null,
     ...overrides,
   };
 }

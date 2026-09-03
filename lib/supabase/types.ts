@@ -256,6 +256,8 @@ export const TABLES = {
   processes: "processes",
   processSuggestions: "process_suggestions",
   processNotes: "process_notes",
+  rosterEntries: "roster_entries",
+  rosterAliases: "roster_aliases",
   npsResponses: "nps_responses",
   npsCampaigns: "nps_campaigns",
   npsCampaignRecipients: "nps_campaign_recipients",
@@ -500,6 +502,13 @@ export interface Process extends Omit<MigrationProcess, "platform"> {
 
   deleted_at: string | null;
   deleted_by: string | null;
+
+  // Roster FKs (0032) -- additive alongside the text columns above, which
+  // stay as a denormalized display mirror kept in sync by updateProcess().
+  fde_owner_id: string | null;
+  tam_owner_id: string | null;
+  partner_id: string | null;
+  engg_owner_id: string | null;
 }
 
 /** Columns Postgres computes. Never send these in an insert or update. */
@@ -522,6 +531,38 @@ export interface ProcessNote {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+// ── roster_entries / roster_aliases (0032) ──────────────────────────────────
+// Canonical FDE/TAM/Partner identity. `kind` distinguishes a Kognitos
+// teammate (a person, possibly holding several roles) from an outsourcing
+// partner org, which is not a person at all. Standalone table -- not
+// processes-owned -- so customers.ae_owner/partner (the identical
+// free-text-roster problem one level up) can adopt it later.
+
+export const ROSTER_KINDS = ["person", "partner_org"] as const;
+export type RosterKind = (typeof ROSTER_KINDS)[number];
+
+export const ROSTER_ROLES = ["fde", "tam", "engg"] as const;
+export type RosterRole = (typeof ROSTER_ROLES)[number];
+
+export interface RosterEntry {
+  id: string;
+  kind: RosterKind;
+  display_name: string;
+  email: string | null;
+  roles: string[];
+  active: boolean;
+  merged_into_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RosterAlias {
+  alias: string;
+  roster_entry_id: string;
+  created_at: string;
 }
 
 // ── process_suggestions (0021) ──────────────────────────────────────────────
