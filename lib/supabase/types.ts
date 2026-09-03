@@ -258,6 +258,7 @@ export const TABLES = {
   processNotes: "process_notes",
   rosterEntries: "roster_entries",
   rosterAliases: "roster_aliases",
+  processLinearTickets: "process_linear_tickets",
   npsResponses: "nps_responses",
   npsCampaigns: "nps_campaigns",
   npsCampaignRecipients: "nps_campaign_recipients",
