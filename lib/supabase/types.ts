@@ -255,6 +255,7 @@ export const TABLES = {
   migrationProcesses: "processes",
   processes: "processes",
   processSuggestions: "process_suggestions",
+  processNotes: "process_notes",
   npsResponses: "nps_responses",
   npsCampaigns: "nps_campaigns",
   npsCampaignRecipients: "nps_campaign_recipients",
@@ -503,6 +504,25 @@ export interface Process extends Omit<MigrationProcess, "platform"> {
 
 /** Columns Postgres computes. Never send these in an insert or update. */
 export const PROCESS_GENERATED_COLUMNS = ["ttv_days"] as const;
+
+// ── process_notes (0031) ────────────────────────────────────────────────────
+// An append-only feed replacing the single overwritten notes/blockers text
+// fields — those two columns still exist and stay in sync (mirrored by
+// lib/processes/notes.ts) for every reader that hasn't moved to the feed yet.
+
+export const PROCESS_NOTE_KINDS = ["note", "blocker", "system"] as const;
+export type ProcessNoteKind = (typeof PROCESS_NOTE_KINDS)[number];
+
+export interface ProcessNote {
+  id: string;
+  process_id: string;
+  kind: ProcessNoteKind;
+  body: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
 
 // ── process_suggestions (0021) ──────────────────────────────────────────────
 // Slack, Linear, Gmail, Kognitos and the agent propose; a human accepts. Nothing

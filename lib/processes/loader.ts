@@ -286,12 +286,52 @@ export interface V2ProcessRow extends ProcessRow {
   confirmed_arr: number | null;
 }
 
+/** Per-customer migration progress — "Acme: 3 of 5 processes migrated" —
+ *  shown on the V2 Migration tab itself rather than only in the separate
+ *  All-Hands report. */
+export interface CustomerMigrationRollup {
+  customer_id: string;
+  customer_display_name: string;
+  migrated: number;
+  total: number;
+}
+
+// A row counts as migrated once it's actually live on v2 for the customer —
+// not just "in progress" (in_development/engg_pending/parity_testing/
+// customer_validation). v2_native is excluded on purpose: per isV2Relevant's
+// comment above, that stage means "built directly on v2, nothing migrated,"
+// so it carries no migration-progress signal even when it clears the
+// evidence bar for being shown at all.
+const MIGRATED_STAGES = new Set<MigrationStage>(["live_on_v2", "migrated_pending_commercial"]);
+
+/** Exported for unit testing — pure aggregation over already-loaded rows. */
+export function buildCustomerRollup(rows: V2ProcessRow[]): CustomerMigrationRollup[] {
+  const byCustomer = new Map<string, CustomerMigrationRollup>();
+  for (const row of rows) {
+    if (!row.customer_id) continue;
+    let entry = byCustomer.get(row.customer_id);
+    if (!entry) {
+      entry = {
+        customer_id: row.customer_id,
+        customer_display_name: row.customer_display_name,
+        migrated: 0,
+        total: 0,
+      };
+      byCustomer.set(row.customer_id, entry);
+    }
+    entry.total++;
+    if (MIGRATED_STAGES.has(row.migration_stage)) entry.migrated++;
+  }
+  return Array.from(byCustomer.values()).sort((a, b) => b.total - a.total);
+}
+
 export interface V2MigrationOverview {
   rows: V2ProcessRow[];
   counts: {
     total: number;
     byStage: Record<MigrationStage, number>;
   };
+  customerRollup: CustomerMigrationRollup[];
   facets: {
     customers: string[];
     fdeOwners: string[];
@@ -333,6 +373,7 @@ export async function loadV2MigrationOverview(): Promise<V2MigrationOverview> {
   return {
     rows,
     counts: { total: rows.length, byStage },
+    customerRollup: buildCustomerRollup(rows),
     facets: {
       customers: dedupSorted(rows.map((r) => r.customer_display_name)),
       fdeOwners: dedupSorted(rows.map((r) => r.fde_owner)),
