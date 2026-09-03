@@ -496,6 +496,9 @@ export interface Process extends Omit<MigrationProcess, "platform"> {
 
   needs_attention: boolean;
   needs_attention_reason: string | null;
+
+  deleted_at: string | null;
+  deleted_by: string | null;
 }
 
 /** Columns Postgres computes. Never send these in an insert or update. */

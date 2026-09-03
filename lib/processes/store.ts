@@ -158,6 +158,9 @@ export interface ProcessFilter {
   customer_id?: string;
   customer_key?: string;
   needs_attention?: boolean;
+  /** Defaults to false: deleted rows are hidden everywhere unless a caller
+   *  explicitly asks for them (e.g. a future "Deleted" admin view). */
+  includeDeleted?: boolean;
 }
 
 const LIFECYCLES_BY_VIEW: Record<ProcessView, string[]> = {
@@ -169,6 +172,7 @@ const LIFECYCLES_BY_VIEW: Record<ProcessView, string[]> = {
 export async function listProcesses(filter: ProcessFilter = {}): Promise<Process[]> {
   const sb = requireAdmin();
   let q = sb.from(TABLES.processes).select("*");
+  if (!filter.includeDeleted) q = q.is("deleted_at", null);
   if (filter.view) q = q.in("lifecycle", LIFECYCLES_BY_VIEW[filter.view]);
   if (filter.customer_id) q = q.eq("customer_id", filter.customer_id);
   if (filter.customer_key) q = q.eq("customer_key", filter.customer_key);
@@ -181,13 +185,14 @@ export async function listProcesses(filter: ProcessFilter = {}): Promise<Process
   return (data as Process[]) ?? [];
 }
 
-export async function getProcess(id: string): Promise<Process | null> {
+export async function getProcess(
+  id: string,
+  opts: { includeDeleted?: boolean } = {}
+): Promise<Process | null> {
   const sb = requireAdmin();
-  const { data, error } = await sb
-    .from(TABLES.processes)
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  let q = sb.from(TABLES.processes).select("*").eq("id", id);
+  if (!opts.includeDeleted) q = q.is("deleted_at", null);
+  const { data, error } = await q.maybeSingle();
   if (error) throw error;
   return (data as Process | null) ?? null;
 }
@@ -273,6 +278,103 @@ export async function createProcess(input: CreateProcessInput, actor: string): P
   const { data, error } = await sb.from(TABLES.processes).insert(row).select("*").single();
   if (error) throw error;
   return data as Process;
+}
+
+// Soft-delete: same "not an edit" distinction as markReviewed — removing a
+// bad row doesn't touch field_provenance, only deleted_at/deleted_by.
+
+export async function deleteProcess(id: string, actor: string): Promise<Process> {
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.processes)
+    .update({ deleted_at: new Date().toISOString(), deleted_by: actor })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") throw new ProcessNotFoundError(id);
+    throw error;
+  }
+  return data as Process;
+}
+
+export async function restoreProcess(id: string, actor: string): Promise<Process> {
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.processes)
+    .update({ deleted_at: null, deleted_by: null, updated_by: actor })
+    .eq("id", id)
+    .not("deleted_at", "is", null)
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") throw new ProcessNotFoundError(id);
+    throw error;
+  }
+  return data as Process;
+}
+
+// ─── Bulk writes ────────────────────────────────────────────────────────────
+// Loop the single-row primitives above rather than a multi-row update, so
+// bulk behavior (derivation, provenance stamping, "row already deleted")
+// never diverges from what a single-row edit does. Partial failure is
+// expected — a bad id in a 40-row selection shouldn't fail the other 39.
+
+export interface BulkResult<T> {
+  updated: T[];
+  failed: { id: string; error: string }[];
+}
+
+/** Exported for unit testing — the partial-failure aggregation is pure given
+ *  any async `fn`, so it's tested directly rather than through a live
+ *  Supabase call. */
+export async function bulkApply<T>(
+  ids: string[],
+  fn: (id: string) => Promise<T>
+): Promise<BulkResult<T>> {
+  const updated: T[] = [];
+  const failed: { id: string; error: string }[] = [];
+  for (const id of ids) {
+    try {
+      updated.push(await fn(id));
+    } catch (err) {
+      failed.push({ id, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { updated, failed };
+}
+
+// Bulk requests are capped so one request can't fan out into hundreds of
+// sequential Supabase round trips.
+export const MAX_BULK_IDS = 200;
+
+export class TooManyIdsError extends Error {
+  constructor(count: number) {
+    super(`Bulk requests are capped at ${MAX_BULK_IDS} ids, got ${count}.`);
+    this.name = "TooManyIdsError";
+  }
+}
+
+function assertBulkSize(ids: string[]): void {
+  if (ids.length > MAX_BULK_IDS) throw new TooManyIdsError(ids.length);
+}
+
+export async function bulkUpdateProcesses(
+  ids: string[],
+  patch: Partial<Process>,
+  actor: string
+): Promise<BulkResult<Process>> {
+  assertBulkSize(ids);
+  return bulkApply(ids, (id) => updateProcess(id, patch, actor));
+}
+
+export async function bulkDeleteProcesses(
+  ids: string[],
+  actor: string
+): Promise<BulkResult<Process>> {
+  assertBulkSize(ids);
+  return bulkApply(ids, (id) => deleteProcess(id, actor));
 }
 
 export async function markReviewed(id: string, actor: string): Promise<Process> {

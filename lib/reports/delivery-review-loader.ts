@@ -37,7 +37,7 @@ export async function loadDeliveryReview(req: RangeRequest = {}): Promise<Delive
     // 3). buildDeliveryReview() re-sorts by status-rank then name for display,
     // but that re-sort should operate on a stable base order, not raw
     // whatever-Postgres-felt-like-that-day order.
-    sb.from(TABLES.processes).select("*").order("id", { ascending: true }),
+    sb.from(TABLES.processes).select("*").is("deleted_at", null).order("id", { ascending: true }),
     sb.from("customers").select("id, key, display_name").is("deleted_at", null),
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed, stage_name"),
   ]);

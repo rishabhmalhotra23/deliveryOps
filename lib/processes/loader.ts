@@ -107,7 +107,7 @@ async function fetchAllProcessRows(): Promise<{
   const sb = requireAdmin();
 
   const [processesRes, customersRes, suggestionsRes] = await Promise.all([
-    sb.from(TABLES.processes).select("*"),
+    sb.from(TABLES.processes).select("*").is("deleted_at", null),
     sb.from("customers").select("id, display_name").is("deleted_at", null),
     sb.from(TABLES.processSuggestions).select("process_id").eq("status", "open"),
   ]);

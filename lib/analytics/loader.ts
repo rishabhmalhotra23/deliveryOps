@@ -182,7 +182,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       .select("id, key, display_name, custom_category, lifecycle_group, ae_owner, partner")
       .is("deleted_at", null),
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
-    sb.from(TABLES.processes).select("*"),
+    sb.from(TABLES.processes).select("*").is("deleted_at", null),
     sb.from(TABLES.npsResponses).select("*"),
     sb.from("sf_accounts").select("customer_id, annual_revenue"),
     sb

@@ -129,7 +129,7 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
     // Pull every process for this customer — one row per process, no more
     // historical per-FY-board duplication, so no ordering/filter games needed
     // beyond the go-live sort applied client-side below.
-    sb.from(TABLES.processes).select("*").eq("customer_id", customerId),
+    sb.from(TABLES.processes).select("*").eq("customer_id", customerId).is("deleted_at", null),
     sb.from(TABLES.npsResponses).select("*").eq("customer_id", customerId),
   ]);
 

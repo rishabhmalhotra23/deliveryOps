@@ -4,7 +4,16 @@
 // lifecycle/platform defaults) are testable without a live Supabase client.
 
 import { describe, it, expect } from "vitest";
-import { buildCreateProcessRow, withDerivedFields, InvalidProcessInputError } from "@/lib/processes/store";
+import {
+  buildCreateProcessRow,
+  withDerivedFields,
+  InvalidProcessInputError,
+  bulkApply,
+  bulkUpdateProcesses,
+  bulkDeleteProcesses,
+  TooManyIdsError,
+  MAX_BULK_IDS,
+} from "@/lib/processes/store";
 import type { Process, ProcessLifecycle, ProcessPhase } from "@/lib/supabase/types";
 
 function fakeProcess(overrides: Partial<Process> = {}): Process {
@@ -131,5 +140,42 @@ describe("withDerivedFields", () => {
     const existing = fakeProcess({ lifecycle: "discovery", phase: "m1_discovery" as ProcessPhase });
     const next = withDerivedFields(existing, { lifecycle: "on_hold" });
     expect(next.phase).toBeUndefined();
+  });
+});
+
+describe("bulkApply", () => {
+  it("collects successes and continues past a failing id", async () => {
+    const result = await bulkApply(["a", "b", "c"], async (id) => {
+      if (id === "b") throw new Error("boom");
+      return `ok-${id}`;
+    });
+    expect(result.updated).toEqual(["ok-a", "ok-c"]);
+    expect(result.failed).toEqual([{ id: "b", error: "boom" }]);
+  });
+
+  it("returns everything as updated when nothing fails", async () => {
+    const result = await bulkApply(["a", "b"], async (id) => id.toUpperCase());
+    expect(result.updated).toEqual(["A", "B"]);
+    expect(result.failed).toEqual([]);
+  });
+
+  it("stringifies a non-Error throw", async () => {
+    const result = await bulkApply(["a"], async () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "not an Error object";
+    });
+    expect(result.failed).toEqual([{ id: "a", error: "not an Error object" }]);
+  });
+});
+
+describe("bulk request size cap", () => {
+  it("rejects a bulk update over the cap before touching Supabase", async () => {
+    const ids = Array.from({ length: MAX_BULK_IDS + 1 }, (_, i) => `id-${i}`);
+    await expect(bulkUpdateProcesses(ids, {}, "actor")).rejects.toThrow(TooManyIdsError);
+  });
+
+  it("rejects a bulk delete over the cap before touching Supabase", async () => {
+    const ids = Array.from({ length: MAX_BULK_IDS + 1 }, (_, i) => `id-${i}`);
+    await expect(bulkDeleteProcesses(ids, "actor")).rejects.toThrow(TooManyIdsError);
   });
 });

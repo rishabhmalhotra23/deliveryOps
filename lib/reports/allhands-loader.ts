@@ -188,7 +188,7 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
     // Postgres's physical row order.
     sb.from(TABLES.customers).select("id, key, display_name, custom_category, lifecycle_group").is("deleted_at", null).order("key"),
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
-    sb.from(TABLES.processes).select("*"),
+    sb.from(TABLES.processes).select("*").is("deleted_at", null),
   ]);
   // Surface read failures instead of silently rendering a misleadingly-empty
   // report (0 live processes, no renewal spotlight, etc.) — same convention

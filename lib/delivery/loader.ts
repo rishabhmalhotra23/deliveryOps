@@ -100,7 +100,11 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
   const sb = requireAdmin();
 
   const [processesRes, customers] = await Promise.all([
-    sb.from(TABLES.processes).select("*").order("go_live_date", { ascending: false, nullsFirst: false }),
+    sb
+      .from(TABLES.processes)
+      .select("*")
+      .is("deleted_at", null)
+      .order("go_live_date", { ascending: false, nullsFirst: false }),
     sb
       .from("customers")
       .select("id, key, display_name, ae_owner, partner, custom_category, lifecycle_group")

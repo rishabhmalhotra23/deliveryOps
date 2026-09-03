@@ -30,7 +30,7 @@ const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
  */
 export async function loadFdesByCustomerId(): Promise<Map<string, string[]>> {
   const sb = requireAdmin();
-  const { data } = await sb.from(TABLES.processes).select("*");
+  const { data } = await sb.from(TABLES.processes).select("*").is("deleted_at", null);
 
   const out = new Map<string, Set<string>>();
   for (const p of (data as Process[] | null) ?? []) {
@@ -268,7 +268,7 @@ export interface ActiveProjectRow {
 export async function loadActiveProjects(): Promise<ActiveProjectRow[]> {
   const sb = requireAdmin();
   const [processesRes, customers] = await Promise.all([
-    sb.from(TABLES.processes).select("*"),
+    sb.from(TABLES.processes).select("*").is("deleted_at", null),
     listCustomers(),
   ]);
   const custById = new Map(customers.map((c) => [c.id, c]));
