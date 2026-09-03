@@ -36,10 +36,12 @@ export class ProcessNotFoundError extends Error {
 export class InvalidProcessInputError extends Error {}
 
 // Fields the drawer may set. Deliberately excludes identity (account,
-// process_name, customer_id/key), generated columns (ttv_days), import
-// provenance (source_*), and needs_attention — those are import-time or
-// creation-time, not drawer edits.
+// customer_key), generated columns (ttv_days), import provenance (source_*),
+// and needs_attention — those are import-time or creation-time, not drawer
+// edits. process_name and customer_id are editable — a mistyped name or a
+// mismatched customer at import time both need a way to be fixed in place.
 const EDITABLE_FIELDS: (keyof Process)[] = [
+  "process_name",
   "customer_id",
   "lifecycle",
   "phase",

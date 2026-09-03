@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
-  listRosterEntries,
+  searchRosterEntries,
   createRosterEntry,
   InvalidRosterInputError,
   type CreateRosterEntryInput,
@@ -11,7 +11,8 @@ import type { RosterKind } from "@/lib/supabase/types";
 export const dynamic = "force-dynamic";
 
 // GET /api/roster?kind=person&role=fde&q=kar — autocomplete/search, backs
-// the owner/partner pickers.
+// the owner/partner pickers. Matches on alias as well as display name (see
+// searchRosterEntries) so old spellings keep resolving.
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const kind = url.searchParams.get("kind") as RosterKind | null;
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
   const q = url.searchParams.get("q") ?? undefined;
 
   try {
-    const entries = await listRosterEntries({ kind: kind ?? undefined, role, q, active: true });
+    const entries = await searchRosterEntries({ kind: kind ?? undefined, role, q, active: true });
     return NextResponse.json({ entries });
   } catch (err) {
     return NextResponse.json(

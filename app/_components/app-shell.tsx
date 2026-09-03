@@ -16,8 +16,7 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" || p === "/" },
   { href: "/customers", label: "Customers", match: (p) => p.startsWith("/customers") },
-  { href: "/delivery", label: "Delivery", match: (p) => p.startsWith("/delivery") },
-  { href: "/v2-migration", label: "V2 Migration", match: (p) => p.startsWith("/v2-migration") },
+  { href: "/delivery", label: "Delivery", match: (p) => p.startsWith("/delivery") || p.startsWith("/v2-migration") },
   { href: "/reports", label: "Reports", match: (p) => p.startsWith("/reports") },
   { href: "/nps", label: "NPS", match: (p) => p.startsWith("/nps") && !p.startsWith("/nps/respond") },
   { href: "/operations", label: "Operations", match: (p) => p.startsWith("/operations") },

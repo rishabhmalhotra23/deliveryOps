@@ -42,6 +42,54 @@ export async function listRosterEntries(filter: RosterFilter = {}): Promise<Rost
   return (data as RosterEntry[]) ?? [];
 }
 
+export interface RosterSearchHit extends RosterEntry {
+  /** Set when this hit came from an alias match rather than the display name
+   *  itself — the Roster Picker surfaces this as `matched "alias"` so a pick
+   *  is never a silent surprise. */
+  matched_alias?: string;
+}
+
+/** Search variant of listRosterEntries used by the Roster Picker's
+ *  type-ahead: also matches on `roster_aliases`, so old spellings ("karthik
+ *  n") keep resolving to the canonical entry instead of only exact-name
+ *  substring matches. Falls back to plain listRosterEntries behaviour when
+ *  `q` is empty. */
+export async function searchRosterEntries(filter: RosterFilter = {}): Promise<RosterSearchHit[]> {
+  const query = filter.q?.trim();
+  if (!query) return listRosterEntries(filter);
+
+  const sb = requireAdmin();
+  let nameQuery = sb.from(TABLES.rosterEntries).select("*").is("merged_into_id", null).ilike("display_name", `%${query}%`);
+  if (filter.kind) nameQuery = nameQuery.eq("kind", filter.kind);
+  if (typeof filter.active === "boolean") nameQuery = nameQuery.eq("active", filter.active);
+  if (filter.role) nameQuery = nameQuery.contains("roles", [filter.role]);
+  const { data: nameData, error: nameError } = await nameQuery.order("display_name", { ascending: true });
+  if (nameError) throw nameError;
+  const nameHits = (nameData as RosterEntry[]) ?? [];
+  const seen = new Set(nameHits.map((e) => e.id));
+
+  const { data: aliasRows, error: aliasError } = await sb
+    .from(TABLES.rosterAliases)
+    .select("alias, roster_entry_id")
+    .ilike("alias", `%${query}%`)
+    .limit(10);
+  if (aliasError) throw aliasError;
+
+  const hits: RosterSearchHit[] = [...nameHits];
+  for (const row of (aliasRows as { alias: string; roster_entry_id: string }[] | null) ?? []) {
+    if (seen.has(row.roster_entry_id)) continue;
+    const entry = await getRosterEntry(row.roster_entry_id);
+    if (!entry) continue;
+    if (entry.merged_into_id) continue;
+    if (filter.kind && entry.kind !== filter.kind) continue;
+    if (typeof filter.active === "boolean" && entry.active !== filter.active) continue;
+    if (filter.role && !entry.roles.includes(filter.role)) continue;
+    seen.add(entry.id);
+    hits.push({ ...entry, matched_alias: row.alias });
+  }
+  return hits.sort((a, b) => a.display_name.localeCompare(b.display_name));
+}
+
 export interface CreateRosterEntryInput {
   kind: RosterKind;
   display_name: string;

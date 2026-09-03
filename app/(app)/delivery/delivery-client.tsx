@@ -1,653 +1,691 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useTheme } from "next-themes";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Legend, AreaChart, Area,
-} from "recharts";
-import type { ProcessesOverview, ProcessRow } from "@/lib/processes/loader";
-import { ACTIVE_LANES, ACTIVE_LANE_LABELS, viewForLifecycle } from "@/lib/processes/loader";
-import { ProcessDrawer } from "@/app/_components/process-drawer";
+// The merged Delivery workspace. V2 Migration is no longer its own page — it's
+// a second section here ("Active work" / "V2 migration") over the same
+// `processes` rows, switchable between table and board. Row click no longer
+// opens the detail panel (cells edit in place); the panel opens deliberately
+// from a row's ⤢ button, mounted either as a 420px sticky split column or an
+// 880px centre overlay depending on the toolbar toggle.
+// Approved design: 2026-09-03-v2-delivery-redesign.html (CLAUDE-CODE-PROMPT.md).
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { ProcessesOverview, ProcessRow, V2MigrationOverview, V2ProcessRow } from "@/lib/processes/loader";
+import type { Process, ProcessNoteKind } from "@/lib/supabase/types";
+import { MIGRATION_STAGE_LABELS } from "@/lib/supabase/types";
 import { PageHeader } from "@/app/_components/brand";
-import type { Process } from "@/lib/supabase/types";
-import { DeliveryStatsRow } from "./_components/delivery-stats-row";
+import { ProcessTable } from "@/app/_components/process-table";
+import { ProcessBoard } from "@/app/_components/process-board";
+import { ProcessDetail, type DetailProcess } from "@/app/_components/process-detail";
+import { ConfigureDialog } from "@/app/_components/configure-dialog";
+import { BulkActionBar, type BulkResult } from "@/app/_components/bulk-action-bar";
 import { NewProcessModal } from "./_components/new-process-modal";
+import { useViewPrefs, type FilterField } from "@/lib/delivery/prefs";
+import { COLDEFS, NARROW_COLS, CARD_FIELDS, type ColKey } from "@/lib/delivery/columns";
 
-interface DeliveryClientProps {
-  overview: ProcessesOverview;
-}
+type Section = "active" | "v2";
+type ViewMode = "table" | "board";
 
-const TABS = ["Active Work", "Delivered", "Archive", "All", "Q-on-Q"] as const;
-type Tab = (typeof TABS)[number];
-
-// ── Chart theme ───────────────────────────────────────────────────────────────
-function useChartTheme() {
-  const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const dark = mounted && resolvedTheme === "dark";
-  return {
-    grid:   dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
-    axis:   dark ? "#A3A3A3" : "#9ca3af",
-    tooltipStyle: {
-      background: dark ? "#262626" : "#ffffff",
-      border:     dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e5e7eb",
-      borderRadius: 10,
-      padding: "8px 12px",
-      fontSize: 12,
-      color: dark ? "#FAFAFA" : "#18181b",
-      boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.12)",
-    },
-  };
-}
-
-const QOQ_COLORS = {
-  delivered: "#34d399",
-  in_flight: "#818cf8",
-  at_risk:   "#fb923c",
-  inactive:  "#6b7280",
+const FILTER_LABEL: Record<FilterField, string> = {
+  stage: "Stage",
+  owner: "FDE",
+  customer: "Customer",
+  health: "Health",
+  partner: "Partner",
+  platform: "Platform",
+  lifecycle: "Lifecycle",
+  phase: "Phase",
+  tam: "TAM",
 };
 
-function label(s: string | null): string {
-  return s ? s.replace(/_/g, " ") : "—";
+const ALL_FILTER_FIELDS: FilterField[] = ["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam"];
+
+function matchesFilters(row: DetailProcess, values: Partial<Record<FilterField, string>>): boolean {
+  if (values.stage && row.migration_stage !== values.stage) return false;
+  if (values.owner && row.fde_owner !== values.owner) return false;
+  if (values.customer && row.customer_display_name !== values.customer) return false;
+  if (values.health && row.health !== values.health) return false;
+  if (values.partner && row.partner !== values.partner) return false;
+  if (values.platform && row.platform !== values.platform) return false;
+  if (values.lifecycle && row.lifecycle !== values.lifecycle) return false;
+  if (values.phase && row.phase !== values.phase) return false;
+  if (values.tam && row.tam_owner !== values.tam) return false;
+  return true;
 }
 
-function formatQuarterTick(q: unknown): string {
-  const s = typeof q === "string" ? q : String(q ?? "");
-  const m = s.match(/^(\d{4})\s+Q([1-4])$/);
-  if (!m) return s;
-  return `Q${m[2]}'${m[1].slice(2)}`;
+function matchesSearch(row: DetailProcess, q: string): boolean {
+  if (!q) return true;
+  const hay = [row.process_name, row.customer_display_name, row.fde_owner ?? "", row.partner ?? "", row.blockers ?? "", row.notes ?? "", ...row.linear_ticket_ids]
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
 }
 
-function TabButton({ label: l, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 text-sm tracking-tight font-medium rounded-md transition-all ${
-        active
-          ? "bg-[rgba(242,255,112,0.12)] text-[color:var(--foreground)] border border-[rgba(242,255,112,0.25)]"
-          : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
-      }`}
-    >
-      {l}
-    </button>
-  );
+function compareBy(key: ColKey, a: DetailProcess, b: DetailProcess): number {
+  switch (key) {
+    case "customer":
+      return a.customer_display_name.localeCompare(b.customer_display_name);
+    case "stage":
+      return a.migration_stage.localeCompare(b.migration_stage);
+    case "lifecycle":
+      return a.lifecycle.localeCompare(b.lifecycle);
+    case "phase":
+      return (a.phase ?? "").localeCompare(b.phase ?? "");
+    case "owner":
+      return (a.fde_owner ?? "").localeCompare(b.fde_owner ?? "");
+    case "tam":
+      return (a.tam_owner ?? "").localeCompare(b.tam_owner ?? "");
+    case "partner":
+      return (a.partner ?? "").localeCompare(b.partner ?? "");
+    case "health":
+      return (a.health ?? "").localeCompare(b.health ?? "");
+    case "platform":
+      return a.platform.localeCompare(b.platform);
+    case "pct":
+      return (a.completion_pct ?? -1) - (b.completion_pct ?? -1);
+    case "arr":
+      return (a.arr ?? -1) - (b.arr ?? -1);
+    case "effort":
+      return (a.total_effort_hours ?? -1) - (b.total_effort_hours ?? -1);
+    case "kickoff":
+      return (a.kickoff_date ?? "").localeCompare(b.kickoff_date ?? "");
+    case "golive":
+      return (a.go_live_date ?? "").localeCompare(b.go_live_date ?? "");
+    case "tickets":
+      return a.linear_ticket_ids.length - b.linear_ticket_ids.length;
+    case "stale":
+      return a.updated_at.localeCompare(b.updated_at);
+    default:
+      return 0;
+  }
 }
 
-function Flags({ row }: { row: ProcessRow }) {
-  return (
-    <>
-      {row.needs_classification ? (
-        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25">
-          needs classification
-        </span>
-      ) : null}
-      {row.needs_attention ? (
-        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25">
-          needs attention
-        </span>
-      ) : null}
-      {row.open_suggestion_count > 0 ? (
-        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-[rgba(242,255,112,0.18)] border-[rgba(242,255,112,0.4)]">
-          {row.open_suggestion_count} suggestion{row.open_suggestion_count > 1 ? "s" : ""}
-        </span>
-      ) : null}
-    </>
-  );
+function optionsForField(field: FilterField, section: Section, rows: DetailProcess[], processesOverview: ProcessesOverview, v2Overview: V2MigrationOverview): string[] {
+  const facets = section === "v2" ? v2Overview.facets : processesOverview.facets;
+  switch (field) {
+    case "customer":
+      return facets.customers;
+    case "owner":
+      return facets.fdeOwners;
+    case "tam":
+      return facets.tamOwners;
+    case "partner":
+      return facets.partners;
+    case "stage":
+      return Array.from(new Set(rows.map((r) => r.migration_stage))).sort();
+    case "health":
+      return Array.from(new Set(rows.map((r) => r.health).filter((v): v is NonNullable<typeof v> => !!v))).sort();
+    case "lifecycle":
+      return Array.from(new Set(rows.map((r) => r.lifecycle))).sort();
+    case "phase":
+      return Array.from(new Set(rows.map((r) => r.phase).filter((v): v is NonNullable<typeof v> => !!v))).sort();
+    case "platform":
+      return Array.from(new Set(rows.map((r) => r.platform))).sort();
+    default:
+      return [];
+  }
 }
 
-// ── Main client component ─────────────────────────────────────────────────────
+function optionLabel(field: FilterField, value: string): string {
+  if (field === "stage") return MIGRATION_STAGE_LABELS[value as keyof typeof MIGRATION_STAGE_LABELS] ?? value;
+  if (field === "platform") return value.toUpperCase();
+  return value.replace(/_/g, " ");
+}
 
-export function DeliveryClient({ overview }: DeliveryClientProps) {
+interface DeliveryClientProps {
+  processesOverview: ProcessesOverview;
+  v2Overview: V2MigrationOverview;
+}
+
+export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClientProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("Active Work");
-  const [customer, setCustomer] = useState("");
-  const [fde, setFde] = useState("");
-  const [partner, setPartner] = useState("");
+  const searchParams = useSearchParams();
+
+  const [section, setSection] = useState<Section>(searchParams.get("section") === "v2" ? "v2" : "active");
+  const [viewBySection, setViewBySection] = useState<Record<Section, ViewMode>>({ active: "board", v2: "table" });
+  const [prefs, setPrefs] = useViewPrefs();
+
+  const [allRows, setAllRows] = useState<ProcessRow[]>(processesOverview.all);
+  const [v2Rows, setV2Rows] = useState<V2ProcessRow[]>(v2Overview.rows);
+  useEffect(() => setAllRows(processesOverview.all), [processesOverview]);
+  useEffect(() => setV2Rows(v2Overview.rows), [v2Overview]);
+
   const [search, setSearch] = useState("");
-  const [selectedProcess, setSelectedProcess] = useState<ProcessRow | null>(null);
+  const [filterValues, setFilterValues] = useState<Partial<Record<FilterField, string>>>({});
+  const [openPopover, setOpenPopover] = useState<FilterField | "add" | "fields" | null>(null);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [configureOpen, setConfigureOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const [sortKey, setSortKey] = useState<ColKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const view = viewBySection[section];
+  const baseRows: DetailProcess[] = section === "v2" ? v2Rows : allRows;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return baseRows.filter((r) => matchesSearch(r, q) && matchesFilters(r, filterValues));
+  }, [baseRows, search, filterValues]);
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered;
+    const sign = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => sign * compareBy(sortKey, a, b));
+  }, [filtered, sortKey, sortDir]);
+
+  function onSort(key: ColKey) {
+    if (sortKey === key) {
+      if (sortDir === "asc") setSortDir("desc");
+      else {
+        setSortKey(null);
+        setSortDir("asc");
+      }
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function applyUpdate(updated: Process) {
+    setAllRows((cur) => cur.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+    setV2Rows((cur) => cur.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+    router.refresh();
+  }
+
+  async function saveField(id: string, patch: Partial<Process>): Promise<Process> {
+    const res = await fetch(`/api/processes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    applyUpdate(json.process as Process);
+    return json.process as Process;
+  }
+
+  function removeRows(ids: string[]) {
+    setAllRows((cur) => cur.filter((r) => !ids.includes(r.id)));
+    setV2Rows((cur) => cur.filter((r) => !ids.includes(r.id)));
+    setSelected((cur) => {
+      const next = new Set(cur);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    if (openId && ids.includes(openId)) setOpenId(null);
+    router.refresh();
+  }
+
+  async function bulkPatch(ids: string[], patch: Partial<Process>): Promise<BulkResult> {
+    const res = await fetch("/api/processes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, patch }),
+    });
+    const json = (await res.json()) as BulkResult;
+    for (const p of json.updated ?? []) applyUpdate(p);
+    return json;
+  }
+
+  async function bulkArchive(ids: string[]) {
+    await fetch("/api/processes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, action: "delete" }),
+    });
+    removeRows(ids);
+  }
+
+  async function bulkNote(ids: string[], body: string, kind: ProcessNoteKind) {
+    await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/processes/${id}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body, kind }),
+        })
+      )
+    );
+  }
 
   function handleCreated(process: Process) {
     setCreating(false);
-    // The board/tables are a server-fetched snapshot; refresh so the new
-    // process shows up in its lane once the drawer closes.
     router.refresh();
-    setSelectedProcess({
-      ...process,
-      customer_display_name: process.account,
-      open_suggestion_count: 0,
-      needs_classification: false,
-    });
+    const asRow = { ...process, customer_display_name: process.account, open_suggestion_count: 0, needs_classification: false };
+    setAllRows((cur) => [asRow, ...cur]);
   }
 
-  // Filters apply to the table views (Delivered / Archive / All), not to the
-  // Active board — the board's four lanes are already a small, fixed set and
-  // don't need a second filter layer on top.
-  const filtered = useMemo(() => {
-    const s = search.trim().toLowerCase();
-    return overview.all.filter((p) => {
-      if (customer && p.customer_display_name !== customer) return false;
-      if (fde && p.fde_owner !== fde) return false;
-      if (partner && p.partner !== partner) return false;
-      if (s) {
-        const hay = [p.process_name, p.customer_display_name, p.fde_owner ?? "", p.partner ?? "", p.blockers ?? "", p.notes ?? ""]
-          .join(" ")
-          .toLowerCase();
-        if (!hay.includes(s)) return false;
-      }
-      return true;
-    });
-  }, [overview.all, customer, fde, partner, search]);
+  const visibleCols = openId && prefs.pattern === "split" ? NARROW_COLS : prefs.cols;
+  const narrow = openId != null && prefs.pattern === "split";
 
-  const delivered = useMemo(() => filtered.filter((p) => viewForLifecycle(p.lifecycle) === "delivered"), [filtered]);
-  const archive = useMemo(() => filtered.filter((p) => viewForLifecycle(p.lifecycle) === "archive"), [filtered]);
+  const openProcess = openId ? sorted.find((r) => r.id === openId) ?? baseRows.find((r) => r.id === openId) ?? null : null;
+
+  const columnCountLabel = view === "table" ? `${visibleCols.length} columns` : "Card fields";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Delivery"
-        title="Every process, every customer, every quarter."
-        subtitle={`${overview.counts.total} processes, native to DeliveryOps — no Monday dependency on this page.`}
+        title="Every process, every customer, every stage."
+        subtitle={`${processesOverview.counts.total} processes, native to DeliveryOps — Active work and V2 migration are the same records, two lenses.`}
         actions={
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="btn-primary rounded-full px-4 py-2 text-sm font-semibold"
-          >
+          <button type="button" onClick={() => setCreating(true)} className="btn-primary rounded-full px-4 py-2 text-sm font-semibold">
             New process
           </button>
         }
       />
 
-      <DeliveryStatsRow counts={overview.counts} onSelectTab={setTab} />
+      {/* Section tabs */}
+      <div className="flex items-center gap-4 border-b" style={{ borderColor: "var(--glass-border)" }}>
+        {(
+          [
+            { key: "active" as Section, label: "Active work", count: processesOverview.counts.active },
+            { key: "v2" as Section, label: "V2 migration", count: v2Overview.counts.total },
+          ]
+        ).map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => {
+              setSection(s.key);
+              setOpenPopover(null);
+              setSelected(new Set());
+              setOpenId(null);
+              router.replace(s.key === "v2" ? "/delivery?section=v2" : "/delivery");
+            }}
+            className="pb-2 text-sm tracking-tight flex items-center gap-1.5"
+            style={{
+              color: section === s.key ? "var(--foreground)" : "var(--muted-foreground)",
+              fontWeight: section === s.key ? 600 : 400,
+              borderBottom: section === s.key ? "2px solid var(--yellow-ink)" : "2px solid transparent",
+            }}
+          >
+            {s.label}
+            <span className="font-mono text-[11px] opacity-70">{s.count}</span>
+          </button>
+        ))}
+        {section === "v2" ? (
+          <span className="ml-auto text-[11px] text-[color:var(--muted-foreground)] pb-2">same records, migration lens</span>
+        ) : null}
+      </div>
 
-      {/* Filter bar — applies to Delivered / Archive / All */}
-      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-3 flex flex-wrap items-center gap-2">
+      {/* Toolbar */}
+      <div className="rounded-xl border p-2.5 flex flex-wrap items-center gap-2" style={{ borderColor: "var(--glass-border)", background: "var(--surface-1, var(--card))" }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search processes…"
-          className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-3 py-1.5 text-sm w-56"
+          className="rounded-md border px-3 py-1.5 text-sm bg-[var(--glass-bg)] text-[color:var(--foreground)] w-56"
+          style={{ borderColor: "var(--glass-border)" }}
         />
-        <SelectFilter value={customer} setValue={setCustomer} label="Customer" options={overview.facets.customers} />
-        <SelectFilter value={fde} setValue={setFde} label="FDE" options={overview.facets.fdeOwners} />
-        <SelectFilter value={partner} setValue={setPartner} label="Partner" options={overview.facets.partners} />
-        {tab !== "Active Work" && tab !== "Q-on-Q" ? (
-          <div className="ml-auto data-label text-[color:var(--muted-foreground)] tabular-nums">
-            {filtered.length} of {overview.all.length} processes
+
+        {prefs.filterKeys.map((key) => (
+          <FilterChip
+            key={key}
+            fieldKey={key}
+            value={filterValues[key] ?? null}
+            open={openPopover === key}
+            onToggleOpen={() => setOpenPopover((cur) => (cur === key ? null : key))}
+            options={optionsForField(key, section, baseRows, processesOverview, v2Overview)}
+            onPick={(v) => {
+              setFilterValues((cur) => ({ ...cur, [key]: v ?? undefined }));
+              setOpenPopover(null);
+            }}
+            onRemove={() => {
+              setPrefs((cur) => ({ ...cur, filterKeys: cur.filterKeys.filter((k) => k !== key) }));
+              setFilterValues((cur) => {
+                const next = { ...cur };
+                delete next[key];
+                return next;
+              });
+            }}
+          />
+        ))}
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpenPopover((cur) => (cur === "add" ? null : "add"))}
+            className="rounded-md border border-dashed px-2.5 py-1.5 text-[12.5px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
+            style={{ borderColor: "var(--glass-border)" }}
+          >
+            + Filter
+          </button>
+          {openPopover === "add" ? (
+            <div
+              className="dops-rise-in absolute z-30 mt-1 w-40 rounded-md border shadow-lg py-1"
+              style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--glass-border)" }}
+            >
+              {ALL_FILTER_FIELDS.filter((f) => !prefs.filterKeys.includes(f)).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => {
+                    setPrefs((cur) => ({ ...cur, filterKeys: [...cur.filterKeys, f] }));
+                    setOpenPopover(f);
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)]"
+                >
+                  {FILTER_LABEL[f]}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+            <button
+              type="button"
+              onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "table" }))}
+              className="px-2.5 py-1 rounded-full text-[11.5px]"
+              style={view === "table" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+            >
+              Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "board" }))}
+              className="px-2.5 py-1 rounded-full text-[11.5px]"
+              style={view === "board" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+            >
+              Board
+            </button>
+          </div>
+
+          <button type="button" onClick={() => setConfigureOpen(true)} title="Configure" className="w-8 h-8 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]">
+            ⚙
+          </button>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setOpenPopover((cur) => (cur === "fields" ? null : "fields"))}
+              className="rounded-md border px-2.5 py-1.5 text-[12.5px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
+              style={{ borderColor: "var(--glass-border)" }}
+            >
+              {columnCountLabel}
+            </button>
+            {openPopover === "fields" ? (
+              <FieldsMenu
+                view={view}
+                cols={prefs.cols}
+                cardFields={prefs.cardFields}
+                onToggle={(key) => {
+                  if (view === "table") {
+                    setPrefs((cur) => ({
+                      ...cur,
+                      cols: cur.cols.includes(key) ? cur.cols.filter((c) => c !== key) : [...cur.cols, key],
+                    }));
+                  } else {
+                    setPrefs((cur) => ({
+                      ...cur,
+                      cardFields: cur.cardFields.includes(key) ? cur.cardFields.filter((c) => c !== key) : [...cur.cardFields, key],
+                    }));
+                  }
+                }}
+                onResetWidths={() => setPrefs((cur) => ({ ...cur, colW: {} }))}
+                hasCustomWidths={Object.keys(prefs.colW).length > 0}
+              />
+            ) : null}
+          </div>
+
+          <span className="text-[11.5px] font-mono text-[color:var(--muted-foreground)]">
+            {sorted.length} of {baseRows.length}
+          </span>
+
+          <div className="w-px h-5" style={{ background: "var(--glass-border)" }} />
+
+          <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+            <button
+              type="button"
+              onClick={() => setPrefs((cur) => ({ ...cur, pattern: "split" }))}
+              className="px-2.5 py-1 rounded-full text-[11.5px]"
+              style={prefs.pattern === "split" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+            >
+              Split panel
+            </button>
+            <button
+              type="button"
+              onClick={() => setPrefs((cur) => ({ ...cur, pattern: "overlay" }))}
+              className="px-2.5 py-1 rounded-full text-[11.5px]"
+              style={prefs.pattern === "overlay" ? { background: "rgba(242,255,112,0.18)" } : undefined}
+            >
+              Overlay
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {Object.keys(filterValues).length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(Object.entries(filterValues) as [FilterField, string][]).map(([k, v]) => (
+            <span
+              key={k}
+              className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border"
+              style={{ background: "rgba(242,255,112,0.10)", borderColor: "rgba(242,255,112,0.35)" }}
+            >
+              {FILTER_LABEL[k]} · {optionLabel(k, v)}
+              <button
+                type="button"
+                onClick={() =>
+                  setFilterValues((cur) => {
+                    const next = { ...cur };
+                    delete next[k];
+                    return next;
+                  })
+                }
+                className="opacity-60 hover:opacity-100"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <button type="button" onClick={() => setFilterValues({})} className="text-[11px] underline text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]">
+            Clear all
+          </button>
+        </div>
+      ) : null}
+
+      {/* Body */}
+      <div className={openId && prefs.pattern === "split" ? "grid gap-3" : ""} style={openId && prefs.pattern === "split" ? { gridTemplateColumns: "minmax(560px,1fr) minmax(360px,420px)" } : undefined}>
+        <div className="min-w-0">
+          {view === "table" ? (
+            <ProcessTable
+              rows={sorted}
+              cols={visibleCols}
+              colW={prefs.colW}
+              onColWChange={(key, px) => setPrefs((cur) => ({ ...cur, colW: { ...cur.colW, [key]: px } }))}
+              onReorderCol={(from, to) =>
+                setPrefs((cur) => {
+                  const next = cur.cols.filter((c) => c !== from);
+                  const idx = next.indexOf(to);
+                  next.splice(idx < 0 ? next.length : idx, 0, from);
+                  return { ...cur, cols: next };
+                })
+              }
+              narrow={narrow}
+              selected={selected}
+              onSelectionChange={setSelected}
+              openId={openId}
+              onOpenDetail={setOpenId}
+              customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              colorMap={prefs.colorMap}
+              onSave={saveField}
+              onArchive={(id) => void bulkArchive([id])}
+              onRestore={() => {}}
+              showRestore={false}
+            />
+          ) : (
+            <ProcessBoard
+              mode={section}
+              rows={sorted}
+              cardFields={prefs.cardFields}
+              colorMap={prefs.colorMap}
+              onSave={saveField}
+              onOpenDetail={setOpenId}
+              onCreateInLane={() => setCreating(true)}
+            />
+          )}
+        </div>
+
+        {openId && prefs.pattern === "split" && openProcess ? (
+          <div className="rounded-xl border sticky self-start" style={{ top: 132, maxHeight: "calc(100vh - 148px)", borderColor: "var(--glass-border)", background: "var(--surface-1, var(--card))" }}>
+            <ProcessDetail
+              process={openProcess}
+              list={sorted}
+              onSelectId={setOpenId}
+              customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
+              onUpdated={applyUpdate}
+              onArchived={(id) => removeRows([id])}
+              onClose={() => setOpenId(null)}
+              onAddColumn={(col) => setPrefs((cur) => ({ ...cur, cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col], cardFields: cur.cardFields.includes(col) ? cur.cardFields : [...cur.cardFields, col] }))}
+            />
           </div>
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1 p-1 rounded-lg glass-card dark:bg-[color:var(--surface-1)] dark:border-0 w-fit flex-wrap">
-        {TABS.map((t) => (
-          <TabButton key={t} label={t} active={tab === t} onClick={() => setTab(t)} />
-        ))}
-      </div>
-
-      {tab === "Active Work" && <Board lanes={overview.lanes} onSelect={setSelectedProcess} />}
-      {tab === "Delivered" && <ProcessTable rows={delivered} onSelect={setSelectedProcess} />}
-      {tab === "Archive" && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-1.5">
-            <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--glass-border)]">
-              Cancelled · {overview.counts.archiveBreakdown.cancelled}
-            </span>
-            <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--glass-border)]">
-              Churned · {overview.counts.archiveBreakdown.churned}
-            </span>
-            <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--glass-border)]">
-              Retired · {overview.counts.archiveBreakdown.retired}
-            </span>
+      {openId && prefs.pattern === "overlay" && openProcess ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 grid place-items-start justify-center overflow-y-auto py-16 px-4"
+          onClick={() => setOpenId(null)}
+          onKeyDown={(e) => e.key === "Escape" && setOpenId(null)}
+        >
+          <div
+            className="dops-rise-in w-full rounded-xl border shadow-2xl"
+            style={{ maxWidth: 880, borderColor: "var(--glass-border)", background: "var(--surface-1, var(--card))", maxHeight: "calc(100vh - 128px)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ProcessDetail
+              process={openProcess}
+              list={sorted}
+              onSelectId={setOpenId}
+              customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
+              onUpdated={applyUpdate}
+              onArchived={(id) => removeRows([id])}
+              onClose={() => setOpenId(null)}
+              onAddColumn={(col) => setPrefs((cur) => ({ ...cur, cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col], cardFields: cur.cardFields.includes(col) ? cur.cardFields : [...cur.cardFields, col] }))}
+            />
           </div>
-          <ProcessTable rows={archive} onSelect={setSelectedProcess} />
         </div>
-      )}
-      {tab === "All" && <ProcessTable rows={filtered} onSelect={setSelectedProcess} />}
-      {tab === "Q-on-Q" && <QonQ overview={overview} />}
+      ) : null}
 
-      {selectedProcess ? (
-        <ProcessDrawer
-          process={selectedProcess}
-          customerDisplayName={selectedProcess.customer_display_name}
-          facets={overview.facets}
-          onClose={() => setSelectedProcess(null)}
-        />
+      <BulkActionBar
+        selectedIds={Array.from(selected)}
+        onClearSelection={() => setSelected(new Set())}
+        onBulkPatch={bulkPatch}
+        onBulkArchive={bulkArchive}
+        onBulkNote={bulkNote}
+      />
+
+      {configureOpen ? (
+        <ConfigureDialog colorMap={prefs.colorMap} onColorMapChange={(next) => setPrefs((cur) => ({ ...cur, colorMap: next }))} onClose={() => setConfigureOpen(false)} />
       ) : null}
 
       {creating ? (
-        <NewProcessModal
-          customerOptions={overview.facets.customerOptions}
-          onClose={() => setCreating(false)}
-          onCreated={handleCreated}
-        />
+        <NewProcessModal customerOptions={processesOverview.facets.customerOptions} onClose={() => setCreating(false)} onCreated={handleCreated} />
       ) : null}
     </div>
   );
 }
 
-function SelectFilter({
-  value, setValue, label: l, options,
+function FilterChip({
+  fieldKey,
+  value,
+  open,
+  onToggleOpen,
+  options,
+  onPick,
+  onRemove,
 }: {
-  value: string; setValue: (v: string) => void; label: string; options: string[];
+  fieldKey: FilterField;
+  value: string | null;
+  open: boolean;
+  onToggleOpen: () => void;
+  options: string[];
+  onPick: (v: string | null) => void;
+  onRemove: () => void;
 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2 py-1.5 text-sm"
-    >
-      <option value="">{l}: all</option>
-      {options.map((o) => <option key={o} value={o}>{l}: {o}</option>)}
-    </select>
-  );
-}
-
-// ── Active work board ────────────────────────────────────────────────────────
-// Four fixed lanes, read-only cards — all editing happens in the drawer. No
-// drag-and-drop: a lane change is a lifecycle edit in the drawer, which asks
-// for whatever that lane requires. Per docs/mockups/ia-step-1.5.html panel 4.
-
-const HEALTH_BORDER: Record<string, string> = {
-  on_track: "border-t-emerald-400",
-  at_risk: "border-t-amber-400",
-  off_track: "border-t-red-400",
-};
-
-function Board({
-  lanes,
-  onSelect,
-}: {
-  lanes: ProcessesOverview["lanes"];
-  onSelect: (p: ProcessRow) => void;
-}) {
-  const total = Object.values(lanes).reduce((n, l) => n + l.length, 0);
-
-  if (total === 0) {
-    return (
-      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-6 text-sm text-[color:var(--muted-foreground)]">
-        No active processes yet — run the Monday-archive importer to populate this board.
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start">
-      {ACTIVE_LANES.map((lane) => (
-        <div key={lane}>
-          <div className="flex items-baseline justify-between px-1 pb-2">
-            <span className="text-[13px] font-semibold tracking-tight text-[color:var(--foreground)]">
-              {ACTIVE_LANE_LABELS[lane]}
-            </span>
-            <span className="text-[11.5px] text-[color:var(--muted-foreground)] tabular-nums">
-              {lanes[lane].length}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {lanes[lane].map((card) => {
-              const staleDays = Math.round((Date.now() - new Date(card.updated_at).getTime()) / 86_400_000);
-              return (
-                <button
-                  key={card.id}
-                  onClick={() => onSelect(card)}
-                  className={`w-full text-left glass-card-hover dark:bg-[color:var(--surface-2)] dark:border-0 p-3 border-t-2 ${
-                    HEALTH_BORDER[card.health ?? ""] ?? "border-t-[var(--glass-border)]"
-                  }`}
-                >
-                  <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
-                    {card.customer_display_name}
-                  </div>
-                  <div className="text-sm font-medium text-[color:var(--foreground)] mt-0.5 line-clamp-2">
-                    {card.process_name}
-                  </div>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    <Flags row={card} />
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                        staleDays > 60
-                          ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25"
-                          : staleDays > 30
-                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
-                            : "border-[var(--glass-border)] text-[color:var(--muted-foreground)]"
-                      }`}
-                    >
-                      {staleDays}d
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[color:var(--muted-foreground)] mt-1.5">
-                    {card.fde_owner ?? "unassigned"}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Process table — Delivered / Archive / All ──────────────────────────────────
-
-type SortKey = "default" | "name" | "customer" | "lifecycle" | "health" | "phase" | "platform" | "fde" | "partner" | "complexity" | "effort" | "ttv" | "kickoff" | "golive" | "updated";
-type SortDir = "asc" | "desc";
-
-function compareString(a: string | null | undefined, b: string | null | undefined): number {
-  const av = (a ?? "").toLowerCase();
-  const bv = (b ?? "").toLowerCase();
-  if (av === bv) return 0;
-  if (!av) return 1;
-  if (!bv) return -1;
-  return av < bv ? -1 : 1;
-}
-function compareNumber(a: number | null | undefined, b: number | null | undefined): number {
-  if (a === b) return 0;
-  if (a == null) return 1;
-  if (b == null) return -1;
-  return a < b ? -1 : 1;
-}
-
-interface ColDef {
-  key: SortKey;
-  label: string;
-  align?: "left" | "right";
-}
-const TABLE_COLS: ColDef[] = [
-  { key: "name", label: "Process" },
-  { key: "customer", label: "Customer" },
-  { key: "lifecycle", label: "Lifecycle" },
-  { key: "phase", label: "Phase" },
-  { key: "health", label: "Health" },
-  { key: "platform", label: "Platform" },
-  { key: "fde", label: "FDE" },
-  { key: "partner", label: "Partner" },
-  { key: "complexity", label: "Complexity" },
-  { key: "effort", label: "Effort", align: "right" },
-  { key: "ttv", label: "TTV", align: "right" },
-  { key: "kickoff", label: "Kickoff" },
-  { key: "golive", label: "Go-live" },
-  { key: "updated", label: "Last touched" },
-];
-
-function sortRows(rows: ProcessRow[], key: SortKey, dir: SortDir): ProcessRow[] {
-  const sign = dir === "asc" ? 1 : -1;
-  const sorted = rows.slice();
-  if (key === "default") {
-    sorted.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    return sorted;
-  }
-  const cmp: Record<Exclude<SortKey, "default">, (a: ProcessRow, b: ProcessRow) => number> = {
-    name:      (a, b) => compareString(a.process_name, b.process_name),
-    customer:  (a, b) => compareString(a.customer_display_name, b.customer_display_name),
-    lifecycle: (a, b) => compareString(a.lifecycle, b.lifecycle),
-    health:    (a, b) => compareString(a.health, b.health),
-    phase:     (a, b) => compareString(a.phase, b.phase),
-    platform:  (a, b) => compareString(a.platform, b.platform),
-    fde:       (a, b) => compareString(a.fde_owner, b.fde_owner),
-    partner:   (a, b) => compareString(a.partner, b.partner),
-    complexity:(a, b) => compareString(a.complexity, b.complexity),
-    effort:    (a, b) => compareNumber(a.total_effort_hours, b.total_effort_hours),
-    ttv:       (a, b) => compareNumber(a.ttv_days, b.ttv_days),
-    kickoff:   (a, b) => compareString(a.kickoff_date, b.kickoff_date),
-    golive:    (a, b) => compareString(a.go_live_date, b.go_live_date),
-    updated:   (a, b) => compareString(a.updated_at, b.updated_at),
-  };
-  sorted.sort((a, b) => sign * cmp[key](a, b));
-  return sorted;
-}
-
-function ProcessTable({ rows, onSelect }: { rows: ProcessRow[]; onSelect: (p: ProcessRow) => void }) {
-  const [sortKey, setSortKey] = useState<SortKey>("default");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-
-  const sorted = useMemo(() => sortRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
-
-  function clickHeader(k: SortKey) {
-    if (sortKey === k) {
-      if (sortDir === "asc") setSortDir("desc");
-      else { setSortKey("default"); setSortDir("asc"); }
-    } else {
-      setSortKey(k);
-      setSortDir(["effort", "ttv", "golive", "kickoff", "updated"].includes(k) ? "desc" : "asc");
-    }
-  }
-
-  if (rows.length === 0) {
-    return <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-6 text-sm text-[color:var(--muted-foreground)]">No processes match the current filters.</div>;
-  }
-
-  return (
-    <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-[color:var(--muted-foreground)] border-b border-[var(--glass-border)] dark:border-0 bg-[var(--glass-bg)]/30 dark:bg-transparent">
-        <span>
-          Sorted by{" "}
-          <span className="text-[color:var(--foreground)] font-medium">
-            {sortKey === "default"
-              ? "last touched (most recent first)"
-              : `${TABLE_COLS.find((c) => c.key === sortKey)?.label} ${sortDir === "asc" ? "↑" : "↓"}`}
-          </span>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggleOpen}
+        className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] text-[color:var(--foreground)]"
+        style={{ borderColor: "var(--glass-border)" }}
+      >
+        {FILTER_LABEL[fieldKey]} · {value ? optionLabel(fieldKey, value) : "any"}
+        <span onClick={(e) => { e.stopPropagation(); onRemove(); }} className="opacity-50 hover:opacity-100">
+          ×
         </span>
-        {sortKey !== "default" ? (
-          <button
-            type="button"
-            onClick={() => { setSortKey("default"); setSortDir("asc"); }}
-            className="ml-auto underline hover:text-[color:var(--foreground)]"
-          >
-            Reset to default
+      </button>
+      {open ? (
+        <div
+          className="dops-rise-in absolute z-30 mt-1 w-52 max-h-64 overflow-auto rounded-md border shadow-lg py-1"
+          style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--glass-border)" }}
+        >
+          <button type="button" onClick={() => onPick(null)} className="w-full text-left px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--muted-foreground)]">
+            any
           </button>
-        ) : null}
-      </div>
-      <div className="overflow-x-auto p-2 dark:p-2.5">
-        <table className="w-full text-sm dark:border-separate dark:[border-spacing:0_4px]">
-          <thead className="bg-[var(--glass-bg)] dark:bg-transparent text-[color:var(--muted-foreground)]">
-            <tr>
-              {TABLE_COLS.map((c) => {
-                const active = sortKey === c.key;
-                const indicator = active ? (sortDir === "asc" ? "↑" : "↓") : "";
-                return (
-                  <th key={c.key} className={`px-3 py-2 text-[10px] uppercase tracking-wider whitespace-nowrap text-${c.align ?? "left"}`}>
-                    <button
-                      type="button"
-                      onClick={() => clickHeader(c.key)}
-                      className={`inline-flex items-center gap-1 hover:text-[color:var(--foreground)] ${active ? "text-[color:var(--foreground)]" : ""}`}
-                      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-                    >
-                      {c.label}
-                      {indicator ? <span className="text-[9px] opacity-80">{indicator}</span> : <span className="text-[9px] opacity-30">↕</span>}
-                    </button>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((p) => {
-              const td = "dark:bg-[color:var(--surface-2)]";
-              return (
-              <tr
-                key={p.id}
-                className="border-t border-[var(--glass-border)] dark:border-0 hover:bg-[var(--glass-bg)] dark:hover:[&>td]:brightness-125 transition-colors cursor-pointer align-top"
-                onClick={() => onSelect(p)}
-              >
-                <td className={`px-3 py-2 font-medium text-[color:var(--foreground)] min-w-[200px] whitespace-normal break-words leading-snug dark:rounded-l-lg ${td}`} title={p.process_name}>
-                  {p.process_name}
-                  <div className="flex flex-wrap gap-1 mt-1"><Flags row={p} /></div>
-                </td>
-                <td className={`px-3 py-2 text-[color:var(--foreground)] dark:text-[color:var(--foreground-body)] min-w-[140px] whitespace-normal break-words leading-snug ${td}`}>
-                  {p.customer_display_name}
-                </td>
-                <td className={`px-3 py-2 whitespace-nowrap ${td}`}>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--glass-border)]">{label(p.lifecycle)}</span>
-                </td>
-                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] min-w-[120px] whitespace-normal break-words leading-snug ${td}`}>
-                  {label(p.phase)}
-                </td>
-                <td className={`px-3 py-2 whitespace-nowrap ${td}`}>
-                  {p.health ? (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                        p.health === "on_track"
-                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
-                          : p.health === "at_risk"
-                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
-                            : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25"
-                      }`}
-                    >
-                      {label(p.health)}
-                    </span>
-                  ) : "—"}
-                </td>
-                <td className={`px-3 py-2 whitespace-nowrap dark:text-[color:var(--foreground-body)] ${td}`}>{p.platform.toUpperCase()}</td>
-                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.fde_owner ?? "—"}</td>
-                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.partner ?? "—"}</td>
-                <td className={`px-3 py-2 text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.complexity ?? "—"}</td>
-                <td className={`px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>
-                  {p.total_effort_hours != null ? `${p.total_effort_hours}h` : "—"}
-                </td>
-                <td className={`px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>
-                  {p.ttv_days != null ? `${p.ttv_days}d` : "—"}
-                </td>
-                <td className={`px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap ${td}`}>{p.kickoff_date ?? "—"}</td>
-                <td className={`px-3 py-2 tabular-nums font-medium text-[color:var(--foreground)] whitespace-nowrap ${td}`}>{p.go_live_date ?? "—"}</td>
-                <td className={`px-3 py-2 tabular-nums text-[color:var(--muted-foreground)] whitespace-nowrap dark:rounded-r-lg ${td}`}>
-                  {new Date(p.updated_at).toLocaleDateString("en-US")}
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+          {options.map((o) => (
+            <button key={o} type="button" onClick={() => onPick(o)} className="w-full text-left px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)] truncate">
+              {optionLabel(fieldKey, o)}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-// ── Q-on-Q ────────────────────────────────────────────────────────────────────
-// Rebuilt on `processes` data. The old "on-time delivery rate" chart is
-// dropped — it compared go_live_date against Monday's timeline_end, which
-// 0021 deliberately didn't carry forward (no target/planned date exists on
-// processes today).
-
-function QonQ({ overview }: { overview: ProcessesOverview }) {
-  const t = useChartTheme();
-  const { byQuarter, avgTtvByQuarter, byCustomer } = overview.qonq;
-  const allQuarters = useMemo(
-    () => Array.from(new Set(byCustomer.flatMap((c) => Object.keys(c.byQ)))).sort(),
-    [byCustomer]
-  );
-
-  if (byQuarter.length === 0) {
-    return (
-      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-6 text-sm text-[color:var(--muted-foreground)]">
-        No processes with go-live or kickoff dates yet.
-      </div>
-    );
-  }
-
+function FieldsMenu({
+  view,
+  cols,
+  cardFields,
+  onToggle,
+  onResetWidths,
+  hasCustomWidths,
+}: {
+  view: ViewMode;
+  cols: ColKey[];
+  cardFields: ColKey[];
+  onToggle: (key: ColKey) => void;
+  onResetWidths: () => void;
+  hasCustomWidths: boolean;
+}) {
+  const active = view === "table" ? cols : cardFields;
+  const universe = view === "table" ? COLDEFS : COLDEFS.filter((c) => CARD_FIELDS.includes(c.key));
   return (
-    <div className="space-y-4">
-      <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-5">
-        <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Processes by calendar quarter</div>
-        <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
-          Delivered vs in-flight vs at risk (all processes)
-        </div>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={byQuarter} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-            <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={formatQuarterTick} />
-            <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={t.tooltipStyle} labelFormatter={formatQuarterTick} />
-            <Legend
-              wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-              formatter={(v: string) => {
-                const labels: Record<string, string> = {
-                  delivered: "Delivered / Live",
-                  in_flight: "In flight",
-                  at_risk:   "At risk",
-                  inactive:  "Archive",
-                };
-                return labels[v] ?? v;
-              }}
-            />
-            <Bar dataKey="delivered" stackId="a" fill={QOQ_COLORS.delivered} name="delivered" />
-            <Bar dataKey="in_flight" stackId="a" fill={QOQ_COLORS.in_flight} name="in_flight" />
-            <Bar dataKey="at_risk"   stackId="a" fill={QOQ_COLORS.at_risk}   name="at_risk" />
-            <Bar dataKey="inactive"  stackId="a" fill={QOQ_COLORS.inactive}  name="inactive" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+    <div
+      className="dops-rise-in absolute right-0 z-30 mt-1 w-52 rounded-md border shadow-lg py-1.5"
+      style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--glass-border)" }}
+    >
+      <div className="px-3 py-1 text-[10.5px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
+        {view === "table" ? "Show as columns" : "Show on cards"}
       </div>
-
-      {avgTtvByQuarter.length > 0 ? (
-        <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 p-5">
-          <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Average TTV</div>
-          <div className="text-sm font-semibold text-[color:var(--foreground)] mb-4 tracking-tight">
-            Days from kickoff to go-live · per quarter (lower is better) — from the generated ttv_days column
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={avgTtvByQuarter} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="ttvGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-              <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={formatQuarterTick} />
-              <YAxis tick={{ fontSize: 11, fill: t.axis }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}d`} />
-              <Tooltip
-                contentStyle={t.tooltipStyle}
-                labelFormatter={formatQuarterTick}
-                formatter={(value, _name, item) => {
-                  const r = item?.payload as { avgTtv: number; count: number } | undefined;
-                  if (!r) return [`${value}d`, "Avg TTV"];
-                  return [`${r.avgTtv}d · across ${r.count} process${r.count === 1 ? "" : "es"}`, "Avg TTV"];
-                }}
-              />
-              <Area type="monotone" dataKey="avgTtv" stroke="#6366f1" strokeWidth={2} fill="url(#ttvGrad)" dot={{ r: 3, fill: "#6366f1" }} activeDot={{ r: 5 }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : null}
-
-      {byCustomer.length > 0 ? (
-        <div className="glass-card dark:bg-[color:var(--surface-1)] dark:border-0 overflow-hidden">
-          <div className="p-4 border-b border-[var(--glass-border)]">
-            <div className="eyebrow text-[color:var(--muted-foreground)] mb-1">Delivered per customer</div>
-            <div className="text-sm font-semibold text-[color:var(--foreground)] tracking-tight">Top 15, by quarter</div>
-          </div>
-          <div className="overflow-x-auto p-2 dark:p-2.5">
-            <table className="w-full text-sm dark:border-separate dark:[border-spacing:0_4px]">
-              <thead className="bg-[var(--glass-bg)] dark:bg-transparent text-[color:var(--muted-foreground)]">
-                <tr>
-                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-left">Customer</th>
-                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-right">Total</th>
-                  {allQuarters.map((q) => (
-                    <th key={q} className="px-3 py-2 text-[10px] uppercase tracking-wider text-right whitespace-nowrap">
-                      {formatQuarterTick(q)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {byCustomer.map((row) => (
-                  <tr key={row.customer} className="border-t border-[var(--glass-border)] dark:border-0">
-                    <td className="px-3 py-2 font-medium text-[color:var(--foreground)] dark:bg-[color:var(--surface-2)] dark:rounded-l-lg">{row.customer}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-medium dark:bg-[color:var(--surface-2)]">{row.total}</td>
-                    {allQuarters.map((q, i) => (
-                      <td key={q} className={`px-3 py-2 text-right tabular-nums text-[color:var(--muted-foreground)] dark:bg-[color:var(--surface-2)] ${i === allQuarters.length - 1 ? "dark:rounded-r-lg" : ""}`}>
-                        {row.byQ[q] ?? "—"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div className="max-h-64 overflow-auto">
+        {universe.map((def) => (
+          <button key={def.key} type="button" onClick={() => onToggle(def.key)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)]">
+            <span
+              className="w-[13px] h-[13px] rounded-[3.5px] border flex items-center justify-center shrink-0"
+              style={{ borderColor: "var(--glass-border)", background: active.includes(def.key) ? "var(--brand-yellow)" : "transparent" }}
+            >
+              {active.includes(def.key) ? <span style={{ color: "#171717", fontSize: 9 }}>✓</span> : null}
+            </span>
+            {def.label}
+          </button>
+        ))}
+      </div>
+      {view === "table" && hasCustomWidths ? (
+        <button type="button" onClick={onResetWidths} className="w-full text-left px-3 py-1.5 text-[11.5px] border-t text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]" style={{ borderColor: "var(--glass-border)" }}>
+          Reset column widths
+        </button>
       ) : null}
     </div>
   );

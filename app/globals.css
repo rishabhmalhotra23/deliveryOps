@@ -176,6 +176,38 @@
   color: var(--card-foreground) !important;
 }
 
+/* ─── Delivery workspace tokens — light values ────────────────────────────
+ * Backs the merged Delivery workspace (table/board/detail/roster picker/
+ * activity feed/configure dialog), approved 2026-09-03
+ * (2026-09-03-v2-delivery-redesign.html). `--yellow-ink` is the split the
+ * mockup calls out explicitly: `--brand-yellow` stays a *fill* (always with
+ * `--brand-night` text on top); anything that reads the accent as a
+ * *foreground* (chip text, links, bars, sort arrows) goes through
+ * `--yellow-ink` instead, which darkens here so it stays legible on a light
+ * background. Never use `--brand-yellow` as a foreground color.
+ * The 8-hue --st-*-fg/bg/bd triads back every value-driven chip (migration
+ * stage, health, lifecycle) via Configure's per-value colour assignment —
+ * light values mirror the existing `.tone-*` classes above (deep ink on a
+ * pale fill). */
+:root {
+  --yellow-ink: #5F6B00;
+  --field: #F7F7F5;
+  --surface-3: #F1F1EF;
+  --row-open-bg: #FBFFE0;
+  --status-good: #16A34A;
+  --status-warn: #C2620C;
+  --status-bad: #DC2626;
+
+  --st-neutral-fg: #525252;  --st-neutral-bg: #F5F5F5;  --st-neutral-bd: #E5E5E5;
+  --st-indigo-fg:  #3730A3;  --st-indigo-bg:  #EEF2FF;  --st-indigo-bd:  #C7D2FE;
+  --st-orange-fg:  #9A3412;  --st-orange-bg:  #FFF7ED;  --st-orange-bd:  #FED7AA;
+  --st-blue-fg:    #1E40AF;  --st-blue-bg:    #EFF6FF;  --st-blue-bd:    #BFDBFE;
+  --st-amber-fg:   #854D0E;  --st-amber-bg:   #FEF3C7;  --st-amber-bd:   #FDE68A;
+  --st-emerald-fg: #065F46;  --st-emerald-bg: #ECFDF5;  --st-emerald-bd: #A7F3D0;
+  --st-fuchsia-fg: #5B21B6;  --st-fuchsia-bg: #F5F3FF;  --st-fuchsia-bd: #DDD6FE;
+  --st-red-fg:     #991B1B;  --st-red-bg:     #FEF2F2;  --st-red-bd:     #FECACA;
+}
+
 /* ─── Dark mode — must come AFTER every :root + .glass-card rule so the
        cascade lets dark mode win.  See top-of-file note. ───────────────── */
 .dark {
@@ -192,6 +224,24 @@
   --status-good:          #4ADE80;
   --status-warn:          #FB923C;
   --status-bad:           #F87171;
+
+  /* Delivery workspace dark overrides — see the light-mode block above for
+   * the full explanation. Dark hue triads are "pale ink on a tint of its own
+   * hue" (vs. light's "deep ink on a pale fill"), same pattern `.dark
+   * .tone-*` already uses below. */
+  --yellow-ink: #F2FF70;
+  --field: rgba(255, 255, 255, 0.06);
+  --surface-3: #2F2F2F;
+  --row-open-bg: #3a3a1f;
+
+  --st-neutral-fg: #A3A3A3;  --st-neutral-bg: rgba(163,163,163,.14);  --st-neutral-bd: rgba(163,163,163,.32);
+  --st-indigo-fg:  #818CF8;  --st-indigo-bg:  rgba(129,140,248,.14);  --st-indigo-bd:  rgba(129,140,248,.32);
+  --st-orange-fg:  #FB923C;  --st-orange-bg:  rgba(251,146,60,.14);   --st-orange-bd:  rgba(251,146,60,.32);
+  --st-blue-fg:    #60A5FA;  --st-blue-bg:    rgba(96,165,250,.14);   --st-blue-bd:    rgba(96,165,250,.32);
+  --st-amber-fg:   #FBBF24;  --st-amber-bg:   rgba(251,191,36,.14);   --st-amber-bd:   rgba(251,191,36,.32);
+  --st-emerald-fg: #4ADE80;  --st-emerald-bg: rgba(74,222,128,.14);   --st-emerald-bd: rgba(74,222,128,.32);
+  --st-fuchsia-fg: #E879F9;  --st-fuchsia-bg: rgba(232,121,249,.14);  --st-fuchsia-bd: rgba(232,121,249,.32);
+  --st-red-fg:     #F87171;  --st-red-bg:     rgba(248,113,113,.14);  --st-red-bd:     rgba(248,113,113,.32);
 
   --card:                 #262626;
   --card-foreground:      #FAFAFA;
@@ -364,6 +414,24 @@
 .status-dot-pulse {
   animation: statusPulse 2s ease-in-out infinite;
 }
+
+/* Delivery workspace motion — approved 2026-09-03 mockup. Opacity/border only,
+ * never `transform` on a table row: with `fill:both`, the resolved identity
+ * matrix on the row makes it a containing block, and any `position:fixed`
+ * popover mounted inside it (row context menu) then resolves against the
+ * row's box instead of the viewport. Board cards are not inside a scrolling
+ * table body, so they're free to also translateY. */
+@keyframes dopsRiseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dopsRowIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dopsCardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes dopsRiseInCentred { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes dopsLaneGlow { 0%, 100% { border-color: var(--yellow-line, rgba(242,255,112,0.45)); } 50% { border-color: var(--brand-yellow); } }
+
+.dops-row-in { animation: dopsRowIn 300ms cubic-bezier(.2,.8,.3,1) both; }
+.dops-card-in { animation: dopsCardIn 280ms cubic-bezier(.2,.8,.3,1) both; }
+.dops-rise-in { animation: dopsRiseIn 160ms ease-out both; }
+.dops-rise-in-centred { animation: dopsRiseInCentred 160ms ease-out both; }
+.dops-lane-glow { animation: dopsLaneGlow 900ms ease-in-out infinite; }
 
 /* ─── Typography helpers ─────────────────────────────────────────────────── */
 /* Data labels: monospaced, slightly smaller, higher contrast. */
