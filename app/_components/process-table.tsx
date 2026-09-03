@@ -17,8 +17,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Process, RosterEntry } from "@/lib/supabase/types";
+import {
+  MIGRATION_STAGES,
+  PROCESS_HEALTHS,
+  PROCESS_LIFECYCLES,
+  PROCESS_PHASES,
+  PROCESS_PLATFORMS,
+} from "@/lib/supabase/types";
 import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delivery/columns";
 import { chipVars, resolveHue, type ColorMap } from "@/lib/delivery/hues";
+import {
+  HEALTH_LABELS,
+  LIFECYCLE_LABELS,
+  MIGRATION_STAGE_LABELS,
+  PHASE_LABELS,
+  PLATFORM_LABELS,
+} from "@/lib/delivery/labels";
 import { RosterPicker } from "@/app/_components/roster-picker";
 import type { DetailProcess } from "@/app/_components/process-detail";
 
@@ -64,6 +78,10 @@ export interface ProcessTableProps {
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
   showRestore: boolean;
+  emptyTitle: string;
+  emptyHint: string;
+  /** Provided only when filters/search are actually narrowing the list. */
+  onClearFilters?: () => void;
 }
 
 export function ProcessTable({
@@ -86,6 +104,9 @@ export function ProcessTable({
   onArchive,
   onRestore,
   showRestore,
+  emptyTitle,
+  emptyHint,
+  onClearFilters,
 }: ProcessTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [maxH, setMaxH] = useState<string>("70vh");
@@ -263,23 +284,27 @@ export function ProcessTable({
           return (
             <div
               key={row.id}
-              className="dops-row-in grid text-sm"
-              style={{
-                gridTemplateColumns: gridTemplate,
-                animationDelay: `${Math.min(i, 14) * 22}ms`,
-                borderBottom: "1px solid var(--brand-metal-line)",
-                background: stickyBg,
-              }}
+              className={`dops-row-in dops-row grid text-sm ${isOpen || isSelected ? "" : "dops-row-plain"}`}
+              style={
+                {
+                  gridTemplateColumns: gridTemplate,
+                  animationDelay: `${Math.min(i, 14) * 22}ms`,
+                  borderBottom: "1px solid var(--brand-metal-line)",
+                  "--row-bg": stickyBg,
+                  background: "var(--row-bg)",
+                } as React.CSSProperties
+              }
             >
-              <div className="sticky left-0 z-10 flex items-center justify-center py-1.5" style={{ background: stickyBg }}>
+              <div className="sticky left-0 z-10 flex items-center justify-center py-1.5" style={{ background: "var(--row-bg)" }}>
                 <input
                   type="checkbox"
                   checked={isSelected}
                   onChange={(e) => toggleRow(row.id, (e.nativeEvent as MouseEvent).shiftKey)}
+                  aria-label={`Select ${row.process_name}`}
                   style={{ accentColor: "var(--brand-yellow)" }}
                 />
               </div>
-              <div className="sticky z-10 py-1.5 pr-2 min-w-0" style={{ left: CHECK_W, background: stickyBg }}>
+              <div className="sticky z-10 py-1.5 pr-2 min-w-0" style={{ left: CHECK_W, background: "var(--row-bg)" }}>
                 <NameCell row={row} onSave={onSave} onOpenDetail={onOpenDetail} />
               </div>
               {cols.map((key) => (
@@ -287,13 +312,13 @@ export function ProcessTable({
                   <Cell colKey={key} row={row} customerOptions={customerOptions} colorMap={colorMap} onSave={onSave} onOpenDetail={onOpenDetail} />
                 </div>
               ))}
-              <div className="sticky right-0 z-10 flex items-center justify-center gap-0.5 py-1.5" style={{ background: stickyBg }}>
+              <div className="sticky right-0 z-10 flex items-center justify-center gap-0.5 py-1.5" style={{ background: "var(--row-bg)" }}>
                 {!narrow ? (
                   <button
                     type="button"
                     title="Open full record"
                     onClick={() => onOpenDetail(row.id)}
-                    className="w-6 h-6 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
+                    className="dops-press w-6 h-6 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
                   >
                     ⤢
                   </button>
@@ -302,7 +327,7 @@ export function ProcessTable({
                   type="button"
                   title="More actions"
                   onClick={(e) => openMenu(e, row.id)}
-                  className="w-6 h-6 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
+                  className="dops-press w-6 h-6 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
                 >
                   ⋮
                 </button>
@@ -311,12 +336,27 @@ export function ProcessTable({
           );
         })}
 
-          {rows.length === 0 ? (
-            <div className="px-4 py-10 text-center text-[13px] text-[color:var(--muted-foreground)]">
-              No processes match the current filters.
-            </div>
-          ) : null}
+
         </div>
+        {/* Outside the min-width wrapper: inside it, `text-center` centred
+            the message across the full ~1600px column total, leaving it half
+            off-screen until you scrolled sideways. */}
+        {rows.length === 0 ? (
+          <div className="sticky left-0 px-6 py-12 text-center">
+            <div className="text-[13px] text-[color:var(--foreground)]">{emptyTitle}</div>
+            <div className="text-[12px] text-[color:var(--muted-foreground)] mt-1">{emptyHint}</div>
+            {onClearFilters ? (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="dops-press mt-3 rounded-full border px-3 py-1.5 text-[12px]"
+                style={{ borderColor: "var(--brand-metal-line)" }}
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* Rendered outside the scrollport on purpose: a position:fixed menu
@@ -508,21 +548,21 @@ function Cell({
       );
     case "lifecycle":
       return (
-        <select disabled={busy} value={row.lifecycle} onChange={(e) => save({ lifecycle: e.target.value as Process["lifecycle"] })} className={`${field} text-[13px] capitalize`}>
+        <select disabled={busy} value={row.lifecycle} onChange={(e) => save({ lifecycle: e.target.value as Process["lifecycle"] })} className={`${field} text-[13px]`}>
           {LIFECYCLE_OPTIONS.map((o) => (
             <option key={o} value={o}>
-              {o.replace(/_/g, " ")}
+              {LIFECYCLE_LABELS[o]}
             </option>
           ))}
         </select>
       );
     case "phase":
       return (
-        <select disabled={busy} value={row.phase ?? ""} onChange={(e) => save({ phase: (e.target.value || null) as Process["phase"] })} className={`${field} text-[13px] capitalize`}>
+        <select disabled={busy} value={row.phase ?? ""} onChange={(e) => save({ phase: (e.target.value || null) as Process["phase"] })} className={`${field} text-[13px]`}>
           <option value="">—</option>
           {PHASE_OPTIONS.map((o) => (
             <option key={o} value={o}>
-              {o.replace(/_/g, " ")}
+              {PHASE_LABELS[o]}
             </option>
           ))}
         </select>
@@ -530,11 +570,11 @@ function Cell({
     case "health":
       if (!row.health) {
         return (
-          <select disabled={busy} value="" onChange={(e) => save({ health: e.target.value as Process["health"] })} className={`${field} text-[13px] capitalize`}>
+          <select disabled={busy} value="" onChange={(e) => save({ health: e.target.value as Process["health"] })} className={`${field} text-[13px]`}>
             <option value="">—</option>
             {HEALTH_OPTIONS.map((o) => (
               <option key={o} value={o}>
-                {o.replace(/_/g, " ")}
+                {HEALTH_LABELS[o]}
               </option>
             ))}
           </select>
@@ -545,12 +585,12 @@ function Cell({
           disabled={busy}
           value={row.health}
           onChange={(e) => save({ health: e.target.value as Process["health"] })}
-          className={`${chip} capitalize`}
+          className={chip}
           style={chipVars(resolveHue("health", row.health, colorMap))}
         >
           {HEALTH_OPTIONS.map((o) => (
             <option key={o} value={o}>
-              {o.replace(/_/g, " ")}
+              {HEALTH_LABELS[o]}
             </option>
           ))}
         </select>
@@ -560,7 +600,7 @@ function Cell({
         <select disabled={busy} value={row.platform} onChange={(e) => save({ platform: e.target.value as Process["platform"] })} className={`${field} text-[13px]`}>
           {PLATFORM_OPTIONS.map((o) => (
             <option key={o} value={o}>
-              {o.toUpperCase()}
+              {PLATFORM_LABELS[o]}
             </option>
           ))}
         </select>
@@ -683,40 +723,14 @@ function Cell({
   }
 }
 
-const STAGE_OPTIONS: { value: Process["migration_stage"]; label: string }[] = [
-  { value: "not_required", label: "Not required" },
-  { value: "in_development", label: "In development" },
-  { value: "engg_pending", label: "Engg pending" },
-  { value: "parity_testing", label: "Parity testing" },
-  { value: "customer_validation", label: "Customer validation" },
-  { value: "live_on_v2", label: "Live on v2" },
-  { value: "v2_native", label: "V2 native" },
-  { value: "migrated_pending_commercial", label: "Migrated · pending commercial" },
-];
+// Derived from the enum + shared labels rather than a hand-kept copy, so a
+// new stage can't silently render as a blank option.
+const STAGE_OPTIONS: { value: Process["migration_stage"]; label: string }[] = MIGRATION_STAGES.map((value) => ({
+  value,
+  label: MIGRATION_STAGE_LABELS[value],
+}));
 
-const LIFECYCLE_OPTIONS: Process["lifecycle"][] = [
-  "backlog",
-  "upcoming",
-  "discovery",
-  "in_development",
-  "uat",
-  "live",
-  "on_hold",
-  "needs_triage",
-  "cancelled",
-  "churned",
-  "retired",
-];
-
-const PHASE_OPTIONS: NonNullable<Process["phase"]>[] = [
-  "pre_kickoff",
-  "m1_discovery",
-  "m2_development",
-  "m3_testing_uat",
-  "m4_deployment",
-  "m5_exception_handling",
-];
-
-const HEALTH_OPTIONS: NonNullable<Process["health"]>[] = ["on_track", "at_risk", "off_track"];
-
-const PLATFORM_OPTIONS: Process["platform"][] = ["v1", "v2", "custom"];
+const LIFECYCLE_OPTIONS = PROCESS_LIFECYCLES;
+const PHASE_OPTIONS = PROCESS_PHASES;
+const HEALTH_OPTIONS = PROCESS_HEALTHS;
+const PLATFORM_OPTIONS = PROCESS_PLATFORMS;

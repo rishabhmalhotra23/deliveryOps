@@ -15,12 +15,24 @@ import {
   MIGRATION_STAGE_LABELS,
   PROCESS_LIFECYCLES,
   PROCESS_HEALTHS,
+  type MigrationStage,
+  type ProcessHealth,
+  type ProcessLifecycle,
   type RosterEntry,
   type RosterKind,
 } from "@/lib/supabase/types";
 import { HUES, hueStyle, resolveHue, type ColorField, type ColorMap, type Hue } from "@/lib/delivery/hues";
+import { healthLabel, lifecycleLabel, stageLabel } from "@/lib/delivery/labels";
 
 type Tab = "stages" | "lifecycle" | "roster" | "colours";
+
+const ROLE_LABELS: Record<string, string> = { fde: "FDE", tam: "TAM", engg: "Engineering" };
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const s = ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
+  return s || name.slice(0, 2).toUpperCase() || "?";
+}
 
 const COLOR_FIELDS: { key: ColorField; label: string }[] = [
   { key: "stage", label: "Migration stage" },
@@ -35,9 +47,9 @@ const VALUES_BY_FIELD: Record<ColorField, readonly string[]> = {
 };
 
 const VALUE_LABEL: Record<ColorField, (v: string) => string> = {
-  stage: (v) => MIGRATION_STAGE_LABELS[v as keyof typeof MIGRATION_STAGE_LABELS],
-  health: (v) => v.replace(/_/g, " "),
-  lifecycle: (v) => v.replace(/_/g, " "),
+  stage: (v) => stageLabel(v as MigrationStage),
+  health: (v) => healthLabel(v as ProcessHealth),
+  lifecycle: (v) => lifecycleLabel(v as ProcessLifecycle),
 };
 
 export function ConfigureDialog({
@@ -49,7 +61,9 @@ export function ConfigureDialog({
   onColorMapChange: (next: ColorMap) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("stages");
+  // Roster is the tab people actually come here for (stages/lifecycle are
+  // fixed enums), so it opens first.
+  const [tab, setTab] = useState<Tab>("roster");
   const [rosterKind, setRosterKind] = useState<RosterKind>("person");
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [rosterLoading, setRosterLoading] = useState(false);
@@ -106,18 +120,18 @@ export function ConfigureDialog({
         <div className="px-4 pt-4">
           <div className="text-sm font-semibold text-[color:var(--foreground)] mb-2">Configure</div>
           <div className="flex gap-4 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
-            {(["stages", "lifecycle", "roster", "colours"] as Tab[]).map((t) => (
+            {(["roster", "colours", "stages", "lifecycle"] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className="pb-2 text-[13px] capitalize"
+                className="dops-tab-underline pb-2 text-[13px]"
                 style={{
                   color: tab === t ? "var(--foreground)" : "var(--muted-foreground)",
                   borderBottom: tab === t ? "2px solid var(--yellow-ink)" : "2px solid transparent",
                 }}
               >
-                {t === "stages" ? "Migration stages" : t === "lifecycle" ? "Lifecycle states" : t}
+                {t === "stages" ? "Migration stages" : t === "lifecycle" ? "Lifecycle states" : t === "roster" ? "Roster" : "Colours"}
               </button>
             ))}
           </div>
@@ -130,7 +144,7 @@ export function ConfigureDialog({
                 {(tab === "stages" ? MIGRATION_STAGES : PROCESS_LIFECYCLES).map((v) => (
                   <div key={v} className="rounded-md px-2.5 py-1.5 text-[13px] flex items-center gap-2" style={{ background: "var(--field)" }}>
                     <span className="text-[color:var(--foreground)]">
-                      {tab === "stages" ? MIGRATION_STAGE_LABELS[v as keyof typeof MIGRATION_STAGE_LABELS] : v.replace(/_/g, " ")}
+                      {tab === "stages" ? stageLabel(v as MigrationStage) : lifecycleLabel(v as ProcessLifecycle)}
                     </span>
                     <span className="font-mono text-[10.5px] text-[color:var(--muted-foreground)] ml-auto">{v}</span>
                   </div>
@@ -171,9 +185,21 @@ export function ConfigureDialog({
                 ) : (
                   roster.map((r) => (
                     <div key={r.id} className="rounded-md px-2.5 py-1.5 text-[13px] flex items-center gap-2" style={{ background: "var(--field)" }}>
-                      <span className="text-[color:var(--foreground)]">{r.display_name}</span>
-                      <span className="font-mono text-[10.5px] text-[color:var(--muted-foreground)] ml-auto">
-                        {r.roles.join(", ") || "roster_entries"}
+                      <span
+                        className="shrink-0 flex items-center justify-center text-[9px] font-semibold"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: r.kind === "person" ? 9999 : 5,
+                          background: "var(--brand-yellow)",
+                          color: "#171717",
+                        }}
+                      >
+                        {initials(r.display_name)}
+                      </span>
+                      <span className="text-[color:var(--foreground)] truncate">{r.display_name}</span>
+                      <span className="text-[10.5px] text-[color:var(--muted-foreground)] ml-auto shrink-0">
+                        {r.roles.length > 0 ? r.roles.map((role) => ROLE_LABELS[role] ?? role).join(" · ") : "No role"}
                       </span>
                     </div>
                   ))
@@ -191,8 +217,11 @@ export function ConfigureDialog({
                   Add
                 </button>
               </div>
-              <div className="text-[11px] text-[color:var(--muted-foreground)] pt-1">
-                One roster for FDE, TAM and Partner. Adding here is the only way a new name enters the system.
+              <div className="text-[11px] text-[color:var(--muted-foreground)] pt-1 leading-snug">
+                One roster for FDE, TAM and Partner — it backs every owner picker in the
+                table, the board and the detail panel. Adding here (or via &ldquo;Add to
+                roster&rdquo; in a picker) is the only way a new name enters the system, which
+                is what stops the same person appearing under three spellings.
               </div>
             </div>
           ) : null}

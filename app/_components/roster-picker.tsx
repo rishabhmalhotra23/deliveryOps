@@ -43,6 +43,7 @@ export function RosterPicker({
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
 
   useEffect(() => {
@@ -97,7 +98,12 @@ export function RosterPicker({
       });
     }
     place();
-    function onScroll() {
+    function onScroll(e: Event) {
+      // Capture-phase on window fires for *any* scroll, including the results
+      // list itself — so scrolling a long roster closed the thing you were
+      // scrolling. Only an ancestor scrolling should dismiss it.
+      const target = e.target as Node | null;
+      if (target && (wrapRef.current?.contains(target) || menuRef.current?.contains(target))) return;
       setEditing(false);
     }
     window.addEventListener("resize", place);
@@ -131,6 +137,7 @@ export function RosterPicker({
       }
       onPick(json.entry as RosterEntry);
       setJustAdded(true);
+      setTimeout(() => setJustAdded(false), 4000);
       setEditing(false);
       setQuery("");
     } catch (err) {
@@ -198,6 +205,7 @@ export function RosterPicker({
         style={{ borderColor: "var(--yellow-line)" }}
       />
       <div
+        ref={menuRef}
         className="dops-rise-in fixed z-50 w-72 max-h-72 overflow-auto rounded-md border shadow-lg"
         style={{
           left: menuPos?.left ?? 0,

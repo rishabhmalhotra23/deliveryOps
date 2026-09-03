@@ -74,15 +74,24 @@ const EDITABLE_FIELDS: (keyof Process)[] = [
   "linear_ticket_ids",
   "arr",
   "company_size",
+  "board_position",
 ];
 
 const GENERATED = new Set<string>(PROCESS_GENERATED_COLUMNS);
 
-function pickEditable(patch: Partial<Process>): Record<string, unknown> {
+export function pickEditable(patch: Partial<Process>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of EDITABLE_FIELDS) {
     if (GENERATED.has(f as string)) continue;
     if (f in patch && patch[f] !== undefined) out[f as string] = patch[f];
+  }
+  // completion_pct is a 0..1 fraction, but every caller is a UI that talks in
+  // whole percents — a scaling slip writes 65 instead of 0.65, which renders
+  // as "6500%" and a progress bar wider than the table. Clamped here rather
+  // than trusting each surface to convert correctly.
+  if ("completion_pct" in out) {
+    const pct = out.completion_pct;
+    out.completion_pct = typeof pct === "number" && Number.isFinite(pct) ? Math.max(0, Math.min(1, pct)) : null;
   }
   return out;
 }
@@ -291,6 +300,10 @@ export interface CreateProcessInput {
   customer_id?: string | null;
   lifecycle?: ProcessLifecycle;
   platform?: ProcessPlatform;
+  /** Preferred: an id already resolved by the roster picker. */
+  fde_owner_id?: string | null;
+  /** Legacy free-text path, kept for scripts/importers. Goes through
+   *  resolveOrCreateRosterEntry like any other write. */
   fde_owner?: string | null;
 }
 
@@ -319,7 +332,11 @@ export function buildCreateProcessRow(
     lifecycle: input.lifecycle ?? DEFAULT_LIFECYCLE,
     platform: input.platform ?? DEFAULT_PLATFORM,
     migration_stage: NEW_PROCESS_MIGRATION_STAGE,
-    fde_owner: input.fde_owner || null,
+    // An id wins when both are present: it's already canonical, and
+    // resolveRosterFields() re-derives the text column from it.
+    ...(input.fde_owner_id
+      ? { fde_owner_id: input.fde_owner_id }
+      : { fde_owner: input.fde_owner || null }),
     updated_by: actor,
   };
 }

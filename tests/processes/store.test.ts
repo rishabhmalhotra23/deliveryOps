@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCreateProcessRow,
+  pickEditable,
   withDerivedFields,
   InvalidProcessInputError,
   bulkApply,
@@ -177,5 +178,33 @@ describe("bulk request size cap", () => {
   it("rejects a bulk delete over the cap before touching Supabase", async () => {
     const ids = Array.from({ length: MAX_BULK_IDS + 1 }, (_, i) => `id-${i}`);
     await expect(bulkDeleteProcesses(ids, "actor")).rejects.toThrow(TooManyIdsError);
+  });
+});
+
+// completion_pct is stored as a 0..1 fraction while every UI surface talks in
+// whole percents. A scaling slip in one surface used to write 65 instead of
+// 0.65, which rendered as "6500%" and a progress bar wider than the table, so
+// the store clamps rather than trusting callers to convert.
+describe("pickEditable / completion_pct", () => {
+  it("keeps a valid fraction untouched", () => {
+    expect(pickEditable({ completion_pct: 0.65 }).completion_pct).toBe(0.65);
+    expect(pickEditable({ completion_pct: 0 }).completion_pct).toBe(0);
+    expect(pickEditable({ completion_pct: 1 }).completion_pct).toBe(1);
+  });
+
+  it("clamps a percent mistakenly sent on a 0..100 scale", () => {
+    expect(pickEditable({ completion_pct: 65 }).completion_pct).toBe(1);
+  });
+
+  it("clamps negatives", () => {
+    expect(pickEditable({ completion_pct: -3 }).completion_pct).toBe(0);
+  });
+
+  it("nulls a non-finite value rather than storing NaN", () => {
+    expect(pickEditable({ completion_pct: Number.NaN }).completion_pct).toBeNull();
+  });
+
+  it("leaves the field alone when the patch doesn't mention it", () => {
+    expect("completion_pct" in pickEditable({ notes: "hi" })).toBe(false);
   });
 });

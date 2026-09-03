@@ -504,6 +504,10 @@ export interface Process extends Omit<MigrationProcess, "platform"> {
   deleted_at: string | null;
   deleted_by: string | null;
 
+  /** Manual order within a board lane (0035). Lower sorts first; null means
+   *  never dragged and sorts last. Fractional, so a reorder is one write. */
+  board_position: number | null;
+
   // Roster FKs (0032) -- additive alongside the text columns above, which
   // stay as a denormalized display mirror kept in sync by updateProcess().
   fde_owner_id: string | null;

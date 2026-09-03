@@ -21,11 +21,68 @@ import {
 } from "@/lib/supabase/types";
 import type { TicketRow } from "@/lib/tickets/types";
 import { FIELD_TO_COL, formatMoney, staleDays, type ColKey } from "@/lib/delivery/columns";
+import {
+  BLOCKED_ON_LABELS,
+  HEALTH_LABELS,
+  LIFECYCLE_LABELS,
+  PHASE_LABELS,
+  PLATFORM_LABELS,
+  WORK_MODE_LABELS,
+  healthLabel,
+  platformLabel,
+  sentenceCase,
+  stageLabel,
+} from "@/lib/delivery/labels";
 import { RosterPicker } from "@/app/_components/roster-picker";
 import { ActivityFeed } from "@/app/_components/activity-feed";
 
-function label(s: string | null): string {
-  return s ? s.replace(/_/g, " ") : "—";
+/** completion_pct is a 0..1 fraction; the UI talks in whole percents. */
+function clampPct(percent: number): number {
+  if (!Number.isFinite(percent)) return 0;
+  return Math.max(0, Math.min(100, percent));
+}
+
+/** Column name -> the label the panel shows for that field, so the history
+ *  list reads "FDE owner changed" rather than "fde owner id changed". */
+const FIELD_DISPLAY_NAMES: Record<string, string> = {
+  process_name: "Process name",
+  customer_id: "Customer",
+  lifecycle: "Lifecycle",
+  migration_stage: "Migration stage",
+  phase: "Phase",
+  health: "Health",
+  blocked_on: "Blocked on",
+  work_mode: "Work mode",
+  platform: "Platform",
+  kickoff_date: "Kickoff",
+  go_live_date: "Go live",
+  date_parity_complete: "Parity complete",
+  date_customer_handover: "Customer handover",
+  date_customer_validation: "Customer validation",
+  completion_pct: "Completion %",
+  total_effort_hours: "Effort hours",
+  fde_owner: "FDE owner",
+  fde_owner_id: "FDE owner",
+  tam_owner: "TAM owner",
+  tam_owner_id: "TAM owner",
+  partner: "Partner",
+  partner_id: "Partner",
+  engg_owner: "Engineering owner",
+  engg_owner_id: "Engineering owner",
+  arr: "ARR (snapshot)",
+  company_size: "Company size",
+  value_minutes_saved_per_run: "Minutes saved / run",
+  value_basis: "Value basis",
+  blockers: "Blocker flag",
+  notes: "Latest note",
+  linear_ticket_ids: "Linear tickets",
+  board_position: "Board order",
+  complexity: "Complexity",
+  priority: "Priority",
+};
+
+function fieldName(column: string): string {
+  return FIELD_DISPLAY_NAMES[column] ?? sentenceCase(column);
 }
 
 async function parseJsonResponse(res: Response): Promise<{ error?: string; process?: Process }> {
@@ -210,6 +267,7 @@ export function ProcessDetail({
 
   async function markReviewed() {
     setReviewBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/processes/${proc.id}`, {
         method: "PATCH",
@@ -217,44 +275,72 @@ export function ProcessDetail({
         body: JSON.stringify({ action: "mark-reviewed" }),
       });
       const json = await parseJsonResponse(res);
-      if (res.ok && json.process) {
-        setProc((cur) => ({ ...cur, ...json.process }));
-        onUpdated(json.process as Process);
-      }
+      if (!res.ok || !json.process) throw new Error(json.error || `HTTP ${res.status}`);
+      setProc((cur) => ({ ...cur, ...json.process }));
+      onUpdated(json.process as Process);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setReviewBusy(false);
     }
   }
 
   async function archive() {
-    if (!window.confirm(`Archive "${proc.process_name}"? This can be undone.`)) return;
+    if (!window.confirm(`Archive "${proc.process_name}"? It can be restored from All processes.`)) return;
     setArchiveBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/processes/${proc.id}`, { method: "DELETE" });
-      if (res.ok) onArchived(proc.id);
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      onArchived(proc.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setArchiveBusy(false);
     }
   }
 
   async function attachTicket(ticketId: string) {
-    await fetch(`/api/processes/${proc.id}/tickets`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticket_id: ticketId }),
-    });
-    setTicketQuery("");
-    setTicketResults([]);
-    const res = await fetch(`/api/processes/${proc.id}/tickets`);
-    const json = await res.json();
-    setTickets(json.tickets ?? []);
-    onDataChanged();
+    setError(null);
+    try {
+      const res = await fetch(`/api/processes/${proc.id}/tickets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticket_id: ticketId }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      setTicketQuery("");
+      setTicketResults([]);
+      const listed = await fetch(`/api/processes/${proc.id}/tickets`);
+      const json = await listed.json();
+      setTickets(json.tickets ?? []);
+      onDataChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function detachTicket(ticketId: string) {
+    const previous = tickets;
     setTickets((cur) => cur.filter((t) => t.id !== ticketId));
-    await fetch(`/api/processes/${proc.id}/tickets?ticket_id=${encodeURIComponent(ticketId)}`, { method: "DELETE" });
-    onDataChanged();
+    try {
+      const res = await fetch(`/api/processes/${proc.id}/tickets?ticket_id=${encodeURIComponent(ticketId)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      onDataChanged();
+    } catch (err) {
+      // Put it back rather than showing a detached ticket that is still
+      // attached in the database.
+      setTickets(previous);
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   const index = list.findIndex((p) => p.id === proc.id);
@@ -272,7 +358,11 @@ export function ProcessDetail({
   const confirmedArr = proc.confirmed_arr ?? proc.arr;
 
   return (
-    <div className="flex flex-col h-full">
+    // `min-h-0` on both the shell and the scroll region is what makes the
+    // internal scrollbar work: a flex item defaults to min-height:auto, so it
+    // refuses to shrink below its content and overflow-y-auto never engages —
+    // the panel just grew past its container and got clipped instead.
+    <div className="flex flex-col h-full min-h-0 flex-1">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
         <div className="flex items-start gap-2">
@@ -326,11 +416,11 @@ export function ProcessDetail({
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
           <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
-            {proc.platform.toUpperCase()}
+            {platformLabel(proc.platform)}
           </span>
           {proc.health ? (
             <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
-              {label(proc.health)}
+              {healthLabel(proc.health)}
             </span>
           ) : null}
           <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
@@ -345,7 +435,7 @@ export function ProcessDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-4">
         {proc.needs_attention_reason ? (
           <div className="rounded-lg bg-amber-500/10 border border-amber-500/25 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
             {proc.needs_attention_reason}
@@ -354,7 +444,7 @@ export function ProcessDetail({
 
         {/* Key facts strip */}
         <div className="grid grid-cols-4 divide-x rounded-lg border" style={{ borderColor: "var(--brand-metal-line)" }}>
-          <KeyFact label="Migration stage" value={MIGRATION_STAGE_LABELS[proc.migration_stage]} />
+          <KeyFact label="Migration stage" value={stageLabel(proc.migration_stage)} />
           <KeyFact label="Progress" value={proc.completion_pct != null ? `${Math.round(proc.completion_pct * 100)}%` : "—"} accent />
           <KeyFact
             label={proc.confirmed_arr != null ? "Confirmed ARR" : "ARR (snapshot)"}
@@ -388,6 +478,7 @@ export function ProcessDetail({
             fieldLabel="Lifecycle"
             value={proc.lifecycle}
             options={PROCESS_LIFECYCLES}
+            optionLabels={LIFECYCLE_LABELS}
             flashed={savedField === "Lifecycle"}
             onCommit={(v) => commit("lifecycle", "Lifecycle", v)}
             onPromote={() => promote("lifecycle")}
@@ -405,6 +496,7 @@ export function ProcessDetail({
             fieldLabel="Phase"
             value={proc.phase}
             options={PROCESS_PHASES}
+            optionLabels={PHASE_LABELS}
             flashed={savedField === "Phase"}
             clearable
             onCommit={(v) => commit("phase", "Phase", v)}
@@ -414,6 +506,7 @@ export function ProcessDetail({
             fieldLabel="Health"
             value={proc.health}
             options={PROCESS_HEALTHS}
+            optionLabels={HEALTH_LABELS}
             flashed={savedField === "Health"}
             clearable
             onCommit={(v) => commit("health", "Health", v)}
@@ -423,7 +516,7 @@ export function ProcessDetail({
             fieldLabel="Blocked on"
             value={proc.blocked_on}
             options={PROCESS_BLOCKED_ON}
-            optionLabels={{ none: "nothing" }}
+            optionLabels={BLOCKED_ON_LABELS}
             flashed={savedField === "Blocked on"}
             onCommit={(v) => commit("blocked_on", "Blocked on", v)}
           />
@@ -431,6 +524,7 @@ export function ProcessDetail({
             fieldLabel="Work mode"
             value={proc.work_mode}
             options={PROCESS_WORK_MODES}
+            optionLabels={WORK_MODE_LABELS}
             flashed={savedField === "Work mode"}
             clearable
             onCommit={(v) => commit("work_mode", "Work mode", v)}
@@ -439,7 +533,7 @@ export function ProcessDetail({
             fieldLabel="Platform"
             value={proc.platform}
             options={PROCESS_PLATFORMS}
-            optionLabels={Object.fromEntries(PROCESS_PLATFORMS.map((p) => [p, p.toUpperCase()]))}
+            optionLabels={PLATFORM_LABELS}
             flashed={savedField === "Platform"}
             onCommit={(v) => commit("platform", "Platform", v)}
             onPromote={() => promote("platform")}
@@ -453,9 +547,21 @@ export function ProcessDetail({
           <DateField fieldLabel="Parity complete" value={proc.date_parity_complete} flashed={savedField === "Parity complete"} onCommit={(v) => commit("date_parity_complete", "Parity complete", v)} />
           <DateField fieldLabel="Customer handover" value={proc.date_customer_handover} flashed={savedField === "Customer handover"} onCommit={(v) => commit("date_customer_handover", "Customer handover", v)} />
           <DateField fieldLabel="Customer validation" value={proc.date_customer_validation} flashed={savedField === "Customer validation"} onCommit={(v) => commit("date_customer_validation", "Customer validation", v)} />
-          <NumberField fieldLabel="Completion %" value={proc.completion_pct} flashed={savedField === "Completion %"} onCommit={(v) => commit("completion_pct", "Completion %", v)} onPromote={() => promote("completion_pct")} />
+          {/* Stored 0..1, shown 0..100. This field used to bind the raw
+              value under a "%" label, so it displayed 0.65 and a user typing
+              the obvious 65 wrote completion_pct = 65 — which rendered as
+              6500% in the table and blew the progress bar across the row. */}
+          <NumberField
+            fieldLabel="Completion %"
+            value={proc.completion_pct != null ? Math.round(proc.completion_pct * 100) : null}
+            min={0}
+            max={100}
+            flashed={savedField === "Completion %"}
+            onCommit={(v) => commit("completion_pct", "Completion %", v == null ? null : clampPct(v) / 100)}
+            onPromote={() => promote("completion_pct")}
+          />
           <NumberField fieldLabel="Effort hours" value={proc.total_effort_hours} flashed={savedField === "Effort hours"} onCommit={(v) => commit("total_effort_hours", "Effort hours", v)} onPromote={() => promote("total_effort_hours")} />
-          <DerivedField fieldLabel="TTV" display={proc.ttv_days != null ? `${proc.ttv_days} days` : "computed on go-live · generated column"} />
+          <DerivedField fieldLabel="TTV" display={proc.ttv_days != null ? `${proc.ttv_days} days` : "Set once kickoff and go-live are both filled in"} />
         </div>
 
         <GroupHeader title="Ownership" />
@@ -501,8 +607,29 @@ export function ProcessDetail({
           />
           <TextField fieldLabel="Company size" value={proc.company_size} flashed={savedField === "Company size"} onCommit={(v) => commit("company_size", "Company size", v)} />
           <NumberField fieldLabel="Minutes saved / run" value={proc.value_minutes_saved_per_run} flashed={savedField === "Minutes saved / run"} onCommit={(v) => commit("value_minutes_saved_per_run", "Minutes saved / run", v)} />
-          <DerivedField fieldLabel="Runs this quarter" display={proc.k2_process_id ? "—" : "no Kognitos link · single-workspace PAT"} />
-          <DerivedField fieldLabel="Value" display="nothing shown, deliberately" />
+          <DerivedField
+            fieldLabel="Runs this quarter"
+            display={proc.k2_process_id ? "—" : "Not linked to a Kognitos automation yet"}
+          />
+        </div>
+
+        <GroupHeader title="Notes on the record" />
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+          {/* The ⚑ flag in the table reads from `blockers`, which the activity
+              feed mirrors into. Without an editable field here a flag raised
+              by a note that was later deleted could never be cleared. */}
+          <TextField
+            fieldLabel="Blocker flag"
+            value={proc.blockers}
+            flashed={savedField === "Blocker flag"}
+            onCommit={(v) => commit("blockers", "Blocker flag", v)}
+          />
+          <TextField
+            fieldLabel="Latest note"
+            value={proc.notes}
+            flashed={savedField === "Latest note"}
+            onCommit={(v) => commit("notes", "Latest note", v)}
+          />
         </div>
 
         <GroupHeader title="Linear tickets" />
@@ -573,7 +700,7 @@ export function ProcessDetail({
               ) : (
                 historyEntries.map(([field, prov]) => (
                   <div key={field} className="text-[11px] text-[color:var(--muted-foreground)] py-0.5">
-                    {label(field)} changed · {prov?.by ?? "unknown"}
+                    {fieldName(field)} changed · {prov?.by ?? "unknown"}
                     {prov?.at ? ` · ${staleDays(prov.at)}d ago` : ""}
                   </div>
                 ))
@@ -592,7 +719,7 @@ export function ProcessDetail({
             <span style={{ color: "var(--yellow-ink)" }}>{savedField} saved</span>
           ) : (
             <>
-              Every field saves on change. No Save button.
+              Changes save as you make them.
               {proc.reviewed_at ? (
                 <span className="ml-2" style={{ color: "var(--yellow-ink)" }}>
                   reviewed {staleDays(proc.reviewed_at)}d ago
@@ -680,7 +807,7 @@ function SelectField<T extends string>({
         </option>
         {options.map((o) => (
           <option key={o} value={o}>
-            {optionLabels?.[o] ?? label(o)}
+            {optionLabels?.[o] ?? sentenceCase(o)}
           </option>
         ))}
       </select>
@@ -720,12 +847,16 @@ function NumberField({
   fieldLabel,
   value,
   flashed,
+  min,
+  max,
   onCommit,
   onPromote,
 }: {
   fieldLabel: string;
   value: number | null;
   flashed: boolean;
+  min?: number;
+  max?: number;
   onCommit: (v: number | null) => void;
   onPromote?: () => void;
 }) {
@@ -736,9 +867,15 @@ function NumberField({
       <input
         type="number"
         value={draft}
+        min={min}
+        max={max}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
           const next = draft === "" ? null : Number(draft);
+          if (next != null && !Number.isFinite(next)) {
+            setDraft(value != null ? String(value) : "");
+            return;
+          }
           if (next !== value) onCommit(next);
         }}
         className="dops-field font-mono text-[13px]"

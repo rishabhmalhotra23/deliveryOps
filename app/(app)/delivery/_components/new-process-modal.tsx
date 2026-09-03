@@ -10,12 +10,10 @@
 import { useState } from "react";
 
 import { PROCESS_LIFECYCLES, PROCESS_PLATFORMS, type Process } from "@/lib/supabase/types";
+import { LIFECYCLE_LABELS, PLATFORM_LABELS } from "@/lib/delivery/labels";
+import { RosterPicker } from "@/app/_components/roster-picker";
 
 const OTHER = "__other__";
-
-function label(s: string): string {
-  return s.replace(/_/g, " ");
-}
 
 const inputClass =
   "w-full rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] text-[color:var(--foreground)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-yellow)]";
@@ -43,7 +41,8 @@ export function NewProcessModal({
   const [freeAccount, setFreeAccount] = useState("");
   const [lifecycle, setLifecycle] = useState<(typeof PROCESS_LIFECYCLES)[number]>(seedLifecycle ?? "backlog");
   const [platform, setPlatform] = useState<(typeof PROCESS_PLATFORMS)[number]>("v2");
-  const [fdeOwner, setFdeOwner] = useState("");
+  const [fdeOwnerId, setFdeOwnerId] = useState("");
+  const [fdeOwnerName, setFdeOwnerName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +64,7 @@ export function NewProcessModal({
           customer_id: usingOther ? null : customerId || null,
           lifecycle,
           platform,
-          fde_owner: fdeOwner.trim() || null,
+          fde_owner_id: fdeOwnerId || null,
         }),
       });
       const json = await res.json();
@@ -144,7 +143,7 @@ export function NewProcessModal({
             >
               {PROCESS_LIFECYCLES.map((v) => (
                 <option key={v} value={v}>
-                  {label(v)}
+                  {LIFECYCLE_LABELS[v]}
                 </option>
               ))}
             </select>
@@ -160,7 +159,7 @@ export function NewProcessModal({
             >
               {PROCESS_PLATFORMS.map((v) => (
                 <option key={v} value={v}>
-                  {v.toUpperCase()}
+                  {PLATFORM_LABELS[v]}
                 </option>
               ))}
             </select>
@@ -171,10 +170,21 @@ export function NewProcessModal({
           <label className="text-[11px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold">
             FDE owner (optional)
           </label>
-          <input
-            value={fdeOwner}
-            onChange={(e) => setFdeOwner(e.target.value)}
-            className={inputClass}
+          {/* A free-text field here defeated the roster: whatever was typed
+              went to resolveOrCreateRosterEntry, which creates an entry, so a
+              typo permanently added a second spelling of a real person. */}
+          <RosterPicker
+            kind="person"
+            role="fde"
+            valueLabel={fdeOwnerName}
+            onPick={(entry) => {
+              setFdeOwnerId(entry.id);
+              setFdeOwnerName(entry.display_name);
+            }}
+            onClear={() => {
+              setFdeOwnerId("");
+              setFdeOwnerName(null);
+            }}
           />
         </div>
 

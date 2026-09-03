@@ -16,6 +16,7 @@ import {
   type RosterEntry,
 } from "@/lib/supabase/types";
 import { RosterPicker } from "@/app/_components/roster-picker";
+import { HEALTH_LABELS } from "@/lib/delivery/labels";
 
 export interface BulkResult {
   updated: Process[];
@@ -195,9 +196,9 @@ export function BulkActionBar({
                       type="button"
                       disabled={busy}
                       onClick={() => void patch({ health: h })}
-                      className="w-full text-left rounded-md px-2.5 py-1.5 text-[13px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)] capitalize"
+                      className="w-full text-left rounded-md px-2.5 py-1.5 text-[13px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)]"
                     >
-                      {h.replace(/_/g, " ")}
+                      {HEALTH_LABELS[h]}
                     </button>
                   ))}
                 </div>

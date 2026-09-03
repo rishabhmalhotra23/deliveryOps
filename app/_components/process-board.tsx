@@ -16,6 +16,7 @@ import { laneFor, type ActiveLane } from "@/lib/import/monday-taxonomy";
 import { ACTIVE_LANES, ACTIVE_LANE_LABELS } from "@/lib/processes/loader";
 import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delivery/columns";
 import { resolveHue, hueStyle, hueDotStyle, type ColorMap, type Hue } from "@/lib/delivery/hues";
+import { BLOCKED_ON_LABELS, healthLabel, platformLabel, stageLabel } from "@/lib/delivery/labels";
 import type { DetailProcess } from "@/app/_components/process-detail";
 
 // Lane dot colours, verbatim from the approved mockup's DELIVERY_LANES.
@@ -45,19 +46,63 @@ interface LaneDef {
   hue: Hue;
   /** Explicit dot colour, when the lane isn't coloured by a chip hue. */
   dot?: string;
+  /** Set when a lane can be shown but not dropped into, with the reason. */
+  noDrop?: string;
 }
+
+export type LaneSort = "manual" | "stale" | "name" | "progress" | "arr" | "health";
+
+export const LANE_SORTS: { key: LaneSort; label: string }[] = [
+  { key: "manual", label: "Manual order" },
+  { key: "stale", label: "Least recently touched" },
+  { key: "name", label: "Process name" },
+  { key: "progress", label: "Progress" },
+  { key: "arr", label: "ARR" },
+  { key: "health", label: "Health" },
+];
+
+const HEALTH_RANK: Record<string, number> = { off_track: 0, at_risk: 1, on_track: 2 };
 
 export interface ProcessBoardProps {
   mode: "active" | "v2";
+  /** Lane ordering. `manual` respects board_position (drag order); anything
+   *  else sorts every lane by that field, since the table's column-header
+   *  sort has no equivalent here. */
+  laneSort: LaneSort;
   rows: DetailProcess[];
   cardFields: ColKey[];
   colorMap: ColorMap;
   onSave: (id: string, patch: Partial<Process>) => Promise<Process>;
+  /** Writes a board_position per row — a reorder needs a different value on
+   *  each row, which the single-patch bulk endpoint can't express. */
+  onReorder: (writes: PositionWrite[]) => Promise<void>;
   onOpenDetail: (id: string) => void;
   onCreateInLane: (seed: Partial<Process>) => void;
 }
 
-function bucketRows(mode: "active" | "v2", rows: DetailProcess[]): { lanes: LaneDef[]; byLane: Map<string, DetailProcess[]> } {
+function comparatorFor(sort: LaneSort): (a: DetailProcess, b: DetailProcess) => number {
+  switch (sort) {
+    case "stale":
+      return (a, b) => a.updated_at.localeCompare(b.updated_at);
+    case "name":
+      return (a, b) => a.process_name.localeCompare(b.process_name);
+    case "progress":
+      return (a, b) => (b.completion_pct ?? -1) - (a.completion_pct ?? -1);
+    case "arr":
+      return (a, b) => (b.arr ?? -1) - (a.arr ?? -1);
+    case "health":
+      return (a, b) => (HEALTH_RANK[a.health ?? ""] ?? 9) - (HEALTH_RANK[b.health ?? ""] ?? 9);
+    default:
+      return byBoardPosition;
+  }
+}
+
+function bucketRows(
+  mode: "active" | "v2",
+  rows: DetailProcess[],
+  laneSort: LaneSort
+): { lanes: LaneDef[]; byLane: Map<string, DetailProcess[]> } {
+  const compare = comparatorFor(laneSort);
   if (mode === "active") {
     const lanes: LaneDef[] = ACTIVE_LANES.map((l) => ({
       key: l,
@@ -70,24 +115,124 @@ function bucketRows(mode: "active" | "v2", rows: DetailProcess[]): { lanes: Lane
       const lane = laneFor(row.lifecycle, row.blocked_on);
       if (lane) byLane.get(lane)!.push(row);
     }
+    byLane.forEach((laneRows) => laneRows.sort(compare));
     return { lanes, byLane };
   }
   const stages = MIGRATION_STAGES.filter((s) => s !== "not_required");
-  const lanes: LaneDef[] = stages.map((s) => ({ key: s, label: MIGRATION_STAGE_LABELS[s], hue: resolveHue("stage", s, {}) }));
+  const lanes: LaneDef[] = stages.map((s) => ({
+    key: s,
+    label: MIGRATION_STAGE_LABELS[s],
+    hue: resolveHue("stage", s, {}),
+    // "V2 native" means built on V2 with nothing migrated, so
+    // isV2Relevant() drops rows in it that carry no migration evidence (no
+    // tickets, no parity/handover/validation dates). Dropping an
+    // evidence-free card here made it disappear from the section entirely
+    // on the next refresh — the user's own action deleted it from view.
+    noDrop: s === "v2_native" ? "V2 native is for work built on V2, not migrated to it" : undefined,
+  }));
   const byLane = new Map<string, DetailProcess[]>(lanes.map((l) => [l.key, []]));
   for (const row of rows) {
     if (byLane.has(row.migration_stage)) byLane.get(row.migration_stage)!.push(row);
   }
+  byLane.forEach((laneRows) => laneRows.sort(compare));
   return { lanes, byLane };
 }
 
-export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenDetail, onCreateInLane }: ProcessBoardProps) {
+/** Manually placed cards first, in position order; everything never dragged
+ *  keeps the previous stalest-first ordering underneath them. */
+function byBoardPosition(a: DetailProcess, b: DetailProcess): number {
+  const ap = a.board_position;
+  const bp = b.board_position;
+  if (ap != null && bp != null) return ap - bp;
+  if (ap != null) return -1;
+  if (bp != null) return 1;
+  return a.updated_at.localeCompare(b.updated_at);
+}
+
+const STEP = 1024;
+
+export interface PositionWrite {
+  id: string;
+  board_position: number;
+}
+
+/** Works out which rows need a new board_position for a drop.
+ *
+ *  `rawSlot` is the gap index as the UI computed it — against the lane list
+ *  *including* the dragged card, which is what the drop markers are indexed
+ *  by. Dropping card A of [A,B,C,D] below C gives rawSlot 3; once A is
+ *  removed the list is [B,C,D] and the correct insert index is 2, so any slot
+ *  below the card's own position shifts down by one. Getting this wrong put
+ *  every downward drag one place too low.
+ *
+ *  Returns one write in the steady state (the midpoint of the new
+ *  neighbours), or a full renumber of the lane when a midpoint can't be
+ *  expressed: the neighbours aren't positioned yet (every lane starts all
+ *  null, since 0035 deliberately doesn't backfill), or the gap has been
+ *  halved until no float sits strictly between. Empty array = no-op. */
+export function planReorder(
+  laneRows: DetailProcess[],
+  dragged: DetailProcess,
+  rawSlot: number | undefined
+): PositionWrite[] {
+  // `laneRows` may or may not already contain the dragged card: it does for a
+  // reorder inside one lane, and doesn't when the card is arriving from
+  // another lane. Taking the row itself rather than an id keeps both cases on
+  // the same path — and means the caller never has to pre-splice it in, which
+  // used to make the no-op check below misfire on every cross-lane drop.
+  const draggedId = dragged.id;
+  const from = laneRows.findIndex((r) => r.id === draggedId);
+  const without = laneRows.filter((r) => r.id !== draggedId);
+
+  let index = rawSlot ?? without.length;
+  if (from >= 0 && from < index) index -= 1;
+  index = Math.max(0, Math.min(index, without.length));
+
+  // Dropped exactly where it already was.
+  if (from >= 0 && index === from) return [];
+  const prev = index > 0 ? without[index - 1]?.board_position ?? null : null;
+  const next = index < without.length ? without[index]?.board_position ?? null : null;
+  const prevKnown = index === 0 || prev != null;
+  const nextKnown = index === without.length || next != null;
+
+  if (prevKnown && nextKnown) {
+    let value: number | null = null;
+    if (prev == null && next == null) value = STEP; // lane is empty
+    else if (prev == null) value = (next as number) - STEP;
+    else if (next == null) value = prev + STEP;
+    else {
+      const mid = (prev + next) / 2;
+      // Strictly between, or the gap is exhausted and we must renumber.
+      if (mid > prev && mid < next) value = mid;
+    }
+    if (value != null) return [{ id: draggedId, board_position: value }];
+  }
+
+  // Fall back: give the whole lane explicit, evenly spaced positions in its
+  // new order. Only the rows whose value actually changes are returned.
+  const finalOrder = [...without];
+  finalOrder.splice(index, 0, dragged);
+  return finalOrder
+    .map((row, i) => ({ id: row.id, board_position: (i + 1) * STEP, previous: row.board_position }))
+    .filter((w) => w.previous !== w.board_position)
+    .map(({ id, board_position }) => ({ id, board_position }));
+}
+
+export function ProcessBoard({ mode, laneSort, rows, cardFields, colorMap, onSave, onReorder, onOpenDetail, onCreateInLane }: ProcessBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragOverLane, setDragOverLane] = useState<string | null>(null);
-  const [pendingStuck, setPendingStuck] = useState<{ id: string } | null>(null);
+  const [pendingStuck, setPendingStuck] = useState<{
+    id: string;
+    boardPosition: number | null;
+    extraWrites: PositionWrite[];
+  } | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropSlot, setDropSlot] = useState<{ lane: string; index: number } | null>(null);
   const [blockedReason, setBlockedReason] = useState<ProcessBlockedOn>("customer");
 
-  const { lanes, byLane } = bucketRows(mode, rows);
+  const { lanes, byLane } = bucketRows(mode, rows, laneSort);
+  // Dragging only makes sense against the order it writes to.
+  const canReorder = laneSort === "manual";
 
   function toggleCollapsed(key: string) {
     setCollapsed((cur) => {
@@ -98,25 +243,43 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
     });
   }
 
-  async function commitMove(id: string, laneKey: string) {
+  async function commitMove(id: string, laneKey: string, slot?: number) {
     // Only ids that belong to a card actually on this board — a drop carries
     // whatever `text/plain` the drag source set, and dragging e.g. the detail
     // panel's permalink onto a lane would otherwise PATCH a bogus id.
     const row = rows.find((r) => r.id === id);
     if (!row) return;
 
+    const currentLane = mode === "v2" ? row.migration_stage : laneFor(row.lifecycle, row.blocked_on);
+
+    // Same lane => a pure reorder. board_position is bookkeeping, so this
+    // deliberately doesn't touch any status field (and migration 0036 keeps
+    // it from resetting "Last touched").
+    if (currentLane === laneKey) {
+      const writes = planReorder(byLane.get(laneKey) ?? [], row, slot);
+      if (writes.length > 0) await onReorder(writes);
+      return;
+    }
+
+    // Crossing lanes: place it where it was dropped, and change the field
+    // that actually defines lane membership. The target lane is planned as if
+    // the card were already in it, so it lands in the gap you aimed at.
+    const writes = planReorder(byLane.get(laneKey) ?? [], row, slot);
+    const boardPosition = writes.find((w) => w.id === id)?.board_position ?? null;
+    const extraWrites = writes.filter((w) => w.id !== id);
+
     if (mode === "v2") {
-      if (row.migration_stage === laneKey) return;
-      await onSave(id, { migration_stage: laneKey as Process["migration_stage"] });
+      await onSave(id, {
+        migration_stage: laneKey as Process["migration_stage"],
+        ...(boardPosition != null ? { board_position: boardPosition } : {}),
+      });
+      if (extraWrites.length > 0) await onReorder(extraWrites);
       return;
     }
 
     const lane = laneKey as ActiveLane;
-    // Releasing a card back into the lane it came from is a no-op, not an
-    // edit. Without this it stamped field_provenance and rewrote lifecycle.
-    if (laneFor(row.lifecycle, row.blocked_on) === lane) return;
     if (lane === "stuck") {
-      setPendingStuck({ id });
+      setPendingStuck({ id, boardPosition, extraWrites });
       return;
     }
     // The lane -> lifecycle map is lossy: Pipeline holds both backlog and
@@ -124,16 +287,23 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
     // lifecycle when clearing blocked_on wouldn't already land the row in the
     // target lane, so a nudge can't silently downgrade upcoming -> backlog.
     const patch: Partial<Process> = { blocked_on: "none" };
+    if (boardPosition != null) patch.board_position = boardPosition;
     if (laneFor(row.lifecycle, "none") !== lane) {
       patch.lifecycle = ACTIVE_LANE_TO_LIFECYCLE[lane];
     }
     await onSave(id, patch);
+    if (extraWrites.length > 0) await onReorder(extraWrites);
   }
 
   async function saveStuckMove() {
     if (!pendingStuck) return;
-    await onSave(pendingStuck.id, { blocked_on: blockedReason });
+    const { id, boardPosition, extraWrites } = pendingStuck;
     setPendingStuck(null);
+    await onSave(id, {
+      blocked_on: blockedReason,
+      ...(boardPosition != null ? { board_position: boardPosition } : {}),
+    });
+    if (extraWrites.length > 0) await onReorder(extraWrites);
   }
 
   return (
@@ -145,7 +315,7 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
         return (
           <div
             key={lane.key}
-            className={`rounded-xl border transition-[flex-basis] duration-200 shrink-0 ${isDragOver ? "dops-lane-glow" : ""}`}
+            className={`dops-lane rounded-xl border transition-[flex-basis] duration-200 shrink-0 ${isDragOver ? "dops-lane-glow" : ""}`}
             style={{
               flexBasis: isCollapsed ? 52 : 268,
               width: isCollapsed ? 52 : 268,
@@ -153,15 +323,23 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
               background: "var(--surface-1, var(--card))",
             }}
             onDragOver={(e) => {
+              if (lane.noDrop) {
+                e.dataTransfer.dropEffect = "none";
+                return;
+              }
               e.preventDefault();
               setDragOverLane(lane.key);
             }}
             onDragLeave={() => setDragOverLane((cur) => (cur === lane.key ? null : cur))}
             onDrop={(e) => {
+              if (lane.noDrop) return;
               e.preventDefault();
               const id = e.dataTransfer.getData("text/plain");
+              const slot = dropSlot?.lane === lane.key ? dropSlot.index : undefined;
               setDragOverLane(null);
-              if (id) void commitMove(id, lane.key);
+              setDropSlot(null);
+              setDragging(null);
+              if (id) void commitMove(id, lane.key, slot);
             }}
           >
             {isCollapsed ? (
@@ -188,6 +366,15 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
                   </button>
                   <span className="w-2 h-2 rounded-full shrink-0" style={lane.dot ? { background: lane.dot } : hueDotStyle(lane.hue)} />
                   <span className="text-[12.5px] font-semibold tracking-tight text-[color:var(--foreground)] truncate">{lane.label}</span>
+                  {lane.noDrop ? (
+                    <span
+                      title={lane.noDrop}
+                      aria-label={lane.noDrop}
+                      className="text-[10px] text-[color:var(--muted-foreground)] cursor-help"
+                    >
+                      ⓘ
+                    </span>
+                  ) : null}
                   <span className="text-[11px] text-[color:var(--muted-foreground)] tabular-nums ml-auto">{laneRows.length}</span>
                   {mode === "active" ? (
                     <button
@@ -201,11 +388,45 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
                     </button>
                   ) : null}
                 </div>
-                <div className="p-2 space-y-2 min-h-[80px]">
+                <div
+                  className="p-2 min-h-[80px]"
+                  onDragOver={(e) => {
+                    // Nothing to place relative to in an empty lane.
+                    if (laneRows.length === 0) setDropSlot({ lane: lane.key, index: 0 });
+                  }}
+                >
                   {laneRows.map((row, i) => (
-                    <Card key={row.id} row={row} index={i} fields={cardFields} colorMap={colorMap} onOpenDetail={onOpenDetail} />
+                    <div
+                      key={row.id}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        // Above or below this card's midpoint decides which
+                        // side of it the dragged card lands on.
+                        const box = e.currentTarget.getBoundingClientRect();
+                        const after = e.clientY > box.top + box.height / 2;
+                        setDropSlot({ lane: lane.key, index: after ? i + 1 : i });
+                      }}
+                    >
+                      {dropSlot?.lane === lane.key && dropSlot.index === i ? <DropMarker /> : null}
+                      <Card
+                        row={row}
+                        index={i}
+                        fields={cardFields}
+                        colorMap={colorMap}
+                        canDrag={canReorder}
+                        dragging={dragging === row.id}
+                        onDragStart={() => setDragging(row.id)}
+                        onDragEnd={() => {
+                          setDragging(null);
+                          setDropSlot(null);
+                          setDragOverLane(null);
+                        }}
+                        onOpenDetail={onOpenDetail}
+                      />
+                    </div>
                   ))}
-                  {isDragOver ? (
+                  {dropSlot?.lane === lane.key && dropSlot.index >= laneRows.length ? <DropMarker /> : null}
+                  {isDragOver && laneRows.length === 0 ? (
                     <div
                       className="dops-row-in rounded-lg border border-dashed px-3 py-4 text-center text-[11px]"
                       style={{ borderColor: "var(--yellow-line)", color: "var(--yellow-ink)" }}
@@ -231,7 +452,7 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
             >
               {PROCESS_BLOCKED_ON.filter((v) => v !== "none").map((v) => (
                 <option key={v} value={v}>
-                  {v.replace(/_/g, " ")}
+                  {BLOCKED_ON_LABELS[v]}
                 </option>
               ))}
             </select>
@@ -250,6 +471,17 @@ export function ProcessBoard({ mode, rows, cardFields, colorMap, onSave, onOpenD
   );
 }
 
+/** A 2px insertion line showing exactly which gap the card will land in —
+ *  a lane-level "drop here" box can't express order. */
+function DropMarker() {
+  return (
+    <div
+      className="dops-row-in rounded-full mb-2"
+      style={{ height: 3, background: "var(--brand-yellow)", boxShadow: "0 0 0 3px var(--yellow-soft)" }}
+    />
+  );
+}
+
 const HEALTH_BORDER: Record<string, string> = {
   on_track: "var(--status-good)",
   at_risk: "var(--status-warn)",
@@ -261,20 +493,47 @@ function Card({
   index,
   fields,
   colorMap,
+  canDrag,
+  dragging,
+  onDragStart,
+  onDragEnd,
   onOpenDetail,
 }: {
   row: DetailProcess;
   index: number;
   fields: ColKey[];
   colorMap: ColorMap;
+  canDrag: boolean;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
   onOpenDetail: (id: string) => void;
 }) {
   return (
+    // role/tabIndex because board view has no other way to open a record —
+    // the table's ⤢ button isn't rendered here, so without this the whole
+    // view was mouse-only.
     <div
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData("text/plain", row.id)}
+      role="button"
+      tabIndex={0}
+      aria-label={`${row.process_name} — ${row.customer_display_name}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenDetail(row.id);
+        }
+      }}
+      draggable={canDrag}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", row.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
       onClick={() => onOpenDetail(row.id)}
-      className="dops-card-in rounded-lg border p-2.5 cursor-pointer transition-transform hover:-translate-y-0.5"
+      className={`dops-card-in dops-card rounded-lg border p-2.5 mb-2 focus:outline-none focus-visible:ring-2 ${
+        canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+      } ${dragging ? "dops-card-dragging" : ""}`}
       style={{
         borderColor: "var(--brand-metal-line)",
         borderTopWidth: 2,
@@ -309,7 +568,7 @@ function CardChip({ colKey, row, colorMap }: { colKey: ColKey; row: DetailProces
       const hue = resolveHue("stage", row.migration_stage, colorMap);
       return (
         <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium" style={hueStyle(hue)}>
-          {MIGRATION_STAGE_LABELS[row.migration_stage]}
+          {stageLabel(row.migration_stage, { short: true })}
         </span>
       );
     }
@@ -317,11 +576,11 @@ function CardChip({ colKey, row, colorMap }: { colKey: ColKey; row: DetailProces
       if (!row.health) return null;
       return (
         <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium" style={hueStyle(resolveHue("health", row.health, colorMap))}>
-          {row.health.replace(/_/g, " ")}
+          {healthLabel(row.health)}
         </span>
       );
     case "platform":
-      return <span className="text-[10px] px-1.5 py-0.5 rounded border text-[color:var(--muted-foreground)]" style={{ borderColor: "var(--brand-metal-line)" }}>{row.platform.toUpperCase()}</span>;
+      return <span className="text-[10px] px-1.5 py-0.5 rounded border text-[color:var(--muted-foreground)]" style={{ borderColor: "var(--brand-metal-line)" }}>{platformLabel(row.platform)}</span>;
     case "pct":
       return row.completion_pct != null ? (
         <span className="text-[10.5px] font-mono text-[color:var(--muted-foreground)]">{Math.round(row.completion_pct * 100)}%</span>

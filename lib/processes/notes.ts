@@ -63,7 +63,7 @@ export async function addProcessNote(
   return data as ProcessNote;
 }
 
-export async function softDeleteProcessNote(noteId: string): Promise<ProcessNote> {
+export async function softDeleteProcessNote(noteId: string, actor = "unknown"): Promise<ProcessNote> {
   const sb = requireAdmin();
   const { data, error } = await sb
     .from(TABLES.processNotes)
@@ -76,5 +76,28 @@ export async function softDeleteProcessNote(noteId: string): Promise<ProcessNote
     if (error.code === "PGRST116") throw new ProcessNoteNotFoundError(noteId);
     throw error;
   }
-  return data as ProcessNote;
+
+  const note = data as ProcessNote;
+
+  // addProcessNote mirrors a note into processes.notes/.blockers so older
+  // readers keep working — and the table's red flag reads `blockers`.
+  // Deleting a note therefore has to re-derive that mirror from whatever note
+  // now survives, or a blocker raised by a since-deleted note stays flagged
+  // forever with no UI able to clear it.
+  const mirrorField = MIRROR_FIELD[note.kind];
+  if (mirrorField) {
+    const { data: survivors, error: listError } = await sb
+      .from(TABLES.processNotes)
+      .select("body")
+      .eq("process_id", note.process_id)
+      .eq("kind", note.kind)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (listError) throw listError;
+    const latest = (survivors as { body: string }[] | null)?.[0]?.body ?? null;
+    await updateProcess(note.process_id, { [mirrorField]: latest } as Partial<Process>, actor);
+  }
+
+  return note;
 }

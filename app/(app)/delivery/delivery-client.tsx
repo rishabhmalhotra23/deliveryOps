@@ -8,22 +8,30 @@
 // 880px centre overlay depending on the toolbar toggle.
 // Approved design: 2026-09-03-v2-delivery-redesign.html (CLAUDE-CODE-PROMPT.md).
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ProcessesOverview, ProcessRow, V2MigrationOverview, V2ProcessRow } from "@/lib/processes/loader";
+import { viewForLifecycle } from "@/lib/processes/loader";
 import type { Process, ProcessNoteKind } from "@/lib/supabase/types";
-import { MIGRATION_STAGE_LABELS } from "@/lib/supabase/types";
+import type {
+  MigrationStage,
+  ProcessHealth,
+  ProcessLifecycle,
+  ProcessPhase,
+  ProcessPlatform,
+} from "@/lib/supabase/types";
+import { healthLabel, lifecycleLabel, phaseLabel, platformLabel, stageLabel } from "@/lib/delivery/labels";
 import { PageHeader } from "@/app/_components/brand";
 import { ProcessTable } from "@/app/_components/process-table";
-import { ProcessBoard } from "@/app/_components/process-board";
+import { ProcessBoard, LANE_SORTS, type LaneSort, type PositionWrite } from "@/app/_components/process-board";
 import { ProcessDetail, type DetailProcess } from "@/app/_components/process-detail";
 import { ConfigureDialog } from "@/app/_components/configure-dialog";
 import { BulkActionBar, type BulkResult } from "@/app/_components/bulk-action-bar";
 import { NewProcessModal } from "./_components/new-process-modal";
 import { useViewPrefs, type FilterField } from "@/lib/delivery/prefs";
-import { COLDEFS, NARROW_COLS, CARD_FIELDS, type ColKey } from "@/lib/delivery/columns";
+import { COLDEFS, CARD_FIELDS, type ColKey } from "@/lib/delivery/columns";
 
-type Section = "active" | "v2";
+type Section = "active" | "v2" | "all";
 type ViewMode = "table" | "board";
 
 const FILTER_LABEL: Record<FilterField, string> = {
@@ -126,10 +134,24 @@ function optionsForField(field: FilterField, section: Section, rows: DetailProce
   }
 }
 
+// Filter chips, the dropdowns and the active-filter pills all read through
+// the shared label maps — they used to de-underscore the raw key, so the same
+// value said "On track" in a table chip and "on track" in its own filter.
 function optionLabel(field: FilterField, value: string): string {
-  if (field === "stage") return MIGRATION_STAGE_LABELS[value as keyof typeof MIGRATION_STAGE_LABELS] ?? value;
-  if (field === "platform") return value.toUpperCase();
-  return value.replace(/_/g, " ");
+  switch (field) {
+    case "stage":
+      return stageLabel(value as MigrationStage);
+    case "platform":
+      return platformLabel(value as ProcessPlatform);
+    case "health":
+      return healthLabel(value as ProcessHealth);
+    case "lifecycle":
+      return lifecycleLabel(value as ProcessLifecycle);
+    case "phase":
+      return phaseLabel(value as ProcessPhase);
+    default:
+      return value;
+  }
 }
 
 interface DeliveryClientProps {
@@ -141,8 +163,12 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [section, setSection] = useState<Section>(searchParams.get("section") === "v2" ? "v2" : "active");
-  const [viewBySection, setViewBySection] = useState<Record<Section, ViewMode>>({ active: "board", v2: "table" });
+  const initialSection = ((): Section => {
+    const q = searchParams.get("section");
+    return q === "v2" || q === "all" ? q : "active";
+  })();
+  const [section, setSection] = useState<Section>(initialSection);
+  const [viewBySection, setViewBySection] = useState<Record<Section, ViewMode>>({ active: "board", v2: "table", all: "table" });
   const [prefs, setPrefs] = useViewPrefs();
 
   const [allRows, setAllRows] = useState<ProcessRow[]>(processesOverview.all);
@@ -155,25 +181,51 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   const [openPopover, setOpenPopover] = useState<FilterField | "add" | "fields" | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [openId, setOpenId] = useState<string | null>(null);
   const [configureOpen, setConfigureOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createSeed, setCreateSeed] = useState<Partial<Process> | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [undo, setUndo] = useState<{ ids: string[] } | null>(null);
 
+  const backdropPressRef = useRef(false);
+  // /processes/<id> redirects here with ?open=<id>; the permalink and the row
+  // menu's "Copy link" both point at it.
+  const [openId, setOpenIdState] = useState<string | null>(searchParams.get("open"));
+  const setOpenId = setOpenIdState;
+  const [laneSort, setLaneSort] = useState<LaneSort>("manual");
   const [sortKey, setSortKey] = useState<ColKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  // Lock the page behind the overlay: without this the wheel scrolled the
+  // table underneath instead of the panel's own content.
+  useEffect(() => {
+    if (!openId || prefs.pattern !== "overlay") return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [openId, prefs.pattern]);
+
+  // Every field in the panel commits on blur, and React does not fire blur on
+  // unmount — so closing while a field was focused silently threw the edit
+  // away. Blurring first lets the pending commit run.
+  const closeDetail = useCallback(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+    setOpenId(null);
+  }, []);
 
   // Escape dismisses the centre overlay only. In split mode the panel is part
   // of the layout, not a modal, so Escape deliberately leaves it open.
   useEffect(() => {
     if (!openId || prefs.pattern !== "overlay") return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpenId(null);
+      if (e.key === "Escape") closeDetail();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [openId, prefs.pattern]);
+  }, [openId, prefs.pattern, closeDetail]);
 
   // One document-level handler dismisses any open toolbar popover on outside
   // click or Escape.
@@ -204,7 +256,14 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   }, [openPopover]);
 
   const view = viewBySection[section];
-  const baseRows: DetailProcess[] = section === "v2" ? v2Rows : allRows;
+  // "Active work" now actually means active work. It used to be handed every
+  // non-deleted process — including live, cancelled, churned and retired —
+  // so the tab badge (view-filtered) and the toolbar's "n of m" (unfiltered)
+  // disagreed permanently, and in board view laneFor() returned null for all
+  // of those rows so they were counted but rendered nowhere. Everything is
+  // still reachable, via the All processes section.
+  const activeRows = useMemo(() => allRows.filter((r) => viewForLifecycle(r.lifecycle) === "active"), [allRows]);
+  const baseRows: DetailProcess[] = section === "v2" ? v2Rows : section === "all" ? allRows : activeRows;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -227,6 +286,20 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
       return next.size === cur.size ? cur : next;
     });
   }, [sorted]);
+
+  // Only CARD_FIELDS can render as a board chip. Promoting e.g. Lifecycle
+  // used to push it into cardFields too, where CardChip fell through to its
+  // default branch and printed the literal word "Lifecycle" on every card —
+  // and the Fields menu only lists CARD_FIELDS, so there was no way to turn
+  // it back off without wiping saved preferences.
+  function promoteToColumn(col: ColKey) {
+    setPrefs((cur) => ({
+      ...cur,
+      cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col],
+      cardFields:
+        CARD_FIELDS.includes(col) && !cur.cardFields.includes(col) ? [...cur.cardFields, col] : cur.cardFields,
+    }));
+  }
 
   function onSort(key: ColKey) {
     if (sortKey === key) {
@@ -275,7 +348,11 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
       throw new Error(message);
     }
     setActionError(null);
-    applyUpdate(json.process as Process);
+    // No router.refresh() here: the PATCH response already carries the full
+    // row (including server-derived lifecycle/phase), and refreshing per edit
+    // meant two quick edits raced — the first refresh's snapshot landed after
+    // the second edit and visibly reverted it.
+    applyUpdate(json.process as Process, { refresh: false });
     return json.process as Process;
   }
 
@@ -317,8 +394,52 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   // the next refresh, which reads as data loss.
   async function bulkArchive(ids: string[]): Promise<BulkResult> {
     const result = await bulkRequest({ ids, action: "delete" });
-    removeRows(result.updated.map((p) => p.id));
+    const archived = result.updated.map((p) => p.id);
+    removeRows(archived);
+    // The copy promised this was undoable; POST .../restore already exists,
+    // so offer it for as long as the toast is up rather than leaving SQL as
+    // the only way back.
+    if (archived.length > 0) setUndo({ ids: archived });
     return result;
+  }
+
+  async function restoreProcesses(ids: string[]) {
+    setUndo(null);
+    const results = await Promise.all(
+      ids.map((id) => fetch(`/api/processes/${id}/restore`, { method: "POST" }).then((r) => r.ok))
+    );
+    const failed = results.filter((ok) => !ok).length;
+    if (failed > 0) setActionError(`${failed} process${failed > 1 ? "es" : ""} could not be restored.`);
+    router.refresh();
+  }
+
+  // Lane reordering: one value per row, so it can't ride the single-patch
+  // bulk endpoint. Applied optimistically then reconciled, and deliberately
+  // without a router.refresh() — position is a view preference, and a refresh
+  // per drag made two quick drags race each other visibly.
+  async function reorderProcesses(writes: PositionWrite[]): Promise<void> {
+    const optimistic = new Map(writes.map((w) => [w.id, w.board_position]));
+    const apply = (list: DetailProcess[]) =>
+      list.map((r) => (optimistic.has(r.id) ? { ...r, board_position: optimistic.get(r.id)! } : r));
+    setAllRows((cur) => apply(cur) as ProcessRow[]);
+    setV2Rows((cur) => apply(cur) as V2ProcessRow[]);
+
+    const res = await fetch("/api/processes/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ positions: writes }),
+    });
+    const json = (await res.json().catch(() => ({}))) as Partial<BulkResult> & { error?: string };
+    if (!res.ok) {
+      setActionError(json.error || `Could not save the new order (HTTP ${res.status}).`);
+      router.refresh();
+      return;
+    }
+    for (const p of json.updated ?? []) applyUpdate(p, { refresh: false });
+    if ((json.failed ?? []).length > 0) {
+      setActionError(`${json.failed!.length} card${json.failed!.length > 1 ? "s" : ""} could not be reordered.`);
+      router.refresh();
+    }
   }
 
   async function bulkNote(ids: string[], body: string, kind: ProcessNoteKind): Promise<BulkResult> {
@@ -358,17 +479,39 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     router.refresh();
   }
 
-  const visibleCols = openId && prefs.pattern === "split" ? NARROW_COLS : prefs.cols;
+  // The split panel used to swap the table down to three columns
+  // (NARROW_COLS), which hid most of the record you were working on. It now
+  // keeps your chosen columns and just switches to the narrow *width*
+  // variant — the table already owns a horizontal scrollport, so nothing is
+  // lost, it's just tighter.
+  const visibleCols = prefs.cols;
   const narrow = openId != null && prefs.pattern === "split";
 
   const openProcess = openId ? sorted.find((r) => r.id === openId) ?? baseRows.find((r) => r.id === openId) ?? null : null;
 
-  const columnCountLabel =
-    view === "board"
-      ? "Card fields"
-      : narrow
-        ? `${NARROW_COLS.length} of ${prefs.cols.length} columns`
-        : `${prefs.cols.length} columns`;
+  const columnCountLabel = view === "board" ? "Card fields" : `${prefs.cols.length} columns`;
+
+  // An empty list means two different things — nothing here yet, or nothing
+  // left after filtering — and the copy used to claim the second either way.
+  const hasNarrowing = search.trim().length > 0 || Object.keys(filterValues).length > 0;
+  function clearNarrowing() {
+    setSearch("");
+    setFilterValues({});
+  }
+  const emptyCopy: Record<Section, { title: string; hint: string }> = {
+    active: {
+      title: "Nothing in flight right now",
+      hint: "Delivered and closed work lives under All processes.",
+    },
+    v2: {
+      title: "No processes with V2 migration activity",
+      hint: "A process appears here once it has a migration stage, a linked ticket or a parity date.",
+    },
+    all: {
+      title: "No processes yet",
+      hint: "Create the first one with New process.",
+    },
+  };
 
   return (
     <div className="space-y-4">
@@ -387,8 +530,9 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
       <div className="flex items-center gap-4 border-b" style={{ borderColor: "var(--glass-border)" }}>
         {(
           [
-            { key: "active" as Section, label: "Active work", count: processesOverview.counts.active },
-            { key: "v2" as Section, label: "V2 migration", count: v2Overview.counts.total },
+            { key: "active" as Section, label: "Active work", count: activeRows.length },
+            { key: "v2" as Section, label: "V2 migration", count: v2Rows.length },
+            { key: "all" as Section, label: "All processes", count: allRows.length },
           ]
         ).map((s) => (
           <button
@@ -399,9 +543,9 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               setOpenPopover(null);
               setSelected(new Set());
               setOpenId(null);
-              router.replace(s.key === "v2" ? "/delivery?section=v2" : "/delivery");
+              router.replace(s.key === "active" ? "/delivery" : `/delivery?section=${s.key}`);
             }}
-            className="pb-2 text-sm tracking-tight flex items-center gap-1.5"
+            className="dops-tab-underline pb-2 text-sm tracking-tight flex items-center gap-1.5"
             style={{
               color: section === s.key ? "var(--foreground)" : "var(--muted-foreground)",
               fontWeight: section === s.key ? 600 : 400,
@@ -412,9 +556,13 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
             <span className="font-mono text-[11px] opacity-70">{s.count}</span>
           </button>
         ))}
-        {section === "v2" ? (
-          <span className="ml-auto text-[11px] text-[color:var(--muted-foreground)] pb-2">same records, migration lens</span>
-        ) : null}
+        <span className="ml-auto text-[11px] text-[color:var(--muted-foreground)] pb-2">
+          {section === "v2"
+            ? "same records, migration lens"
+            : section === "all"
+              ? "every process, including delivered and closed"
+              : "in flight now — delivered and closed live under All processes"}
+        </span>
       </div>
 
       {/* Toolbar */}
@@ -501,8 +649,37 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
             </button>
           </div>
 
-          <button type="button" onClick={() => setConfigureOpen(true)} title="Configure" className="w-8 h-8 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]">
-            ⚙
+          {/* Board view has no column headers, so lane order needs its own
+              control — the table's header sort has no equivalent here. */}
+          {view === "board" ? (
+            <label className="flex items-center gap-1.5 text-[11.5px] text-[color:var(--muted-foreground)] shrink-0">
+              Sort
+              <select
+                value={laneSort}
+                onChange={(e) => setLaneSort(e.target.value as LaneSort)}
+                className="dops-input px-2 py-1 text-[11.5px]"
+                aria-label="Order cards within each lane"
+              >
+                {LANE_SORTS.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {/* Labelled, not a bare gear: the roster lives in here and an
+              unlabelled icon gave no clue where to edit people or colours. */}
+          <button
+            type="button"
+            onClick={() => setConfigureOpen(true)}
+            title="Configure stages, roster and colours"
+            className="dops-press rounded-md border px-2.5 py-1.5 text-[12.5px] flex items-center gap-1.5 text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
+            style={{ borderColor: "var(--brand-metal-line)" }}
+          >
+            <span aria-hidden="true">⚙</span>
+            Configure
           </button>
 
           <div className="relative" data-dops-popover>
@@ -517,7 +694,6 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
             {openPopover === "fields" ? (
               <FieldsMenu
                 view={view}
-                narrow={narrow}
                 cols={prefs.cols}
                 cardFields={prefs.cardFields}
                 onToggle={(key) => {
@@ -613,9 +789,15 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               onColWChange={(key, px) => setPrefs((cur) => ({ ...cur, colW: { ...cur.colW, [key]: px } }))}
               onReorderCol={(from, to) =>
                 setPrefs((cur) => {
+                  // Insert *after* the target when dragging rightwards.
+                  // Always inserting before meant no gesture could ever move
+                  // a column to the last position.
+                  const fromIdx = cur.cols.indexOf(from);
+                  const toIdx = cur.cols.indexOf(to);
+                  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return cur;
                   const next = cur.cols.filter((c) => c !== from);
-                  const idx = next.indexOf(to);
-                  next.splice(idx < 0 ? next.length : idx, 0, from);
+                  const target = next.indexOf(to);
+                  next.splice(fromIdx < toIdx ? target + 1 : target, 0, from);
                   return { ...cur, cols: next };
                 })
               }
@@ -633,14 +815,19 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               onArchive={(id) => void bulkArchive([id])}
               onRestore={() => {}}
               showRestore={false}
+              emptyTitle={hasNarrowing ? "No processes match these filters" : emptyCopy[section].title}
+              emptyHint={hasNarrowing ? "Try clearing a filter or widening your search." : emptyCopy[section].hint}
+              onClearFilters={hasNarrowing ? clearNarrowing : undefined}
             />
           ) : (
             <ProcessBoard
-              mode={section}
+              mode={section === "v2" ? "v2" : "active"}
+              laneSort={laneSort}
               rows={sorted}
               cardFields={prefs.cardFields}
               colorMap={prefs.colorMap}
               onSave={saveField}
+              onReorder={reorderProcesses}
               onOpenDetail={setOpenId}
               onCreateInLane={(seed) => {
                 setCreateSeed(seed);
@@ -655,8 +842,13 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
           // overflow-y-auto` body gets a definite height to scroll inside,
           // instead of spilling past maxHeight.
           <div
-            className="rounded-xl border sticky self-start flex flex-col overflow-hidden"
-            style={{ top: 132, maxHeight: "calc(100vh - 148px)", borderColor: "var(--brand-metal-line)", background: "var(--surface-1, var(--card))" }}
+            className="dops-panel-in rounded-xl border sticky self-start flex flex-col min-h-0 overflow-hidden"
+            style={{
+              top: 16,
+              height: "calc(100vh - 32px)",
+              borderColor: "var(--brand-metal-line)",
+              background: "var(--surface-1, var(--card))",
+            }}
           >
             <ProcessDetail
               process={openProcess}
@@ -666,8 +858,8 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               onUpdated={applyUpdate}
               onArchived={(id) => removeRows([id])}
               onDataChanged={() => router.refresh()}
-              onClose={() => setOpenId(null)}
-              onAddColumn={(col) => setPrefs((cur) => ({ ...cur, cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col], cardFields: cur.cardFields.includes(col) ? cur.cardFields : [...cur.cardFields, col] }))}
+              onClose={closeDetail}
+              onAddColumn={promoteToColumn}
             />
           </div>
         ) : null}
@@ -677,10 +869,33 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
         // Flex centring, not `grid place-items`: a single auto-sized grid
         // track sizes from the child's content, so a percentage-width child
         // collapses instead of centring at its intended 880px.
-        <div className="fixed inset-0 z-40 bg-black/50 flex justify-center overflow-y-auto py-16 px-4" onClick={() => setOpenId(null)}>
+        <div
+          className="fixed inset-0 z-40 bg-black/50 flex justify-center items-start p-6 sm:p-10 overflow-hidden"
+          // Only a press that both starts and ends on the backdrop closes it.
+          // A plain onClick fired when a text selection that began inside the
+          // panel was released outside it, closing mid-edit.
+          onMouseDown={(e) => {
+            backdropPressRef.current = e.target === e.currentTarget;
+          }}
+          onMouseUp={(e) => {
+            if (backdropPressRef.current && e.target === e.currentTarget) closeDetail();
+            backdropPressRef.current = false;
+          }}
+        >
           <div
-            className="dops-rise-in rounded-xl border shadow-2xl self-start flex flex-col overflow-hidden"
-            style={{ width: "min(880px, 100%)", borderColor: "var(--brand-metal-line)", background: "var(--surface-1, var(--card))", maxHeight: "calc(100vh - 128px)" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${openProcess.process_name} — process detail`}
+            className="dops-rise-in rounded-xl border shadow-2xl flex flex-col min-h-0 overflow-hidden"
+            style={{
+              width: "min(880px, 100%)",
+              borderColor: "var(--brand-metal-line)",
+              background: "var(--surface-1, var(--card))",
+              // A definite height (not just max-height) is what lets the
+              // panel's inner flex child scroll instead of overflowing.
+              height: "min(880px, 100%)",
+              maxHeight: "100%",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <ProcessDetail
@@ -691,16 +906,38 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               onUpdated={applyUpdate}
               onArchived={(id) => removeRows([id])}
               onDataChanged={() => router.refresh()}
-              onClose={() => setOpenId(null)}
-              onAddColumn={(col) => setPrefs((cur) => ({ ...cur, cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col], cardFields: cur.cardFields.includes(col) ? cur.cardFields : [...cur.cardFields, col] }))}
+              onClose={closeDetail}
+              onAddColumn={promoteToColumn}
             />
           </div>
         </div>
       ) : null}
 
-      {actionError ? (
+      {undo ? (
         <div
           className="dops-rise-in-centred fixed left-1/2 bottom-6 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-[12px] shadow-lg flex items-center gap-3"
+          style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--brand-metal-line)" }}
+        >
+          Archived {undo.ids.length} process{undo.ids.length > 1 ? "es" : ""}.
+          <button
+            type="button"
+            onClick={() => void restoreProcesses(undo.ids)}
+            className="dops-press font-semibold underline"
+            style={{ color: "var(--yellow-ink)" }}
+          >
+            Undo
+          </button>
+          <button type="button" onClick={() => setUndo(null)} aria-label="Dismiss" className="opacity-60 hover:opacity-100">
+            ×
+          </button>
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <div
+          className={`dops-rise-in-centred fixed left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-[12px] shadow-lg flex items-center gap-3 ${
+            selected.size > 0 ? "bottom-32" : "bottom-6"
+          }`}
           style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--status-bad)", color: "var(--status-bad)" }}
         >
           {actionError}
@@ -796,7 +1033,6 @@ function FilterChip({
 
 function FieldsMenu({
   view,
-  narrow,
   cols,
   cardFields,
   onToggle,
@@ -804,7 +1040,6 @@ function FieldsMenu({
   hasCustomWidths,
 }: {
   view: ViewMode;
-  narrow: boolean;
   cols: ColKey[];
   cardFields: ColKey[];
   onToggle: (key: ColKey) => void;
@@ -821,12 +1056,7 @@ function FieldsMenu({
       <div className="px-3 py-1 text-[10.5px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
         {view === "table" ? "Show as columns" : "Show on cards"}
       </div>
-      {view === "table" && narrow ? (
-        <div className="px-3 pb-1.5 text-[10.5px] leading-snug text-[color:var(--muted-foreground)]">
-          The detail panel is open, so the table is showing its narrow set. These
-          take effect when you close the panel.
-        </div>
-      ) : null}
+
       <div className="max-h-64 overflow-auto">
         {universe.map((def) => (
           <button key={def.key} type="button" onClick={() => onToggle(def.key)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)]">

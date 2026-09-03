@@ -203,6 +203,7 @@
   --surface-2: #FAFAFA;
   --surface-3: #F1F1EF;
   --row-open-bg: #FBFFE0;
+  --row-hover-bg: #FAFAF7;
   /* Opaque on purpose: these paint sticky table cells, and a translucent
    * value lets horizontally-scrolled content smear through underneath. */
   --row-selected-bg: #FEFFF2;
@@ -248,6 +249,7 @@
   --surface-3: #2F2F2F;
   --row-open-bg: #3a3a1f;
   --row-selected-bg: #2c2c22;
+  --row-hover-bg: #2e2e2e;
 
   --st-neutral-fg: #A3A3A3;  --st-neutral-bg: rgba(163,163,163,.14);  --st-neutral-bd: rgba(163,163,163,.32);
   --st-indigo-fg:  #818CF8;  --st-indigo-bg:  rgba(129,140,248,.14);  --st-indigo-bd:  rgba(129,140,248,.32);
@@ -330,14 +332,20 @@
 /* ─── Delivery workspace controls ─────────────────────────────────────────
  * The `.dark select / input / textarea` block above has to use !important
  * (dark-mode browsers render native controls with light defaults that vanish
- * on #171717) — but an !important stylesheet declaration also beats a React
- * inline style. That silently flattened every value-driven chip and every
- * flat table cell in this workspace to the same translucent grey, which is
- * exactly the bug these classes exist to fix. Colours come in through inline
- * custom properties (--chip-fg/bg/bd), so a per-value hue still works while
- * the declaration itself is strong enough to win in dark mode.
- * MUST stay after the `.dark select` block — order is what makes it win. */
-.dops-chip {
+ * on #171717) — and an !important stylesheet declaration also beats a React
+ * inline style, which is what flattened every value-driven chip in this
+ * workspace to the same grey. Colours therefore come in through inline
+ * custom properties (--chip-fg/bg/bd) consumed here.
+ *
+ * EVERY selector below is element-qualified on purpose. `.dark select` is
+ * specificity (0,1,1); a bare `.dops-chip` is only (0,1,0), and when two
+ * !important declarations collide the cascade compares specificity and never
+ * consults source order — so the plain class lost and the chips stayed grey
+ * even though this block sits later in the file. `.dark select.dops-chip`
+ * is (0,2,1) and wins. Don't "simplify" these back to bare classes. */
+.dops-chip,
+select.dops-chip,
+.dark select.dops-chip {
   appearance: none;
   -webkit-appearance: none;
   background: var(--chip-bg) !important;
@@ -350,12 +358,22 @@
   line-height: 1.35;
   width: 100%;
   cursor: pointer;
+  transition: filter 140ms ease, box-shadow 140ms ease;
 }
-.dops-chip:focus { outline: none; box-shadow: 0 0 0 2px rgba(242, 255, 112, 0.35); }
+select.dops-chip:hover,
+.dark select.dops-chip:hover { filter: brightness(1.18); }
+select.dops-chip:focus,
+.dark select.dops-chip:focus { outline: none; box-shadow: 0 0 0 2px var(--yellow-line); }
 
 /* Flat, borderless-until-hover cell control — the table's default editing
  * affordance. Reads as plain text until you reach for it. */
-.dops-field {
+.dops-field,
+select.dops-field,
+input.dops-field,
+textarea.dops-field,
+.dark select.dops-field,
+.dark input.dops-field,
+.dark textarea.dops-field {
   appearance: none;
   -webkit-appearance: none;
   background: transparent !important;
@@ -364,25 +382,111 @@
   border-radius: 6px;
   width: 100%;
   padding: 1px 4px;
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
-.dops-field:hover { border-color: var(--brand-metal-line) !important; }
-.dops-field:focus { outline: none; border-color: var(--yellow-ink) !important; }
-/* 1200ms post-save flash. Instant on/off by design — no transition here. */
+select.dops-field:hover,
+input.dops-field:hover,
+textarea.dops-field:hover,
+.dark select.dops-field:hover,
+.dark input.dops-field:hover,
+.dark textarea.dops-field:hover {
+  border-color: var(--brand-metal-line) !important;
+  background: var(--field) !important;
+}
+select.dops-field:focus,
+input.dops-field:focus,
+textarea.dops-field:focus,
+.dark select.dops-field:focus,
+.dark input.dops-field:focus,
+.dark textarea.dops-field:focus {
+  outline: none;
+  border-color: var(--yellow-ink) !important;
+  background: var(--field) !important;
+}
+/* 1200ms post-save flash. */
 .dops-field-saved,
-.dops-chip-saved { border-color: rgba(242, 255, 112, 0.55) !important; }
+.dops-chip-saved,
+select.dops-field-saved,
+input.dops-field-saved,
+select.dops-chip-saved,
+.dark select.dops-field-saved,
+.dark input.dops-field-saved,
+.dark select.dops-chip-saved {
+  border-color: var(--yellow-line) !important;
+  background: var(--yellow-soft) !important;
+}
 
 /* Filled field — dialogs, composers, search boxes, the roster type-ahead. */
-.dops-input {
+.dops-input,
+select.dops-input,
+input.dops-input,
+textarea.dops-input,
+.dark select.dops-input,
+.dark input.dops-input,
+.dark textarea.dops-input {
   appearance: none;
   -webkit-appearance: none;
   background: var(--field) !important;
   color: var(--foreground) !important;
   border: 1px solid var(--brand-metal-line) !important;
   border-radius: 8px;
+  transition: border-color 120ms ease;
 }
-.dops-input:focus { outline: none; border-color: var(--yellow-ink) !important; }
-.dops-input-accent { border-color: var(--yellow-ink) !important; }
-.dops-input-dashed { border-style: dashed !important; background: transparent !important; }
+select.dops-input:focus,
+input.dops-input:focus,
+textarea.dops-input:focus,
+.dark select.dops-input:focus,
+.dark input.dops-input:focus,
+.dark textarea.dops-input:focus { outline: none; border-color: var(--yellow-ink) !important; }
+input.dops-input-accent,
+.dark input.dops-input-accent { border-color: var(--yellow-ink) !important; }
+input.dops-input-dashed,
+.dark input.dops-input-dashed { border-style: dashed !important; background: transparent !important; }
+
+/* Native date inputs render a white system calendar glyph that disappears on
+ * a light background and reads as a smudge on a dark one. */
+.dark input.dops-field[type="date"]::-webkit-calendar-picker-indicator,
+.dark input.dops-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.45); }
+input.dops-field[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.45; }
+input.dops-field[type="date"]:hover::-webkit-calendar-picker-indicator,
+.dark input.dops-field[type="date"]:hover::-webkit-calendar-picker-indicator { opacity: 0.9; }
+/* Spinners on the numeric cells add visual noise to a data grid. */
+input.dops-field[type="number"]::-webkit-outer-spin-button,
+input.dops-field[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input.dops-field[type="number"] { -moz-appearance: textfield; }
+
+/* ─── Delivery workspace interaction motion ──────────────────────────────
+ * Hover/press feedback, not just mount animations — an editing surface that
+ * doesn't respond to the pointer reads as static and unfinished. */
+/* Row hover is published as an inherited custom property rather than a
+ * background rule: the sticky Process/checkbox/actions cells paint their own
+ * opaque background (they have to, or scrolled content shows through), so a
+ * plain `.dops-row:hover` left them un-highlighted and the row looked broken
+ * in half. Overriding --row-bg cascades into every cell for free. */
+.dops-row { transition: background-color 120ms ease; }
+.dops-row-plain:hover { --row-bg: var(--row-hover-bg); }
+
+.dops-card {
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+.dops-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+.dops-card:active { transform: translateY(0) scale(0.995); }
+.dops-card-dragging { opacity: 0.45; }
+
+.dops-press { transition: transform 100ms ease, background-color 140ms ease, color 140ms ease, border-color 140ms ease; }
+.dops-press:active { transform: scale(0.96); }
+
+.dops-panel-in { animation: dopsPanelIn 200ms cubic-bezier(.2,.8,.3,1) both; }
+@keyframes dopsPanelIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+
+.dops-tab-underline { transition: color 140ms ease, border-color 140ms ease; }
+
+/* The drop placeholder and lane glow already animate; give the card being
+ * dragged over a lane a little breathing room too. */
+.dops-lane { transition: border-color 160ms ease, background-color 160ms ease; }
 
 /* ─── Report theme — scoped dark palette for the two live reports (All-Hands,
    Weekly Delivery Review). Deliberately NOT merged into `.dark` above, even
