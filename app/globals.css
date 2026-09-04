@@ -416,6 +416,73 @@ select.dops-chip-saved,
   background: var(--yellow-soft) !important;
 }
 
+/* Section heading inside a dropdown panel — the roster picker's
+ * "FDEs" / "Everyone else" split. */
+.dops-group-head {
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted-foreground);
+  padding: 7px 10px 4px;
+  background: var(--glass-bg);
+}
+
+/* Dropdown affordance for both cell controls above.
+ *
+ * `.dops-chip` and `.dops-field` both set `appearance: none` (they have to —
+ * the native control paints its own background and defeats the hue tokens),
+ * and neither put the arrow back. The result: Customer, Lifecycle, Phase and
+ * Work mode rendered as plain static text in the table, so nobody could tell
+ * they were editable at all. Reviewed 2026-09-04.
+ *
+ * Drawn as a background SVG rather than a pseudo-element, because `select`
+ * is a replaced element and ::after never renders inside one. A data URI
+ * can't reference `currentColor` or a custom property, so the stroke is a
+ * fixed mid-grey chosen to read against both the light and dark chip fills
+ * rather than trying to track each value's hue.
+ *
+ * Every declaration here needs `!important`: `.dops-chip` above sets
+ * `background: ... !important` as a SHORTHAND, which resets background-image
+ * to `none !important`, and a plain background-image can never win against
+ * that no matter how late it appears in the file. Same trap the comment on
+ * `.dops-chip` describes for colour.
+ *
+ * `padding-right` leaves room for it; without that a long option label runs
+ * underneath the arrow. */
+select.dops-chip,
+select.dops-field,
+.dark select.dops-chip,
+.dark select.dops-field {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'><path d='M1 1l3 3 3-3' fill='none' stroke='%23909090' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 5px center !important;
+  padding-right: 17px;
+}
+
+/* Restate the fills as background-COLOR, since the shorthands they were
+ * originally written as would clobber the chevron image. */
+select.dops-chip,
+.dark select.dops-chip {
+  background-color: var(--chip-bg) !important;
+}
+select.dops-field,
+.dark select.dops-field {
+  background-color: transparent !important;
+}
+select.dops-field:hover,
+select.dops-field:focus,
+.dark select.dops-field:hover,
+.dark select.dops-field:focus {
+  background-color: var(--field) !important;
+}
+select.dops-field-saved,
+select.dops-chip-saved,
+.dark select.dops-field-saved,
+.dark select.dops-chip-saved {
+  background-color: var(--yellow-soft) !important;
+}
+
 /* Filled field — dialogs, composers, search boxes, the roster type-ahead. */
 .dops-input,
 select.dops-input,
@@ -475,6 +542,9 @@ input.dops-field[type="number"] { -moz-appearance: textfield; }
 }
 .dops-card:active { transform: translateY(0) scale(0.995); }
 .dops-card-dragging { opacity: 0.45; }
+/* Table row equivalent. Rows are grid containers with sticky children, so
+ * this can only fade — a transform would break the sticky columns' offsets. */
+.dops-row-dragging { opacity: 0.45; }
 
 .dops-press { transition: transform 100ms ease, background-color 140ms ease, color 140ms ease, border-color 140ms ease; }
 .dops-press:active { transform: scale(0.96); }

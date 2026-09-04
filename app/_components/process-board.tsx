@@ -13,10 +13,11 @@ import { useState } from "react";
 import type { Process, ProcessBlockedOn, ProcessLifecycle } from "@/lib/supabase/types";
 import { PROCESS_BLOCKED_ON, MIGRATION_STAGES, MIGRATION_STAGE_LABELS } from "@/lib/supabase/types";
 import { laneFor, type ActiveLane } from "@/lib/import/monday-taxonomy";
+import { byPosition, planPositions } from "@/lib/delivery/reorder";
 import { ACTIVE_LANES, ACTIVE_LANE_LABELS } from "@/lib/processes/loader";
 import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delivery/columns";
 import { resolveHue, hueStyle, hueDotStyle, type ColorMap, type Hue } from "@/lib/delivery/hues";
-import { BLOCKED_ON_LABELS, healthLabel, platformLabel, stageLabel } from "@/lib/delivery/labels";
+import { BLOCKED_ON_LABELS, blockedOnLabel, healthLabel, platformLabel, stageLabel } from "@/lib/delivery/labels";
 import type { DetailProcess } from "@/app/_components/process-detail";
 
 // Lane dot colours, verbatim from the approved mockup's DELIVERY_LANES.
@@ -138,84 +139,25 @@ function bucketRows(
   return { lanes, byLane };
 }
 
-/** Manually placed cards first, in position order; everything never dragged
- *  keeps the previous stalest-first ordering underneath them. */
-function byBoardPosition(a: DetailProcess, b: DetailProcess): number {
-  const ap = a.board_position;
-  const bp = b.board_position;
-  if (ap != null && bp != null) return ap - bp;
-  if (ap != null) return -1;
-  if (bp != null) return 1;
-  return a.updated_at.localeCompare(b.updated_at);
-}
-
-const STEP = 1024;
+const byBoardPosition = byPosition<DetailProcess>((r) => r.board_position);
 
 export interface PositionWrite {
   id: string;
   board_position: number;
 }
 
-/** Works out which rows need a new board_position for a drop.
- *
- *  `rawSlot` is the gap index as the UI computed it — against the lane list
- *  *including* the dragged card, which is what the drop markers are indexed
- *  by. Dropping card A of [A,B,C,D] below C gives rawSlot 3; once A is
- *  removed the list is [B,C,D] and the correct insert index is 2, so any slot
- *  below the card's own position shifts down by one. Getting this wrong put
- *  every downward drag one place too low.
- *
- *  Returns one write in the steady state (the midpoint of the new
- *  neighbours), or a full renumber of the lane when a midpoint can't be
- *  expressed: the neighbours aren't positioned yet (every lane starts all
- *  null, since 0035 deliberately doesn't backfill), or the gap has been
- *  halved until no float sits strictly between. Empty array = no-op. */
+/** Board-lane wrapper over the shared planPositions() math — see
+ *  lib/delivery/reorder.ts. Kept as a named export because
+ *  tests/delivery/board-reorder.test.ts pins the two off-by-one and
+ *  all-null-lane bugs against this exact signature. */
 export function planReorder(
   laneRows: DetailProcess[],
   dragged: DetailProcess,
   rawSlot: number | undefined
 ): PositionWrite[] {
-  // `laneRows` may or may not already contain the dragged card: it does for a
-  // reorder inside one lane, and doesn't when the card is arriving from
-  // another lane. Taking the row itself rather than an id keeps both cases on
-  // the same path — and means the caller never has to pre-splice it in, which
-  // used to make the no-op check below misfire on every cross-lane drop.
-  const draggedId = dragged.id;
-  const from = laneRows.findIndex((r) => r.id === draggedId);
-  const without = laneRows.filter((r) => r.id !== draggedId);
-
-  let index = rawSlot ?? without.length;
-  if (from >= 0 && from < index) index -= 1;
-  index = Math.max(0, Math.min(index, without.length));
-
-  // Dropped exactly where it already was.
-  if (from >= 0 && index === from) return [];
-  const prev = index > 0 ? without[index - 1]?.board_position ?? null : null;
-  const next = index < without.length ? without[index]?.board_position ?? null : null;
-  const prevKnown = index === 0 || prev != null;
-  const nextKnown = index === without.length || next != null;
-
-  if (prevKnown && nextKnown) {
-    let value: number | null = null;
-    if (prev == null && next == null) value = STEP; // lane is empty
-    else if (prev == null) value = (next as number) - STEP;
-    else if (next == null) value = prev + STEP;
-    else {
-      const mid = (prev + next) / 2;
-      // Strictly between, or the gap is exhausted and we must renumber.
-      if (mid > prev && mid < next) value = mid;
-    }
-    if (value != null) return [{ id: draggedId, board_position: value }];
-  }
-
-  // Fall back: give the whole lane explicit, evenly spaced positions in its
-  // new order. Only the rows whose value actually changes are returned.
-  const finalOrder = [...without];
-  finalOrder.splice(index, 0, dragged);
-  return finalOrder
-    .map((row, i) => ({ id: row.id, board_position: (i + 1) * STEP, previous: row.board_position }))
-    .filter((w) => w.previous !== w.board_position)
-    .map(({ id, board_position }) => ({ id, board_position }));
+  return planPositions(laneRows, dragged, rawSlot, (r) => r.board_position).map(
+    ({ id, position }) => ({ id, board_position: position })
+  );
 }
 
 export function ProcessBoard({ mode, laneSort, rows, cardFields, colorMap, onSave, onReorder, onOpenDetail, onCreateInLane }: ProcessBoardProps) {
@@ -545,6 +487,20 @@ function Card({
       <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] truncate">{row.customer_display_name}</div>
       <div className="text-[12.5px] font-medium text-[color:var(--foreground)] mt-0.5 line-clamp-2">{row.process_name}</div>
       <div className="flex flex-wrap gap-1 mt-2">
+        {/* Why this card is in Stuck. Stuck is derived, not stored (see
+            laneFor), so a card sitting there used to give no hint of its own
+            cause — you had to open the drawer and know that Blocked on is
+            what puts it there. Only rendered for a real block, so it never
+            duplicates a chip the user already chose to show. */}
+        {row.blocked_on && row.blocked_on !== "none" ? (
+          <span
+            className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium"
+            style={hueStyle("red")}
+            title={`In the Stuck lane because Blocked on = ${blockedOnLabel(row.blocked_on)}`}
+          >
+            ⛔ Blocked: {blockedOnLabel(row.blocked_on)}
+          </span>
+        ) : null}
         {fields.map((key) => (
           <CardChip key={key} colKey={key} row={row} colorMap={colorMap} />
         ))}

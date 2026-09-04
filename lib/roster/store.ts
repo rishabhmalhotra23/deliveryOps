@@ -17,6 +17,8 @@ export class InvalidRosterInputError extends Error {}
 
 export interface RosterFilter {
   kind?: RosterKind;
+  /** Preferred role. Deliberately a RANKING hint, not a filter — see
+   *  listRosterEntries. */
   role?: string;
   q?: string;
   active?: boolean;
@@ -29,17 +31,43 @@ export async function getRosterEntry(id: string): Promise<RosterEntry | null> {
   return (data as RosterEntry | null) ?? null;
 }
 
+/** `filter.role` ranks, it does NOT restrict.
+ *
+ *  It used to be `roles @> {role}`. 0033 created every roster row without
+ *  touching `roles`, so all 27 sat at the '{}' default and the FDE and TAM
+ *  pickers — which pass role="fde"/"tam" — matched zero rows and were
+ *  permanently empty. 0037 backfills the column from real usage, but a strict
+ *  filter would reintroduce exactly the same failure for the next person
+ *  added without a role set, and the failure mode is silent: an empty
+ *  dropdown looks like an empty roster.
+ *
+ *  So a missing role can only ever cost you your position in the list. The
+ *  picker groups on the same boundary this sort produces. */
 export async function listRosterEntries(filter: RosterFilter = {}): Promise<RosterEntry[]> {
   const sb = requireAdmin();
   let q = sb.from(TABLES.rosterEntries).select("*").is("merged_into_id", null);
   if (filter.kind) q = q.eq("kind", filter.kind);
   if (typeof filter.active === "boolean") q = q.eq("active", filter.active);
-  if (filter.role) q = q.contains("roles", [filter.role]);
   if (filter.q && filter.q.trim()) q = q.ilike("display_name", `%${filter.q.trim()}%`);
   q = q.order("display_name", { ascending: true });
   const { data, error } = await q;
   if (error) throw error;
-  return (data as RosterEntry[]) ?? [];
+  return rankByRole((data as RosterEntry[]) ?? [], filter.role);
+}
+
+/** Role-holders first, then everyone else; alphabetical within each group.
+ *  A stable partition rather than a score, so the picker can find the group
+ *  boundary by testing the same predicate. */
+export function rankByRole<T extends { display_name: string; roles: string[] }>(
+  entries: T[],
+  role?: string
+): T[] {
+  if (!role) return entries;
+  const holds = (e: T) => e.roles.includes(role);
+  return [
+    ...entries.filter(holds).sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    ...entries.filter((e) => !holds(e)).sort((a, b) => a.display_name.localeCompare(b.display_name)),
+  ];
 }
 
 export interface RosterSearchHit extends RosterEntry {
@@ -62,7 +90,6 @@ export async function searchRosterEntries(filter: RosterFilter = {}): Promise<Ro
   let nameQuery = sb.from(TABLES.rosterEntries).select("*").is("merged_into_id", null).ilike("display_name", `%${query}%`);
   if (filter.kind) nameQuery = nameQuery.eq("kind", filter.kind);
   if (typeof filter.active === "boolean") nameQuery = nameQuery.eq("active", filter.active);
-  if (filter.role) nameQuery = nameQuery.contains("roles", [filter.role]);
   const { data: nameData, error: nameError } = await nameQuery.order("display_name", { ascending: true });
   if (nameError) throw nameError;
   const nameHits = (nameData as RosterEntry[]) ?? [];
@@ -83,11 +110,14 @@ export async function searchRosterEntries(filter: RosterFilter = {}): Promise<Ro
     if (entry.merged_into_id) continue;
     if (filter.kind && entry.kind !== filter.kind) continue;
     if (typeof filter.active === "boolean" && entry.active !== filter.active) continue;
-    if (filter.role && !entry.roles.includes(filter.role)) continue;
     seen.add(entry.id);
     hits.push({ ...entry, matched_alias: row.alias });
   }
-  return hits.sort((a, b) => a.display_name.localeCompare(b.display_name));
+  // Same ranking contract as listRosterEntries: role orders, never excludes.
+  return rankByRole(
+    hits.sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    filter.role
+  );
 }
 
 export interface CreateRosterEntryInput {
@@ -154,7 +184,12 @@ async function resolveLiveEntry(entry: RosterEntry): Promise<RosterEntry> {
  *  roster can never silently fall out of sync going forward. */
 export async function resolveOrCreateRosterEntry(
   kind: RosterKind,
-  rawName: string
+  rawName: string,
+  /** The role this name is being used in (fde/tam/engg). Added to the entry's
+   *  `roles` if it isn't there yet, so the 0037 backfill keeps holding as new
+   *  people arrive by the free-text path rather than decaying back to the
+   *  all-'{}' state that broke the pickers in the first place. */
+  role?: string
 ): Promise<RosterEntry> {
   const trimmed = rawName.trim();
   if (!trimmed) throw new InvalidRosterInputError("A name is required.");
@@ -175,7 +210,7 @@ export async function resolveOrCreateRosterEntry(
       .eq("id", (aliasRow as { roster_entry_id: string }).roster_entry_id)
       .single();
     if (error) throw error;
-    return resolveLiveEntry(data as RosterEntry);
+    return ensureRole(await resolveLiveEntry(data as RosterEntry), role);
   }
 
   // No alias yet -- a canonical entry with this exact (case-insensitive)
@@ -186,10 +221,35 @@ export async function resolveOrCreateRosterEntry(
   // onConflict, so this does an explicit find-then-insert instead, with a
   // unique-violation retry to stay race-safe.
   const existing = await findEntryByName(kind, trimmed);
-  const entry = existing ?? (await insertEntryTolerantly(kind, trimmed));
+  const entry = existing ?? (await insertEntryTolerantly(kind, trimmed, role));
 
   await addAlias(trimmed, entry.id);
-  return entry;
+  return ensureRole(entry, role);
+}
+
+/** Adds `role` to an entry's roles if missing. A no-op for partner orgs
+ *  (no role passed) and for an entry that already holds it, so the common
+ *  path costs nothing. Exported as addRosterRole for the picker path in
+ *  updateProcess(), which resolves an id and so never calls
+ *  resolveOrCreateRosterEntry. */
+export async function addRosterRole(entry: RosterEntry, role: string): Promise<RosterEntry> {
+  return ensureRole(entry, role);
+}
+
+async function ensureRole(entry: RosterEntry, role?: string): Promise<RosterEntry> {
+  if (!role || entry.roles.includes(role)) return entry;
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.rosterEntries)
+    .update({ roles: [...entry.roles, role] })
+    .eq("id", entry.id)
+    .select("*")
+    .single();
+  // A failure here must not fail the process edit that triggered it: the role
+  // is a ranking hint, and the write that matters (the owner FK) has either
+  // already landed or is about to. Fall back to the un-updated entry.
+  if (error) return entry;
+  return data as RosterEntry;
 }
 
 async function findEntryByName(kind: RosterKind, displayName: string): Promise<RosterEntry | null> {
@@ -204,11 +264,15 @@ async function findEntryByName(kind: RosterKind, displayName: string): Promise<R
   return (data as RosterEntry | null) ?? null;
 }
 
-async function insertEntryTolerantly(kind: RosterKind, displayName: string): Promise<RosterEntry> {
+async function insertEntryTolerantly(
+  kind: RosterKind,
+  displayName: string,
+  role?: string
+): Promise<RosterEntry> {
   const sb = requireAdmin();
   const { data, error } = await sb
     .from(TABLES.rosterEntries)
-    .insert({ kind, display_name: displayName })
+    .insert({ kind, display_name: displayName, roles: role ? [role] : [] })
     .select("*")
     .single();
   if (error) {

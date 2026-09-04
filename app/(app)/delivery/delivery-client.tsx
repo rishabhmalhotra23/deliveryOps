@@ -24,6 +24,8 @@ import { healthLabel, lifecycleLabel, phaseLabel, platformLabel, stageLabel } fr
 import { PageHeader } from "@/app/_components/brand";
 import { ProcessTable } from "@/app/_components/process-table";
 import { ProcessBoard, LANE_SORTS, type LaneSort, type PositionWrite } from "@/app/_components/process-board";
+import type { TablePositionWrite } from "@/app/_components/process-table";
+import { byPosition } from "@/lib/delivery/reorder";
 import { ProcessDetail, type DetailProcess } from "@/app/_components/process-detail";
 import { ConfigureDialog } from "@/app/_components/configure-dialog";
 import { BulkActionBar, type BulkResult } from "@/app/_components/bulk-action-bar";
@@ -159,6 +161,8 @@ interface DeliveryClientProps {
   v2Overview: V2MigrationOverview;
 }
 
+const byTablePosition = byPosition<DetailProcess>((r) => r.table_position);
+
 export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -270,8 +274,12 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     return baseRows.filter((r) => matchesSearch(r, q) && matchesFilters(r, filterValues));
   }, [baseRows, search, filterValues]);
 
+  // No column sort => the hand-dragged order, which is also the only state
+  // where the table's drag grip is live. `byPosition` puts never-dragged rows
+  // after positioned ones, keeping the previous stalest-first default intact
+  // until somebody actually drags something.
   const sorted = useMemo(() => {
-    if (!sortKey) return filtered;
+    if (!sortKey) return [...filtered].sort(byTablePosition);
     const sign = sortDir === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => sign * compareBy(sortKey, a, b));
   }, [filtered, sortKey, sortDir]);
@@ -413,21 +421,32 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     router.refresh();
   }
 
-  // Lane reordering: one value per row, so it can't ride the single-patch
+  // Manual reordering: one value per row, so it can't ride the single-patch
   // bulk endpoint. Applied optimistically then reconciled, and deliberately
   // without a router.refresh() — position is a view preference, and a refresh
   // per drag made two quick drags race each other visibly.
-  async function reorderProcesses(writes: PositionWrite[]): Promise<void> {
-    const optimistic = new Map(writes.map((w) => [w.id, w.board_position]));
+  //
+  // `field` picks which order is being written: board lanes use
+  // board_position, the table uses table_position. They're separate columns
+  // on purpose (see lib/delivery/reorder.ts) — board positions are numbered
+  // per lane, so one column can't express both orders.
+  async function commitPositions(
+    field: "board_position" | "table_position",
+    writes: { id: string; position: number }[]
+  ): Promise<void> {
+    const optimistic = new Map(writes.map((w) => [w.id, w.position]));
     const apply = (list: DetailProcess[]) =>
-      list.map((r) => (optimistic.has(r.id) ? { ...r, board_position: optimistic.get(r.id)! } : r));
+      list.map((r) => (optimistic.has(r.id) ? { ...r, [field]: optimistic.get(r.id)! } : r));
     setAllRows((cur) => apply(cur) as ProcessRow[]);
     setV2Rows((cur) => apply(cur) as V2ProcessRow[]);
 
     const res = await fetch("/api/processes/reorder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ positions: writes }),
+      body: JSON.stringify({
+        field,
+        positions: writes.map((w) => ({ id: w.id, position: w.position })),
+      }),
     });
     const json = (await res.json().catch(() => ({}))) as Partial<BulkResult> & { error?: string };
     if (!res.ok) {
@@ -437,10 +456,22 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     }
     for (const p of json.updated ?? []) applyUpdate(p, { refresh: false });
     if ((json.failed ?? []).length > 0) {
-      setActionError(`${json.failed!.length} card${json.failed!.length > 1 ? "s" : ""} could not be reordered.`);
+      setActionError(`${json.failed!.length} row${json.failed!.length > 1 ? "s" : ""} could not be reordered.`);
       router.refresh();
     }
   }
+
+  const reorderProcesses = (writes: PositionWrite[]) =>
+    commitPositions(
+      "board_position",
+      writes.map((w) => ({ id: w.id, position: w.board_position }))
+    );
+
+  const reorderRows = (writes: TablePositionWrite[]) =>
+    commitPositions(
+      "table_position",
+      writes.map((w) => ({ id: w.id, position: w.table_position }))
+    );
 
   async function bulkNote(ids: string[], body: string, kind: ProcessNoteKind): Promise<BulkResult> {
     const failed: { id: string; error: string }[] = [];
@@ -807,6 +838,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               openId={openId}
               onOpenDetail={setOpenId}
               customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
+              onReorderRows={reorderRows}
               sortKey={sortKey}
               sortDir={sortDir}
               onSort={onSort}

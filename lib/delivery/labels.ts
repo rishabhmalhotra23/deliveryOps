@@ -119,3 +119,54 @@ export function stageLabel(v: MigrationStage | null, opts: { short?: boolean } =
   if (!v) return "—";
   return (opts.short ? MIGRATION_STAGE_SHORT[v] : MIGRATION_STAGE_LABELS[v]) ?? sentenceCase(v);
 }
+
+// ─── Import-attention reasons ───────────────────────────────────────────────
+// `processes.needs_attention_reason` was written by the Monday importer
+// (lib/import/monday-taxonomy.ts) in Monday's vocabulary — "milestone",
+// "Current Phase", "marked Live". Migration 0021 replaced all of that with
+// lifecycle/phase, and 0024 dropped the Monday tables entirely, so the stored
+// text now names fields that no longer exist: the banner told you a milestone
+// was unrecoverable on a system that has no milestones.
+//
+// Rewritten at render time rather than with an UPDATE, so the original import
+// record stays intact and re-reading an old row can't lose information. The
+// patterns are matched loosely (substring/regex, not equality) because the
+// importer joined several reasons with "; " and interpolated names into them.
+
+const ATTENTION_REWRITES: { match: RegExp; rewrite: (m: RegExpMatchArray) => string }[] = [
+  {
+    match: /milestone unrecoverable/i,
+    rewrite: () => "Imported from Monday without a phase — set Phase to clear this.",
+  },
+  {
+    match: /marked Live but phase is "([^"]+)"/i,
+    rewrite: (m) =>
+      `Imported as Live while still at "${m[1]}" — confirm Lifecycle before this counts as delivered.`,
+  },
+  {
+    match: /marked Inactive but this is a POV/i,
+    rewrite: () => "Imported as inactive, but this is a POV awaiting a decision — check Lifecycle.",
+  },
+  {
+    match: /customer inferred from the item name \("([^"]+)"\)/i,
+    rewrite: (m) => `Customer was inferred from the process name ("${m[1]}") — confirm it's right.`,
+  },
+];
+
+/** Turns a stored `needs_attention_reason` into one sentence per cause, in
+ *  the vocabulary the app actually uses today. Anything unrecognised is
+ *  passed through unchanged rather than swallowed. */
+export function attentionReasons(raw: string | null): string[] {
+  if (!raw || !raw.trim()) return [];
+  return raw
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      for (const { match, rewrite } of ATTENTION_REWRITES) {
+        const m = part.match(match);
+        if (m) return rewrite(m);
+      }
+      return part;
+    });
+}

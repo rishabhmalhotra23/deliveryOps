@@ -60,20 +60,35 @@ const DEFAULT_HEALTH_HUE: Record<ProcessHealth, Hue> = {
   off_track: "red",
 };
 
-// Lifecycle ships uncoloured, matching the approved mockup: it renders as a
-// plain select in the table, not a chip, so a hue only ever shows up here
-// once someone assigns one in Configure → Colours.
+// Lifecycle used to ship entirely uncoloured (every value mapped to
+// "neutral"), which made the column read as dead text: Discovery, In
+// development and UAT were visually identical, so the one field that says
+// where a process actually is carried no signal at all. Reviewed 2026-09-04
+// and given real hues.
+//
+// Cool -> warm -> green along the happy path (upcoming, discovery, in
+// development, UAT, live) and warm/red for the off-ramps, so a lane of chips
+// reads as progress at a glance. Where a value shares a name with a migration
+// stage the hue is deliberately NOT forced to match — `in_development` is
+// indigo as a stage and fuchsia as a lifecycle, because the two columns sit
+// side by side in the table and identical chips there would imply the two
+// fields are the same field.
+//
+// Backlog, Cancelled and Retired share neutral on purpose: all three mean
+// "no signal", and Churned carries the red instead. Any of these is
+// overridable per value in Configure -> Colours, which writes into colorMap
+// and wins over every default here.
 const DEFAULT_LIFECYCLE_HUE: Record<ProcessLifecycle, Hue> = {
   backlog: "neutral",
-  upcoming: "neutral",
-  discovery: "neutral",
-  in_development: "neutral",
-  uat: "neutral",
-  live: "neutral",
-  on_hold: "neutral",
-  needs_triage: "neutral",
+  upcoming: "blue",
+  discovery: "indigo",
+  in_development: "fuchsia",
+  uat: "amber",
+  live: "emerald",
+  on_hold: "orange",
+  needs_triage: "red",
   cancelled: "neutral",
-  churned: "neutral",
+  churned: "red",
   retired: "neutral",
 };
 

@@ -35,8 +35,29 @@ import {
 } from "@/lib/delivery/labels";
 import { RosterPicker } from "@/app/_components/roster-picker";
 import type { DetailProcess } from "@/app/_components/process-detail";
+import { planPositions } from "@/lib/delivery/reorder";
 
-const CHECK_W = 34;
+export interface TablePositionWrite {
+  id: string;
+  table_position: number;
+}
+
+/** Table-order wrapper over the shared planPositions() math — the board's
+ *  planReorder() is the same call against board_position. See
+ *  lib/delivery/reorder.ts for why the two orders need two columns. */
+export function planRowReorder(
+  rows: DetailProcess[],
+  dragged: DetailProcess,
+  rawSlot: number | undefined
+): TablePositionWrite[] {
+  return planPositions(rows, dragged, rawSlot, (r) => r.table_position).map(
+    ({ id, position }) => ({ id, table_position: position })
+  );
+}
+
+// Wide enough for the drag grip and the checkbox side by side. Was 34 (just
+// the checkbox) before rows became draggable.
+const CHECK_W = 52;
 const ACTIONS_W_WIDE = 66;
 const ACTIONS_W_NARROW = 44;
 const NAME_W_WIDE = 260;
@@ -75,6 +96,10 @@ export interface ProcessTableProps {
   onSort: (key: ColKey) => void;
   colorMap: ColorMap;
   onSave: (id: string, patch: Partial<Process>) => Promise<Process>;
+  /** Commits a hand-dragged row order. Only ever called while `sortKey` is
+   *  null — a manual order and a column sort can't both be in effect, so the
+   *  grip is disabled whenever a sort is active. */
+  onReorderRows: (writes: TablePositionWrite[]) => Promise<void>;
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
   showRestore: boolean;
@@ -101,6 +126,7 @@ export function ProcessTable({
   onSort,
   colorMap,
   onSave,
+  onReorderRows,
   onArchive,
   onRestore,
   showRestore,
@@ -112,6 +138,12 @@ export function ProcessTable({
   const [maxH, setMaxH] = useState<string>("70vh");
   const [lastChecked, setLastChecked] = useState<string | null>(null);
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
+  const [dragRow, setDragRow] = useState<string | null>(null);
+  const [dropRowSlot, setDropRowSlot] = useState<number | null>(null);
+  // A hand order is only meaningful over the unsorted list; a column sort
+  // would immediately override it, so the grip goes inert instead of silently
+  // writing positions nobody can see.
+  const canDragRows = sortKey === null;
   const [menuFor, setMenuFor] = useState<{ id: string; x: number; y: number; up: boolean } | null>(null);
 
   // The page is document-scrolled, so a fixed `calc(100vh - 200px)` either
@@ -147,6 +179,15 @@ export function ProcessTable({
   const nameW = nameWidthFor(narrow, colW);
   const actionsW = narrow ? ACTIONS_W_NARROW : ACTIONS_W_WIDE;
   const colWidths = cols.map((k) => widthFor(k, narrow, colW));
+  async function commitRowDrop(slot: number) {
+    const dragged = rows.find((r) => r.id === dragRow);
+    setDragRow(null);
+    setDropRowSlot(null);
+    if (!dragged) return;
+    const writes = planRowReorder(rows, dragged, slot);
+    if (writes.length > 0) await onReorderRows(writes);
+  }
+
   const gridTemplate = `${CHECK_W}px ${nameW}px ${colWidths.map((w) => `${w}px`).join(" ")} ${actionsW}px`;
   const minWidth = CHECK_W + nameW + colWidths.reduce((a, b) => a + b, 0) + actionsW;
 
@@ -284,18 +325,68 @@ export function ProcessTable({
           return (
             <div
               key={row.id}
-              className={`dops-row-in dops-row grid text-sm ${isOpen || isSelected ? "" : "dops-row-plain"}`}
+              className={`dops-row-in dops-row group/row grid text-sm ${isOpen || isSelected ? "" : "dops-row-plain"} ${
+                dragRow === row.id ? "dops-row-dragging" : ""
+              }`}
               style={
                 {
                   gridTemplateColumns: gridTemplate,
                   animationDelay: `${Math.min(i, 14) * 22}ms`,
-                  borderBottom: "1px solid var(--brand-metal-line)",
+                  // The drop indicator is a border rather than an inserted
+                  // element: the row is a CSS grid whose column template is
+                  // shared with the header, and a full-width marker row would
+                  // have to re-declare every column just to draw a 2px line.
+                  borderTop:
+                    dropRowSlot === i ? "2px solid var(--brand-yellow)" : "2px solid transparent",
+                  borderBottom:
+                    dropRowSlot === i + 1 && i === rows.length - 1
+                      ? "2px solid var(--brand-yellow)"
+                      : "1px solid var(--brand-metal-line)",
                   "--row-bg": stickyBg,
                   background: "var(--row-bg)",
                 } as React.CSSProperties
               }
+              onDragOver={(e) => {
+                if (!canDragRows || !dragRow) return;
+                e.preventDefault();
+                // Above or below the row's midpoint decides which gap the
+                // marker shows, so the line always lands where the pointer is.
+                const box = e.currentTarget.getBoundingClientRect();
+                setDropRowSlot(e.clientY < box.top + box.height / 2 ? i : i + 1);
+              }}
+              onDrop={(e) => {
+                if (!canDragRows || !dragRow) return;
+                e.preventDefault();
+                void commitRowDrop(dropRowSlot ?? i);
+              }}
             >
-              <div className="sticky left-0 z-10 flex items-center justify-center py-1.5" style={{ background: "var(--row-bg)" }}>
+              <div className="sticky left-0 z-10 flex items-center justify-center gap-0.5 py-1.5" style={{ background: "var(--row-bg)" }}>
+                <span
+                  draggable={canDragRows}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", row.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragRow(row.id);
+                  }}
+                  onDragEnd={() => {
+                    setDragRow(null);
+                    setDropRowSlot(null);
+                  }}
+                  title={
+                    canDragRows
+                      ? "Drag to reorder"
+                      : "Clear the sort to reorder by hand"
+                  }
+                  aria-hidden
+                  className={`select-none text-[11px] leading-none tracking-[-1px] transition-opacity ${
+                    canDragRows
+                      ? "cursor-grab active:cursor-grabbing opacity-0 group-hover/row:opacity-60 hover:!opacity-100"
+                      : "cursor-not-allowed opacity-20"
+                  }`}
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  ⠿
+                </span>
                 <input
                   type="checkbox"
                   checked={isSelected}
@@ -547,8 +638,18 @@ function Cell({
         </select>
       );
     case "lifecycle":
+      // A chip, not a flat field: uncoloured, Discovery / In development /
+      // UAT were visually identical, so the column that says where a process
+      // actually is read as dead text. Same hue system as stage and health,
+      // so Configure -> Colours recolours it too.
       return (
-        <select disabled={busy} value={row.lifecycle} onChange={(e) => save({ lifecycle: e.target.value as Process["lifecycle"] })} className={`${field} text-[13px]`}>
+        <select
+          disabled={busy}
+          value={row.lifecycle}
+          onChange={(e) => save({ lifecycle: e.target.value as Process["lifecycle"] })}
+          className={chip}
+          style={chipVars(resolveHue("lifecycle", row.lifecycle, colorMap))}
+        >
           {LIFECYCLE_OPTIONS.map((o) => (
             <option key={o} value={o}>
               {LIFECYCLE_LABELS[o]}

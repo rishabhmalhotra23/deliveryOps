@@ -5,6 +5,14 @@
 // and the only path to a new value is an explicit "Add to roster" — never a
 // free-text field — so a stray spelling can never re-enter the system.
 // Approved design: 2026-09-03-v2-delivery-redesign.html, Roster picker panel.
+//
+// It opens as a browsable LIST, not a blank search box (fixed 2026-09-04).
+// The empty-query fetch was always there, but `role` used to be a WHERE
+// clause server-side and 0033 left every entry at roles = '{}', so the FDE
+// and TAM pickers returned nothing whether you typed or not — the control
+// looked like a search box that could never find anybody. `role` now ranks
+// instead of restricting (lib/roster/store.ts), and the two groups below make
+// that ranking legible rather than looking like an arbitrary order.
 
 import { useEffect, useRef, useState } from "react";
 import type { RosterEntry, RosterKind, RosterRole } from "@/lib/supabase/types";
@@ -12,6 +20,13 @@ import type { RosterEntry, RosterKind, RosterRole } from "@/lib/supabase/types";
 interface RosterHit extends RosterEntry {
   matched_alias?: string;
 }
+
+/** Plural group headings. `role.toUpperCase()` would read "ENGGs". */
+const ROLE_GROUP_LABEL: Record<string, string> = {
+  fde: "FDEs",
+  tam: "TAMs",
+  engg: "Engineering",
+};
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -125,12 +140,13 @@ export function RosterPicker({
         body: JSON.stringify({ kind, display_name, roles: role ? [role] : [] }),
       });
       const json = await res.json();
-      // A 409 means the name exists but didn't match this picker's role
-      // filter — surface it instead of leaving the dropdown sitting there.
+      // A 409 means that name is already taken. Since the role filter became
+      // a ranking hint, an existing entry is always already in the list —
+      // so point at it rather than implying a missing role hid it.
       if (!res.ok) {
         setError(
           res.status === 409
-            ? `"${display_name}" is already in the roster — it may not hold the ${role ?? "required"} role.`
+            ? `"${display_name}" is already in the roster — pick them from the list above.`
             : json.error || `HTTP ${res.status}`
         );
         return;
@@ -149,6 +165,23 @@ export function RosterPicker({
 
   const avatarRadius = kind === "person" ? 9999 : 6;
   const avatarSize = dense ? 18 : 22;
+
+  // The server already sorted role-holders to the front (rankByRole); this
+  // just draws the boundary so the order reads as intentional. Unheaded
+  // single group when there's no role to rank by — a lone "Everyone else"
+  // header over the whole list would be noise.
+  const groups: { label: string | null; entries: RosterHit[] }[] = (() => {
+    if (!role) return [{ label: null, entries: results }];
+    const holders = results.filter((r) => r.roles.includes(role));
+    const rest = results.filter((r) => !r.roles.includes(role));
+    if (holders.length === 0 || rest.length === 0) {
+      return [{ label: null, entries: results }];
+    }
+    return [
+      { label: ROLE_GROUP_LABEL[role] ?? role, entries: holders },
+      { label: "Everyone else", entries: rest },
+    ];
+  })();
 
   if (!editing) {
     return (
@@ -173,6 +206,11 @@ export function RosterPicker({
           ) : (
             <span className="text-[color:var(--muted-foreground)]">—</span>
           )}
+          {/* Same affordance the .dops-field selects now carry: without it
+              an unset owner cell was indistinguishable from a dead "—". */}
+          <span className="ml-auto shrink-0 text-[8px] opacity-50" aria-hidden>
+            ▼
+          </span>
         </button>
         {justAdded ? (
           <span className="shrink-0 text-[10px]" style={{ color: "var(--yellow-ink)" }} title="Available on every process from now on">
@@ -200,7 +238,7 @@ export function RosterPicker({
         autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={kind === "person" ? 'Search people — try "karthik n"' : "Search partner organisations"}
+        placeholder={kind === "person" ? "Search people, or just pick one" : "Search partners, or just pick one"}
         className="dops-input dops-input-accent w-full min-w-[180px] px-2 py-1 text-[13px]"
         style={{ borderColor: "var(--yellow-line)" }}
       />
@@ -222,38 +260,45 @@ export function RosterPicker({
         ) : null}
         {results.length === 0 && !busy ? (
           <div className="px-2.5 py-2 text-[12px] text-[color:var(--muted-foreground)]">
-            Nobody in the roster matches &quot;{query}&quot;.
+            {query.trim()
+              ? `Nobody in the roster matches "${query}".`
+              : "The roster is empty — add the first person below."}
           </div>
         ) : (
-          results.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => {
-                onPick(r);
-                setEditing(false);
-                setQuery("");
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-[var(--glass-bg)]"
-            >
-              <span
-                className="shrink-0 flex items-center justify-center text-[9px] font-semibold"
-                style={{ width: 22, height: 22, borderRadius: avatarRadius, background: "var(--brand-yellow)", color: "#171717" }}
-              >
-                {initials(r.display_name)}
-              </span>
-              <span className="flex-1 min-w-0">
-                <div className="text-[12.5px] text-[color:var(--foreground)] truncate">{r.display_name}</div>
-                <div className="text-[10.5px] text-[color:var(--muted-foreground)] truncate">
-                  {r.kind === "partner_org" ? "Partner" : r.roles.join(" · ") || "—"}
-                </div>
-              </span>
-              {r.matched_alias ? (
-                <span className="text-[10px] shrink-0" style={{ color: "var(--yellow-ink)" }}>
-                  matched &quot;{r.matched_alias}&quot;
-                </span>
-              ) : null}
-            </button>
+          groups.map((group) => (
+            <div key={group.label ?? "all"}>
+              {group.label ? <div className="dops-group-head">{group.label}</div> : null}
+              {group.entries.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    onPick(r);
+                    setEditing(false);
+                    setQuery("");
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-[var(--glass-bg)]"
+                >
+                  <span
+                    className="shrink-0 flex items-center justify-center text-[9px] font-semibold"
+                    style={{ width: 22, height: 22, borderRadius: avatarRadius, background: "var(--brand-yellow)", color: "#171717" }}
+                  >
+                    {initials(r.display_name)}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <div className="text-[12.5px] text-[color:var(--foreground)] truncate">{r.display_name}</div>
+                    <div className="text-[10.5px] text-[color:var(--muted-foreground)] truncate">
+                      {r.kind === "partner_org" ? "Partner" : r.roles.join(" · ") || "No role set"}
+                    </div>
+                  </span>
+                  {r.matched_alias ? (
+                    <span className="text-[10px] shrink-0" style={{ color: "var(--yellow-ink)" }}>
+                      matched &quot;{r.matched_alias}&quot;
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           ))
         )}
         <button

@@ -24,7 +24,7 @@ import {
   type MigrationStage,
   type RosterKind,
 } from "@/lib/supabase/types";
-import { resolveOrCreateRosterEntry, getRosterEntry } from "@/lib/roster/store";
+import { resolveOrCreateRosterEntry, getRosterEntry, addRosterRole } from "@/lib/roster/store";
 
 export class ProcessNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -36,10 +36,16 @@ export class ProcessNotFoundError extends Error {
 export class InvalidProcessInputError extends Error {}
 
 // Fields the drawer may set. Deliberately excludes identity (account,
-// customer_key), generated columns (ttv_days), import provenance (source_*),
-// and needs_attention — those are import-time or creation-time, not drawer
-// edits. process_name and customer_id are editable — a mistyped name or a
-// mismatched customer at import time both need a way to be fixed in place.
+// customer_key), generated columns (ttv_days) and import provenance
+// (source_*) — those are import-time or creation-time, not drawer edits.
+// process_name and customer_id are editable — a mistyped name or a mismatched
+// customer at import time both need a way to be fixed in place.
+//
+// needs_attention was on that excluded list until 2026-09-04, which meant no
+// UI path could ever clear it: 22 rows carried a permanent amber banner, 12 of
+// them on rows a human had already gone in and corrected. It's writable now so
+// the banner's dismiss button works, and clearAttentionOnEdit() below clears
+// it implicitly on any real field edit.
 const EDITABLE_FIELDS: (keyof Process)[] = [
   "process_name",
   "customer_id",
@@ -75,6 +81,9 @@ const EDITABLE_FIELDS: (keyof Process)[] = [
   "arr",
   "company_size",
   "board_position",
+  "table_position",
+  "needs_attention",
+  "needs_attention_reason",
 ];
 
 const GENERATED = new Set<string>(PROCESS_GENERATED_COLUMNS);
@@ -179,20 +188,32 @@ export function withDerivedFields(
 // This runs on every updateProcess() call, not just from the drawer, so the
 // roster can never silently fall out of sync going forward.
 
-const OWNER_FIELD_ROSTER: { textField: string; idField: string; kind: RosterKind }[] = [
-  { textField: "fde_owner", idField: "fde_owner_id", kind: "person" },
-  { textField: "tam_owner", idField: "tam_owner_id", kind: "person" },
-  { textField: "engg_owner", idField: "engg_owner_id", kind: "person" },
+// `role` is what the resolved entry gets stamped with in roster_entries.roles
+// (see resolveOrCreateRosterEntry). It's what keeps the 0037 role backfill
+// true over time: without it, everyone arriving by the free-text path lands
+// with roles = '{}' again, which is the state that left the FDE and TAM
+// pickers permanently empty. Partner orgs carry no role.
+const OWNER_FIELD_ROSTER: { textField: string; idField: string; kind: RosterKind; role?: string }[] = [
+  { textField: "fde_owner", idField: "fde_owner_id", kind: "person", role: "fde" },
+  { textField: "tam_owner", idField: "tam_owner_id", kind: "person", role: "tam" },
+  { textField: "engg_owner", idField: "engg_owner_id", kind: "person", role: "engg" },
   { textField: "partner", idField: "partner_id", kind: "partner_org" },
 ];
 
 async function resolveRosterFields(update: Record<string, unknown>): Promise<void> {
-  for (const { textField, idField, kind } of OWNER_FIELD_ROSTER) {
+  for (const { textField, idField, kind, role } of OWNER_FIELD_ROSTER) {
     if (idField in update) {
       const id = update[idField] as string | null;
       if (id) {
         const entry = await getRosterEntry(id);
-        if (entry) update[textField] = entry.display_name;
+        if (entry) {
+          update[textField] = entry.display_name;
+          // The picker path resolves an id, so it never goes through
+          // resolveOrCreateRosterEntry. Stamp the role here too, otherwise
+          // assigning a brand-new teammate as FDE would leave them roleless
+          // and permanently sorted under "Everyone else".
+          if (role) await addRosterRole(entry, role);
+        }
       } else {
         update[textField] = null;
       }
@@ -201,7 +222,7 @@ async function resolveRosterFields(update: Record<string, unknown>): Promise<voi
     if (textField in update) {
       const raw = update[textField] as string | null;
       if (raw && raw.trim()) {
-        const entry = await resolveOrCreateRosterEntry(kind, raw);
+        const entry = await resolveOrCreateRosterEntry(kind, raw, role);
         update[idField] = entry.id;
         update[textField] = entry.display_name;
       } else {
@@ -259,6 +280,32 @@ export async function getProcess(
 
 // ─── Writes ───────────────────────────────────────────────────────────────
 
+/** `needs_attention` is Monday-import triage: "somebody should look at this
+ *  row". Touching any real field IS somebody looking at it, so the flag
+ *  clears itself — approved 2026-09-04 as the behaviour the team wanted, in
+ *  preference to 22 banners that could only ever be dismissed one by one.
+ *
+ *  Two writes are excluded, both because they aren't a human reviewing
+ *  content: the manual ordering columns (a mouse gesture, and already excluded
+ *  from `updated_at` by migration 0036/0037), and an explicit write to
+ *  needs_attention itself, which is the dismiss button and must be left to say
+ *  exactly what the caller asked for.
+ *
+ *  Mutates `update` in place, matching withDerivedFields/resolveRosterFields. */
+export function clearAttentionOnEdit(
+  existing: Pick<Process, "needs_attention">,
+  update: Record<string, unknown>
+): void {
+  if (!existing.needs_attention) return;
+  if ("needs_attention" in update) return;
+  const contentFields = Object.keys(update).filter(
+    (f) => f !== "board_position" && f !== "table_position"
+  );
+  if (contentFields.length === 0) return;
+  update.needs_attention = false;
+  update.needs_attention_reason = null;
+}
+
 export async function updateProcess(
   id: string,
   patch: Partial<Process>,
@@ -272,6 +319,8 @@ export async function updateProcess(
   if (Object.keys(update).length === 0) return existing;
   update = withDerivedFields(existing, update);
   await resolveRosterFields(update);
+
+  clearAttentionOnEdit(existing, update);
 
   const now = new Date().toISOString();
   const provenance = { ...existing.field_provenance };

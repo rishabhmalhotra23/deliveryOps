@@ -507,6 +507,10 @@ export interface Process extends Omit<MigrationProcess, "platform"> {
   /** Manual order within a board lane (0035). Lower sorts first; null means
    *  never dragged and sorts last. Fractional, so a reorder is one write. */
   board_position: number | null;
+  /** Manual row order in the Delivery table (0037). Separate from
+   *  board_position, which is numbered per lane and so can't express a flat
+   *  order. Only honoured when no column sort is active. */
+  table_position: number | null;
 
   // Roster FKs (0032) -- additive alongside the text columns above, which
   // stay as a denormalized display mirror kept in sync by updateProcess().

@@ -28,6 +28,7 @@ function row(overrides: Partial<V2ProcessRow> & { migration_stage: MigrationStag
     deleted_at: null, deleted_by: null,
     fde_owner_id: null, tam_owner_id: null, partner_id: null, engg_owner_id: null,
     board_position: null,
+    table_position: null,
   };
   return {
     ...base,

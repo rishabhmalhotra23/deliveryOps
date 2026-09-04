@@ -24,6 +24,7 @@ function proc(overrides: Partial<Process>): Process {
     deleted_at: null, deleted_by: null,
     fde_owner_id: null, tam_owner_id: null, partner_id: null, engg_owner_id: null,
     board_position: null,
+    table_position: null,
     ...overrides,
   };
 }

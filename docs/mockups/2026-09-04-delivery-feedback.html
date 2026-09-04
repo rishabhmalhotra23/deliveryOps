@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Delivery tab — feedback fixes (mockup, 2026-09-04)</title>
+<style>
+:root{
+  --surface-1:#262626; --surface-2:#1F1F1F; --surface-3:#2F2F2F; --card:#262626;
+  --foreground:#FAFAFA; --muted-foreground:#A3A3A3;
+  --brand-yellow:#F2FF70; --yellow-ink:#F2FF70;
+  --yellow-soft:rgba(242,255,112,.14); --yellow-line:rgba(242,255,112,.45);
+  --field:rgba(255,255,255,.06); --glass-bg:rgba(255,255,255,.10);
+  --brand-metal-line:rgba(255,255,255,.12);
+  --status-good:#4ADE80; --status-bad:#F87171;
+  --st-neutral-fg:#A3A3A3; --st-neutral-bg:rgba(163,163,163,.14); --st-neutral-bd:rgba(163,163,163,.32);
+  --st-indigo-fg:#818CF8;  --st-indigo-bg:rgba(129,140,248,.14);  --st-indigo-bd:rgba(129,140,248,.32);
+  --st-orange-fg:#FB923C;  --st-orange-bg:rgba(251,146,60,.14);   --st-orange-bd:rgba(251,146,60,.32);
+  --st-blue-fg:#60A5FA;    --st-blue-bg:rgba(96,165,250,.14);     --st-blue-bd:rgba(96,165,250,.32);
+  --st-amber-fg:#FBBF24;   --st-amber-bg:rgba(251,191,36,.14);    --st-amber-bd:rgba(251,191,36,.32);
+  --st-emerald-fg:#4ADE80; --st-emerald-bg:rgba(74,222,128,.14);  --st-emerald-bd:rgba(74,222,128,.32);
+  --st-fuchsia-fg:#E879F9; --st-fuchsia-bg:rgba(232,121,249,.14); --st-fuchsia-bd:rgba(232,121,249,.32);
+  --st-red-fg:#F87171;     --st-red-bg:rgba(248,113,113,.14);     --st-red-bd:rgba(248,113,113,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#171717;color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:28px 32px 80px}
+h1{font-size:19px;margin:0 0 4px} h1+p{margin:0 0 28px;color:var(--muted-foreground);font-size:12.5px}
+section{margin:0 0 34px}
+h2{font-size:13.5px;margin:0 0 3px;letter-spacing:.2px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  background:var(--brand-yellow);color:#171717;font-size:11px;font-weight:700;margin-right:8px}
+.quote{color:var(--muted-foreground);font-size:12px;font-style:italic;margin:0 0 12px 27px;
+  border-left:2px solid var(--brand-metal-line);padding-left:10px}
+.cols{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-left:27px}
+.pane{background:var(--surface-1);border:1px solid var(--brand-metal-line);border-radius:11px;padding:13px 14px}
+.tag{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted-foreground);
+  display:block;margin-bottom:9px;font-weight:600}
+.tag.bad{color:var(--status-bad)} .tag.good{color:var(--brand-yellow)}
+.lbl{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:2px 6px;
+  font-size:11px;font-weight:500;border:1px solid}
+.field{border:1px solid transparent;border-radius:6px;padding:1px 4px}
+.wrap{background:var(--surface-2);border:1px solid var(--brand-metal-line);border-radius:8px;padding:6px 8px}
+.sel{display:flex;align-items:center;justify-content:space-between;gap:6px;
+  border:1px solid transparent;border-radius:6px;padding:2px 5px}
+.sel:hover{border-color:var(--brand-metal-line);background:var(--field)}
+.cv{color:var(--muted-foreground);font-size:8px;flex-shrink:0;opacity:.75}
+.av{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:9999px;background:var(--brand-yellow);color:#171717;font-size:9px;font-weight:700;flex-shrink:0}
+.av.sq{border-radius:6px}
+.note{font-size:11.5px;color:var(--muted-foreground);margin:11px 0 0 27px;max-width:760px}
+.note b{color:var(--foreground);font-weight:600}
+table{border-collapse:collapse;font-size:12.5px}
+th{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  text-align:left;font-weight:600;padding:6px 9px;border-bottom:1px solid var(--brand-metal-line)}
+td{padding:5px 9px;border-bottom:1px solid rgba(255,255,255,.05)}
+.grip{color:var(--muted-foreground);cursor:grab;opacity:0;font-size:11px;letter-spacing:-1px}
+tr:hover .grip{opacity:.6}
+.drop{height:2px;background:var(--brand-yellow);box-shadow:0 0 8px var(--yellow-line)}
+.ghost{background:var(--yellow-soft);outline:1px solid var(--yellow-line)}
+.menu{width:272px;background:var(--surface-3);border:1px solid var(--brand-metal-line);
+  border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.5);overflow:hidden}
+.mh{font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted-foreground);
+  padding:7px 10px 4px;font-weight:700;background:rgba(255,255,255,.03)}
+.mi{display:flex;align-items:center;gap:8px;padding:5px 10px}
+.mi:hover{background:var(--glass-bg)}
+.mi .nm{font-size:12.5px} .mi .rl{font-size:10.5px;color:var(--muted-foreground)}
+.inp{background:var(--field);border:1px solid var(--yellow-ink);border-radius:6px;
+  padding:4px 7px;font-size:12.5px;color:var(--muted-foreground)}
+.banner{border-radius:8px;padding:7px 10px;font-size:11.5px;display:flex;gap:9px;align-items:flex-start}
+.banner.old{background:rgba(251,146,60,.10);border:1px solid rgba(251,146,60,.25);color:#FB923C}
+.banner.new{background:var(--field);border:1px solid var(--brand-metal-line);color:var(--muted-foreground)}
+.x{margin-left:auto;opacity:.5;cursor:pointer;flex-shrink:0}
+.stuckbar{background:rgba(248,113,113,.10);border:1px solid rgba(248,113,113,.28);
+  border-radius:8px;padding:8px 10px;font-size:11.5px;color:#F87171;display:flex;gap:9px;align-items:center}
+.btn{background:var(--brand-yellow);color:#171717;border:0;border-radius:6px;
+  padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0}
+.btn.ghosty{background:transparent;color:var(--foreground);border:1px solid var(--brand-metal-line)}
+.card{width:250px;background:var(--surface-2);border:1px solid var(--brand-metal-line);
+  border-left:2px solid var(--st-red-fg);border-radius:9px;padding:9px 10px}
+.card .cust{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);font-weight:600}
+.card .ttl{font-size:12.5px;margin:2px 0 7px}
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:7px;margin-left:27px;max-width:640px}
+.sw{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted-foreground)}
+.arrow{align-self:center;color:var(--muted-foreground);font-size:17px;padding:0 2px}
+code{background:var(--field);border-radius:4px;padding:1px 4px;font-size:11.5px}
+</style></head><body>
+
+<h1>Delivery tab — the six fixes</h1>
+<p>Mockup for approval · 2026-09-04 · dark mode, real <code>--st-*</code> tokens · no code changed yet</p>
+
+<!-- 1 + 5 -->
+<section>
+  <h2><span class="n">1</span>FDE / TAM / Partner pickers actually list people</h2>
+  <p class="quote">“Why is the owner or FDE not in dropdown here?” · “Dropdown missing from table as well for FDE, customer or partner columns”</p>
+  <div class="cols">
+    <div class="pane" style="width:300px">
+      <span class="tag bad">Today — always empty</span>
+      <span class="lbl">FDE owner</span>
+      <div style="margin-top:5px"><div class="inp">Search people — try “kart”</div></div>
+      <div class="menu" style="margin-top:5px;width:auto">
+        <div style="padding:9px 10px;font-size:12px;color:var(--muted-foreground)">Nobody in the roster matches “kart”.</div>
+      </div>
+      <p style="font-size:11px;color:var(--status-bad);margin:9px 0 0">
+        All 27 roster rows have <code>roles = '{}'</code>, so the
+        <code>role='fde'</code> filter matches zero rows — typing never helps.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pane" style="width:300px">
+      <span class="tag good">Fixed — opens as a browsable list</span>
+      <span class="lbl">FDE owner</span>
+      <div style="margin-top:5px"><div class="inp">Search people, or just pick one</div></div>
+      <div class="menu" style="margin-top:5px;width:auto">
+        <div class="mh">FDEs</div>
+        <div class="mi"><span class="av">KN</span><span><div class="nm">Karthik Nagabhushana</div><div class="rl">FDE · 6 processes</div></span></div>
+        <div class="mi"><span class="av">AL</span><span><div class="nm">Alejo</div><div class="rl">FDE · 3 processes</div></span></div>
+        <div class="mi"><span class="av">RM</span><span><div class="nm">Rishabh Malhotra</div><div class="rl">FDE · TAM</div></span></div>
+        <div class="mh">Everyone else</div>
+        <div class="mi"><span class="av">SD</span><span><div class="nm">Sandeep D</div><div class="rl">—</div></span></div>
+        <div class="mi" style="border-top:1px solid var(--brand-metal-line);background:var(--field)">
+          <span class="av sq" style="background:transparent;border:1px dashed var(--brand-metal-line);color:var(--foreground)">+</span>
+          <span class="nm">Add a new person to the roster</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>Fix:</b> migration <code>0037</code> backfills <code>roster_entries.roles</code> from real usage
+  (12 FDEs, 8 TAMs, 5 engg, 6 partners), <code>createRosterEntry</code>/<code>resolveOrCreateRosterEntry</code> stamp the role
+  going forward, and the picker's role filter becomes a <b>sort key, not a WHERE clause</b> — so a teammate with no role yet
+  is still pickable and this bug can't come back.</p>
+</section>
+
+<!-- 5b -->
+<section>
+  <h2><span class="n">2</span>Dropdown cells look like dropdowns</h2>
+  <p class="quote">“Dropdown missing from table as well for FDE, customer or partner columns”</p>
+  <div class="cols">
+    <div class="pane">
+      <span class="tag bad">Today — <code>appearance:none</code>, no chevron</span>
+      <table><tr><th>Customer</th><th>Lifecycle</th><th>Phase</th></tr>
+      <tr><td><span class="field">JBI</span></td><td><span class="field">Discovery</span></td><td><span class="field">M1 · Discovery</span></td></tr>
+      <tr><td><span class="field">Norco</span></td><td><span class="field">UAT</span></td><td><span class="field">M3 · Testing</span></td></tr></table>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:9px 0 0">Reads as dead text. Nothing says it's editable.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pane">
+      <span class="tag good">Fixed — chevron on hover, always on focus</span>
+      <table><tr><th>Customer</th><th>Lifecycle</th><th>Phase</th></tr>
+      <tr><td><span class="sel" style="border-color:var(--brand-metal-line);background:var(--field)">JBI<span class="cv">▼</span></span></td>
+          <td><span class="chip" style="color:var(--st-blue-fg);background:var(--st-blue-bg);border-color:var(--st-blue-bd)">Discovery<span class="cv" style="color:var(--st-blue-fg)">▼</span></span></td>
+          <td><span class="sel">M1 · Discovery<span class="cv">▼</span></span></td></tr>
+      <tr><td><span class="sel">Norco<span class="cv">▼</span></span></td>
+          <td><span class="chip" style="color:var(--st-amber-fg);background:var(--st-amber-bg);border-color:var(--st-amber-bd)">UAT<span class="cv" style="color:var(--st-amber-fg)">▼</span></span></td>
+          <td><span class="sel">M3 · Testing<span class="cv">▼</span></span></td></tr></table>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:9px 0 0">One chevron rule added to <code>.dops-field</code> + <code>.dops-chip</code> — fixes every select at once.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section>
+  <h2><span class="n">3</span>Lifecycle gets colour</h2>
+  <p class="quote">“Why is there no color for Lifecycle for In development or UAT or other stages?”</p>
+  <div class="swatches">
+    <div class="sw"><span class="chip" style="color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)">Backlog</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-blue-fg);background:var(--st-blue-bg);border-color:var(--st-blue-bd)">Upcoming</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-indigo-fg);background:var(--st-indigo-bg);border-color:var(--st-indigo-bd)">Discovery</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-fuchsia-fg);background:var(--st-fuchsia-bg);border-color:var(--st-fuchsia-bd)">In development</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-amber-fg);background:var(--st-amber-bg);border-color:var(--st-amber-bd)">UAT</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">Live</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-orange-fg);background:var(--st-orange-bg);border-color:var(--st-orange-bd)">On hold</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-red-fg);background:var(--st-red-bg);border-color:var(--st-red-bd)">Needs triage</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-red-fg);background:var(--st-red-bg);border-color:var(--st-red-bd)">Churned</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)">Cancelled</span></div>
+    <div class="sw"><span class="chip" style="color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)">Retired</span></div>
+  </div>
+  <p class="note">Cool → warm → green along the happy path, warm/red for the off-ramps.
+  <b>Reuses the same 8-hue system</b> as Migration stage and Health, so Configure → Colours can recolour any of these
+  and it follows everywhere (table chip, board chip, lane dot). Lifecycle also becomes a <b>chip</b> rather than plain text.
+  Backlog / Cancelled / Retired share neutral on purpose — all three are "no signal".</p>
+</section>
+
+<!-- 2 -->
+<section>
+  <h2><span class="n">4</span>The orange bar becomes clearable — and stops naming a dead field</h2>
+  <p class="quote">“Remove these orange tag bars, they are permanent… there is no milestone at all anymore so what is this even tracking?”</p>
+  <div class="cols">
+    <div class="pane" style="width:340px">
+      <span class="tag bad">Today — permanent, 22 rows, 12 already edited</span>
+      <div class="banner old">milestone unrecoverable — Monday overwrote it with a waiting state</div>
+      <p style="font-size:11px;color:var(--status-bad);margin:9px 0 0">
+        <code>needs_attention</code> is excluded from <code>EDITABLE_FIELDS</code>, so no UI path can ever clear it.
+        And “milestone” was a Monday column that migration 0021 deleted.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pane" style="width:340px">
+      <span class="tag good">Fixed — rewritten in live vocabulary, dismissable</span>
+      <div class="banner new">
+        <span style="opacity:.8">Imported from Monday without a phase — set Phase to clear this.</span>
+        <span class="x">×</span></div>
+      <div style="height:8px"></div>
+      <div class="banner new">
+        <span style="opacity:.8">Customer was inferred from the process name — confirm it's right.</span>
+        <span class="x">×</span></div>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:9px 0 0">
+        Amber → neutral: it's a note, not an alarm. Clears on <b>any field edit</b>, or the ×.
+        Migration also clears the 12 rows already hand-edited.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section>
+  <h2><span class="n">5</span>A visible way out of Stuck</h2>
+  <p class="quote">“How would a process move out of Stuck phase? There's no option to remove it.”</p>
+  <div class="cols">
+    <div class="pane">
+      <span class="tag">Board card — cause now shown on the card</span>
+      <div class="card">
+        <div class="cust">JBI</div>
+        <div class="ttl">JBI - Material Allocation Import Process</div>
+        <span class="chip" style="color:var(--st-red-fg);background:var(--st-red-bg);border-color:var(--st-red-bd)">⛔ Blocked: Customer</span>
+        <span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">V2 native</span>
+      </div>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0;max-width:250px">
+        Today a Stuck card shows no hint of <em>why</em> it's stuck.</p>
+    </div>
+    <div class="pane" style="width:390px">
+      <span class="tag good">Drawer — states the cause and offers the exit</span>
+      <div class="stuckbar">
+        <span style="flex:1">In <b>Stuck</b> because <b>Blocked on = Customer</b>. Stuck isn't a field — it's this.</span>
+        <button class="btn">Unblock</button>
+      </div>
+      <div style="height:9px"></div>
+      <div class="stuckbar" style="background:rgba(251,146,60,.10);border-color:rgba(251,146,60,.28);color:#FB923C">
+        <span style="flex:1">In <b>Stuck</b> because <b>Lifecycle = On hold</b>.</span>
+        <button class="btn ghosty">Resume →</button>
+      </div>
+      <div style="height:11px"></div>
+      <div class="wrap" style="display:inline-block;min-width:180px">
+        <div class="lbl">Blocked on</div>
+        <div class="sel" style="border-color:var(--yellow-ink);background:var(--field);margin-top:2px">Customer<span class="cv">▼</span></div>
+      </div>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0">
+        <b>Unblock</b> sets <code>blocked_on = none</code> — the row leaves Stuck immediately.
+        <b>Resume</b> focuses the Lifecycle select, since “not on hold” has no single right answer.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section>
+  <h2><span class="n">6</span>Drag to reorder table rows</h2>
+  <p class="quote">“There should be a way to drag and realign the lines or position of a certain row.”</p>
+  <div class="cols">
+    <div class="pane">
+      <span class="tag good">Grip appears on row hover · yellow drop line marks the landing slot</span>
+      <table style="min-width:560px">
+        <tr><th style="width:22px"></th><th>Process</th><th>Customer</th><th>Lifecycle</th><th>FDE</th></tr>
+        <tr><td><span class="grip" style="opacity:.6">⠿</span></td><td>BGV QC</td><td><span class="sel">—<span class="cv">▼</span></span></td>
+            <td><span class="chip" style="color:var(--st-amber-fg);background:var(--st-amber-bg);border-color:var(--st-amber-bd)">UAT<span class="cv" style="color:var(--st-amber-fg)">▼</span></span></td>
+            <td><span class="sel">—<span class="cv">▼</span></span></td></tr>
+        <tr><td colspan="5" style="padding:0"><div class="drop"></div></td></tr>
+        <tr class="ghost"><td><span class="grip" style="opacity:1">⠿</span></td><td>Norco - Parts Reconciliation</td><td><span class="sel">Norco<span class="cv">▼</span></span></td>
+            <td><span class="chip" style="color:var(--st-fuchsia-fg);background:var(--st-fuchsia-bg);border-color:var(--st-fuchsia-bd)">In development<span class="cv" style="color:var(--st-fuchsia-fg)">▼</span></span></td>
+            <td><span class="sel"><span style="display:inline-flex;align-items:center;gap:5px"><span class="av" style="width:18px;height:18px;font-size:8px">KN</span>Karthik N</span><span class="cv">▼</span></span></td></tr>
+        <tr><td><span class="grip">⠿</span></td><td>Century - Accounting Ops</td><td><span class="sel">Century<span class="cv">▼</span></span></td>
+            <td><span class="chip" style="color:var(--st-amber-fg);background:var(--st-amber-bg);border-color:var(--st-amber-bd)">UAT<span class="cv" style="color:var(--st-amber-fg)">▼</span></span></td>
+            <td><span class="sel">—<span class="cv">▼</span></span></td></tr>
+      </table>
+    </div>
+    <div class="pane" style="width:280px">
+      <span class="tag">When a column sort is on</span>
+      <table style="width:100%"><tr><th style="width:22px"></th><th>Process ↑</th></tr>
+        <tr><td><span style="opacity:.25;font-size:11px;letter-spacing:-1px" title="Clear the sort to reorder by hand">⠿</span></td><td>BGV QC</td></tr>
+        <tr><td><span style="opacity:.25;font-size:11px;letter-spacing:-1px">⠿</span></td><td>Century - Accounting Ops</td></tr>
+      </table>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0">
+        Grip greys out — a hand order can't coexist with a column sort.
+        Tooltip: <em>“Clear the sort to reorder by hand.”</em></p>
+    </div>
+  </div>
+  <p class="note"><b>Fix:</b> migration <code>0037</code> adds <code>processes.table_position</code>, kept separate from
+  <code>board_position</code> so table order and board lane order never scramble each other. Reuses the existing
+  <code>planReorder()</code> / <code>onReorder()</code> plumbing and the same optimistic-update path, so two fast drags
+  can't race. Unsorted view orders by <code>table_position</code> (nulls last).</p>
+</section>
+
+</body></html>

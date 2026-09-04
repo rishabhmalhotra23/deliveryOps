@@ -28,6 +28,8 @@ import {
   PHASE_LABELS,
   PLATFORM_LABELS,
   WORK_MODE_LABELS,
+  attentionReasons,
+  blockedOnLabel,
   healthLabel,
   platformLabel,
   sentenceCase,
@@ -184,6 +186,7 @@ export function ProcessDetail({
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(process.process_name);
+  const lifecycleRef = useRef<HTMLSelectElement>(null);
 
   const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [ticketQuery, setTicketQuery] = useState("");
@@ -258,6 +261,42 @@ export function ProcessDetail({
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  /** Explicit dismiss. Sends needs_attention directly, which
+   *  clearAttentionOnEdit() deliberately leaves alone so this says exactly
+   *  what was asked rather than being re-derived. */
+  async function dismissAttention() {
+    await commit("needs_attention", "Attention", false);
+  }
+
+  // laneFor() is the single source of truth for Stuck membership, so the
+  // causes are read off the same two fields it reads rather than re-guessed.
+  const stuckCauses: {
+    kind: "blocked" | "on_hold";
+    text: string;
+    actionLabel: string;
+    action: () => void;
+  }[] = [];
+  if (proc.blocked_on && proc.blocked_on !== "none") {
+    stuckCauses.push({
+      kind: "blocked",
+      text: `In Stuck because Blocked on = ${blockedOnLabel(proc.blocked_on)}. Stuck isn't a field — it's this.`,
+      actionLabel: "Unblock",
+      action: () => void commit("blocked_on", "Blocked on", "none"),
+    });
+  }
+  if (proc.lifecycle === "on_hold") {
+    stuckCauses.push({
+      kind: "on_hold",
+      // No button that writes a lifecycle: "not on hold" has no single right
+      // answer (backlog? in development? UAT?), and guessing one here is how
+      // the board's lane->lifecycle map used to silently downgrade rows.
+      // Focus the field and let the user choose.
+      text: "In Stuck because Lifecycle = On hold.",
+      actionLabel: "Resume →",
+      action: () => lifecycleRef.current?.focus(),
+    });
   }
 
   function promote(field: keyof Process) {
@@ -436,9 +475,70 @@ export function ProcessDetail({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-4">
-        {proc.needs_attention_reason ? (
-          <div className="rounded-lg bg-amber-500/10 border border-amber-500/25 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-            {proc.needs_attention_reason}
+        {/* Import-attention notes. Amber until 2026-09-04, which read as an
+            alarm for what is only "somebody should confirm this" — and could
+            never be cleared, because needs_attention wasn't editable. Now a
+            neutral note with a dismiss, and the copy is rewritten out of
+            Monday's dead vocabulary by attentionReasons(). Any field edit
+            clears it server-side too (clearAttentionOnEdit). */}
+        {proc.needs_attention ? (
+          <div className="space-y-1.5">
+            {attentionReasons(proc.needs_attention_reason).map((reason, i, all) => (
+              <div
+                key={reason}
+                className="flex items-start gap-2 rounded-lg border px-3 py-2 text-xs"
+                style={{
+                  background: "var(--field)",
+                  borderColor: "var(--brand-metal-line)",
+                  color: "var(--muted-foreground)",
+                }}
+              >
+                <span className="flex-1">{reason}</span>
+                {/* One × per note would imply per-note dismissal, which the
+                    single boolean column can't express — so only the last
+                    row carries it, and it clears the whole flag. */}
+                {i === all.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => void dismissAttention()}
+                    title="Dismiss — I've checked this"
+                    className="shrink-0 opacity-50 hover:opacity-100 leading-none"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Why this row is in the Stuck lane, and the one control that gets it
+            out. Stuck is derived (laneFor: on_hold OR blocked_on != none), not
+            stored, so there is nothing named "Stuck" to un-set — which left
+            people with no idea how to leave it. */}
+        {stuckCauses.length > 0 ? (
+          <div className="space-y-1.5">
+            {stuckCauses.map((cause) => (
+              <div
+                key={cause.kind}
+                className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs"
+                style={{
+                  background: cause.kind === "blocked" ? "var(--st-red-bg)" : "var(--st-orange-bg)",
+                  borderColor: cause.kind === "blocked" ? "var(--st-red-bd)" : "var(--st-orange-bd)",
+                  color: cause.kind === "blocked" ? "var(--st-red-fg)" : "var(--st-orange-fg)",
+                }}
+              >
+                <span className="flex-1">{cause.text}</span>
+                <button
+                  type="button"
+                  onClick={cause.action}
+                  className="shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold"
+                  style={{ background: "var(--brand-yellow)", color: "#171717" }}
+                >
+                  {cause.actionLabel}
+                </button>
+              </div>
+            ))}
           </div>
         ) : null}
 
@@ -480,6 +580,7 @@ export function ProcessDetail({
             options={PROCESS_LIFECYCLES}
             optionLabels={LIFECYCLE_LABELS}
             flashed={savedField === "Lifecycle"}
+            selectRef={lifecycleRef}
             onCommit={(v) => commit("lifecycle", "Lifecycle", v)}
             onPromote={() => promote("lifecycle")}
           />
@@ -783,6 +884,7 @@ function SelectField<T extends string>({
   clearable = false,
   onCommit,
   onPromote,
+  selectRef,
 }: {
   fieldLabel: string;
   value: T | null;
@@ -794,10 +896,15 @@ function SelectField<T extends string>({
   clearable?: boolean;
   onCommit: (v: T | null) => void;
   onPromote?: () => void;
+  /** Lets a caller focus the control — used by the Stuck banner's "Resume",
+   *  which points at Lifecycle rather than picking a value on the user's
+   *  behalf. */
+  selectRef?: React.Ref<HTMLSelectElement>;
 }) {
   return (
     <FieldWrapper fieldLabel={fieldLabel} promote={onPromote} flashed={flashed}>
       <select
+        ref={selectRef}
         value={value ?? ""}
         onChange={(e) => onCommit((e.target.value || null) as T | null)}
         className="dops-field text-[13px]"
