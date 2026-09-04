@@ -43,6 +43,17 @@ export function slugifyCustomerKey(displayName: string): string {
     .slice(0, 64);
 }
 
+/** A 401 here means the Auth0 session lapsed, which the middleware answers
+ *  before the route ever runs — so there is no error body to show and the
+ *  only useful instruction is "reload". Anything else is worth surfacing
+ *  verbatim rather than as a blank list. */
+function describeFetchFailure(status: number): string {
+  if (status === 401 || status === 403) {
+    return "Your session expired — reload the page to sign back in.";
+  }
+  return `Couldn't load this list (HTTP ${status}). Try reopening Configure.`;
+}
+
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const s = ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
@@ -119,28 +130,64 @@ export function ConfigureDialog({
   // whether they're rendered, so toggling it costs no refetch.
   useEffect(() => {
     if (tab !== "roster") return;
+    let cancelled = false;
     setRosterLoading(true);
+    setRosterError(null);
+    // A failed load must NOT fall through to an empty list. It used to
+    // `.catch(() => setRoster([]))`, which rendered "Nobody here yet." — so
+    // an expired Auth0 session (the middleware answers /api/roster with a
+    // bare 401) looked exactly like an empty roster, and the whole tab
+    // appeared to be broken or unbuilt. Reported 2026-09-04 and confirmed in
+    // the Vercel logs: three 401s, then a 200 a minute later.
     fetch(`/api/roster?kind=${rosterKind}&include_inactive=1&counts=1`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(describeFetchFailure(r.status));
+        return r.json();
+      })
       .then((json) => {
+        if (cancelled) return;
         setRoster(json.entries ?? []);
         setCounts(json.counts ?? {});
       })
-      .catch(() => setRoster([]))
-      .finally(() => setRosterLoading(false));
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setRoster([]);
+        setRosterError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setRosterLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [tab, rosterKind]);
 
   useEffect(() => {
     if (tab !== "customers") return;
+    let cancelled = false;
     setCustLoading(true);
+    setCustError(null);
     fetch("/api/customers/roster")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(describeFetchFailure(r.status));
+        return r.json();
+      })
       .then((json) => {
+        if (cancelled) return;
         setCustomers(json.customers ?? []);
         setCustCounts(json.counts ?? {});
       })
-      .catch(() => setCustomers([]))
-      .finally(() => setCustLoading(false));
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setCustomers([]);
+        setCustError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setCustLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [tab]);
 
   function openCustEditor(c: Customer) {
@@ -301,13 +348,16 @@ export function ConfigureDialog({
       >
         <div className="px-4 pt-4">
           <div className="text-sm font-semibold text-[color:var(--foreground)] mb-2">Configure</div>
-          <div className="flex gap-4 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
+          {/* shrink-0 + overflow-x: five tabs no longer fit a max-w-lg
+              dialog, and flex's default shrinking wrapped "Migration stages"
+              onto two lines and pushed Customers out of easy reach. */}
+          <div className="flex gap-4 border-b overflow-x-auto" style={{ borderColor: "var(--brand-metal-line)" }}>
             {(["roster", "customers", "colours", "stages", "lifecycle"] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className="dops-tab-underline pb-2 text-[13px]"
+                className="dops-tab-underline pb-2 text-[13px] shrink-0 whitespace-nowrap"
                 style={{
                   color: tab === t ? "var(--foreground)" : "var(--muted-foreground)",
                   borderBottom: tab === t ? "2px solid var(--yellow-ink)" : "2px solid transparent",
@@ -372,7 +422,11 @@ export function ConfigureDialog({
                   <div className="text-[12px] text-[color:var(--muted-foreground)] py-2">Loading…</div>
                 ) : visibleRoster.length === 0 ? (
                   <div className="text-[12px] text-[color:var(--muted-foreground)] py-2 italic">
-                    {roster.length === 0 ? "Nobody here yet." : "Everyone here has left."}
+                    {rosterError
+                      ? "Couldn't load the roster — see below."
+                      : roster.length === 0
+                        ? "Nobody here yet."
+                        : "Everyone here has left."}
                   </div>
                 ) : (
                   visibleRoster.map((r) =>
@@ -587,7 +641,11 @@ export function ConfigureDialog({
                   <div className="text-[12px] text-[color:var(--muted-foreground)] py-2">Loading…</div>
                 ) : visibleCustomers.length === 0 ? (
                   <div className="text-[12px] text-[color:var(--muted-foreground)] py-2 italic">
-                    {customers.length === 0 ? "No customers yet." : "Every customer is inactive."}
+                    {custError
+                      ? "Couldn't load customers — see below."
+                      : customers.length === 0
+                        ? "No customers yet."
+                        : "Every customer is inactive."}
                   </div>
                 ) : (
                   visibleCustomers.map((c) =>

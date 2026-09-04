@@ -391,28 +391,26 @@ export async function mergeRosterEntries(loserId: string, survivorId: string): P
   if (loserId === survivorId) {
     throw new InvalidRosterInputError("Cannot merge a roster entry into itself.");
   }
+  if (!(await getRosterEntry(loserId))) throw new RosterEntryNotFoundError(loserId);
+  if (!(await getRosterEntry(survivorId))) throw new RosterEntryNotFoundError(survivorId);
+
+  // Delegated to merge_roster_entry() (0040) rather than looped here. The
+  // app-side version repointed the *_owner_id FKs but left the denormalized
+  // owner TEXT reading the loser's name, so a merged-away duplicate kept
+  // showing in the Delivery table; and repointing an FK to the canonical row
+  // for the same human counts as a content change to the updated_at trigger,
+  // so a merge reset "Last touched" on every row it touched. Both need one
+  // transaction and the GUC the trigger honours, which only the database can
+  // give.
   const sb = requireAdmin();
+  const { error } = await sb.rpc("merge_roster_entry", {
+    p_loser_id: loserId,
+    p_survivor_id: survivorId,
+  });
+  if (error) throw error;
 
-  const { error: aliasErr } = await sb
-    .from(TABLES.rosterAliases)
-    .update({ roster_entry_id: survivorId })
-    .eq("roster_entry_id", loserId);
-  if (aliasErr) throw aliasErr;
-
-  for (const column of ["fde_owner_id", "tam_owner_id", "partner_id", "engg_owner_id"]) {
-    const { error } = await sb.from(TABLES.processes).update({ [column]: survivorId }).eq(column, loserId);
-    if (error) throw error;
-  }
-
-  const { data, error } = await sb
-    .from(TABLES.rosterEntries)
-    .update({ active: false, merged_into_id: survivorId })
-    .eq("id", loserId)
-    .select("*")
-    .single();
-  if (error) {
-    if (error.code === "PGRST116") throw new RosterEntryNotFoundError(loserId);
-    throw error;
-  }
-  return data as RosterEntry;
+  const loser = await getRosterEntry(loserId);
+  if (!loser) throw new RosterEntryNotFoundError(loserId);
+  return loser;
 }
+
