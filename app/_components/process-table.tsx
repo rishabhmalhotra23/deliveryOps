@@ -101,6 +101,14 @@ export interface ProcessTableProps {
    *  null — a manual order and a column sort can't both be in effect, so the
    *  grip is disabled whenever a sort is active. */
   onReorderRows: (writes: TablePositionWrite[]) => Promise<void>;
+  /** Set false where this table renders a SUBSET of the list rather than all
+   *  of it — Historical's per-quarter groups. `table_position` is one global
+   *  sequence, and planRowReorder derives new positions from the rows it can
+   *  see, so a drag inside a 12-row quarter group would renumber against
+   *  those 12 and silently scramble the flat order that Active work and V2
+   *  migration read. A hand order across quarter boundaries has no meaning
+   *  anyway. */
+  allowRowDrag?: boolean;
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
   showRestore: boolean;
@@ -128,6 +136,7 @@ export function ProcessTable({
   colorMap,
   onSave,
   onReorderRows,
+  allowRowDrag = true,
   onArchive,
   onRestore,
   showRestore,
@@ -143,8 +152,9 @@ export function ProcessTable({
   const [dropRowSlot, setDropRowSlot] = useState<number | null>(null);
   // A hand order is only meaningful over the unsorted list; a column sort
   // would immediately override it, so the grip goes inert instead of silently
-  // writing positions nobody can see.
-  const canDragRows = sortKey === null;
+  // writing positions nobody can see. Same for a table showing a subset —
+  // see allowRowDrag.
+  const canDragRows = sortKey === null && allowRowDrag;
   const [menuFor, setMenuFor] = useState<{ id: string; x: number; y: number; up: boolean } | null>(null);
 
   // The page is document-scrolled, so a fixed `calc(100vh - 200px)` either
@@ -376,7 +386,9 @@ export function ProcessTable({
                   title={
                     canDragRows
                       ? "Drag to reorder"
-                      : "Clear the sort to reorder by hand"
+                      : allowRowDrag
+                        ? "Clear the sort to reorder by hand"
+                        : "Rows can't be reordered inside a quarter group"
                   }
                   aria-hidden
                   className={`select-none text-[11px] leading-none tracking-[-1px] transition-opacity ${
@@ -615,9 +627,11 @@ function Cell({
       return (
         <CustomerPicker
           value={row.customer_id}
+          valueLabel={row.customer_display_name}
           options={customerOptions}
           onPick={(id) => save({ customer_id: id })}
           className={`${field} text-[13px]`}
+          disabled={busy}
         />
       );
     case "stage":

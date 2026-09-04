@@ -68,10 +68,20 @@ export function sectionFor(row: {
  *  team's output rather than a graveyard. Section counts therefore do not sum
  *  to the total, on purpose.
  *
- *  A row qualifies if it shipped (has a go-live date) or if it ended. */
-export function inHistoricalLens(row: {
-  lifecycle: ProcessLifecycle;
-  go_live_date: string | null;
-}): boolean {
-  return row.go_live_date != null || ENDED_LIFECYCLES.has(row.lifecycle);
+ *  A row qualifies if it ended, or if it has ALREADY shipped. `go_live_date`
+ *  is a target as often as a fact — it is hand-edited in the drawer long
+ *  before the date arrives, and lib/customers/view-model.ts's delivered count
+ *  has always guarded it with `<= today` for exactly that reason. Without the
+ *  guard, a process going live next quarter showed up under "Shipped and
+ *  ended work" and was counted in the delivered-per-quarter strip, inventing
+ *  future quarters of output. */
+export function inHistoricalLens(
+  row: {
+    lifecycle: ProcessLifecycle;
+    go_live_date: string | null;
+  },
+  today: string = new Date().toISOString().slice(0, 10)
+): boolean {
+  if (ENDED_LIFECYCLES.has(row.lifecycle)) return true;
+  return row.go_live_date != null && row.go_live_date.slice(0, 10) <= today;
 }

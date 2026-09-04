@@ -560,6 +560,7 @@ export function ProcessDetail({
           <FieldWrapper fieldLabel="Customer" flashed={savedField === "Customer"}>
             <CustomerPicker
               value={proc.customer_id}
+              valueLabel={proc.customer_display_name}
               options={customerOptions}
               onPick={(id) => void commit("customer_id", "Customer", id)}
             />

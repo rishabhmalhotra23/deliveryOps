@@ -160,17 +160,31 @@ async function fetchAllProcessRows(): Promise<{
     oppsByCustomer.set(o.customer_id, list);
   }
 
+  // Confirmed ARR is a property of the CUSTOMER, and this now runs for every
+  // process rather than only the migration-relevant ones — a customer with 20
+  // processes would otherwise re-scan its whole opportunity history 20 times
+  // to reach the same number.
+  const arrByCustomer = new Map<string, number | null>();
+  function confirmedArrFor(customerId: string | null, customerKey: string | null): number | null {
+    const cacheKey = `${customerId ?? ""}|${customerKey ?? ""}`;
+    const cached = arrByCustomer.get(cacheKey);
+    if (cached !== undefined) return cached;
+    const opps = (customerId && oppsByCustomer.get(customerId)) || [];
+    const { arr } = getConfirmedArrForCustomer(customerKey, opps);
+    const value = arr > 0 ? arr : null;
+    arrByCustomer.set(cacheKey, value);
+    return value;
+  }
+
   const rawRows = (processesRes.data as Process[] | null) ?? [];
   const all: ProcessRow[] = rawRows.map((row) => {
-    const opps = (row.customer_id && oppsByCustomer.get(row.customer_id)) || [];
-    const confirmed = getConfirmedArrForCustomer(row.customer_key, opps);
     return {
       ...row,
       customer_display_name:
         (row.customer_id && custById.get(row.customer_id)?.display_name) || row.account,
       open_suggestion_count: suggestionCounts.get(row.id) ?? 0,
       needs_classification: !row.source_system,
-      confirmed_arr: confirmed.arr > 0 ? confirmed.arr : null,
+      confirmed_arr: confirmedArrFor(row.customer_id, row.customer_key),
     };
   });
 

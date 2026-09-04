@@ -457,7 +457,11 @@ export function ConfigureDialog({
                             them as left won&rsquo;t change that —{" "}
                             <a
                               className="underline"
-                              href={`/delivery?owner=${encodeURIComponent(r.display_name)}`}
+                              // ?person=, not ?owner=: the count above spans FDE, TAM and
+                              // engineering, and ?owner= only ever matched the FDE
+                              // column — so for anyone who is purely a TAM the link
+                              // landed on an empty table contradicting the warning.
+                              href={`/delivery?person=${encodeURIComponent(r.display_name)}`}
                             >
                               open those in Delivery
                             </a>{" "}

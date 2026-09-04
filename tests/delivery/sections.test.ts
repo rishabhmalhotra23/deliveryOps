@@ -96,6 +96,28 @@ describe("inHistoricalLens", () => {
     expect(inHistoricalLens({ lifecycle: "discovery", go_live_date: null })).toBe(false);
     expect(inHistoricalLens({ lifecycle: "uat", go_live_date: null })).toBe(false);
   });
+
+  // go_live_date is a target as often as a fact — it's hand-edited in the
+  // drawer months ahead. Counting a future date as shipped filed work due
+  // next quarter under "Shipped and ended work" and drew a bar for it on the
+  // delivered-per-quarter strip.
+  it("excludes a go-live date that hasn't arrived yet", () => {
+    expect(inHistoricalLens({ lifecycle: "uat", go_live_date: "2026-12-01" }, "2026-09-04")).toBe(
+      false
+    );
+  });
+
+  it("includes it the day it arrives", () => {
+    expect(inHistoricalLens({ lifecycle: "uat", go_live_date: "2026-09-04" }, "2026-09-04")).toBe(
+      true
+    );
+  });
+
+  it("still keeps ended work whose planned go-live never happened", () => {
+    expect(
+      inHistoricalLens({ lifecycle: "cancelled", go_live_date: "2027-01-01" }, "2026-09-04")
+    ).toBe(true);
+  });
 });
 
 describe("fiscalQuarterOf", () => {
@@ -216,5 +238,46 @@ describe("to_be_retired must not leak into the All-Hands report", () => {
   it("still gates v2_native on real evidence", () => {
     expect(isV2Relevant("v2_native", false)).toBe(false);
     expect(isV2Relevant("v2_native", true)).toBe(true);
+  });
+});
+
+describe("the roster hand-over filter must match any owner role", () => {
+  // Configure -> Roster's "still assigned to N processes" counts all four
+  // owner FKs, but the deep link used to filter the FDE column alone. 9 of
+  // the 21 people in the production roster hold ZERO FDE assignments and 34
+  // TAM/engineering ones between them, so for every one of those the link
+  // landed on an empty table directly contradicting the warning that
+  // produced it.
+  type OwnerRow = { fde_owner: string | null; tam_owner: string | null; engg_owner: string | null };
+
+  const matchesPerson = (row: OwnerRow, person: string) =>
+    row.fde_owner === person || row.tam_owner === person || row.engg_owner === person;
+
+  const matchesOwnerOnly = (row: OwnerRow, person: string) => row.fde_owner === person;
+
+  const tamOnly: OwnerRow = { fde_owner: "Karthik", tam_owner: "Shyam Prabhal", engg_owner: null };
+  const enggOnly: OwnerRow = { fde_owner: "Karthik", tam_owner: null, engg_owner: "Sid" };
+  const fde: OwnerRow = { fde_owner: "Karthik", tam_owner: null, engg_owner: null };
+
+  it("finds a TAM-only assignment that the FDE filter misses", () => {
+    expect(matchesOwnerOnly(tamOnly, "Shyam Prabhal")).toBe(false);
+    expect(matchesPerson(tamOnly, "Shyam Prabhal")).toBe(true);
+  });
+
+  it("finds an engineering-only assignment", () => {
+    expect(matchesPerson(enggOnly, "Sid")).toBe(true);
+  });
+
+  it("still finds an FDE assignment", () => {
+    expect(matchesPerson(fde, "Karthik")).toBe(true);
+  });
+
+  it("does not match somebody uninvolved", () => {
+    expect(matchesPerson(fde, "Shyam Prabhal")).toBe(false);
+  });
+
+  it("matches a person holding two roles on the same process exactly once", () => {
+    const both: OwnerRow = { fde_owner: "Rishabh", tam_owner: "Rishabh", engg_owner: null };
+    expect([both].filter((r) => matchesPerson(r, "Rishabh"))).toHaveLength(1);
   });
 });

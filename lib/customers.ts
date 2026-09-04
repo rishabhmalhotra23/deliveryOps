@@ -23,6 +23,16 @@ export const SYNC_OWNED_BY_DELIVERY_OPS_WHEN_EDITED = new Set([
   "lifecycle_group",
   "slack_channel",
   "email_alias",
+  // 0039. Retiring a customer is a deliberate human call and a sync must
+  // never undo it. Harmless today — nothing writes `customers` from a sync
+  // (upsertCustomer has no callers, and toInsertRow doesn't emit `active`) —
+  // but the protection has to exist BEFORE such a path does, because the
+  // failure mode is a churned customer quietly reappearing in every dropdown.
+  //
+  // Adding it here doesn't widen what the agent can bulk-edit: the guard in
+  // bulkUpdateCustomerField is a typo check, and every agent operation passes
+  // a hardcoded field name (ae_owner / custom_category / partner).
+  "active",
 ]);
 
 // ─── Reads ────────────────────────────────────────────────────────────────

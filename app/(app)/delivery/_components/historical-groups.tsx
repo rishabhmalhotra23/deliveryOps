@@ -33,9 +33,16 @@ export function HistoricalGroups({
   const series = deliveredSeries(groups);
   // Newest quarter open, the rest collapsed: 132 rows across 12 quarters is a
   // lot of table to scroll past to reach the second group.
-  const [collapsed, setCollapsed] = useState<Set<string>>(
-    () => new Set(groups.slice(1).map((g) => g.quarter))
-  );
+  //
+  // Held as per-quarter OVERRIDES rather than as the collapsed set itself,
+  // because the set can't be seeded once at mount: `groups` depends on the
+  // active filters, so mounting while a filter matched nothing (a
+  // ?owner= deep link, say) seeded an empty set, and clearing the filter
+  // then expanded all twelve quarters at once. Anything the user hasn't
+  // touched falls back to the rule below.
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const newestQuarter = groups[0]?.quarter;
+  const isCollapsedFor = (quarter: string) => overrides[quarter] ?? quarter !== newestQuarter;
 
   if (rows.length === 0) {
     // Matches ProcessTable's own empty block rather than importing a shared
@@ -51,12 +58,12 @@ export function HistoricalGroups({
   const peak = Math.max(1, ...series.map((p) => p.delivered));
 
   function toggle(quarter: string) {
-    setCollapsed((cur) => {
-      const next = new Set(cur);
-      if (next.has(quarter)) next.delete(quarter);
-      else next.add(quarter);
-      return next;
-    });
+    setOverrides((cur) => ({ ...cur, [quarter]: !isCollapsedFor(quarter) }));
+  }
+
+  /** The bar strip's "show only this quarter". */
+  function isolate(quarter: string) {
+    setOverrides(Object.fromEntries(groups.map((g) => [g.quarter, g.quarter !== quarter])));
   }
 
   return (
@@ -77,9 +84,7 @@ export function HistoricalGroups({
               <button
                 key={point.quarter}
                 type="button"
-                onClick={() => {
-                  setCollapsed(new Set(groups.map((g) => g.quarter).filter((q) => q !== point.quarter)));
-                }}
+                onClick={() => isolate(point.quarter)}
                 title={`${point.delivered} delivered in ${point.quarter} — click to show only this quarter`}
                 className="shrink-0 flex flex-col items-center gap-1 group"
               >
@@ -109,7 +114,7 @@ export function HistoricalGroups({
       ) : null}
 
       {groups.map((group) => {
-        const isCollapsed = collapsed.has(group.quarter);
+        const isCollapsed = isCollapsedFor(group.quarter);
         return (
           <div key={group.quarter}>
             <button

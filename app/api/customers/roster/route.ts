@@ -32,9 +32,15 @@ interface PatchBody {
 }
 
 // PATCH /api/customers/roster — mark a customer active/inactive, or fix its
-// name or category. Goes through updateCustomerManually so the field is added
-// to deliveryops_protected_fields and the next Salesforce/Monday sync can't
-// quietly reactivate a customer you just retired.
+// name or category. Goes through updateCustomerManually, which records
+// field_provenance and adds the edited field to deliveryops_protected_fields
+// when it's one of SYNC_OWNED_BY_DELIVERY_OPS_WHEN_EDITED — `active` is in
+// that set, so a future sync path can't quietly reactivate a customer you
+// just retired.
+//
+// `display_name` is NOT in that set and so isn't protected: it's the one
+// field a Salesforce account rename should legitimately win, since the
+// account name there is the source of truth for what the customer is called.
 export async function PATCH(request: Request) {
   let body: PatchBody;
   try {
@@ -56,7 +62,13 @@ export async function PATCH(request: Request) {
   const updates: Parameters<typeof updateCustomerManually>[1] = {};
   if (body.active !== undefined) updates.active = body.active;
   if (body.display_name !== undefined) updates.display_name = body.display_name.trim();
-  if (body.custom_category !== undefined) updates.custom_category = body.custom_category;
+  // "" is what the Category <select>'s "—" option submits, and it must land
+  // as NULL: every reader treats the column as `string | null` and filters
+  // falsy out (lib/customers/view-model.ts's category facet), so an empty
+  // string would render as a blank category that matches no filter.
+  if (body.custom_category !== undefined) {
+    updates.custom_category = body.custom_category.trim() || null;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });

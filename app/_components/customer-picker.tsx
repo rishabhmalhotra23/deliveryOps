@@ -20,20 +20,36 @@ import { slugifyCustomerKey } from "@/app/_components/configure-dialog";
 
 export function CustomerPicker({
   value,
+  valueLabel,
   options,
   onPick,
   className = "dops-field text-[13px]",
+  disabled = false,
   onCustomerAdded,
 }: {
   value: string | null;
+  /** The row's own customer name, used when `value` isn't in `options` —
+   *  which is every process belonging to an inactive customer, and every
+   *  process for the moment between adding a customer inline and the page
+   *  refetching. Without it those rows read "(inactive customer)" instead of
+   *  saying who the customer is. */
+  valueLabel?: string | null;
   options: { id: string; display_name: string }[];
   onPick: (customerId: string | null) => void;
   className?: string;
+  /** Mirrors the other cells in a table row: a select left enabled during an
+   *  in-flight save accepts a second change that races the first. */
+  disabled?: boolean;
   /** Lets the parent add the new customer to its own option list, so the
    *  picker shows the new name without waiting for a page refetch. */
   onCustomerAdded?: (customer: { id: string; display_name: string }) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  // The customer this picker just created. `options` comes from the server
+  // page payload, so it can't contain it until the router refresh lands —
+  // without this the select would fall into the "not in options" branch and
+  // label a brand-new customer as inactive.
+  const [justAdded, setJustAdded] = useState<{ id: string; display_name: string } | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +71,7 @@ export function CustomerPicker({
         return;
       }
       const created = json.customer as { id: string; display_name: string };
+      setJustAdded(created);
       onCustomerAdded?.(created);
       onPick(created.id);
       setAdding(false);
@@ -105,6 +122,7 @@ export function CustomerPicker({
   return (
     <select
       value={value ?? ""}
+      disabled={disabled}
       onChange={(e) => {
         if (e.target.value === "__add__") {
           setAdding(true);
@@ -122,9 +140,18 @@ export function CustomerPicker({
       ))}
       {/* An inactive customer still owns processes, so a row can point at one
           that is no longer in `options`. Without this the select would show
-          "—" and the next save would silently unassign it. */}
+          "—" and the next save would silently unassign it. Labelled with the
+          row's own customer name where the caller has it — the 13 churned
+          customers own real processes, and a Customer column reading
+          "(inactive customer)" on every one of them tells you nothing. */}
       {value && !options.some((c) => c.id === value) ? (
-        <option value={value}>(inactive customer)</option>
+        <option value={value}>
+          {justAdded?.id === value
+            ? justAdded.display_name
+            : valueLabel
+              ? `${valueLabel} (inactive)`
+              : "(inactive customer)"}
+        </option>
       ) : null}
       <option value="__add__">+ Add a new customer…</option>
     </select>

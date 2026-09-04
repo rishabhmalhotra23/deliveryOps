@@ -11,7 +11,12 @@ import { useEffect, useState } from "react";
 import { CARD_FIELDS, COLDEFS, DEFAULT_CARD_FIELDS, DEFAULT_COLS, type ColKey } from "./columns";
 import type { ColorMap } from "./hues";
 
-export type FilterField = "stage" | "owner" | "customer" | "health" | "partner" | "platform" | "lifecycle" | "phase" | "tam";
+// `person` matches ANY owner role (FDE, TAM or engineering) rather than one
+// column. It backs Configure -> Roster's "still assigned to N processes"
+// link: that count spans all four owner FKs, so filtering by FDE alone
+// showed nothing for the 9 of 21 roster people who hold no FDE assignments
+// but 34 TAM/engineering ones between them.
+export type FilterField = "stage" | "owner" | "customer" | "health" | "partner" | "platform" | "lifecycle" | "phase" | "tam" | "person";
 
 export type DetailPattern = "split" | "overlay";
 
@@ -28,7 +33,7 @@ const STORAGE_KEY = "dops.viewPrefs";
 
 const KNOWN_COLS = new Set<string>(COLDEFS.map((c) => c.key));
 const KNOWN_CARD_FIELDS = new Set<string>(CARD_FIELDS);
-const KNOWN_FILTERS = new Set<string>(["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam"]);
+const KNOWN_FILTERS = new Set<string>(["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam", "person"]);
 
 /** Anything persisted is untrusted input: a renamed column key or a
  *  half-written value used to throw on render (`COLDEF_BY_KEY[key].narrowW`

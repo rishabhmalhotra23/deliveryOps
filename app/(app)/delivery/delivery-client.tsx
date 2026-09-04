@@ -10,8 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { ProcessesOverview, ProcessRow, V2MigrationOverview, V2ProcessRow } from "@/lib/processes/loader";
-import { viewForLifecycle } from "@/lib/processes/loader";
+import type { ProcessesOverview, ProcessRow } from "@/lib/processes/loader";
 import type { Process, ProcessNoteKind } from "@/lib/supabase/types";
 import type {
   MigrationStage,
@@ -60,9 +59,10 @@ const FILTER_LABEL: Record<FilterField, string> = {
   lifecycle: "Lifecycle",
   phase: "Phase",
   tam: "TAM",
+  person: "Anyone involved",
 };
 
-const ALL_FILTER_FIELDS: FilterField[] = ["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam"];
+const ALL_FILTER_FIELDS: FilterField[] = ["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam", "person"];
 
 function matchesFilters(row: DetailProcess, values: Partial<Record<FilterField, string>>): boolean {
   if (values.stage && row.migration_stage !== values.stage) return false;
@@ -74,6 +74,16 @@ function matchesFilters(row: DetailProcess, values: Partial<Record<FilterField, 
   if (values.lifecycle && row.lifecycle !== values.lifecycle) return false;
   if (values.phase && row.phase !== values.phase) return false;
   if (values.tam && row.tam_owner !== values.tam) return false;
+  // Any owner role, not one column — see the FilterField comment in
+  // lib/delivery/prefs.ts for why the roster's hand-over link needs this.
+  if (
+    values.person &&
+    row.fde_owner !== values.person &&
+    row.tam_owner !== values.person &&
+    row.engg_owner !== values.person
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -124,7 +134,9 @@ function compareBy(key: ColKey, a: DetailProcess, b: DetailProcess): number {
   }
 }
 
-function optionsForField(field: FilterField, section: Section, rows: DetailProcess[], processesOverview: ProcessesOverview): string[] {
+// `section` is deliberately not a parameter any more: every section reads the
+// same row list, so the facets are the same everywhere.
+function optionsForField(field: FilterField, rows: DetailProcess[], processesOverview: ProcessesOverview): string[] {
   const facets = processesOverview.facets;
   switch (field) {
     case "customer":
@@ -133,6 +145,9 @@ function optionsForField(field: FilterField, section: Section, rows: DetailProce
       return facets.fdeOwners;
     case "tam":
       return facets.tamOwners;
+    case "person":
+      // Union of every owner role, deduped — a person can hold two.
+      return Array.from(new Set([...facets.fdeOwners, ...facets.tamOwners])).sort();
     case "partner":
       return facets.partners;
     case "stage":
@@ -180,12 +195,36 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // ?person= is what Configure -> Roster links with; ?owner= is kept working
+  // for anything already bookmarked, but only ever matched FDE.
+  const personParam = searchParams.get("person");
+  const ownerParam = searchParams.get("owner");
+
   const initialSection = ((): Section => {
     const q = searchParams.get("section");
     // ?section=all kept resolving for old links and bookmarks — Historical is
     // what replaced it.
     if (q === "all") return "historical";
-    return q === "v2" || q === "historical" ? q : "active";
+    if (q === "active" || q === "v2" || q === "historical") return q;
+    // An ?owner= deep link carries no section of its own, and now that
+    // membership is derived, one person's processes are spread across all
+    // three. Landing on Active work showed "no processes match these
+    // filters" to somebody who had just been told they still own ten — every
+    // one of them a V1 process sitting in V2 migration. Open the first
+    // section that actually holds one.
+    const who = personParam ?? ownerParam;
+    if (who) {
+      const mine = processesOverview.all.filter((r) =>
+        personParam
+          ? r.fde_owner === who || r.tam_owner === who || r.engg_owner === who
+          : r.fde_owner === who
+      );
+      const hit = DELIVERY_SECTIONS.find((s) =>
+        mine.some((r) => (s === "historical" ? inHistoricalLens(r) : sectionFor(r) === s))
+      );
+      if (hit) return hit;
+    }
+    return "active";
   })();
   const [section, setSection] = useState<Section>(initialSection);
   // Historical is a quarter-grouped list; a kanban board of shipped work has
@@ -201,11 +240,22 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
   // someone as left links here to hand over the processes they still own.
   // Matches on the display name because that's what the owner filter compares
   // (matchesFilters reads row.fde_owner, the text mirror) — no id plumbing.
-  const [filterValues, setFilterValues] = useState<Partial<Record<FilterField, string>>>(() => {
-    const owner = searchParams.get("owner");
-    return owner ? { owner } : {};
-  });
+  const [filterValues, setFilterValues] = useState<Partial<Record<FilterField, string>>>(() =>
+    personParam ? { person: personParam } : ownerParam ? { owner: ownerParam } : {}
+  );
   const [openPopover, setOpenPopover] = useState<FilterField | "add" | "fields" | null>(null);
+
+  // The chip has to be pinned too, or the filter is invisible: filter chips
+  // render from prefs.filterKeys, and a user who removed the Owner chip has
+  // that removal persisted in localStorage. They would arrive at a silently
+  // filtered table with nothing on screen explaining the missing rows.
+  useEffect(() => {
+    const key: FilterField | null = personParam ? "person" : ownerParam ? "owner" : null;
+    if (!key) return;
+    setPrefs((cur) =>
+      cur.filterKeys.includes(key) ? cur : { ...cur, filterKeys: [...cur.filterKeys, key] }
+    );
+  }, [personParam, ownerParam, setPrefs]);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [configureOpen, setConfigureOpen] = useState(false);
@@ -282,13 +332,12 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
     };
   }, [openPopover]);
 
-  const view = viewBySection[section];
-  // "Active work" now actually means active work. It used to be handed every
-  // non-deleted process — including live, cancelled, churned and retired —
-  // so the tab badge (view-filtered) and the toolbar's "n of m" (unfiltered)
-  // disagreed permanently, and in board view laneFor() returned null for all
-  // of those rows so they were counted but rendered nowhere. Everything is
-  // still reachable, via the All processes section.
+  // Historical always renders the quarter-grouped table. Forced here rather
+  // than only at the render site: `view` also drives the toolbar (lane-sort
+  // control, "Card fields" vs "N columns"), so leaving it on the stored
+  // preference let a click on Board dress the toolbar up as a board while a
+  // table was still on screen.
+  const view: ViewMode = section === "historical" ? "table" : viewBySection[section];
   // Every section reads the same list and is separated by sectionFor() alone,
   // so a process can never be in two operational sections or in none. v2Rows
   // (the report-scoped loader) is no longer what the V2 tab renders — it kept
@@ -302,7 +351,11 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
       if (s === "active") active.push(row);
       else if (s === "v2") v2.push(row);
     }
-    return { active, v2, historical: allRows.filter(inHistoricalLens) };
+    // Wrapped, not passed by reference: Array#filter hands the callback
+    // (value, index, array), and inHistoricalLens's second parameter is the
+    // `today` cutoff — a bare reference would compare go-live dates against
+    // the row's array index.
+    return { active, v2, historical: allRows.filter((r) => inHistoricalLens(r)) };
   }, [allRows]);
 
   const baseRows: DetailProcess[] = bySection[section];
@@ -665,7 +718,7 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
             value={filterValues[key] ?? null}
             open={openPopover === key}
             onToggleOpen={() => setOpenPopover((cur) => (cur === key ? null : key))}
-            options={optionsForField(key, section, baseRows, processesOverview)}
+            options={optionsForField(key, baseRows, processesOverview)}
             onPick={(v) => {
               setFilterValues((cur) => ({ ...cur, [key]: v ?? undefined }));
               setOpenPopover(null);
@@ -713,24 +766,29 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
         </div>
 
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <div className="inline-flex shrink-0 rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
-            <button
-              type="button"
-              onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "table" }))}
-              className="px-2.5 py-1 rounded-full text-[11.5px]"
-              style={view === "table" ? { background: "var(--yellow-soft)" } : undefined}
-            >
-              Table
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "board" }))}
-              className="px-2.5 py-1 rounded-full text-[11.5px]"
-              style={view === "board" ? { background: "var(--yellow-soft)" } : undefined}
-            >
-              Board
-            </button>
-          </div>
+          {/* Hidden in Historical: shipped work has no lanes to move
+              between, so a Board button there is a control that does
+              nothing. */}
+          {section !== "historical" ? (
+            <div className="inline-flex shrink-0 rounded-full border p-0.5" style={{ borderColor: "var(--glass-border)" }}>
+              <button
+                type="button"
+                onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "table" }))}
+                className="px-2.5 py-1 rounded-full text-[11.5px]"
+                style={view === "table" ? { background: "var(--yellow-soft)" } : undefined}
+              >
+                Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewBySection((cur) => ({ ...cur, [section]: "board" }))}
+                className="px-2.5 py-1 rounded-full text-[11.5px]"
+                style={view === "board" ? { background: "var(--yellow-soft)" } : undefined}
+              >
+                Board
+              </button>
+            </div>
+          ) : null}
 
           {/* Board view has no column headers, so lane order needs its own
               control — the table's header sort has no equivalent here. */}
@@ -887,6 +945,7 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
                   onOpenDetail={setOpenId}
                   customerOptions={processesOverview.facets.customerOptions}
                   onReorderRows={reorderRows}
+                  allowRowDrag={false}
                   sortKey={sortKey}
                   sortDir={sortDir}
                   onSort={onSort}
@@ -1064,8 +1123,19 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
         onBulkNote={bulkNote}
       />
 
+      {/* Refetch on close: Configure -> Customers writes the customers table,
+          but facets.customerOptions is part of the server page payload, so
+          without this a customer you just added or retired stays missing from
+          (or present in) every dropdown until a manual reload. */}
       {configureOpen ? (
-        <ConfigureDialog colorMap={prefs.colorMap} onColorMapChange={(next) => setPrefs((cur) => ({ ...cur, colorMap: next }))} onClose={() => setConfigureOpen(false)} />
+        <ConfigureDialog
+          colorMap={prefs.colorMap}
+          onColorMapChange={(next) => setPrefs((cur) => ({ ...cur, colorMap: next }))}
+          onClose={() => {
+            setConfigureOpen(false);
+            router.refresh();
+          }}
+        />
       ) : null}
 
       {creating ? (
