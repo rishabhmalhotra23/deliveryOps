@@ -26,6 +26,15 @@ import { ProcessTable } from "@/app/_components/process-table";
 import { ProcessBoard, LANE_SORTS, type LaneSort, type PositionWrite } from "@/app/_components/process-board";
 import type { TablePositionWrite } from "@/app/_components/process-table";
 import { byPosition } from "@/lib/delivery/reorder";
+import {
+  sectionFor,
+  inHistoricalLens,
+  DELIVERY_SECTIONS,
+  SECTION_LABELS,
+  SECTION_HINTS,
+  type DeliverySection,
+} from "@/lib/delivery/sections";
+import { HistoricalGroups } from "@/app/(app)/delivery/_components/historical-groups";
 import { ProcessDetail, type DetailProcess } from "@/app/_components/process-detail";
 import { ConfigureDialog } from "@/app/_components/configure-dialog";
 import { BulkActionBar, type BulkResult } from "@/app/_components/bulk-action-bar";
@@ -33,7 +42,12 @@ import { NewProcessModal } from "./_components/new-process-modal";
 import { useViewPrefs, type FilterField } from "@/lib/delivery/prefs";
 import { COLDEFS, CARD_FIELDS, type ColKey } from "@/lib/delivery/columns";
 
-type Section = "active" | "v2" | "all";
+// Sections are DERIVED from each row (lib/delivery/sections.ts), never
+// stored — change a lifecycle or migration_stage and the row moves. "all" is
+// replaced by "historical", which is a lens rather than a partition: a live
+// process appears both in its operational section and here under its go-live
+// quarter, so these counts don't sum to the total.
+type Section = DeliverySection;
 type ViewMode = "table" | "board";
 
 const FILTER_LABEL: Record<FilterField, string> = {
@@ -110,8 +124,8 @@ function compareBy(key: ColKey, a: DetailProcess, b: DetailProcess): number {
   }
 }
 
-function optionsForField(field: FilterField, section: Section, rows: DetailProcess[], processesOverview: ProcessesOverview, v2Overview: V2MigrationOverview): string[] {
-  const facets = section === "v2" ? v2Overview.facets : processesOverview.facets;
+function optionsForField(field: FilterField, section: Section, rows: DetailProcess[], processesOverview: ProcessesOverview): string[] {
+  const facets = processesOverview.facets;
   switch (field) {
     case "customer":
       return facets.customers;
@@ -158,27 +172,29 @@ function optionLabel(field: FilterField, value: string): string {
 
 interface DeliveryClientProps {
   processesOverview: ProcessesOverview;
-  v2Overview: V2MigrationOverview;
 }
 
 const byTablePosition = byPosition<DetailProcess>((r) => r.table_position);
 
-export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClientProps) {
+export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const initialSection = ((): Section => {
     const q = searchParams.get("section");
-    return q === "v2" || q === "all" ? q : "active";
+    // ?section=all kept resolving for old links and bookmarks — Historical is
+    // what replaced it.
+    if (q === "all") return "historical";
+    return q === "v2" || q === "historical" ? q : "active";
   })();
   const [section, setSection] = useState<Section>(initialSection);
-  const [viewBySection, setViewBySection] = useState<Record<Section, ViewMode>>({ active: "board", v2: "table", all: "table" });
+  // Historical is a quarter-grouped list; a kanban board of shipped work has
+  // no lanes to move between, so it never offers board view.
+  const [viewBySection, setViewBySection] = useState<Record<Section, ViewMode>>({ active: "board", v2: "table", historical: "table" });
   const [prefs, setPrefs] = useViewPrefs();
 
   const [allRows, setAllRows] = useState<ProcessRow[]>(processesOverview.all);
-  const [v2Rows, setV2Rows] = useState<V2ProcessRow[]>(v2Overview.rows);
   useEffect(() => setAllRows(processesOverview.all), [processesOverview]);
-  useEffect(() => setV2Rows(v2Overview.rows), [v2Overview]);
 
   const [search, setSearch] = useState("");
   // ?owner=<display name> arrives from Configure -> Roster, where marking
@@ -273,8 +289,23 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   // disagreed permanently, and in board view laneFor() returned null for all
   // of those rows so they were counted but rendered nowhere. Everything is
   // still reachable, via the All processes section.
-  const activeRows = useMemo(() => allRows.filter((r) => viewForLifecycle(r.lifecycle) === "active"), [allRows]);
-  const baseRows: DetailProcess[] = section === "v2" ? v2Rows : section === "all" ? allRows : activeRows;
+  // Every section reads the same list and is separated by sectionFor() alone,
+  // so a process can never be in two operational sections or in none. v2Rows
+  // (the report-scoped loader) is no longer what the V2 tab renders — it kept
+  // its own evidence-based definition, which is why 36 rows used to appear in
+  // both tabs.
+  const bySection = useMemo(() => {
+    const active: DetailProcess[] = [];
+    const v2: DetailProcess[] = [];
+    for (const row of allRows) {
+      const s = sectionFor(row);
+      if (s === "active") active.push(row);
+      else if (s === "v2") v2.push(row);
+    }
+    return { active, v2, historical: allRows.filter(inHistoricalLens) };
+  }, [allRows]);
+
+  const baseRows: DetailProcess[] = bySection[section];
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -316,6 +347,23 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     }));
   }
 
+  // Shared by the flat table and every Historical quarter group, so a column
+  // drag in one behaves identically in the other.
+  function reorderCol(from: ColKey, to: ColKey) {
+    setPrefs((cur) => {
+      // Insert *after* the target when dragging rightwards. Always inserting
+      // before meant no gesture could ever move a column to the last
+      // position.
+      const fromIdx = cur.cols.indexOf(from);
+      const toIdx = cur.cols.indexOf(to);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return cur;
+      const next = cur.cols.filter((c) => c !== from);
+      const target = next.indexOf(to);
+      next.splice(fromIdx < toIdx ? target + 1 : target, 0, from);
+      return { ...cur, cols: next };
+    });
+  }
+
   function onSort(key: ColKey) {
     if (sortKey === key) {
       if (sortDir === "asc") setSortDir("desc");
@@ -334,7 +382,6 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   // 40-row bulk patch into 40 refetches of the whole page payload.
   function applyUpdate(updated: Process, opts: { refresh?: boolean } = {}) {
     setAllRows((cur) => cur.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
-    setV2Rows((cur) => cur.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
     if (opts.refresh !== false) router.refresh();
   }
 
@@ -373,7 +420,6 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
 
   function removeRows(ids: string[]) {
     setAllRows((cur) => cur.filter((r) => !ids.includes(r.id)));
-    setV2Rows((cur) => cur.filter((r) => !ids.includes(r.id)));
     setSelected((cur) => {
       const next = new Set(cur);
       ids.forEach((id) => next.delete(id));
@@ -445,7 +491,6 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
     const apply = (list: DetailProcess[]) =>
       list.map((r) => (optimistic.has(r.id) ? { ...r, [field]: optimistic.get(r.id)! } : r));
     setAllRows((cur) => apply(cur) as ProcessRow[]);
-    setV2Rows((cur) => apply(cur) as V2ProcessRow[]);
 
     const res = await fetch("/api/processes/reorder", {
       method: "POST",
@@ -509,10 +554,20 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   function handleCreated(process: Process) {
     setCreating(false);
     setCreateSeed(null);
-    // Only `allRows` gets the optimistic insert: a new process is always
-    // created with migration_stage 'not_required' (see buildCreateProcessRow),
-    // which isV2Relevant filters out of the V2 lens by definition.
-    const asRow = { ...process, customer_display_name: process.account, open_suggestion_count: 0, needs_classification: false };
+    // One list now backs every section, so the optimistic insert lands
+    // wherever sectionFor() puts it — Active work, since new processes are
+    // created as V2 native (see buildCreateProcessRow).
+    //
+    // confirmed_arr is null rather than looked up: it comes from Salesforce
+    // opps in the loader, and router.refresh() below fills it in. Guessing it
+    // from processes.arr here would show the stale import snapshot for a beat.
+    const asRow: ProcessRow = {
+      ...process,
+      customer_display_name: process.account,
+      open_suggestion_count: 0,
+      needs_classification: false,
+      confirmed_arr: null,
+    };
     setAllRows((cur) => [asRow, ...cur]);
     router.refresh();
   }
@@ -539,15 +594,15 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   const emptyCopy: Record<Section, { title: string; hint: string }> = {
     active: {
       title: "Nothing in flight right now",
-      hint: "Delivered and closed work lives under All processes.",
+      hint: "Set a process's migration stage to V2 native and it appears here. Shipped and closed work is under Historical.",
     },
     v2: {
-      title: "No processes with V2 migration activity",
-      hint: "A process appears here once it has a migration stage, a linked ticket or a parity date.",
+      title: "Nothing left to migrate",
+      hint: "Every in-flight process is already V2 native. Anything not yet migrated shows here until its stage says otherwise.",
     },
-    all: {
-      title: "No processes yet",
-      hint: "Create the first one with New process.",
+    historical: {
+      title: "Nothing shipped yet",
+      hint: "A process appears here once it has a go-live date, or once it is cancelled, churned or retired.",
     },
   };
 
@@ -556,7 +611,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
       <PageHeader
         eyebrow="Delivery"
         title="Every process, every customer, every stage."
-        subtitle={`${processesOverview.counts.total} processes, native to DeliveryOps — Active work and V2 migration are the same records, two lenses.`}
+        subtitle={`${processesOverview.counts.total} processes, native to DeliveryOps — which section a process sits in is derived from its lifecycle and migration stage, so changing either moves it.`}
         actions={
           <button type="button" onClick={() => setCreating(true)} className="btn-primary rounded-full px-4 py-2 text-sm font-semibold">
             New process
@@ -566,13 +621,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
 
       {/* Section tabs */}
       <div className="flex items-center gap-4 border-b" style={{ borderColor: "var(--glass-border)" }}>
-        {(
-          [
-            { key: "active" as Section, label: "Active work", count: activeRows.length },
-            { key: "v2" as Section, label: "V2 migration", count: v2Rows.length },
-            { key: "all" as Section, label: "All processes", count: allRows.length },
-          ]
-        ).map((s) => (
+        {DELIVERY_SECTIONS.map((key) => ({ key, label: SECTION_LABELS[key], count: bySection[key].length })).map((s) => (
           <button
             key={s.key}
             type="button"
@@ -595,11 +644,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
           </button>
         ))}
         <span className="ml-auto text-[11px] text-[color:var(--muted-foreground)] pb-2">
-          {section === "v2"
-            ? "same records, migration lens"
-            : section === "all"
-              ? "every process, including delivered and closed"
-              : "in flight now — delivered and closed live under All processes"}
+          {SECTION_HINTS[section]}
         </span>
       </div>
 
@@ -620,7 +665,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
             value={filterValues[key] ?? null}
             open={openPopover === key}
             onToggleOpen={() => setOpenPopover((cur) => (cur === key ? null : key))}
-            options={optionsForField(key, section, baseRows, processesOverview, v2Overview)}
+            options={optionsForField(key, section, baseRows, processesOverview)}
             onPick={(v) => {
               setFilterValues((cur) => ({ ...cur, [key]: v ?? undefined }));
               setOpenPopover(null);
@@ -819,32 +864,57 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
         style={openId && prefs.pattern === "split" ? { gridTemplateColumns: "minmax(0,1fr) minmax(320px,420px)" } : undefined}
       >
         <div className="min-w-0">
-          {view === "table" ? (
+          {/* Historical replaces the flat table with quarter groups. It's a
+              record of output, so the useful axis is when work shipped, not
+              which column you last sorted by. Rendered above the table rather
+              than instead of it — each group holds the same ProcessTable, so
+              every inline edit still works and an edit that changes a
+              lifecycle moves the row out of the section entirely. */}
+          {section === "historical" ? (
+            <HistoricalGroups
+              rows={sorted}
+              renderGroup={(groupRows) => (
+                <ProcessTable
+                  rows={groupRows}
+                  cols={visibleCols}
+                  colW={prefs.colW}
+                  onColWChange={(key, px) => setPrefs((cur) => ({ ...cur, colW: { ...cur.colW, [key]: px } }))}
+                  onReorderCol={reorderCol}
+                  narrow={narrow}
+                  selected={selected}
+                  onSelectionChange={setSelected}
+                  openId={openId}
+                  onOpenDetail={setOpenId}
+                  customerOptions={processesOverview.facets.customerOptions}
+                  onReorderRows={reorderRows}
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={onSort}
+                  colorMap={prefs.colorMap}
+                  onSave={saveField}
+                  onArchive={(id) => void bulkArchive([id])}
+                  onRestore={(id) => void restoreProcesses([id])}
+                  showRestore
+                  emptyTitle=""
+                  emptyHint=""
+                />
+              )}
+              emptyTitle={hasNarrowing ? "No processes match these filters" : emptyCopy.historical.title}
+              emptyHint={hasNarrowing ? "Try clearing a filter or widening your search." : emptyCopy.historical.hint}
+            />
+          ) : view === "table" ? (
             <ProcessTable
               rows={sorted}
               cols={visibleCols}
               colW={prefs.colW}
               onColWChange={(key, px) => setPrefs((cur) => ({ ...cur, colW: { ...cur.colW, [key]: px } }))}
-              onReorderCol={(from, to) =>
-                setPrefs((cur) => {
-                  // Insert *after* the target when dragging rightwards.
-                  // Always inserting before meant no gesture could ever move
-                  // a column to the last position.
-                  const fromIdx = cur.cols.indexOf(from);
-                  const toIdx = cur.cols.indexOf(to);
-                  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return cur;
-                  const next = cur.cols.filter((c) => c !== from);
-                  const target = next.indexOf(to);
-                  next.splice(fromIdx < toIdx ? target + 1 : target, 0, from);
-                  return { ...cur, cols: next };
-                })
-              }
+              onReorderCol={reorderCol}
               narrow={narrow}
               selected={selected}
               onSelectionChange={setSelected}
               openId={openId}
               onOpenDetail={setOpenId}
-              customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
+              customerOptions={processesOverview.facets.customerOptions}
               onReorderRows={reorderRows}
               sortKey={sortKey}
               sortDir={sortDir}
@@ -893,7 +963,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               process={openProcess}
               list={sorted}
               onSelectId={setOpenId}
-              customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
+              customerOptions={processesOverview.facets.customerOptions}
               onUpdated={applyUpdate}
               onArchived={(id) => removeRows([id])}
               onDataChanged={() => router.refresh()}
@@ -941,7 +1011,7 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
               process={openProcess}
               list={sorted}
               onSelectId={setOpenId}
-              customerOptions={section === "v2" ? v2Overview.facets.customerOptions : processesOverview.facets.customerOptions}
+              customerOptions={processesOverview.facets.customerOptions}
               onUpdated={applyUpdate}
               onArchived={(id) => removeRows([id])}
               onDataChanged={() => router.refresh()}

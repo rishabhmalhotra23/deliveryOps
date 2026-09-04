@@ -92,6 +92,47 @@ export function quarterSortKey(s: string): number {
 // modal's quarter picker defaults to the fiscal quarter Kognitos is
 // currently in, instead of a raw calendar year that would immediately
 // reintroduce the same mislabeling for the next campaign.
+/** The fiscal quarter an arbitrary date falls in, as the same "<n>Q<yy>"
+ *  string currentFiscalQuarter() and nps_responses.quarter use.
+ *
+ *  Generalised out of currentFiscalQuarter (2026-09-04) so Delivery's
+ *  Historical section can group processes by go-live quarter without
+ *  inventing a second quarter convention — the Q-on-Q aggregate in
+ *  lib/processes/loader.ts keyed on CALENDAR quarters ("2026 Q1"), which
+ *  would have put the same piece of work in a different quarter than every
+ *  NPS chart and the team's own Excel tracker. Returns null for a null or
+ *  unparseable date so callers can render an explicit "no date" group rather
+ *  than silently bucketing it somewhere wrong. */
+export function fiscalQuarterOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  // UTC throughout: these are date-only columns, and reading them in a
+  // local timezone west of UTC shifts 2026-02-01 back into January — across
+  // a fiscal-year boundary, not just a quarter one.
+  const month = d.getUTCMonth() + 1;
+  const year = d.getUTCFullYear();
+  let quarterNum: 1 | 2 | 3 | 4;
+  let fy: number;
+  if (month === 1) {
+    quarterNum = 4;
+    fy = year;
+  } else if (month >= 11) {
+    quarterNum = 4;
+    fy = year + 1;
+  } else if (month <= 4) {
+    quarterNum = 1;
+    fy = year + 1;
+  } else if (month <= 7) {
+    quarterNum = 2;
+    fy = year + 1;
+  } else {
+    quarterNum = 3;
+    fy = year + 1;
+  }
+  return `${quarterNum}Q${String(fy % 100).padStart(2, "0")}`;
+}
+
 /** Pure. Exported for unit testing. */
 export function currentFiscalQuarter(now: Date = new Date()): { quarterNum: 1 | 2 | 3 | 4; year: number } {
   const month = now.getMonth() + 1; // 1-12

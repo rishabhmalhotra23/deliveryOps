@@ -52,6 +52,8 @@ const DEFAULT_STAGE_HUE: Record<MigrationStage, Hue> = {
   live_on_v2: "emerald",
   v2_native: "emerald",
   migrated_pending_commercial: "fuchsia",
+  // Red: this one is being killed, which is the only stage that is bad news.
+  to_be_retired: "red",
 };
 
 const DEFAULT_HEALTH_HUE: Record<ProcessHealth, Hue> = {

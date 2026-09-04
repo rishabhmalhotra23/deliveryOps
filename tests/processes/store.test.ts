@@ -1,7 +1,7 @@
 // buildCreateProcessRow is the pure validation/defaulting core of
 // createProcess (lib/processes/store.ts) — split out so the "New Process"
-// flow's rules (required fields, migration_stage always not_required,
-// lifecycle/platform defaults) are testable without a live Supabase client.
+// flow's rules (required fields, forced migration_stage, lifecycle/platform
+// defaults) are testable without a live Supabase client.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -26,7 +26,13 @@ function fakeProcess(overrides: Partial<Process> = {}): Process {
 }
 
 describe("buildCreateProcessRow", () => {
-  it("applies delivery defaults and forces migration_stage to not_required", () => {
+  // The forced stage was `not_required` until 2026-09-04, on the reasoning
+  // that new work isn't migration work. Delivery's sections are now derived
+  // from migration_stage (lib/delivery/sections.ts), which inverts it: new
+  // work is new V2 dev, and v2_native is what routes a process to Active
+  // work. Under the old default every process you created would have landed
+  // in the V2 migration / migrate-or-retire list instead.
+  it("applies delivery defaults and forces migration_stage to v2_native", () => {
     const row = buildCreateProcessRow(
       { process_name: "Invoice reconciliation", account: "Acme Corp" },
       "rishabh@kognitos.com"
@@ -37,7 +43,7 @@ describe("buildCreateProcessRow", () => {
       customer_id: null,
       lifecycle: "backlog",
       platform: "v2",
-      migration_stage: "not_required",
+      migration_stage: "v2_native",
       fde_owner: null,
       updated_by: "rishabh@kognitos.com",
     });

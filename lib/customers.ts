@@ -68,6 +68,26 @@ export async function listCustomers(): Promise<Customer[]> {
   return (data as Customer[]) ?? [];
 }
 
+/** How many live processes belong to each customer, keyed by customer id.
+ *
+ *  Only the Configure -> Customers tab needs this: it's what turns "mark
+ *  inactive" from a blind toggle into a decision. Mirrors
+ *  countRosterAssignments() in lib/roster/store.ts. */
+export async function countCustomerProcesses(): Promise<Record<string, number>> {
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.processes)
+    .select("customer_id")
+    .is("deleted_at", null);
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  for (const row of (data as { customer_id: string | null }[] | null) ?? []) {
+    if (row.customer_id) counts[row.customer_id] = (counts[row.customer_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 // Filter that powers the operations chat. All filters are optional and AND'd.
 export interface CustomerFilter {
   ae_owner?: string;
@@ -187,7 +207,7 @@ export async function upsertCustomer(input: CreateCustomerInput): Promise<Custom
 // Used by the operations chat + dashboard inline edits.
 export async function updateCustomerManually(
   key: string,
-  updates: Partial<Pick<Customer, "ae_owner" | "partner" | "custom_category" | "lifecycle_group" | "slack_channel" | "email_alias" | "display_name">>,
+  updates: Partial<Pick<Customer, "ae_owner" | "partner" | "custom_category" | "lifecycle_group" | "slack_channel" | "email_alias" | "display_name" | "active">>,
   opts: { updatedBy?: string } = {}
 ): Promise<Customer> {
   const existing = await requireCustomerByKey(key);

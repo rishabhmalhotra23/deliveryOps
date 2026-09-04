@@ -356,10 +356,16 @@ export interface CreateProcessInput {
   fde_owner?: string | null;
 }
 
-// New processes are always delivery work, not migration work, by definition —
-// migration_stage only ever becomes something else via a drawer edit, the
-// same mechanism used to move a process off the V2 Migration report.
-const NEW_PROCESS_MIGRATION_STAGE = "not_required" as const;
+// New work is new V2 development, which is exactly what Delivery's Active
+// work section now means (lib/delivery/sections.ts routes v2_native there).
+//
+// This was `not_required` on the reasoning that "new processes are always
+// delivery work, not migration work". That was right when the two sections
+// used unrelated definitions; under stage-driven routing it inverted — every
+// process you created would land in V2 migration, i.e. in the migrate-or-
+// retire list, which is the opposite of what creating one means. Changed
+// 2026-09-04.
+const NEW_PROCESS_MIGRATION_STAGE = "v2_native" as const;
 const DEFAULT_LIFECYCLE: ProcessLifecycle = "backlog";
 const DEFAULT_PLATFORM: ProcessPlatform = "v2";
 

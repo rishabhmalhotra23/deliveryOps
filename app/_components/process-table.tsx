@@ -34,6 +34,7 @@ import {
   PLATFORM_LABELS,
 } from "@/lib/delivery/labels";
 import { RosterPicker } from "@/app/_components/roster-picker";
+import { CustomerPicker } from "@/app/_components/customer-picker";
 import type { DetailProcess } from "@/app/_components/process-detail";
 import { planPositions } from "@/lib/delivery/reorder";
 
@@ -612,14 +613,12 @@ function Cell({
   switch (colKey) {
     case "customer":
       return (
-        <select disabled={busy} value={row.customer_id ?? ""} onChange={(e) => save({ customer_id: e.target.value || null })} className={`${field} text-[13px]`}>
-          <option value="">—</option>
-          {customerOptions.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.display_name}
-            </option>
-          ))}
-        </select>
+        <CustomerPicker
+          value={row.customer_id}
+          options={customerOptions}
+          onPick={(id) => save({ customer_id: id })}
+          className={`${field} text-[13px]`}
+        />
       );
     case "stage":
       return (

@@ -35,6 +35,10 @@ export interface Customer {
   field_provenance: FieldProvenance;
   brand_color: string | null;  // hex e.g. "#E2231A" — drives hero accent
   logo_url: string | null;     // manual logo override; falls back to Clearbit
+  /** False = no longer a live customer (0039). Hidden from every customer
+   *  picker, but keeps its processes and its customer-360 page. Deliberately
+   *  separate from custom_category, which is a reporting bucket. */
+  active: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -315,6 +319,10 @@ export const MIGRATION_STAGES = [
   "live_on_v2",
   "v2_native",
   "migrated_pending_commercial",
+  // 0039. "We have looked at this and it will be killed rather than
+  // migrated" — a decision, distinct from not_required ("migration was never
+  // needed") and from lifecycle 'retired' ("the killing already happened").
+  "to_be_retired",
 ] as const;
 
 export type MigrationStage = (typeof MIGRATION_STAGES)[number];
@@ -328,6 +336,7 @@ export const MIGRATION_STAGE_LABELS: Record<MigrationStage, string> = {
   live_on_v2: "Live on v2",
   v2_native: "V2 native",
   migrated_pending_commercial: "Migrated, pending commercial",
+  to_be_retired: "To be retired",
 };
 
 // Stages that count as actively migrating — drives the "in flight" metric.

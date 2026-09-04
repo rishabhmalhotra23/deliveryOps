@@ -84,6 +84,7 @@ export const MIGRATION_STAGE_SHORT: Record<MigrationStage, string> = {
   live_on_v2: "Live on V2",
   v2_native: "V2 native",
   migrated_pending_commercial: "Migrated · commercial",
+  to_be_retired: "To be retired",
 };
 
 export { MIGRATION_STAGE_LABELS };

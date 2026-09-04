@@ -36,6 +36,7 @@ import {
   stageLabel,
 } from "@/lib/delivery/labels";
 import { RosterPicker } from "@/app/_components/roster-picker";
+import { CustomerPicker } from "@/app/_components/customer-picker";
 import { ActivityFeed } from "@/app/_components/activity-feed";
 
 /** completion_pct is a 0..1 fraction; the UI talks in whole percents. */
@@ -557,18 +558,11 @@ export function ProcessDetail({
         <GroupHeader title="Identity" />
         <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
           <FieldWrapper fieldLabel="Customer" flashed={savedField === "Customer"}>
-            <select
-              value={proc.customer_id ?? ""}
-              onChange={(e) => void commit("customer_id", "Customer", e.target.value || null)}
-              className="dops-field text-[13px]"
-            >
-              <option value="">—</option>
-              {customerOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.display_name}
-                </option>
-              ))}
-            </select>
+            <CustomerPicker
+              value={proc.customer_id}
+              options={customerOptions}
+              onPick={(id) => void commit("customer_id", "Customer", id)}
+            />
           </FieldWrapper>
         </div>
 

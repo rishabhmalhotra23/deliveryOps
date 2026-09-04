@@ -19,15 +19,29 @@ import {
   type ProcessHealth,
   type ProcessLifecycle,
   ROSTER_ROLES,
+  CUSTOMER_CATEGORIES,
+  type Customer,
   type RosterEntry,
   type RosterKind,
 } from "@/lib/supabase/types";
 import { HUES, hueStyle, resolveHue, type ColorField, type ColorMap, type Hue } from "@/lib/delivery/hues";
 import { healthLabel, lifecycleLabel, stageLabel } from "@/lib/delivery/labels";
 
-type Tab = "stages" | "lifecycle" | "roster" | "colours";
+type Tab = "stages" | "lifecycle" | "roster" | "customers" | "colours";
 
 const ROLE_LABELS: Record<string, string> = { fde: "FDE", tam: "TAM", engg: "Engineering" };
+
+/** Display name -> the stable `key` slug. Mirrors what the existing seed and
+ *  sync paths produce, so a customer added here joins to the same
+ *  /customers/[key] route and integration lookups as an imported one. */
+export function slugifyCustomerKey(displayName: string): string {
+  return displayName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -83,6 +97,23 @@ export function ConfigureDialog({
   const [showLeft, setShowLeft] = useState(false);
   const [colorField, setColorField] = useState<ColorField>("stage");
 
+  // Customers tab. Same shape as the roster above — customers ARE the
+  // customer roster (41 rows, external IDs, a 360 page each), so this
+  // deliberately reuses that interaction rather than inventing a second one.
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [custCounts, setCustCounts] = useState<Record<string, number>>({});
+  const [custLoading, setCustLoading] = useState(false);
+  const [custEditingKey, setCustEditingKey] = useState<string | null>(null);
+  const [custDraft, setCustDraft] = useState<{ display_name: string; custom_category: string; active: boolean }>({
+    display_name: "",
+    custom_category: "",
+    active: true,
+  });
+  const [custSaving, setCustSaving] = useState(false);
+  const [custError, setCustError] = useState<string | null>(null);
+  const [showInactiveCust, setShowInactiveCust] = useState(false);
+  const [newCustomer, setNewCustomer] = useState("");
+
   // Always loads leavers and counts: this is the management view, and the
   // leavers are exactly who you come here to edit. `showLeft` only controls
   // whether they're rendered, so toggling it costs no refetch.
@@ -98,6 +129,81 @@ export function ConfigureDialog({
       .catch(() => setRoster([]))
       .finally(() => setRosterLoading(false));
   }, [tab, rosterKind]);
+
+  useEffect(() => {
+    if (tab !== "customers") return;
+    setCustLoading(true);
+    fetch("/api/customers/roster")
+      .then((r) => r.json())
+      .then((json) => {
+        setCustomers(json.customers ?? []);
+        setCustCounts(json.counts ?? {});
+      })
+      .catch(() => setCustomers([]))
+      .finally(() => setCustLoading(false));
+  }, [tab]);
+
+  function openCustEditor(c: Customer) {
+    setCustError(null);
+    setCustEditingKey(c.key);
+    setCustDraft({
+      display_name: c.display_name,
+      custom_category: c.custom_category ?? "",
+      active: c.active,
+    });
+  }
+
+  async function saveCustEditor(c: Customer) {
+    setCustSaving(true);
+    setCustError(null);
+    try {
+      const res = await fetch("/api/customers/roster", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: c.key, ...custDraft }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setCustError(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      const updated = json.customer as Customer;
+      setCustomers((cur) =>
+        cur
+          .map((x) => (x.key === updated.key ? updated : x))
+          .sort((a, b) => a.display_name.localeCompare(b.display_name))
+      );
+      if (!updated.active) setShowInactiveCust(true);
+      setCustEditingKey(null);
+    } catch (err) {
+      setCustError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCustSaving(false);
+    }
+  }
+
+  async function addCustomer() {
+    const display_name = newCustomer.trim();
+    if (!display_name) return;
+    setCustError(null);
+    const res = await fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // `key` is the stable slug every integration and the /customers/[key]
+      // route join on, so it's derived here rather than typed — a hand-typed
+      // key with a space or capital in it would break those links silently.
+      body: JSON.stringify({ key: slugifyCustomerKey(display_name), display_name }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setCustError(json.error || `HTTP ${res.status}`);
+      return;
+    }
+    setCustomers((cur) =>
+      [...cur, json.customer as Customer].sort((a, b) => a.display_name.localeCompare(b.display_name))
+    );
+    setNewCustomer("");
+  }
 
   function openEditor(entry: RosterEntry) {
     setRosterError(null);
@@ -135,6 +241,11 @@ export function ConfigureDialog({
       setSaving(false);
     }
   }
+
+  const inactiveCustomers = customers.filter((c) => !c.active);
+  const visibleCustomers = customers.filter(
+    (c) => c.active || showInactiveCust || c.key === custEditingKey
+  );
 
   const leavers = roster.filter((r) => !r.active);
   // A leaver being edited stays on screen regardless of the toggle, so the
@@ -191,7 +302,7 @@ export function ConfigureDialog({
         <div className="px-4 pt-4">
           <div className="text-sm font-semibold text-[color:var(--foreground)] mb-2">Configure</div>
           <div className="flex gap-4 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
-            {(["roster", "colours", "stages", "lifecycle"] as Tab[]).map((t) => (
+            {(["roster", "customers", "colours", "stages", "lifecycle"] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -202,7 +313,15 @@ export function ConfigureDialog({
                   borderBottom: tab === t ? "2px solid var(--yellow-ink)" : "2px solid transparent",
                 }}
               >
-                {t === "stages" ? "Migration stages" : t === "lifecycle" ? "Lifecycle states" : t === "roster" ? "Roster" : "Colours"}
+                {t === "stages"
+                  ? "Migration stages"
+                  : t === "lifecycle"
+                    ? "Lifecycle states"
+                    : t === "roster"
+                      ? "Roster"
+                      : t === "customers"
+                        ? "Customers"
+                        : "Colours"}
               </button>
             ))}
           </div>
@@ -453,6 +572,197 @@ export function ConfigureDialog({
                 Marking someone as left removes them from every dropdown but keeps their
                 past work attributed to them; renaming follows through to every process
                 they own.
+              </div>
+            </div>
+          ) : null}
+
+          {tab === "customers" ? (
+            <div className="space-y-2">
+              <div className="max-h-56 overflow-auto space-y-1">
+                {custLoading ? (
+                  <div className="text-[12px] text-[color:var(--muted-foreground)] py-2">Loading…</div>
+                ) : visibleCustomers.length === 0 ? (
+                  <div className="text-[12px] text-[color:var(--muted-foreground)] py-2 italic">
+                    {customers.length === 0 ? "No customers yet." : "Every customer is inactive."}
+                  </div>
+                ) : (
+                  visibleCustomers.map((c) =>
+                    custEditingKey === c.key ? (
+                      <div
+                        key={c.key}
+                        className="rounded-lg px-2.5 py-2.5 space-y-2.5"
+                        style={{ background: "var(--surface-3, var(--field))", border: "1px solid var(--yellow-line)" }}
+                      >
+                        <div>
+                          <label
+                            className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold mb-0.5"
+                            htmlFor={`cust-name-${c.key}`}
+                          >
+                            Customer name
+                          </label>
+                          <input
+                            id={`cust-name-${c.key}`}
+                            autoFocus
+                            value={custDraft.display_name}
+                            onChange={(e) => setCustDraft((cur) => ({ ...cur, display_name: e.target.value }))}
+                            className="dops-input w-full px-2 py-1 text-[13px]"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold mb-0.5"
+                            htmlFor={`cust-cat-${c.key}`}
+                          >
+                            Category
+                          </label>
+                          <select
+                            id={`cust-cat-${c.key}`}
+                            value={custDraft.custom_category}
+                            onChange={(e) => setCustDraft((cur) => ({ ...cur, custom_category: e.target.value }))}
+                            className="dops-field text-[13px]"
+                          >
+                            <option value="">—</option>
+                            {CUSTOMER_CATEGORIES.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <label className="flex items-center gap-2 text-[12px] cursor-pointer pt-0.5">
+                          <input
+                            type="checkbox"
+                            checked={custDraft.active}
+                            onChange={(e) => setCustDraft((cur) => ({ ...cur, active: e.target.checked }))}
+                            style={{ accentColor: "var(--brand-yellow)" }}
+                          />
+                          <span style={{ color: custDraft.active ? "var(--foreground)" : "var(--muted-foreground)" }}>
+                            {custDraft.active ? "Still a customer" : "No longer a customer — hidden from every dropdown"}
+                          </span>
+                        </label>
+
+                        {/* Category and active are independent on purpose: a
+                            customer can be At Risk and still very much
+                            active. The only thing `active` controls is
+                            whether they can be picked for new work. */}
+                        {!custDraft.active && (custCounts[c.id] ?? 0) > 0 ? (
+                          <div
+                            className="rounded-md px-2.5 py-1.5 text-[11.5px]"
+                            style={{
+                              background: "var(--st-amber-bg)",
+                              border: "1px solid var(--st-amber-bd)",
+                              color: "var(--st-amber-fg)",
+                            }}
+                          >
+                            Keeps its {custCounts[c.id]} process{custCounts[c.id] === 1 ? "" : "es"} and its
+                            customer page — it just can&rsquo;t be picked for new work.
+                          </div>
+                        ) : null}
+
+                        <div className="flex gap-2 justify-end pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setCustEditingKey(null)}
+                            className="rounded-full px-3 py-1 text-[11.5px] border"
+                            style={{ borderColor: "var(--brand-metal-line)", color: "var(--foreground)" }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveCustEditor(c)}
+                            disabled={custSaving || !custDraft.display_name.trim()}
+                            className="btn-primary rounded-full px-3 py-1 text-[11.5px] font-semibold disabled:opacity-60"
+                          >
+                            {custSaving ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        key={c.key}
+                        className="rounded-md px-2.5 py-1.5 text-[13px] flex items-center gap-2"
+                        style={{ background: "var(--field)", opacity: c.active ? 1 : 0.5 }}
+                      >
+                        <span
+                          className="shrink-0 rounded-full"
+                          style={{
+                            width: 8,
+                            height: 8,
+                            background: c.active ? "var(--status-good)" : "var(--st-neutral-bd)",
+                          }}
+                        />
+                        <span className="text-[color:var(--foreground)] truncate flex-1 min-w-0">
+                          {c.display_name}
+                        </span>
+                        <span className="text-[10.5px] text-[color:var(--muted-foreground)] shrink-0">
+                          {c.custom_category ?? "No category"}
+                          {c.active ? "" : " · inactive"}
+                        </span>
+                        <span
+                          className="shrink-0 text-[10.5px] rounded-full px-1.5 min-w-[26px] text-center"
+                          style={{ background: "var(--glass-bg)", color: "var(--muted-foreground)" }}
+                          title={`${custCounts[c.id] ?? 0} process${(custCounts[c.id] ?? 0) === 1 ? "" : "es"}`}
+                        >
+                          {custCounts[c.id] ?? 0}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openCustEditor(c)}
+                          title="Edit name, category, or mark as no longer a customer"
+                          className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
+                        >
+                          ⋯
+                        </button>
+                      </div>
+                    )
+                  )
+                )}
+              </div>
+
+              {inactiveCustomers.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowInactiveCust((v) => !v)}
+                  className="text-[11.5px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] text-left"
+                >
+                  {showInactiveCust ? "▾ Hide" : "▸ Show"} the {inactiveCustomers.length} inactive
+                </button>
+              ) : null}
+
+              {custError ? (
+                <div className="text-[11.5px]" style={{ color: "var(--status-bad)" }}>
+                  {custError}
+                </div>
+              ) : null}
+
+              <div className="flex gap-2">
+                <input
+                  value={newCustomer}
+                  onChange={(e) => setNewCustomer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void addCustomer();
+                  }}
+                  placeholder="Add a customer…"
+                  className="dops-input dops-input-dashed flex-1 px-2.5 py-1.5 text-[13px]"
+                  style={{ borderColor: "var(--brand-metal-line)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void addCustomer()}
+                  disabled={!newCustomer.trim()}
+                  className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                >
+                  Add
+                </button>
+              </div>
+              <div className="text-[11px] text-[color:var(--muted-foreground)] pt-1 leading-snug">
+                This is the customer roster — it backs every customer dropdown in the table, the
+                board and the detail panel. Marking one inactive removes it from those dropdowns
+                but keeps its processes and its customer page, so history stays intact.
+                Category is a reporting bucket and stays independent: a customer can be At Risk
+                and still active.
               </div>
             </div>
           ) : null}

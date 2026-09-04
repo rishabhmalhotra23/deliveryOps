@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Delivery: derived sections + Historical (mockup, 2026-09-04)</title>
+<style>
+:root{
+  --surface-1:#262626; --surface-2:#1F1F1F; --surface-3:#2F2F2F; --card:#262626;
+  --foreground:#FAFAFA; --muted-foreground:#A3A3A3;
+  --brand-yellow:#F2FF70; --yellow-ink:#F2FF70;
+  --yellow-soft:rgba(242,255,112,.14); --yellow-line:rgba(242,255,112,.45);
+  --field:rgba(255,255,255,.06); --glass-bg:rgba(255,255,255,.10);
+  --brand-metal-line:rgba(255,255,255,.12); --status-bad:#F87171;
+  --st-neutral-fg:#A3A3A3; --st-neutral-bg:rgba(163,163,163,.14); --st-neutral-bd:rgba(163,163,163,.32);
+  --st-indigo-fg:#818CF8;  --st-indigo-bg:rgba(129,140,248,.14);  --st-indigo-bd:rgba(129,140,248,.32);
+  --st-orange-fg:#FB923C;  --st-orange-bg:rgba(251,146,60,.14);   --st-orange-bd:rgba(251,146,60,.32);
+  --st-blue-fg:#60A5FA;    --st-blue-bg:rgba(96,165,250,.14);     --st-blue-bd:rgba(96,165,250,.32);
+  --st-amber-fg:#FBBF24;   --st-amber-bg:rgba(251,191,36,.14);    --st-amber-bd:rgba(251,191,36,.32);
+  --st-emerald-fg:#4ADE80; --st-emerald-bg:rgba(74,222,128,.14);  --st-emerald-bd:rgba(74,222,128,.32);
+  --st-fuchsia-fg:#E879F9; --st-fuchsia-bg:rgba(232,121,249,.14); --st-fuchsia-bd:rgba(232,121,249,.32);
+  --st-red-fg:#F87171;     --st-red-bg:rgba(248,113,113,.14);     --st-red-bd:rgba(248,113,113,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#171717;color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:28px 32px 80px}
+h1{font-size:19px;margin:0 0 4px} h1+p{margin:0 0 26px;color:var(--muted-foreground);font-size:12.5px}
+h2{font-size:13.5px;margin:0 0 12px;letter-spacing:.2px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  background:var(--brand-yellow);color:#171717;font-size:11px;font-weight:700;margin-right:8px}
+section{margin:0 0 38px}
+.row{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-left:27px}
+.pane{background:var(--surface-1);border:1px solid var(--brand-metal-line);border-radius:11px;padding:13px 14px}
+.tag{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted-foreground);
+  display:block;margin-bottom:9px;font-weight:600}
+.tag.good{color:var(--brand-yellow)}
+.nav{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--brand-metal-line);
+  border-radius:9999px;padding:3px;font-size:12.5px}
+.nav span{padding:4px 13px;border-radius:9999px;color:var(--muted-foreground);white-space:nowrap}
+.nav span.on{background:var(--yellow-soft);color:var(--foreground);font-weight:600}
+.nav span b{font-weight:600;opacity:.75;margin-left:5px;font-size:11px}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:2px 6px;
+  font-size:11px;font-weight:500;border:1px solid}
+.note{font-size:11.5px;color:var(--muted-foreground);margin:12px 0 0 27px;max-width:830px;line-height:1.65}
+.note b{color:var(--foreground);font-weight:600}
+code{background:var(--field);border-radius:4px;padding:1px 4px;font-size:11.5px}
+table{border-collapse:collapse;font-size:12.5px;width:100%}
+th{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  text-align:left;font-weight:600;padding:5px 8px;border-bottom:1px solid var(--brand-metal-line)}
+td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+.warn{background:var(--st-amber-bg);border:1px solid var(--st-amber-bd);color:var(--st-amber-fg);
+  border-radius:8px;padding:9px 11px;font-size:11.5px;margin-left:27px;max-width:830px;line-height:1.6}
+.qhead{display:flex;align-items:center;gap:9px;background:var(--surface-2);
+  border:1px solid var(--brand-metal-line);border-radius:8px;padding:6px 10px;margin:9px 0 4px;font-size:12px}
+.qhead b{font-weight:600}
+.bar{height:7px;border-radius:9999px;background:var(--brand-yellow);flex-shrink:0}
+.prow{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 22px;font-size:12px;
+  border-bottom:1px solid rgba(255,255,255,.05)}
+.prow .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spark{display:flex;align-items:flex-end;gap:3px;height:56px}
+.spark i{width:17px;background:var(--brand-yellow);border-radius:2px 2px 0 0;display:block;opacity:.85}
+.spark span{font-size:8.5px;color:var(--muted-foreground);text-align:center;display:block;margin-top:3px}
+.sparkwrap{display:flex;gap:3px;align-items:flex-end}
+.col{display:flex;flex-direction:column;align-items:center}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;margin-top:6px}
+.box{border:1px solid var(--brand-metal-line);border-radius:7px;padding:5px 9px;background:var(--surface-2)}
+</style></head><body>
+
+<h1>Delivery: three derived sections, nothing hardcoded</h1>
+<p>Mockup for approval · 2026-09-04 · live production counts · no code changed yet</p>
+
+<!-- 1 -->
+<section>
+  <h2><span class="n">1</span>Section membership is a pure function of the row</h2>
+  <div class="row">
+    <div class="pane" style="max-width:600px">
+      <span class="tag good">One function, evaluated on every render</span>
+      <table>
+        <tr><th>Test, in order</th><th>Section</th><th>Now</th></tr>
+        <tr><td><code>lifecycle</code> is cancelled · churned · retired · needs&nbsp;triage</td>
+            <td><b>Historical</b></td><td>73</td></tr>
+        <tr><td>else <code>migration_stage</code> = <span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">V2 native</span></td>
+            <td><b>Active work</b></td><td>13</td></tr>
+        <tr><td>else anything else</td>
+            <td><b>V2 migration</b></td><td>63</td></tr>
+      </table>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0">
+        No stored section, no per-project override, no hardcoded list anywhere.
+        Change a field and the row is somewhere else on the next render.</p>
+    </div>
+  </div>
+  <p class="note"><b>Worked example — one of the 30 needs-triage rows.</b> It sits in Historical
+  today. Set its lifecycle to <em>Discovery</em> and it leaves immediately; where it lands is
+  decided by its stage, with no further input:</p>
+  <div class="flow" style="margin-left:27px">
+    <span class="box">lifecycle <b>needs triage</b><br><span style="color:var(--muted-foreground)">→ Historical</span></span>
+    <span style="color:var(--muted-foreground)">→ set lifecycle = Discovery →</span>
+    <span class="box">stage <b>V2 native</b><br><span style="color:var(--st-emerald-fg)">→ Active work</span></span>
+    <span style="color:var(--muted-foreground)">or</span>
+    <span class="box">stage <b>Engg pending</b><br><span style="color:var(--st-blue-fg)">→ V2 migration</span></span>
+  </div>
+</section>
+
+<!-- 2 -->
+<section>
+  <h2><span class="n">2</span>Nav</h2>
+  <div class="row">
+    <div class="pane">
+      <div class="nav">
+        <span class="on">Active work <b>13</b></span>
+        <span>V2 migration <b>63</b></span>
+        <span>Historical <b>132</b></span>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted-foreground);margin:11px 0 0;max-width:560px">
+        <b style="color:var(--foreground)">"All processes" is replaced, not deleted.</b> Historical
+        is the wider lens: everything ever shipped (85 with a go-live quarter) plus everything
+        ended. Live processes appear in <em>both</em> their operational tab and Historical —
+        Active work answers "what are we doing", Historical answers "what have we shipped", so
+        these counts deliberately do not sum to 149.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section>
+  <h2><span class="n">3</span>Historical — by fiscal quarter, with the record on top</h2>
+  <div class="row">
+    <div class="pane" style="width:660px">
+      <span class="tag good">Delivered per quarter · reviving the aggregate that already exists</span>
+      <div class="sparkwrap" style="padding:4px 0 2px">
+        <span class="col"><i class="spark" style="height:6px;width:17px;background:var(--brand-yellow);border-radius:2px 2px 0 0;display:block"></i><span>1Q24</span></span>
+        <span class="col"><i style="height:6px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>4Q24</span></span>
+        <span class="col"><i style="height:18px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>2Q25</span></span>
+        <span class="col"><i style="height:30px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>3Q25</span></span>
+        <span class="col"><i style="height:46px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>4Q25</span></span>
+        <span class="col"><i style="height:22px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>1Q26</span></span>
+        <span class="col"><i style="height:26px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>2Q26</span></span>
+        <span class="col"><i style="height:36px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>3Q26</span></span>
+        <span class="col"><i style="height:56px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block"></i><span>4Q26</span></span>
+        <span class="col"><i style="height:26px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>1Q27</span></span>
+        <span class="col"><i style="height:16px;width:17px;background:var(--brand-yellow);border-radius:2px;display:block;opacity:.85"></i><span>2Q27</span></span>
+      </div>
+      <p style="font-size:10.5px;color:var(--muted-foreground);margin:2px 0 12px">
+        Processes delivered per fiscal quarter · Feb&ndash;Jan, named for the year it ends in
+        (same convention as NPS) · avg TTV per quarter available from the same aggregate</p>
+
+      <div class="qhead"><b>4Q26</b>
+        <span style="color:var(--muted-foreground)">17 delivered · 14 live · 3 ended</span>
+        <span class="bar" style="width:120px;margin-left:auto"></span></div>
+      <div class="prow"><span class="pn">Norco - AR Additions</span>
+        <span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">Live</span>
+        <span style="color:var(--muted-foreground);font-size:11px">Norco</span></div>
+      <div class="prow"><span class="pn">Wipro FSS - WTSL</span>
+        <span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">Live</span>
+        <span style="color:var(--muted-foreground);font-size:11px">Wipro FSS</span></div>
+      <div class="prow"><span class="pn">Siemens - AP Automation</span>
+        <span class="chip" style="color:var(--st-red-fg);background:var(--st-red-bg);border-color:var(--st-red-bd)">Churned</span>
+        <span style="color:var(--muted-foreground);font-size:11px">Siemens</span></div>
+
+      <div class="qhead"><b>3Q26</b>
+        <span style="color:var(--muted-foreground)">10 delivered · 7 live · 3 ended</span>
+        <span class="bar" style="width:71px;margin-left:auto"></span></div>
+      <div class="prow"><span class="pn">Century - BOL Enhancements</span>
+        <span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">Live</span>
+        <span style="color:var(--muted-foreground);font-size:11px">Century</span></div>
+      <div class="prow"><span class="pn">Concord - Invoice Intake</span>
+        <span class="chip" style="color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)">Cancelled</span>
+        <span style="color:var(--muted-foreground);font-size:11px">Concord</span></div>
+
+      <div class="qhead" style="opacity:.7"><b>No go-live date</b>
+        <span style="color:var(--muted-foreground)">47 rows · 30 need triage, 17 ended</span></div>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:8px 0 0">
+        Its own group rather than hidden or guessed at. Set a go-live date on any of these
+        and it moves into that quarter — same derived rule as everything else.
+      </p>
+    </div>
+  </div>
+  <p class="note">The lifecycle chip <em>is</em> the cancelled/churned tag you asked for — it
+  already exists and got real colours in the last push, so Historical gets it for free
+  (Live green, Churned red, Cancelled/Retired grey). The quarter grouping and avg-TTV come
+  from <code>loadProcessesOverview().qonq</code>, which has been computed on every Delivery
+  page load since the September redesign and rendered <b>nowhere</b>. No new aggregation.</p>
+</section>
+
+<!-- 4 -->
+<section>
+  <h2><span class="n">4</span>The charts you asked about</h2>
+  <div class="warn">
+    Nothing was lost. All 11 charts are live at <b>Dashboard → Trends</b>: Delivery timeline
+    (delivered by go-live month), Value delivered by domain, ARR by category, Customer
+    portfolio, NPS trend / health / distribution / by-segment, TTV distribution, TTV trend by
+    quarter. What the September redesign <em>did</em> delete was Delivery's own 5-block stat
+    row and its Delivered/Archive views — Historical is what brings those back, in a better
+    form. I am not moving the Trends charts; they are portfolio-wide and belong on the
+    dashboard. Historical adds the process-level, per-quarter detail Trends can't show.
+  </div>
+</section>
+
+</body></html>

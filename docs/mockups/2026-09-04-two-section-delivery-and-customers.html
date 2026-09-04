@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Delivery: two sections by migration stage + customer roster (mockup, 2026-09-04)</title>
+<style>
+:root{
+  --surface-1:#262626; --surface-2:#1F1F1F; --surface-3:#2F2F2F; --card:#262626;
+  --foreground:#FAFAFA; --muted-foreground:#A3A3A3;
+  --brand-yellow:#F2FF70; --yellow-ink:#F2FF70;
+  --yellow-soft:rgba(242,255,112,.14); --yellow-line:rgba(242,255,112,.45);
+  --field:rgba(255,255,255,.06); --glass-bg:rgba(255,255,255,.10);
+  --brand-metal-line:rgba(255,255,255,.12); --status-bad:#F87171;
+  --st-neutral-fg:#A3A3A3; --st-neutral-bg:rgba(163,163,163,.14); --st-neutral-bd:rgba(163,163,163,.32);
+  --st-indigo-fg:#818CF8;  --st-indigo-bg:rgba(129,140,248,.14);  --st-indigo-bd:rgba(129,140,248,.32);
+  --st-orange-fg:#FB923C;  --st-orange-bg:rgba(251,146,60,.14);   --st-orange-bd:rgba(251,146,60,.32);
+  --st-blue-fg:#60A5FA;    --st-blue-bg:rgba(96,165,250,.14);     --st-blue-bd:rgba(96,165,250,.32);
+  --st-amber-fg:#FBBF24;   --st-amber-bg:rgba(251,191,36,.14);    --st-amber-bd:rgba(251,191,36,.32);
+  --st-emerald-fg:#4ADE80; --st-emerald-bg:rgba(74,222,128,.14);  --st-emerald-bd:rgba(74,222,128,.32);
+  --st-fuchsia-fg:#E879F9; --st-fuchsia-bg:rgba(232,121,249,.14); --st-fuchsia-bd:rgba(232,121,249,.32);
+  --st-red-fg:#F87171;     --st-red-bg:rgba(248,113,113,.14);     --st-red-bd:rgba(248,113,113,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#171717;color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:28px 32px 80px}
+h1{font-size:19px;margin:0 0 4px} h1+p{margin:0 0 26px;color:var(--muted-foreground);font-size:12.5px}
+h2{font-size:13.5px;margin:0 0 12px;letter-spacing:.2px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  background:var(--brand-yellow);color:#171717;font-size:11px;font-weight:700;margin-right:8px}
+section{margin:0 0 38px}
+.row{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-left:27px}
+.pane{background:var(--surface-1);border:1px solid var(--brand-metal-line);border-radius:11px;padding:13px 14px}
+.tag{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted-foreground);
+  display:block;margin-bottom:9px;font-weight:600}
+.tag.good{color:var(--brand-yellow)} .tag.bad{color:var(--status-bad)}
+.nav{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--brand-metal-line);
+  border-radius:9999px;padding:3px;font-size:12.5px}
+.nav span{padding:4px 13px;border-radius:9999px;color:var(--muted-foreground);white-space:nowrap}
+.nav span.on{background:var(--yellow-soft);color:var(--foreground);font-weight:600}
+.nav span b{font-weight:600;opacity:.75;margin-left:5px;font-size:11px}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:2px 6px;
+  font-size:11px;font-weight:500;border:1px solid}
+.arrow{align-self:center;color:var(--muted-foreground);font-size:20px}
+.note{font-size:11.5px;color:var(--muted-foreground);margin:12px 0 0 27px;max-width:820px;line-height:1.65}
+.note b{color:var(--foreground);font-weight:600}
+code{background:var(--field);border-radius:4px;padding:1px 4px;font-size:11.5px}
+table{border-collapse:collapse;font-size:12.5px;width:100%}
+th{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  text-align:left;font-weight:600;padding:5px 8px;border-bottom:1px solid var(--brand-metal-line)}
+td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+.warn{background:var(--st-amber-bg);border:1px solid var(--st-amber-bd);color:var(--st-amber-fg);
+  border-radius:8px;padding:9px 11px;font-size:11.5px;margin-left:27px;max-width:820px;line-height:1.6}
+.ok{background:var(--st-emerald-bg);border:1px solid var(--st-emerald-bd);color:var(--st-emerald-fg);
+  border-radius:8px;padding:9px 11px;font-size:11.5px;margin-left:27px;max-width:820px;line-height:1.6}
+.menu{width:270px;background:var(--surface-3);border:1px solid var(--brand-metal-line);
+  border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.5);overflow:hidden}
+.mh{font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted-foreground);
+  padding:7px 10px 4px;font-weight:700;background:rgba(255,255,255,.03)}
+.mi{padding:5px 10px;font-size:12.5px} .mi:hover{background:var(--glass-bg)}
+.mi.add{border-top:1px solid var(--brand-metal-line);background:var(--field);display:flex;gap:8px;align-items:center}
+.ent{display:flex;align-items:center;gap:8px;background:var(--field);border-radius:7px;padding:6px 9px;margin-bottom:4px}
+.ent.off{opacity:.5}
+.dot{width:8px;height:8px;border-radius:9999px;flex-shrink:0}
+.lane{width:150px;background:var(--surface-1);border:1px solid var(--brand-metal-line);
+  border-radius:9px;padding:7px 8px;font-size:11px}
+.lane .lh{display:flex;align-items:center;gap:5px;margin-bottom:6px;font-weight:600}
+.card{background:var(--surface-2);border:1px solid var(--brand-metal-line);border-radius:6px;
+  padding:4px 6px;font-size:10.5px;margin-bottom:3px}
+</style></head><body>
+
+<h1>Delivery: two sections driven by migration stage · plus a customer roster</h1>
+<p>Mockup for approval · 2026-09-04 · numbers are live production counts · no code changed yet</p>
+
+<!-- 1 -->
+<section>
+  <h2><span class="n">1</span>Two sections. Membership is <code>migration_stage</code>, nothing else.</h2>
+  <div class="row">
+    <div class="pane">
+      <span class="tag bad">Today — three sections, two different definitions</span>
+      <div class="nav">
+        <span class="on">Active work <b>76</b></span><span>V2 migration <b>36</b></span><span>All processes <b>149</b></span>
+      </div>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0;max-width:330px">
+        Active work is defined by <b>lifecycle</b>; V2 migration by a separate
+        <code>isV2Relevant()</code> evidence test. So 36 processes appear in
+        <b>both</b>, and changing a process's stage doesn't move it anywhere.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pane">
+      <span class="tag good">Proposed — one rule, no overlap</span>
+      <div class="nav">
+        <span class="on">Active work <b>13</b></span><span>V2 migration <b>63</b></span>
+      </div>
+      <table style="margin-top:12px;max-width:400px">
+        <tr><th>Migration stage</th><th>Lands in</th></tr>
+        <tr><td><span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">V2 native</span></td>
+            <td><b>Active work</b> — new V2 dev</td></tr>
+        <tr><td><span class="chip" style="color:var(--st-indigo-fg);background:var(--st-indigo-bg);border-color:var(--st-indigo-bd)">In development</span>
+                <span class="chip" style="color:var(--st-orange-fg);background:var(--st-orange-bg);border-color:var(--st-orange-bd)">Engg pending</span></td>
+            <td>V2 migration</td></tr>
+        <tr><td><span class="chip" style="color:var(--st-blue-fg);background:var(--st-blue-bg);border-color:var(--st-blue-bd)">Parity testing</span>
+                <span class="chip" style="color:var(--st-amber-fg);background:var(--st-amber-bg);border-color:var(--st-amber-bd)">Cust. validation</span></td>
+            <td>V2 migration</td></tr>
+        <tr><td><span class="chip" style="color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)">Live on V2</span>
+                <span class="chip" style="color:var(--st-fuchsia-fg);background:var(--st-fuchsia-bg);border-color:var(--st-fuchsia-bd)">Migrated · comm.</span></td>
+            <td>V2 migration</td></tr>
+        <tr><td><span class="chip" style="color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)">Not required</span>
+                <span class="chip" style="color:var(--st-red-fg);background:var(--st-red-bg);border-color:var(--st-red-bd)">To be retired ✦</span></td>
+            <td>V2 migration — the migrate-or-retire decision list</td></tr>
+      </table>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0">
+        ✦ new enum value. You named it; <code>not_required</code> already exists.</p>
+    </div>
+  </div>
+  <p class="note"><b>Change the stage and the process jumps sections immediately</b> — that's the
+  whole point of routing on one field. Set a V1 process to <b>V2 native</b> and it leaves the
+  migration list for Active work; set it to <b>To be retired</b> and it goes the other way.
+  The 28 live V1 processes land in V2 migration, which is now honestly what that tab is:
+  <em>everything not yet V2-native, pending a migrate-or-retire call</em>.</p>
+</section>
+
+<!-- 2 -->
+<section>
+  <h2><span class="n">2</span>What this must not break: the All-Hands report</h2>
+  <div class="warn">
+    <b>I am not touching <code>isV2Relevant()</code>.</b> That function also feeds
+    <code>lib/reports/allhands-loader.ts</code> — the live All-Hands report at
+    <code>/reports/v2-migration</code>. Widening it to "everything not V2-native" would pull
+    28 live V1 processes into the migration funnel and overstate the migration programme in a
+    deck the team presents. So Delivery gets its own <code>sectionFor(row)</code> and the
+    report keeps its stricter, evidence-based definition. Two consumers, two questions,
+    two functions.
+  </div>
+</section>
+
+<!-- 3 -->
+<section>
+  <h2><span class="n">3</span>Where the 73 archived processes go</h2>
+  <div class="row">
+    <div class="pane" style="max-width:560px">
+      <span class="tag">"All processes" is gone, so these need a home</span>
+      <div class="nav" style="margin-bottom:10px">
+        <span class="on">Active work <b>13</b></span><span>V2 migration <b>63</b></span>
+        <span style="margin-left:6px;border:1px dashed var(--brand-metal-line);border-radius:9999px">
+          Archived <b>73</b></span>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted-foreground);margin:0">
+        A <b>toggle in the filter bar, not a third nav entry</b> — you asked for two sections
+        and this isn't one, it's a scope switch on the section you're already in. Off by
+        default. Covers cancelled, churned, retired, needs-triage and delivered.
+      </p>
+    </div>
+  </div>
+  <p class="note">Without this, 73 processes would be unreachable from Delivery entirely once
+  "All processes" is removed. Flagging it because it wasn't in your instruction and it's the
+  one place where "only 2 sections" needed a decision.</p>
+</section>
+
+<!-- 4 -->
+<section>
+  <h2><span class="n">4</span>New processes default to V2 native</h2>
+  <div class="row">
+    <div class="pane" style="max-width:560px">
+      <table>
+        <tr><th></th><th>Today</th><th>Proposed</th></tr>
+        <tr><td>New Process default stage</td>
+            <td><code>not_required</code></td>
+            <td><code>v2_native</code></td></tr>
+        <tr><td>Lands in</td>
+            <td style="color:var(--st-red-fg)">V2 migration — wrong</td>
+            <td style="color:var(--st-emerald-fg)">Active work — correct</td></tr>
+      </table>
+      <p style="font-size:11.5px;color:var(--muted-foreground);margin:10px 0 0">
+        "New processes are always delivery work, not migration work" is why the old default
+        was <code>not_required</code>. Under the new routing that reasoning inverts: new work
+        is <b>new V2 dev</b>, which is exactly what Active work now means.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section>
+  <h2><span class="n">5</span>Customers: churned ones leave the dropdown, new ones can be added inline</h2>
+  <div class="row">
+    <div class="pane" style="width:300px">
+      <span class="tag bad">Today — all 41, churned included</span>
+      <div class="menu">
+        <div class="mi">American Towers</div>
+        <div class="mi">Atlantis UGS</div>
+        <div class="mi">Builders Firstsource</div>
+        <div class="mi">Century</div>
+        <div class="mi">Concord</div>
+        <div class="mi" style="color:var(--muted-foreground)">… 36 more</div>
+      </div>
+      <p style="font-size:11px;color:var(--status-bad);margin:9px 0 0">
+        13 are already categorised <b>Churned</b>. <code>customerOptions</code> only filters
+        <code>deleted_at</code>, so they all still show. No way to add one from here either.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pane" style="width:300px">
+      <span class="tag good">Proposed — 28 active, add inline</span>
+      <div class="menu">
+        <div class="mh">Customers</div>
+        <div class="mi">Century</div>
+        <div class="mi">Charleston County School District</div>
+        <div class="mi">JBI</div>
+        <div class="mi">Norco</div>
+        <div class="mi">Plunkett</div>
+        <div class="mi" style="color:var(--muted-foreground)">… 23 more</div>
+        <div class="mi add">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+            border:1px dashed var(--brand-metal-line);border-radius:5px">+</span>
+          <span>Add a new customer</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:18px">
+    <div class="pane" style="width:452px">
+      <span class="tag good">Configure → Customers — same shape as the Roster tab</span>
+      <div style="display:flex;gap:16px;border-bottom:1px solid var(--brand-metal-line);
+        margin-bottom:11px;font-size:13px;color:var(--muted-foreground)">
+        <span>Roster</span>
+        <span style="color:var(--foreground);border-bottom:2px solid var(--yellow-ink);padding-bottom:8px">Customers</span>
+        <span>Colours</span><span>Stages</span>
+      </div>
+      <div class="ent"><span class="dot" style="background:var(--st-emerald-fg)"></span>
+        <span style="flex:1">JBI</span>
+        <span style="font-size:10.5px;color:var(--muted-foreground)">Upcoming Renewals</span>
+        <span style="font-size:10.5px;color:var(--muted-foreground);background:var(--glass-bg);
+          border-radius:9999px;padding:1px 7px">15</span><span style="color:var(--muted-foreground)">⋯</span></div>
+      <div class="ent"><span class="dot" style="background:var(--st-emerald-fg)"></span>
+        <span style="flex:1">Norco</span>
+        <span style="font-size:10.5px;color:var(--muted-foreground)">Strategic Growth</span>
+        <span style="font-size:10.5px;color:var(--muted-foreground);background:var(--glass-bg);
+          border-radius:9999px;padding:1px 7px">9</span><span style="color:var(--muted-foreground)">⋯</span></div>
+      <div class="ent off"><span class="dot" style="background:var(--st-neutral-bd)"></span>
+        <span style="flex:1">Siemens</span>
+        <span style="font-size:10.5px;color:var(--muted-foreground)">Churned · inactive</span>
+        <span style="font-size:10.5px;color:var(--muted-foreground);background:var(--glass-bg);
+          border-radius:9999px;padding:1px 7px">2</span><span style="color:var(--muted-foreground)">⋯</span></div>
+      <div style="font-size:11.5px;color:var(--muted-foreground);margin-top:8px">▸ Show the 13 inactive</div>
+      <div style="display:flex;gap:8px;margin-top:11px">
+        <input style="flex:1;background:var(--field);border:1px solid var(--brand-metal-line);
+          border-radius:6px;padding:4px 7px;font-size:12.5px;color:var(--muted-foreground)"
+          value="Add a customer…" readonly>
+        <button style="background:var(--brand-yellow);color:#171717;border:0;border-radius:9999px;
+          padding:4px 13px;font-size:11.5px;font-weight:600">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><b>Mechanism (my call, per your "you decide"):</b> a new
+  <code>customers.active</code> boolean rather than a new roster table — <code>customers</code>
+  already <em>is</em> the roster, with 41 rows, external IDs and a customer-360 page each.
+  Deliberately separate from <code>custom_category</code>: that's a reporting bucket
+  ("Churned", "At Risk", "Upcoming Renewals") and overloading it as a selectability flag
+  would mean you couldn't have an active customer who is also At Risk. Backfilling
+  <code>active = false</code> for the 13 already categorised Churned, per your answer —
+  Bradley &amp; Beams and Halemeyer ("To Drop") stay active.</p>
+  <div class="ok" style="margin-top:12px">
+    Same rule as the roster: an inactive customer keeps every process already assigned to
+    them and keeps their customer-360 page. They just can't be picked for new work.
+  </div>
+</section>
+
+</body></html>
