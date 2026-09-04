@@ -43,6 +43,55 @@ Deferred out of the spec's original scope: the Operations+Chat "Agent" nav merge
 
 Still Stage B (not done): Customers list, V2 Migration, Reports catalog visual refresh, the Agent merge, Customer 360's deeper secondary tabs (Documents/Tasks/Profile/Rules/NPS responses/Activity), a full Recharts dark-palette system (charts only got a chrome-level color retune so far), and the Suspense/skeleton-loading + dashboard-empty-state gaps from `docs/ux-improvement-plan.md`.
 
+## PR 00 — queue volume audit (2026-09-04)
+
+Run to gate PR 04 of the Platform IA plan, which asks whether "Today" is a
+destination or a card. Script: `scripts/audit-queue-volume.ts` (read-only).
+Numbers below read from the production project via the Supabase connector —
+`.env.local` points at the local Supabase, which is pre-0030 and cannot answer
+this; the script now says so with the command to fix it rather than dying on a
+raw Postgres error.
+
+| Source | Now | Note |
+|---|---|---|
+| `pending_approvals` | **0 rows, all time** | The approval queue has never been used. Today's primary source contributes nothing. |
+| `events` | 99 rows, newest **106 days old** | Stale, not empty. Nothing writes to `events`. "Changed overnight" has no input. |
+| `tasks` | **0 rows** | The scheduler has never been used. |
+| `process_suggestions` open | **0** | |
+| Processes blocked (`blocked_on` set) | **30** | A standing backlog, not a daily arrival. |
+| Active processes untouched >30d | **0** | 106 processes were legitimately touched 2026-09-03. |
+| Renewals inside 90 days | **6**, $364,600 | The only source with genuine, recurring signal. |
+
+**Queue if built today: ~36 items — but daily inflow is approximately zero.**
+30 of the 36 are the standing blocked-process backlog; 6 are renewals that
+turn over on a quarterly rhythm.
+
+### What this means for PR 04
+
+The plan's own test was "40 items a day needs ranking and snooze; one item
+means Today is a card on Customers." Neither branch fits cleanly, because the
+question the audit actually answered is different: **three of Today's four
+sources are empty or dead.** Approvals, tasks and events have never carried
+traffic or stopped carrying it 106 days ago.
+
+So ranking rules and a snooze model would be built for volume that does not
+exist, and "Needs you" would be a list of 30 blocked processes plus 6
+renewals — which is a filter on Delivery and a card on Customers, not a
+destination. Recommendation: **defer PR 04**, and revisit once the Agent merge
+(PR 03) puts approvals into real use, since that is the source that would
+give Today a daily rhythm.
+
+Worth fixing regardless of Today: nothing has written to `events` in 106 days.
+Every "activity timeline" in the IA plan reads that table.
+
+### Signal-health check
+
+`updated_at` on `processes` is the input to the staleness number above, so a
+bulk write that reset it would make that row read 0 regardless of reality.
+Verified after today's roster renames and merges: **14 of 149** processes carry
+today's timestamp, and 0038/0040's guard preserved it on all 84 rows the
+renames and merges touched. The staleness signal is intact.
+
 ## Next up (per Rishabh, 2026-08-10)
 
 1. Finish verifying Weekly Delivery Review against production (in progress — see the SDD ledger under `.superpowers/sdd/` if resuming that plan).
