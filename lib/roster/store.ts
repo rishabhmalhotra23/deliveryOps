@@ -285,6 +285,105 @@ async function insertEntryTolerantly(
   return data as RosterEntry;
 }
 
+/** How many live processes point at each roster entry, keyed by entry id.
+ *
+ *  Only the Configure dialog needs this — it's what turns "mark as left" from
+ *  a blind toggle into a decision ("still the FDE on 2 active processes"). The
+ *  owner pickers deliberately don't ask for it, so the hot path stays a single
+ *  query. Counts a process once per role it holds on it, which is what the
+ *  dialog claims: "assigned to N processes". */
+export async function countRosterAssignments(): Promise<Record<string, number>> {
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.processes)
+    .select("fde_owner_id, tam_owner_id, engg_owner_id, partner_id")
+    .is("deleted_at", null);
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  for (const row of (data as Record<string, string | null>[] | null) ?? []) {
+    for (const id of Object.values(row)) {
+      if (id) counts[id] = (counts[id] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
+export interface UpdateRosterEntryInput {
+  roles?: string[];
+  /** false = this person has left. Every picker filters `active: true`, so
+   *  they stop being selectable — but their existing assignments are left
+   *  alone on purpose: blanking those would erase who actually did the
+   *  work. */
+  active?: boolean;
+}
+
+/** Roles and active only. A rename is renameRosterEntry() — it has to move
+ *  the text mirrors on `processes` in the same transaction, which this plain
+ *  column write cannot express. */
+export async function updateRosterEntry(
+  id: string,
+  patch: UpdateRosterEntryInput
+): Promise<RosterEntry> {
+  const existing = await getRosterEntry(id);
+  if (!existing) throw new RosterEntryNotFoundError(id);
+
+  const update: Record<string, unknown> = {};
+  if (patch.roles !== undefined) {
+    const clean = Array.from(new Set(patch.roles.map((r) => r.trim()).filter(Boolean)));
+    update.roles = clean;
+  }
+  if (patch.active !== undefined) update.active = patch.active;
+  if (Object.keys(update).length === 0) return existing;
+
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.rosterEntries)
+    .update(update)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as RosterEntry;
+}
+
+/** Renames an entry AND the denormalized owner text mirrors on `processes`.
+ *
+ *  Separate from updateRosterEntry's plain column write because it has to run
+ *  as one transaction with updated_at preserved, which only the database can
+ *  do — the guard on processes.updated_at is a BEFORE trigger that overwrites
+ *  whatever timestamp a client sends. rename_roster_entry() (0038) sets a
+ *  transaction-local GUC the trigger honours. The text mirrors have to move
+ *  at all because `processes` keeps both halves of every owner (0032:
+ *  fde_owner alongside fde_owner_id) so pre-roster readers keep working —
+ *  leave the text behind and the roster says "Shyam Prabhal" while the
+ *  Delivery table still shows the email it was imported under.
+ *
+ *  Returns the entry plus how many process rows were re-labelled, so the UI
+ *  can say what it just did. */
+export async function renameRosterEntry(
+  id: string,
+  displayName: string
+): Promise<{ entry: RosterEntry; processesRelabelled: number }> {
+  const trimmed = displayName.trim();
+  if (!trimmed) throw new InvalidRosterInputError("display_name cannot be blank.");
+
+  // Fail fast with a clear error rather than letting the function raise.
+  if (!(await getRosterEntry(id))) throw new RosterEntryNotFoundError(id);
+
+  const sb = requireAdmin();
+  const { data, error } = await sb.rpc("rename_roster_entry", {
+    p_entry_id: id,
+    p_new_name: trimmed,
+  });
+  if (error) throw error;
+
+  await addAlias(trimmed, id);
+  const entry = await getRosterEntry(id);
+  if (!entry) throw new RosterEntryNotFoundError(id);
+  return { entry, processesRelabelled: (data as number | null) ?? 0 };
+}
+
 /** Repoints every alias and every processes.*_id FK from the loser to the
  *  survivor, then deactivates the loser. The actual cleanup mechanism for
  *  whatever the conservative backfill (0033) didn't catch. */

@@ -18,6 +18,7 @@ import {
   type MigrationStage,
   type ProcessHealth,
   type ProcessLifecycle,
+  ROSTER_ROLES,
   type RosterEntry,
   type RosterKind,
 } from "@/lib/supabase/types";
@@ -66,19 +67,86 @@ export function ConfigureDialog({
   const [tab, setTab] = useState<Tab>("roster");
   const [rosterKind, setRosterKind] = useState<RosterKind>("person");
   const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [rosterLoading, setRosterLoading] = useState(false);
   const [newName, setNewName] = useState("");
+  // Which row's inline editor is open, plus its uncommitted draft. One at a
+  // time: two half-finished renames would be a way to lose an edit.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ display_name: string; roles: string[]; active: boolean }>({
+    display_name: "",
+    roles: [],
+    active: true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  const [showLeft, setShowLeft] = useState(false);
   const [colorField, setColorField] = useState<ColorField>("stage");
 
+  // Always loads leavers and counts: this is the management view, and the
+  // leavers are exactly who you come here to edit. `showLeft` only controls
+  // whether they're rendered, so toggling it costs no refetch.
   useEffect(() => {
     if (tab !== "roster") return;
     setRosterLoading(true);
-    fetch(`/api/roster?kind=${rosterKind}`)
+    fetch(`/api/roster?kind=${rosterKind}&include_inactive=1&counts=1`)
       .then((r) => r.json())
-      .then((json) => setRoster(json.entries ?? []))
+      .then((json) => {
+        setRoster(json.entries ?? []);
+        setCounts(json.counts ?? {});
+      })
       .catch(() => setRoster([]))
       .finally(() => setRosterLoading(false));
   }, [tab, rosterKind]);
+
+  function openEditor(entry: RosterEntry) {
+    setRosterError(null);
+    setEditingId(entry.id);
+    setDraft({ display_name: entry.display_name, roles: [...entry.roles], active: entry.active });
+  }
+
+  async function saveEditor(entry: RosterEntry) {
+    setSaving(true);
+    setRosterError(null);
+    try {
+      const res = await fetch(`/api/roster/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setRosterError(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      const updated = json.entry as RosterEntry;
+      setRoster((cur) =>
+        cur
+          .map((r) => (r.id === updated.id ? updated : r))
+          .sort((a, b) => a.display_name.localeCompare(b.display_name))
+      );
+      // A leaver stays visible until the panel is reopened rather than
+      // vanishing mid-edit, which would read as "did that save?".
+      if (!updated.active) setShowLeft(true);
+      setEditingId(null);
+    } catch (err) {
+      setRosterError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const leavers = roster.filter((r) => !r.active);
+  // A leaver being edited stays on screen regardless of the toggle, so the
+  // row you are working on can't disappear from under you.
+  const visibleRoster = roster.filter((r) => r.active || showLeft || r.id === editingId);
+
+  function toggleDraftRole(role: string) {
+    setDraft((cur) => ({
+      ...cur,
+      roles: cur.roles.includes(role) ? cur.roles.filter((r) => r !== role) : [...cur.roles, role],
+    }));
+  }
 
   async function addRosterEntry() {
     const display_name = newName.trim();
@@ -99,6 +167,9 @@ export function ConfigureDialog({
     if (res.ok) {
       setRoster((cur) => [...cur, json.entry as RosterEntry].sort((a, b) => a.display_name.localeCompare(b.display_name)));
       setNewName("");
+      setRosterError(null);
+    } else {
+      setRosterError(json.error || `HTTP ${res.status}`);
     }
   }
 
@@ -180,31 +251,188 @@ export function ConfigureDialog({
               <div className="max-h-56 overflow-auto space-y-1">
                 {rosterLoading ? (
                   <div className="text-[12px] text-[color:var(--muted-foreground)] py-2">Loading…</div>
-                ) : roster.length === 0 ? (
-                  <div className="text-[12px] text-[color:var(--muted-foreground)] py-2 italic">Nobody here yet.</div>
+                ) : visibleRoster.length === 0 ? (
+                  <div className="text-[12px] text-[color:var(--muted-foreground)] py-2 italic">
+                    {roster.length === 0 ? "Nobody here yet." : "Everyone here has left."}
+                  </div>
                 ) : (
-                  roster.map((r) => (
-                    <div key={r.id} className="rounded-md px-2.5 py-1.5 text-[13px] flex items-center gap-2" style={{ background: "var(--field)" }}>
-                      <span
-                        className="shrink-0 flex items-center justify-center text-[9px] font-semibold"
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: r.kind === "person" ? 9999 : 5,
-                          background: "var(--brand-yellow)",
-                          color: "#171717",
-                        }}
+                  visibleRoster.map((r) =>
+                    editingId === r.id ? (
+                      <div
+                        key={r.id}
+                        className="rounded-lg px-2.5 py-2.5 space-y-2.5"
+                        style={{ background: "var(--surface-3, var(--field))", border: "1px solid var(--yellow-line)" }}
                       >
-                        {initials(r.display_name)}
-                      </span>
-                      <span className="text-[color:var(--foreground)] truncate">{r.display_name}</span>
-                      <span className="text-[10.5px] text-[color:var(--muted-foreground)] ml-auto shrink-0">
-                        {r.roles.length > 0 ? r.roles.map((role) => ROLE_LABELS[role] ?? role).join(" · ") : "No role"}
-                      </span>
-                    </div>
-                  ))
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold mb-0.5" htmlFor={`roster-name-${r.id}`}>
+                            {r.kind === "person" ? "Display name" : "Organisation name"}
+                          </label>
+                          <input
+                            id={`roster-name-${r.id}`}
+                            autoFocus
+                            value={draft.display_name}
+                            onChange={(e) => setDraft((cur) => ({ ...cur, display_name: e.target.value }))}
+                            className="dops-input w-full px-2 py-1 text-[13px]"
+                          />
+                        </div>
+
+                        {/* Partner orgs hold no role — the pickers only ever
+                            rank people by fde/tam/engg. */}
+                        {r.kind === "person" ? (
+                          <div>
+                            <span className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold">Roles</span>
+                            <div className="flex gap-3 pt-0.5">
+                              {ROSTER_ROLES.map((role) => (
+                                <label key={role} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={draft.roles.includes(role)}
+                                    onChange={() => toggleDraftRole(role)}
+                                    style={{ accentColor: "var(--brand-yellow)" }}
+                                  />
+                                  <span
+                                    style={{
+                                      color: draft.roles.includes(role)
+                                        ? "var(--foreground)"
+                                        : "var(--muted-foreground)",
+                                    }}
+                                  >
+                                    {ROLE_LABELS[role] ?? role}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <label className="flex items-center gap-2 text-[12px] cursor-pointer pt-0.5">
+                          <input
+                            type="checkbox"
+                            checked={draft.active}
+                            onChange={(e) => setDraft((cur) => ({ ...cur, active: e.target.checked }))}
+                            style={{ accentColor: "var(--brand-yellow)" }}
+                          />
+                          <span style={{ color: draft.active ? "var(--foreground)" : "var(--muted-foreground)" }}>
+                            {draft.active
+                              ? r.kind === "person"
+                                ? "Still at Kognitos"
+                                : "Still a partner"
+                              : "Has left — hidden from every dropdown"}
+                          </span>
+                        </label>
+
+                        {/* The number is why this isn't a blind toggle. Their
+                            existing work stays attributed to them, so it has
+                            to be handed over somewhere — and that somewhere is
+                            the table, where you can see the context. */}
+                        {!draft.active && (counts[r.id] ?? 0) > 0 ? (
+                          <div
+                            className="rounded-md px-2.5 py-1.5 text-[11.5px]"
+                            style={{
+                              background: "var(--st-amber-bg)",
+                              border: "1px solid var(--st-amber-bd)",
+                              color: "var(--st-amber-fg)",
+                            }}
+                          >
+                            Still assigned to {counts[r.id]} process{counts[r.id] === 1 ? "" : "es"}. Marking
+                            them as left won&rsquo;t change that —{" "}
+                            <a
+                              className="underline"
+                              href={`/delivery?owner=${encodeURIComponent(r.display_name)}`}
+                            >
+                              open those in Delivery
+                            </a>{" "}
+                            to hand them over.
+                          </div>
+                        ) : null}
+
+                        <div className="flex gap-2 justify-end pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="rounded-full px-3 py-1 text-[11.5px] border"
+                            style={{ borderColor: "var(--brand-metal-line)", color: "var(--foreground)" }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveEditor(r)}
+                            disabled={saving || !draft.display_name.trim()}
+                            className="btn-primary rounded-full px-3 py-1 text-[11.5px] font-semibold disabled:opacity-60"
+                          >
+                            {saving ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        key={r.id}
+                        className="rounded-md px-2.5 py-1.5 text-[13px] flex items-center gap-2"
+                        style={{ background: "var(--field)", opacity: r.active ? 1 : 0.5 }}
+                      >
+                        <span
+                          className="shrink-0 flex items-center justify-center text-[9px] font-semibold"
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: r.kind === "person" ? 9999 : 5,
+                            background: r.active ? "var(--brand-yellow)" : "var(--st-neutral-bd)",
+                            color: r.active ? "#171717" : "var(--muted-foreground)",
+                          }}
+                        >
+                          {initials(r.display_name)}
+                        </span>
+                        <span className="text-[color:var(--foreground)] truncate flex-1 min-w-0">
+                          {r.display_name}
+                        </span>
+                        <span className="text-[10.5px] text-[color:var(--muted-foreground)] shrink-0">
+                          {!r.active
+                            ? "left"
+                            : r.kind === "partner_org"
+                              ? "Partner"
+                              : r.roles.length > 0
+                                ? r.roles.map((role) => ROLE_LABELS[role] ?? role).join(" · ")
+                                : "No role"}
+                        </span>
+                        <span
+                          className="shrink-0 text-[10.5px] rounded-full px-1.5 min-w-[26px] text-center"
+                          style={{ background: "var(--glass-bg)", color: "var(--muted-foreground)" }}
+                          title={`Assigned to ${counts[r.id] ?? 0} process${(counts[r.id] ?? 0) === 1 ? "" : "es"}`}
+                        >
+                          {counts[r.id] ?? 0}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openEditor(r)}
+                          title="Edit name, roles, or mark as left"
+                          className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
+                        >
+                          ⋯
+                        </button>
+                      </div>
+                    )
+                  )
                 )}
               </div>
+              {leavers.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowLeft((v) => !v)}
+                  className="text-[11.5px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] text-left"
+                >
+                  {showLeft ? "▾ Hide" : "▸ Show"} the {leavers.length}{" "}
+                  {rosterKind === "person" ? "who ha" : "which ha"}
+                  {leavers.length === 1 ? "s" : "ve"} left
+                </button>
+              ) : null}
+
+              {rosterError ? (
+                <div className="text-[11.5px]" style={{ color: "var(--status-bad)" }}>
+                  {rosterError}
+                </div>
+              ) : null}
+
               <div className="flex gap-2">
                 <input
                   value={newName}
@@ -222,6 +450,9 @@ export function ConfigureDialog({
                 table, the board and the detail panel. Adding here (or via &ldquo;Add to
                 roster&rdquo; in a picker) is the only way a new name enters the system, which
                 is what stops the same person appearing under three spellings.
+                Marking someone as left removes them from every dropdown but keeps their
+                past work attributed to them; renaming follows through to every process
+                they own.
               </div>
             </div>
           ) : null}

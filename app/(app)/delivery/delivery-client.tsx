@@ -181,7 +181,14 @@ export function DeliveryClient({ processesOverview, v2Overview }: DeliveryClient
   useEffect(() => setV2Rows(v2Overview.rows), [v2Overview]);
 
   const [search, setSearch] = useState("");
-  const [filterValues, setFilterValues] = useState<Partial<Record<FilterField, string>>>({});
+  // ?owner=<display name> arrives from Configure -> Roster, where marking
+  // someone as left links here to hand over the processes they still own.
+  // Matches on the display name because that's what the owner filter compares
+  // (matchesFilters reads row.fde_owner, the text mirror) — no id plumbing.
+  const [filterValues, setFilterValues] = useState<Partial<Record<FilterField, string>>>(() => {
+    const owner = searchParams.get("owner");
+    return owner ? { owner } : {};
+  });
   const [openPopover, setOpenPopover] = useState<FilterField | "add" | "fields" | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());

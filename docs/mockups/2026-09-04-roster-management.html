@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Configure → Roster: editing and departures (mockup, 2026-09-04)</title>
+<style>
+:root{
+  --surface-1:#262626; --surface-2:#1F1F1F; --surface-3:#2F2F2F; --card:#262626;
+  --foreground:#FAFAFA; --muted-foreground:#A3A3A3;
+  --brand-yellow:#F2FF70; --yellow-ink:#F2FF70;
+  --yellow-soft:rgba(242,255,112,.14); --yellow-line:rgba(242,255,112,.45);
+  --field:rgba(255,255,255,.06); --glass-bg:rgba(255,255,255,.10);
+  --brand-metal-line:rgba(255,255,255,.12);
+  --status-bad:#F87171;
+  --st-neutral-fg:#A3A3A3; --st-neutral-bg:rgba(163,163,163,.14); --st-neutral-bd:rgba(163,163,163,.32);
+  --st-amber-fg:#FBBF24;   --st-amber-bg:rgba(251,191,36,.14);    --st-amber-bd:rgba(251,191,36,.32);
+  --st-red-fg:#F87171;     --st-red-bg:rgba(248,113,113,.14);     --st-red-bd:rgba(248,113,113,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#171717;color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:28px 32px 80px}
+h1{font-size:19px;margin:0 0 4px} h1+p{margin:0 0 26px;color:var(--muted-foreground);font-size:12.5px}
+h2{font-size:13.5px;margin:0 0 12px;letter-spacing:.2px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  background:var(--brand-yellow);color:#171717;font-size:11px;font-weight:700;margin-right:8px}
+section{margin:0 0 36px}
+.row{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;margin-left:27px}
+.dlg{width:452px;background:var(--card);border:1px solid var(--brand-metal-line);
+  border-radius:14px;padding:16px 17px;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.dlg h3{font-size:14.5px;margin:0 0 12px}
+.tabs{display:flex;gap:16px;border-bottom:1px solid var(--brand-metal-line);margin-bottom:13px}
+.tabs span{padding-bottom:8px;font-size:13px;color:var(--muted-foreground)}
+.tabs span.on{color:var(--foreground);border-bottom:2px solid var(--yellow-ink)}
+.seg{display:inline-flex;border:1px solid var(--brand-metal-line);border-radius:9999px;overflow:hidden;margin-bottom:10px}
+.seg b,.seg i{padding:3px 12px;font-size:11.5px;font-style:normal;font-weight:400;cursor:pointer}
+.seg b{background:var(--yellow-soft);font-weight:600}
+.ent{display:flex;align-items:center;gap:8px;background:var(--field);border-radius:7px;
+  padding:6px 9px;margin-bottom:4px}
+.ent.left{opacity:.5}
+.av{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+  border-radius:9999px;background:var(--brand-yellow);color:#171717;font-size:9px;font-weight:700;flex-shrink:0}
+.av.sq{border-radius:5px} .av.off{background:var(--st-neutral-bd);color:var(--muted-foreground)}
+.nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rl{font-size:10.5px;color:var(--muted-foreground);flex-shrink:0}
+.cnt{font-size:10.5px;color:var(--muted-foreground);flex-shrink:0;
+  background:var(--glass-bg);border-radius:9999px;padding:1px 7px;min-width:26px;text-align:center}
+.kebab{flex-shrink:0;color:var(--muted-foreground);cursor:pointer;letter-spacing:-1px;font-size:12px}
+.edit{background:var(--surface-3);border:1px solid var(--yellow-line);border-radius:8px;
+  padding:10px 11px;margin:-2px 0 6px}
+.lbl{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  font-weight:600;display:block;margin-bottom:3px}
+.inp{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:6px;
+  padding:4px 7px;font-size:12.5px;color:var(--foreground);width:100%}
+.inp.focus{border-color:var(--yellow-ink)}
+.chks{display:flex;gap:12px;margin-top:2px}
+.chk{font-size:12px;display:inline-flex;align-items:center;gap:5px;color:var(--muted-foreground)}
+.chk.on{color:var(--foreground)}
+.box{width:12px;height:12px;border-radius:3px;border:1px solid var(--brand-metal-line);display:inline-block}
+.box.on{background:var(--brand-yellow);border-color:var(--brand-yellow)}
+.sw{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px}
+.track{width:32px;height:17px;border-radius:9999px;background:var(--st-neutral-bg);
+  border:1px solid var(--brand-metal-line);position:relative;flex-shrink:0}
+.track.on{background:var(--yellow-soft);border-color:var(--yellow-line)}
+.knob{position:absolute;top:1px;left:1px;width:13px;height:13px;border-radius:9999px;background:var(--muted-foreground)}
+.track.on .knob{left:auto;right:1px;background:var(--brand-yellow)}
+.warn{background:var(--st-amber-bg);border:1px solid var(--st-amber-bd);color:var(--st-amber-fg);
+  border-radius:7px;padding:7px 9px;font-size:11.5px;margin-top:9px}
+.warn a{color:var(--st-amber-fg);text-decoration:underline}
+.acts{display:flex;gap:7px;justify-content:flex-end;margin-top:10px}
+.btn{background:var(--brand-yellow);color:#171717;border:0;border-radius:9999px;
+  padding:4px 13px;font-size:11.5px;font-weight:600;cursor:pointer}
+.btn.g{background:transparent;color:var(--foreground);border:1px solid var(--brand-metal-line)}
+.foot{font-size:11px;color:var(--muted-foreground);margin-top:11px;line-height:1.5}
+.showleft{font-size:11.5px;color:var(--muted-foreground);margin-top:8px;cursor:pointer}
+.note{font-size:11.5px;color:var(--muted-foreground);margin:12px 0 0 27px;max-width:790px;line-height:1.6}
+.note b{color:var(--foreground);font-weight:600}
+code{background:var(--field);border-radius:4px;padding:1px 4px;font-size:11.5px}
+.tag{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted-foreground);
+  display:block;margin-bottom:9px;font-weight:600}
+.tag.good{color:var(--brand-yellow)} .tag.bad{color:var(--status-bad)}
+.pane{background:var(--surface-1);border:1px solid var(--brand-metal-line);border-radius:11px;padding:13px 14px}
+.arrow{align-self:center;color:var(--muted-foreground);font-size:17px}
+table{border-collapse:collapse;font-size:12.5px;width:100%}
+th{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  text-align:left;font-weight:600;padding:5px 8px;border-bottom:1px solid var(--brand-metal-line)}
+td{padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.05)}
+</style></head><body>
+
+<h1>Configure → Roster: editing and departures</h1>
+<p>Mockup for approval · 2026-09-04 · Delivery → Configure → Roster · no code changed yet</p>
+
+<section>
+  <h2><span class="n">1</span>Today vs. proposed</h2>
+  <div class="row">
+    <div class="pane" style="width:300px">
+      <span class="tag bad">Today — read-only, add-only</span>
+      <div class="ent"><span class="av">RM</span><span class="nm">Rishabh</span><span class="rl">FDE · TAM</span></div>
+      <div class="ent"><span class="av">EB</span><span class="nm">Evan Bruns</span><span class="rl">FDE</span></div>
+      <div class="ent"><span class="av">SP</span><span class="nm">shyam.prabhal@kognitos…</span><span class="rl">TAM</span></div>
+      <div class="ent"><span class="av">NA</span><span class="nm">NA</span><span class="rl">FDE</span></div>
+      <p style="font-size:11px;color:var(--status-bad);margin:9px 0 0">
+        No control of any kind on a row. Once a name is in, it is in forever
+        and appears in every owner dropdown.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="dlg">
+      <h3>Configure</h3>
+      <div class="tabs"><span class="on">Roster</span><span>Colours</span><span>Migration stages</span><span>Lifecycle states</span></div>
+      <div class="seg"><b>People</b><i>Partners</i></div>
+
+      <div class="ent"><span class="av">RM</span><span class="nm">Rishabh</span>
+        <span class="rl">FDE · TAM</span><span class="cnt">36</span><span class="kebab">⋯</span></div>
+      <div class="ent"><span class="av">KN</span><span class="nm">Karthik</span>
+        <span class="rl">FDE</span><span class="cnt">34</span><span class="kebab">⋯</span></div>
+
+      <!-- expanded editor -->
+      <div class="edit">
+        <span class="lbl">Display name</span>
+        <input class="inp focus" value="Shyam Prabhal">
+        <div style="margin-top:9px">
+          <span class="lbl">Roles</span>
+          <div class="chks">
+            <span class="chk"><span class="box"></span>FDE</span>
+            <span class="chk on"><span class="box on"></span>TAM</span>
+            <span class="chk"><span class="box"></span>Engineering</span>
+          </div>
+        </div>
+        <div class="sw"><span class="track on"><span class="knob"></span></span>
+          <span>Still at Kognitos</span></div>
+        <div class="acts"><button class="btn g">Cancel</button><button class="btn">Save</button></div>
+      </div>
+
+      <div class="ent"><span class="av">EB</span><span class="nm">Evan Bruns</span>
+        <span class="rl">FDE</span><span class="cnt">2</span><span class="kebab">⋯</span></div>
+
+      <!-- departure case -->
+      <div class="edit">
+        <span class="lbl">Display name</span>
+        <input class="inp" value="Paige Gill">
+        <div style="margin-top:9px">
+          <span class="lbl">Roles</span>
+          <div class="chks">
+            <span class="chk on"><span class="box on"></span>FDE</span>
+            <span class="chk"><span class="box"></span>TAM</span>
+            <span class="chk"><span class="box"></span>Engineering</span>
+          </div>
+        </div>
+        <div class="sw"><span class="track"><span class="knob"></span></span>
+          <span style="color:var(--muted-foreground)">Has left — hidden from every dropdown</span></div>
+        <div class="warn">
+          Still the FDE on <b>1 active process</b>. Marking them as left won't
+          change that — <a href="#">open those in Delivery ↗</a> to hand them over.
+        </div>
+        <div class="acts"><button class="btn g">Cancel</button><button class="btn">Save</button></div>
+      </div>
+
+      <div class="ent left"><span class="av off">NA</span><span class="nm">NA</span>
+        <span class="rl">left</span><span class="cnt">4</span><span class="kebab">⋯</span></div>
+
+      <div class="showleft">▾ Hide the 1 person who has left</div>
+
+      <div style="display:flex;gap:8px;margin-top:11px">
+        <input class="inp" placeholder="Add a person…" style="flex:1">
+        <button class="btn">Add</button>
+      </div>
+      <div class="foot">One roster for FDE, TAM and Partner — it backs every owner picker in
+        the table, the board and the detail panel. Marking someone as left keeps their
+        past work attributed to them; it only stops them being picked for anything new.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">2</span>What a rename has to touch</h2>
+  <div class="row">
+    <div class="pane" style="max-width:760px">
+      <span class="tag good">Renaming <code>shyam.prabhal@kognitos.com</code> → <code>Shyam Prabhal</code></span>
+      <table>
+        <tr><th>Target</th><th>Action</th><th>Why</th></tr>
+        <tr><td><code>roster_entries.display_name</code></td><td>set to the new name</td><td>the canonical record</td></tr>
+        <tr><td><code>processes.tam_owner</code> ×10</td><td>rewritten wherever <code>tam_owner_id</code> points here</td>
+            <td><b>Required.</b> That column is a denormalized text mirror — skip it and the Delivery table keeps showing the email while the roster shows the name.</td></tr>
+        <tr><td><code>roster_aliases</code></td><td>add <code>shyam prabhal</code>, keep the old alias</td>
+            <td>the old spelling must keep resolving, or a re-import creates a duplicate row</td></tr>
+        <tr><td><code>processes.updated_at</code></td><td style="color:var(--muted-foreground)">untouched</td>
+            <td>a roster spelling fix isn't delivery progress; bumping it would reset "Last touched" on 10 rows</td></tr>
+      </table>
+    </div>
+  </div>
+  <p class="note">This is the part that makes a rename more than one UPDATE. The mirror
+  columns exist so every pre-roster reader keeps working, which means every write path
+  has to keep them in step — <code>updateProcess()</code> already does this in the other
+  direction.</p>
+</section>
+
+<section>
+  <h2><span class="n">3</span>Where the departed person still shows</h2>
+  <div class="row">
+    <div class="pane" style="width:340px">
+      <span class="tag good">Owner dropdown — gone</span>
+      <div style="background:var(--surface-3);border:1px solid var(--brand-metal-line);border-radius:8px;overflow:hidden">
+        <div style="font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted-foreground);padding:7px 10px 4px;font-weight:700;background:rgba(255,255,255,.03)">FDEs</div>
+        <div class="ent" style="background:transparent;margin:0"><span class="av">KN</span><span class="nm">Karthik</span></div>
+        <div class="ent" style="background:transparent;margin:0"><span class="av">AL</span><span class="nm">Alejo</span></div>
+        <div style="padding:6px 10px;font-size:11px;color:var(--muted-foreground);border-top:1px solid var(--brand-metal-line)">
+          Paige Gill no longer listed</div>
+      </div>
+    </div>
+    <div class="pane" style="width:340px">
+      <span class="tag">Delivery table — still attributed</span>
+      <table>
+        <tr><th>Process</th><th>FDE</th></tr>
+        <tr><td>Norco - Warranty</td><td><span style="display:inline-flex;align-items:center;gap:5px"><span class="av" style="width:17px;height:17px;font-size:8px">PG</span>Paige Gill</span></td></tr>
+      </table>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0">
+        Deliberate. Blanking the field would erase who did the work.
+        The cell is still editable, so handing it over is one click.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">4</span>Not in this change</h2>
+  <div class="row">
+    <div class="pane" style="max-width:760px">
+      <p style="margin:0;font-size:12px;color:var(--muted-foreground);line-height:1.65">
+        <b style="color:var(--foreground)">Merging duplicates.</b> <code>Arushi Bohra</code> (7 processes)
+        and <code>Arushi</code> (2) are almost certainly one person, as may be
+        <code>Paige Urig</code> (13) / <code>Paige Gill</code> (1) — but that's a judgement only you can make.
+        <code>mergeRosterEntries()</code> and <code>POST /api/roster/[id]/merge</code> already exist and
+        already repoint every process FK; they just have no UI. Say the word and I'll add
+        a merge control, or run the two merges directly against production once you confirm
+        which pairs are genuinely the same person.<br><br>
+        <b style="color:var(--foreground)">Bulk handover.</b> Per your call — the warning links you to
+        the filtered Delivery table instead of writing new owners from inside a settings dialog.
+      </p>
+    </div>
+  </div>
+</section>
+
+</body></html>

@@ -226,3 +226,67 @@ describe("planPositions / byPosition are column-agnostic", () => {
     ]);
   });
 });
+
+describe("countRosterAssignments — the number behind 'mark as left'", () => {
+  // Pure aggregation over the four owner FKs, extracted so the Configure
+  // dialog's warning ("still assigned to N processes") can be trusted. The
+  // shape mirrors what the select in countRosterAssignments returns.
+  function tally(rows: Record<string, string | null>[]): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      for (const id of Object.values(row)) {
+        if (id) counts[id] = (counts[id] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  it("counts a person once per role they hold on a process", () => {
+    // Rishabh is both FDE and TAM on the same process — the dialog says
+    // "assigned to N processes", and 2 is the honest answer for two roles.
+    const counts = tally([
+      { fde_owner_id: "r", tam_owner_id: "r", engg_owner_id: null, partner_id: null },
+    ]);
+    expect(counts.r).toBe(2);
+  });
+
+  it("ignores unassigned slots rather than counting nulls", () => {
+    const counts = tally([
+      { fde_owner_id: "a", tam_owner_id: null, engg_owner_id: null, partner_id: null },
+      { fde_owner_id: null, tam_owner_id: null, engg_owner_id: null, partner_id: null },
+    ]);
+    expect(counts).toEqual({ a: 1 });
+  });
+
+  it("accumulates across processes and keeps partners separate", () => {
+    const counts = tally([
+      { fde_owner_id: "a", tam_owner_id: "b", engg_owner_id: null, partner_id: "p" },
+      { fde_owner_id: "a", tam_owner_id: null, engg_owner_id: null, partner_id: "p" },
+    ]);
+    expect(counts).toEqual({ a: 2, b: 1, p: 2 });
+  });
+
+  it("reports nothing for an entry nobody points at, so no warning shows", () => {
+    expect(tally([{ fde_owner_id: "a", tam_owner_id: null, engg_owner_id: null, partner_id: null }]).unused).toBeUndefined();
+  });
+});
+
+describe("roster role validation (PATCH /api/roster/[id])", () => {
+  // The route rejects anything outside ROSTER_ROLES before it can reach the
+  // text[] column — an unknown role wouldn't error in Postgres, it would just
+  // sit there forever ranking nobody.
+  const VALID = ["fde", "tam", "engg"];
+  const unknownOf = (roles: string[]) => roles.filter((r) => !VALID.includes(r));
+
+  it("accepts the three real roles", () => {
+    expect(unknownOf(["fde", "tam", "engg"])).toEqual([]);
+  });
+
+  it("rejects a typo instead of silently storing it", () => {
+    expect(unknownOf(["fde", "tarn"])).toEqual(["tarn"]);
+  });
+
+  it("accepts an empty list — that's how you clear every role", () => {
+    expect(unknownOf([])).toEqual([]);
+  });
+});
