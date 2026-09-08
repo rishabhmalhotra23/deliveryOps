@@ -147,7 +147,7 @@ export async function loadCustomerEnrichment(customerId: string): Promise<Custom
         board_name: null,
         health:          legacy.health,
         project_status:  legacy.status,
-        current_phase:   legacy.phase,
+        current_phase:   legacy.lifecycle_label,
         dev_platform:    legacy.platform,
         complexity:      legacy.complexity,
         go_live_date:    legacy.go_live_date,

@@ -22,7 +22,7 @@ export interface DrillDownProject {
   group_title: string | null;
   status: string | null;
   health: string | null;
-  phase: string | null;
+  lifecycle_label: string | null;
   platform: string | null;
   /** Combined FDE roster — union of every person Monday lists on the
    *  project's delivery columns, deduped.  Replaces the old separate
@@ -69,7 +69,12 @@ export interface AnalyticsBundle {
   projects_by_group: Array<{ group: string; count: number }>;
   projects_by_lifecycle: Array<{ group: string; count: number }>; // active groups only
   projects_by_status: Array<{ status: string; count: number }>;
-  projects_by_phase: Array<{ phase: string; count: number }>;
+  /** Was projects_by_phase. The `phase` column restated lifecycle 1:1 and was
+   *  retired on 2026-09-08, so this reads the lifecycle label with work_mode
+   *  overriding for the two post-live modes (Support / Enhancement) where it
+   *  is the more specific answer. Distinct from projects_by_lifecycle above,
+   *  which buckets by the coarser Monday group and covers active rows only. */
+  projects_by_stage: Array<{ stage: string; count: number }>;
   nps_distribution: Array<{ category: string; count: number }>; // Promoter / Passive / Detractor
   nps_by_quarter: Array<{ quarter: string; average: number; nps_score: number | null; count: number; promoter: number; passive: number; detractor: number }>;
   nps_by_customer_category: Array<{ category: string; average: number; responses: number }>;
@@ -118,7 +123,7 @@ interface ProjectRow {
   group_title: string;
   status: string;
   health: string | null;
-  phase: string | null;
+  lifecycle_label: string | null;
   platform: string;
   complexity: string | null;
   go_live_date: string | null;
@@ -243,7 +248,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       group_title: legacy.group_title,
       status: legacy.status,
       health: legacy.health,
-      phase: legacy.phase,
+      lifecycle_label: legacy.lifecycle_label,
       platform: legacy.platform,
       complexity: legacy.complexity,
       go_live_date: legacy.go_live_date,
@@ -392,7 +397,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   // ─── Projects by group / status / phase ─────────────────────────────
   const projGroupAgg = new Map<string, number>();
   const projStatusAgg = new Map<string, number>();
-  const projPhaseAgg = new Map<string, number>();
+  const projStageAgg = new Map<string, number>();
   // Single FDE workload aggregate — Monday still surfaces two columns
   // (delivery + engineering), but for "1 single flow" we merge both into
   // one roster and count each unique person once per project.
@@ -426,7 +431,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
       group_title: p.group_title,
       status: p.status,
       health: p.health,
-      phase: p.phase,
+      lifecycle_label: p.lifecycle_label,
       platform: p.platform,
       fde: unionPeople(p.tam_text, p.dev_text),
       go_live_date: p.go_live_date,
@@ -480,8 +485,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     projGroupAgg.set(g, (projGroupAgg.get(g) ?? 0) + 1);
     const s = p.status ?? "(unset)";
     projStatusAgg.set(s, (projStatusAgg.get(s) ?? 0) + 1);
-    const ph = p.phase ?? "(unset)";
-    projPhaseAgg.set(ph, (projPhaseAgg.get(ph) ?? 0) + 1);
+    const stage = p.lifecycle_label ?? "(unset)";
+    projStageAgg.set(stage, (projStageAgg.get(stage) ?? 0) + 1);
 
     // Stage drill-down: every project gets a slot under its group_title so
     // the "Projects by stage" chart click yields the matching project list.
@@ -566,8 +571,8 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const projects_by_lifecycle = projects_by_group
     .filter((p) => ACTIVE_LIFECYCLE_GROUPS.has(p.group))
     .sort((a, b) => groupSortKey(a.group) - groupSortKey(b.group));
-  const projects_by_phase = [...projPhaseAgg.entries()]
-    .map(([phase, count]) => ({ phase, count }))
+  const projects_by_stage = [...projStageAgg.entries()]
+    .map(([stage, count]) => ({ stage, count }))
     .sort((a, b) => b.count - a.count);
 
   const by_fde = [...fdeAgg.entries()]
@@ -730,7 +735,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
     projects_by_group,
     projects_by_lifecycle,
     projects_by_status: [],
-    projects_by_phase,
+    projects_by_stage,
     nps_distribution,
     nps_by_quarter,
     nps_by_customer_category,

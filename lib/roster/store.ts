@@ -150,6 +150,75 @@ export async function createRosterEntry(
   return data as RosterEntry;
 }
 
+/** Every alias pointing at an entry, for Configure -> Roster.
+ *
+ *  `roster_aliases` (0032) is what makes an old spelling keep resolving on
+ *  import and in the picker, and it was written implicitly on create and
+ *  rename with no way to see, add or remove one — so a wrong alias was
+ *  permanent and an invisible cause of mis-attributed processes. */
+export async function listRosterAliases(rosterEntryId: string): Promise<string[]> {
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.rosterAliases)
+    .select("alias")
+    .eq("roster_entry_id", rosterEntryId)
+    .order("alias");
+  if (error) throw error;
+  return ((data as { alias: string }[] | null) ?? []).map((r) => r.alias);
+}
+
+/** Adds an alias to an entry. Aliases are unique across the whole table, so
+ *  claiming one already pointing elsewhere is refused rather than silently
+ *  repointed — that would quietly reassign a name on the next import. */
+export async function addRosterAlias(rosterEntryId: string, raw: string): Promise<string[]> {
+  const alias = raw.trim().toLowerCase();
+  if (!alias) throw new InvalidRosterInputError("An alias is required.");
+
+  const entry = await getRosterEntry(rosterEntryId);
+  if (!entry) throw new RosterEntryNotFoundError(rosterEntryId);
+
+  const sb = requireAdmin();
+  const { data: existing, error: readError } = await sb
+    .from(TABLES.rosterAliases)
+    .select("roster_entry_id")
+    .eq("alias", alias)
+    .maybeSingle();
+  if (readError) throw readError;
+  const owner = (existing as { roster_entry_id: string } | null)?.roster_entry_id;
+  if (owner && owner !== rosterEntryId) {
+    const other = await getRosterEntry(owner);
+    throw new InvalidRosterInputError(
+      `"${alias}" already resolves to ${other?.display_name ?? "another roster entry"}.`
+    );
+  }
+
+  await addAlias(alias, rosterEntryId);
+  return listRosterAliases(rosterEntryId);
+}
+
+/** Removes an alias. The entry's own display name is refused: it is the alias
+ *  that makes the entry findable at all, and addAlias re-creates it on every
+ *  rename anyway, so deleting it would be both harmful and futile. */
+export async function removeRosterAlias(rosterEntryId: string, raw: string): Promise<string[]> {
+  const alias = raw.trim().toLowerCase();
+  const entry = await getRosterEntry(rosterEntryId);
+  if (!entry) throw new RosterEntryNotFoundError(rosterEntryId);
+  if (alias === entry.display_name.trim().toLowerCase()) {
+    throw new InvalidRosterInputError(
+      "That alias is the entry's own name — rename the entry instead of removing it."
+    );
+  }
+
+  const sb = requireAdmin();
+  const { error } = await sb
+    .from(TABLES.rosterAliases)
+    .delete()
+    .eq("roster_entry_id", rosterEntryId)
+    .eq("alias", alias);
+  if (error) throw error;
+  return listRosterAliases(rosterEntryId);
+}
+
 async function addAlias(raw: string, rosterEntryId: string): Promise<void> {
   const sb = requireAdmin();
   const alias = raw.trim().toLowerCase();
@@ -316,11 +385,18 @@ export interface UpdateRosterEntryInput {
    *  alone on purpose: blanking those would erase who actually did the
    *  work. */
   active?: boolean;
+  /** Both columns have existed since 0032 and neither was reachable from the
+   *  product: `email` was accepted by createRosterEntry and never sent by any
+   *  caller, and `notes` was written by nothing at all. Exposed in
+   *  Configure -> Roster on 2026-09-08. Empty string clears to null so the
+   *  column stays a real "unset" rather than "". */
+  email?: string | null;
+  notes?: string | null;
 }
 
-/** Roles and active only. A rename is renameRosterEntry() — it has to move
- *  the text mirrors on `processes` in the same transaction, which this plain
- *  column write cannot express. */
+/** Plain column writes only — roles, active, email, notes. A rename is
+ *  renameRosterEntry(): it has to move the text mirrors on `processes` in the
+ *  same transaction, which this cannot express. */
 export async function updateRosterEntry(
   id: string,
   patch: UpdateRosterEntryInput
@@ -334,6 +410,8 @@ export async function updateRosterEntry(
     update.roles = clean;
   }
   if (patch.active !== undefined) update.active = patch.active;
+  if (patch.email !== undefined) update.email = patch.email?.trim() || null;
+  if (patch.notes !== undefined) update.notes = patch.notes?.trim() || null;
   if (Object.keys(update).length === 0) return existing;
 
   const sb = requireAdmin();

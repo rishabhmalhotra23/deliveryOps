@@ -180,43 +180,13 @@ export function pillClass(
 //   "M3 - Testing/UAT", "M5 - Exception Handling" (no M4),
 //   "Customer Handling exceptions", "Waiting for Customer",
 //   "POV complete, Waiting for next steps", "Support", "Enhancement"
-// New phases added on Monday should be added to PhaseClassifier below;
-// unknown phases fall into "other".
-
-export type PhaseGroup =
-  | "discovery"     // Pre-Kickoff, M1
-  | "dev"           // M2
-  | "uat"           // M3, M4 (none yet), M5 / exception handling
-  | "waiting"       // Waiting for Customer, POV complete
-  | "support"       // Support, Enhancement
-  | "live"          // overrides all others when status indicates delivered
-  | "other";
-
-export function phaseGroup(phase: string | null | undefined, status: string | null | undefined): PhaseGroup {
-  if (isDelivered(status)) return "live";
-  const p = (phase ?? "").toLowerCase();
-  if (p.includes("m1") || p.includes("discovery") || p.includes("pre-kickoff") || p.includes("pre kickoff")) return "discovery";
-  if (p.includes("m2") || p.includes("development") || p.includes("develop")) return "dev";
-  if (p.includes("m3") || p.includes("m4") || p.includes("m5") || p.includes("uat") || p.includes("testing") || p.includes("exception")) return "uat";
-  if (p.includes("waiting") || p.includes("pov complete") || p.includes("customer handling")) return "waiting";
-  if (p.includes("support") || p.includes("enhancement")) return "support";
-  return "other";
-}
-
-export const PHASE_GROUP_META: Record<PhaseGroup, { label: string; color: string }> = {
-  discovery: { label: "Pre-Kickoff / M1",         color: "#818cf8" },
-  dev:       { label: "M2 Development",           color: "#6366f1" },
-  uat:       { label: "M3–M5 UAT",                color: "#f59e0b" },
-  waiting:   { label: "Waiting on customer",      color: "#f97316" },
-  support:   { label: "Support / Enhancement",    color: "#71717a" },
-  live:      { label: "Live",                     color: "#10b981" },
-  other:     { label: "Other",                    color: "#a1a1aa" },
-};
-
-// Phases that count as "active project work" (excludes live, support,
-// enhancement). Used for headcount / workload calculations and the phase
-// breakdown chart on the weekly report.
-export const ACTIVE_WORK_PHASES: PhaseGroup[] = ["discovery", "dev", "uat", "waiting"];
+// PhaseGroup / phaseGroup() / PHASE_GROUP_META / ACTIVE_WORK_PHASES lived here
+// until 2026-09-08. They classified Monday's free-text "Current Phase" into
+// coarse buckets for the old weekly report's phase-breakdown chart. That
+// report was deleted in the Monday decommission, and grepping the tree found
+// no caller outside this file — so they went out with the `phase` column
+// itself. lib/delivery/sections.ts and laneFor() answer "where is this work"
+// natively now.
 
 // ─── People-name normaliser ───────────────────────────────────────────────────
 // Monday "people" columns return either "First Last" or "first.last@kognitos.com".
@@ -399,8 +369,9 @@ function mk(qNum: 1 | 2 | 3 | 4, fy: number, start: Date, end: Date): KognitosQu
 // to carry pre-existing Monday-era consumers across the cutover without a UI
 // change.
 
+import { lifecycleLabel } from "@/lib/delivery/labels";
 import type {
-  Process, ProcessLifecycle, ProcessHealth, ProcessPlatform, ProcessPhase, ProcessWorkMode,
+  Process, ProcessLifecycle, ProcessHealth, ProcessPlatform, ProcessWorkMode,
   MigrationStage,
 } from "@/lib/supabase/types";
 
@@ -474,15 +445,14 @@ const PLATFORM_TO_LEGACY: Record<ProcessPlatform, string> = {
   custom: "Custom Solution",
 };
 
-const PHASE_TO_LEGACY: Record<ProcessPhase, string> = {
-  pre_kickoff: "Pre-Kickoff",
-  m1_discovery: "M1 - Discovery",
-  m2_development: "M2 - Development",
-  m3_testing_uat: "M3 - Testing/UAT",
-  m4_deployment: "M4 - Deployment",
-  m5_exception_handling: "M5 - Exception Handling",
-};
-
+// `phase` was retired on 2026-09-08 — it was derived 1:1 from lifecycle on
+// every write and blank on 111 of 149 production rows, so the old
+// PHASE_TO_LEGACY map turned a restatement of lifecycle into Monday's
+// milestone vocabulary and every downstream reader inherited the fiction.
+// Everything that used to read `phase` through this bridge now reads the
+// lifecycle label, which is the thing it always actually meant. Work mode
+// still overrides for the two post-live modes, where it IS the more specific
+// answer.
 const WORK_MODE_TO_LEGACY_PHASE: Partial<Record<ProcessWorkMode, string>> = {
   support: "Support",
   enhancement: "Enhancement",
@@ -544,7 +514,9 @@ export interface LegacyProcessFields {
   fiscal_year: string;
   status: string;
   health: string | null;
-  phase: string | null;
+  /** Human label for the row's lifecycle — "In development", "UAT", "Live".
+   *  Was the `phase` column until 2026-09-08; see WORK_MODE_TO_LEGACY_PHASE. */
+  lifecycle_label: string | null;
   platform: string;
   migration: string | null;
   complexity: string | null;
@@ -561,9 +533,8 @@ export interface LegacyProcessFields {
 }
 
 export function legacyFieldsFromProcess(p: Process): LegacyProcessFields {
-  const phase = p.phase
-    ? PHASE_TO_LEGACY[p.phase]
-    : (p.work_mode ? WORK_MODE_TO_LEGACY_PHASE[p.work_mode] ?? null : null);
+  const lifecycle_label =
+    (p.work_mode ? WORK_MODE_TO_LEGACY_PHASE[p.work_mode] : null) ?? lifecycleLabel(p.lifecycle);
   return {
     id: p.id,
     name: p.process_name,
@@ -572,7 +543,7 @@ export function legacyFieldsFromProcess(p: Process): LegacyProcessFields {
     fiscal_year: LIFECYCLE_TO_FISCAL_YEAR[p.lifecycle],
     status: LIFECYCLE_TO_STATUS[p.lifecycle],
     health: p.health ? HEALTH_TO_LEGACY[p.health] : null,
-    phase,
+    lifecycle_label,
     platform: PLATFORM_TO_LEGACY[p.platform],
     migration: legacyMigrationText(p),
     complexity: p.complexity,

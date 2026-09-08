@@ -178,22 +178,25 @@ export async function DashboardTrends() {
           .filter((ae) => ae && ae !== "(unassigned)")}
       />
 
-      {/* Project phase breakdown */}
-      {bundle.projects_by_phase.length > 0 ? (
+      {/* Delivery-stage breakdown. Was "Projects by milestone phase", reading
+          the `phase` column — which restated lifecycle 1:1 and was retired on
+          2026-09-08. Reads the lifecycle label now, so the title says what the
+          number is. */}
+      {bundle.projects_by_stage.length > 0 ? (
         <section className="glass-card p-6">
           <div className="text-xs uppercase tracking-wider text-[color:var(--muted-foreground)] mb-4">
-            Projects by milestone phase
+            Projects by delivery stage
           </div>
           <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-            {bundle.projects_by_phase.slice(0, 10).map((p, i) => (
-              <div key={p.phase} className="glass-card p-3">
+            {bundle.projects_by_stage.slice(0, 10).map((p, i) => (
+              <div key={p.stage} className="glass-card p-3">
                 <div
                   className="text-2xl font-bold tabular-nums"
                   style={{ color: i < 5 ? ["#818cf8","#34d399","#38bdf8","#fb923c","#a78bfa"][i] : undefined }}
                 >
                   {p.count}
                 </div>
-                <div className="text-[10px] text-[color:var(--muted-foreground)] mt-0.5 leading-tight">{p.phase}</div>
+                <div className="text-[10px] text-[color:var(--muted-foreground)] mt-0.5 leading-tight">{p.stage}</div>
               </div>
             ))}
           </div>

@@ -216,7 +216,7 @@ function ProjectList({
                   fiscal_year: p.fiscal_year,
                   health: p.health,
                   project_status: p.status,
-                  current_phase: p.phase,
+                  current_phase: p.lifecycle_label,
                   dev_platform: p.platform,
                   go_live_date: p.go_live_date,
                   kickoff_date: p.kickoff_date,
@@ -247,7 +247,7 @@ function ProjectList({
                     ) : p.health ? (
                       <Pill tone="emerald">{p.health}</Pill>
                     ) : null}
-                    {p.phase ? <Pill tone="neutral">{p.phase}</Pill> : null}
+                    {p.lifecycle_label ? <Pill tone="neutral">{p.lifecycle_label}</Pill> : null}
                     {p.platform ? <Pill tone="indigo">{p.platform}</Pill> : null}
                   </div>
                 </div>

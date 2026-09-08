@@ -48,6 +48,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (body.active !== undefined && typeof body.active !== "boolean") {
     return NextResponse.json({ error: "active must be a boolean." }, { status: 400 });
   }
+  for (const key of ["email", "notes"] as const) {
+    const value = body[key];
+    if (value !== undefined && value !== null && typeof value !== "string") {
+      return NextResponse.json({ error: `${key} must be a string or null.` }, { status: 400 });
+    }
+  }
 
   try {
     let processesRelabelled = 0;
@@ -61,7 +67,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       ({ processesRelabelled } = await renameRosterEntry(id, body.display_name));
     }
 
-    const entry = await updateRosterEntry(id, { roles: body.roles, active: body.active });
+    const entry = await updateRosterEntry(id, {
+      roles: body.roles,
+      active: body.active,
+      email: body.email,
+      notes: body.notes,
+    });
     return NextResponse.json({ entry, processesRelabelled });
   } catch (err) {
     if (err instanceof RosterEntryNotFoundError) {

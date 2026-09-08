@@ -286,7 +286,7 @@ export async function loadActiveProjects(): Promise<ActiveProjectRow[]> {
       name: legacy.name,
       status: legacy.status,
       health: legacy.health,
-      phase: legacy.phase,
+      phase: legacy.lifecycle_label,
       fiscal_year: legacy.fiscal_year,
       group_title: legacy.group_title,
       go_live_date: legacy.go_live_date,

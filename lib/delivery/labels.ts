@@ -18,7 +18,6 @@ import {
   type ProcessBlockedOn,
   type ProcessHealth,
   type ProcessLifecycle,
-  type ProcessPhase,
   type ProcessPlatform,
   type ProcessWorkMode,
 } from "@/lib/supabase/types";
@@ -41,15 +40,6 @@ export const HEALTH_LABELS: Record<ProcessHealth, string> = {
   on_track: "On track",
   at_risk: "At risk",
   off_track: "Off track",
-};
-
-export const PHASE_LABELS: Record<ProcessPhase, string> = {
-  pre_kickoff: "Pre-kickoff",
-  m1_discovery: "M1 · Discovery",
-  m2_development: "M2 · Development",
-  m3_testing_uat: "M3 · Testing / UAT",
-  m4_deployment: "M4 · Deployment",
-  m5_exception_handling: "M5 · Exception handling",
 };
 
 export const BLOCKED_ON_LABELS: Record<ProcessBlockedOn, string> = {
@@ -103,9 +93,6 @@ export function lifecycleLabel(v: ProcessLifecycle | null): string {
 }
 export function healthLabel(v: ProcessHealth | null): string {
   return v ? HEALTH_LABELS[v] ?? sentenceCase(v) : "—";
-}
-export function phaseLabel(v: ProcessPhase | null): string {
-  return v ? PHASE_LABELS[v] ?? sentenceCase(v) : "—";
 }
 export function blockedOnLabel(v: ProcessBlockedOn | null): string {
   return v ? BLOCKED_ON_LABELS[v] ?? sentenceCase(v) : "—";

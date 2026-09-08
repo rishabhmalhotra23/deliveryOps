@@ -479,7 +479,6 @@ export interface Process extends Omit<MigrationProcess, "platform"> {
   platform: ProcessPlatform;
 
   lifecycle: ProcessLifecycle;
-  phase: ProcessPhase | null;
   health: ProcessHealth | null;
   blocked_on: ProcessBlockedOn;
   work_mode: ProcessWorkMode | null;

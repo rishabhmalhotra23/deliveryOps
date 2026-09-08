@@ -323,7 +323,7 @@ function ProjectRow({
 
       {/* Row 2: metadata grid */}
       <div className="flex flex-wrap gap-x-4 gap-y-1">
-        {p.current_phase ? <Meta label="Phase">{p.current_phase}</Meta> : null}
+        {p.current_phase ? <Meta label="Stage">{p.current_phase}</Meta> : null}
         {p.complexity ? <Meta label="Complexity">{p.complexity}</Meta> : null}
         {p.kickoff_date ? <Meta label="Kickoff">{p.kickoff_date}</Meta> : null}
         {p.go_live_date ? <Meta label="Go-live"><span className="font-medium text-[color:var(--foreground)]">{p.go_live_date}</span></Meta> : null}

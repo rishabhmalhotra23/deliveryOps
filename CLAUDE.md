@@ -83,9 +83,18 @@ Frontend Stage A shipped 2026-08-10 (spec: `docs/superpowers/specs/2026-08-07-ap
 
 Three sections, and **which one a process is in is derived, never stored** — `sectionFor()` in `lib/delivery/sections.ts` is a pure function of `lifecycle` + `migration_stage`, so changing either field moves the row. This was an explicit requirement: no hardcoded per-project placement anywhere.
 
-- **Active work** — `migration_stage = v2_native`. New V2 development. `createProcess` defaults new rows here.
-- **V2 migration** — everything else. The migrate-or-retire list, including `not_required` and `to_be_retired` (0039).
-- **Historical** — ended lifecycles, plus (as a *lens*, via `inHistoricalLens`) anything with a go-live date. Grouped by fiscal quarter by `lib/delivery/historical.ts`. Counts deliberately don't sum to the total: a live process appears in both its operational section and here.
+- **Active work** — `migration_stage = v2_native` **and not yet live**. Work in flight: backlog, discovery, in development, UAT, on hold. `createProcess` defaults new rows here. `live` leaves for Historical (2026-09-08) — Active work means in flight, and shipping is an exit from it.
+- **V2 migration** — everything else. The migrate-or-retire list, including `not_required` and `to_be_retired` (0039). **Deliberately keeps its live rows**, unlike Active work: a process running live on V1 is still on the migrate-or-retire list, and applying the Active-work rule here would move 58 of 65 rows out and collapse the section to 5. Two sections, two questions, two rules.
+- **Historical** — ended lifecycles, work routed here by `sectionFor` (live + `v2_native`), plus (as a *lens*) anything already shipped. Grouped by fiscal quarter by `lib/delivery/historical.ts`. Counts deliberately don't sum to the total.
+  **Use `inHistoricalSection()`, never `inHistoricalLens()` alone** — the lens is false for a row with no go-live date, so a process marked live without one would satisfy neither test and appear in *no* section. The union is what keeps it reachable, in the "No go-live date" bucket where it can be fixed. `verify:db` asserts visibility, not just that `sectionFor` returned a valid string.
+
+**A board must never silently drop a row.** `bucketRows()` in `app/_components/process-board.tsx` used to push only when it found a lane: `laneFor()` returns `null` for `live`, and `not_required` was filtered out of the V2 lane list while `sectionFor` kept all 29 of those rows in the section's count. That is why one section showed three different totals. Anything unplaceable now lands in an explicit trailing lane, and `tests/delivery/board-lanes.test.ts` pins lane totals to the input count.
+
+**Tab counts are post-filter.** They were computed before search and filters while the table rendered after, and `?person=` deep links seed a filter on mount — so a tab could read 11 above a table showing 3 with nobody having touched a control.
+
+**`phase` is gone** (0044, 2026-09-08). It was derived 1:1 from `lifecycle` on every write, blank on 111 of 149 rows, and stale where set — 4 `retired` processes still read "M1 - Discovery". Post-live nuance lives on `work_mode`. The Trends chart is "Projects by delivery stage" now, `lib/delivery/taxonomy.ts`'s legacy bridge exposes `lifecycle_label`, and `EXTENDABLE_VOCABULARIES` is six enums, not seven. Don't reintroduce it.
+
+**`went_live_at` is stamped by `stampGoLive()`** in `lib/processes/store.ts`, once and idempotently, when `lifecycle` flips to `live` or `migration_stage` reaches `live_on_v2` — and appends a `MILESTONE` event, the first process-side writer `events` has had. No write path stamped it before 0044 (the 11 rows that had a value came from the Monday import); the Slack notifier this unblocks is still archived at `archive/superseded/lib-migrations/notify.ts` and deliberately not wired.
 
 `isV2Relevant()` in `lib/processes/loader.ts` is a **different question** — "is there real evidence this went through migration work?" — and exists only for the All-Hands report. Never widen it for section routing; doing so pulls 28 live V1 processes into the migration funnel and overstates the programme. Any new `migration_stage` value must be explicitly excluded there if it isn't migration work (the test is `<> not_required`, so new values are included by default).
 
@@ -93,7 +102,7 @@ Fiscal quarters are Feb–Jan named for the year they end in; use `fiscalQuarter
 
 Manual ordering: `board_position` (per board lane) and `table_position` (flat table) are separate columns because board positions repeat across lanes. Shared math in `lib/delivery/reorder.ts`. Both are excluded from `processes.updated_at` by the trigger (0036/0037), as are roster renames (0038) — `updated_at` means "content last changed" and every staleness signal reads it.
 
-Roster and customer management both live in **Delivery → Configure** (Roster and Customers tabs): rename, set roles/category, mark inactive. Marking someone inactive never touches their existing assignments.
+Roster and customer management both live in **Delivery → Configure** (Roster and Customers tabs). Roster: rename, roles, **email**, **notes**, **aliases** (view/add/remove — `roster_aliases` had no UI at all before 2026-09-08) and **merge** (`merge_roster_entry()` (0040) and its API route were fully built with no caller, so de-duplication had no front door). Customers: name, category — **which can now mint a new value**, since `custom_category` is free text in Postgres and the closed `<select>` was the only thing making a new category need a code change — plus active/inactive. Marking someone inactive never touches their existing assignments.
 
 ## Deploy workflow (follow exactly)
 

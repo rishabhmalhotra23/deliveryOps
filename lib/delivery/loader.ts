@@ -138,7 +138,7 @@ export async function loadDeliveryBundle(): Promise<DeliveryBundle> {
       monday_updated_at: p.updated_at,
       health:       legacy.health,
       status:       legacy.status,
-      phase:        legacy.phase,
+      phase:        legacy.lifecycle_label,
       platform:     legacy.platform,
       complexity:   legacy.complexity,
       kickoff_date: legacy.kickoff_date,
@@ -227,7 +227,6 @@ function infoScore(p: DeliveryProject): number {
   let s = 0;
   if (p.status) s += 4;
   if (p.go_live_date) s += 3;
-  if (p.phase) s += 2;
   if (p.kickoff_date) s += 2;
   if (p.health) s += 1;
   if (p.platform) s += 1;

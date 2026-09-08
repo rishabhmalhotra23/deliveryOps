@@ -18,12 +18,13 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { HUES, type ColorField, type ColorMap, type Hue } from "@/lib/delivery/hues";
 import type { VocabMap } from "@/lib/delivery/vocab";
 
-/** The seven enums add_vocabulary_value() will extend. Mirrors its
- *  allow-list; the function is the enforcement, this is for the UI. */
+/** The six enums add_vocabulary_value() will extend. Mirrors its allow-list;
+ *  the function is the enforcement, this is for the UI. `process_phase` was
+ *  the seventh until 2026-09-08, when the column and the enum were dropped —
+ *  see migration 0044. */
 export const EXTENDABLE_VOCABULARIES = [
   "migration_stage",
   "process_lifecycle",
-  "process_phase",
   "process_health",
   "process_blocked_on",
   "process_work_mode",
@@ -34,7 +35,6 @@ export type VocabularyName = (typeof EXTENDABLE_VOCABULARIES)[number];
 export const VOCABULARY_LABELS: Record<VocabularyName, string> = {
   migration_stage: "Migration stage",
   process_lifecycle: "Lifecycle",
-  process_phase: "Phase",
   process_health: "Health",
   process_blocked_on: "Blocked on",
   process_work_mode: "Work mode",
@@ -54,7 +54,7 @@ export interface VocabularyValue {
 
 /** The three vocabularies whose values render as coloured chips, mapped to
  *  the `ColorField` key `resolveHue()` uses. Only these three are coloured —
- *  phase, blocked_on, work_mode and platform render as plain text. */
+ *  blocked_on, work_mode and platform render as plain text. */
 export const COLOR_FIELD_VOCABULARY: Record<ColorField, VocabularyName> = {
   stage: "migration_stage",
   health: "process_health",

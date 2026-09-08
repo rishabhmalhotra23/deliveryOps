@@ -4,7 +4,7 @@
 // after seeing both laid out). Reads `processes` natively, no Monday-legacy
 // translation needed since this is new UI.
 
-import type { Process, ProcessBlockedOn } from "@/lib/supabase/types";
+import type { Process, ProcessBlockedOn, ProcessLifecycle } from "@/lib/supabase/types";
 import { ARCHIVE_LIFECYCLES as ARCHIVE_LIFECYCLE_LIST } from "@/lib/supabase/types";
 
 export type DeliveryReviewStatus = "done" | "coming_up" | "blocked" | "live";
@@ -79,7 +79,8 @@ export interface DeliveryReviewProcessItem {
   id: string;
   name: string;
   status: DeliveryReviewStatus;
-  phase: string | null;
+  /** Native lifecycle. Was `phase`, retired 2026-09-08. */
+  lifecycle: ProcessLifecycle;
   complexity: string | null;
   platform: string;
   goLiveDate: string | null;
@@ -96,7 +97,7 @@ function toItem(p: Process, status: DeliveryReviewStatus, now: Date): DeliveryRe
     id: p.id,
     name: p.process_name,
     status,
-    phase: p.phase,
+    lifecycle: p.lifecycle,
     complexity: p.complexity,
     platform: p.platform,
     goLiveDate: p.go_live_date,

@@ -35,16 +35,22 @@ describe("vocabulary catalogue", () => {
     }
   });
 
-  it("covers exactly the seven delivery enums the Configure dialog showed as fixed", () => {
+  // Was seven. `process_phase` came out on 2026-09-08 with the column and the
+  // enum (migration 0044) — it was derived 1:1 from lifecycle on every write,
+  // so a label or a new value for it configured nothing.
+  it("covers exactly the six delivery enums the Configure dialog showed as fixed", () => {
     expect([...EXTENDABLE_VOCABULARIES].sort()).toEqual([
       "migration_stage",
       "process_blocked_on",
       "process_health",
       "process_lifecycle",
-      "process_phase",
       "process_platform",
       "process_work_mode",
     ]);
+  });
+
+  it("no longer offers phase, whose column and enum are gone", () => {
+    expect([...EXTENDABLE_VOCABULARIES]).not.toContain("process_phase");
   });
 });
 

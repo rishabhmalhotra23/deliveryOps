@@ -8,6 +8,7 @@ import {
   buildCreateProcessRow,
   pickEditable,
   withDerivedFields,
+  stampGoLive,
   InvalidProcessInputError,
   bulkApply,
   bulkUpdateProcesses,
@@ -15,12 +16,11 @@ import {
   TooManyIdsError,
   MAX_BULK_IDS,
 } from "@/lib/processes/store";
-import type { Process, ProcessLifecycle, ProcessPhase } from "@/lib/supabase/types";
+import type { Process, ProcessLifecycle } from "@/lib/supabase/types";
 
 function fakeProcess(overrides: Partial<Process> = {}): Process {
   return {
     lifecycle: "discovery",
-    phase: "m1_discovery",
     ...overrides,
   } as Process;
 }
@@ -98,28 +98,30 @@ describe("withDerivedFields", () => {
     expect(next.lifecycle).toBe("in_development");
   });
 
-  it("derives phase from the resulting lifecycle in the same write", () => {
-    const existing = fakeProcess({ lifecycle: "discovery", phase: "m1_discovery" });
+  it("still derives lifecycle from a migration_stage change", () => {
+    const existing = fakeProcess({ lifecycle: "discovery" });
     const next = withDerivedFields(existing, { migration_stage: "parity_testing" });
     expect(next.lifecycle).toBe("uat");
-    expect(next.phase).toBe("m3_testing_uat");
   });
 
-  it("derives phase from an explicit lifecycle edit with no migration_stage involved", () => {
-    const existing = fakeProcess({ lifecycle: "discovery", phase: "m1_discovery" });
-    const next = withDerivedFields(existing, { lifecycle: "live" });
-    expect(next.phase).toBe("m4_deployment");
+  // Phase was retired on 2026-09-08. It used to be derived here 1:1 from
+  // lifecycle on every write, which is exactly why it never carried
+  // information the lifecycle chip beside it didn't already show: blank on 111
+  // of 149 production rows, and where set it just restated its neighbour.
+  // Asserted rather than deleted so nobody reintroduces the derivation.
+  it("no longer writes phase", () => {
+    const existing = fakeProcess({ lifecycle: "discovery" });
+    expect(withDerivedFields(existing, { migration_stage: "parity_testing" })).not.toHaveProperty("phase");
+    expect(withDerivedFields(existing, { lifecycle: "live" })).not.toHaveProperty("phase");
   });
 
-  it("never overrides an explicit lifecycle or phase in the same patch", () => {
+  it("never overrides an explicit lifecycle in the same patch", () => {
     const existing = fakeProcess({ lifecycle: "discovery" });
     const next = withDerivedFields(existing, {
       migration_stage: "in_development",
       lifecycle: "on_hold",
-      phase: "m1_discovery",
     });
     expect(next.lifecycle).toBe("on_hold");
-    expect(next.phase).toBe("m1_discovery");
   });
 
   it("does not touch lifecycle when migration_stage carries no delivery signal (not_required)", () => {
@@ -137,16 +139,9 @@ describe("withDerivedFields", () => {
   });
 
   it("is a no-op when the derived value already matches the current one", () => {
-    const existing = fakeProcess({ lifecycle: "in_development", phase: "m2_development" });
+    const existing = fakeProcess({ lifecycle: "in_development" });
     const next = withDerivedFields(existing, { migration_stage: "engg_pending" });
     expect(next.lifecycle).toBeUndefined();
-    expect(next.phase).toBeUndefined();
-  });
-
-  it("leaves phase alone for lifecycles with no clean single-phase mapping", () => {
-    const existing = fakeProcess({ lifecycle: "discovery", phase: "m1_discovery" as ProcessPhase });
-    const next = withDerivedFields(existing, { lifecycle: "on_hold" });
-    expect(next.phase).toBeUndefined();
   });
 });
 
@@ -212,5 +207,59 @@ describe("pickEditable / completion_pct", () => {
 
   it("leaves the field alone when the patch doesn't mention it", () => {
     expect("completion_pct" in pickEditable({ notes: "hi" })).toBe(false);
+  });
+});
+
+
+describe("stampGoLive", () => {
+  // Nothing stamped went_live_at before 2026-09-08. The notifier was designed
+  // in 0019's header comment, built, then archived, and MIGRATION_DONE_STAGE
+  // survived with no caller — so the column was permanently null and
+  // lib/reports/delivery-review-loader.ts documented the resulting
+  // under-reporting as a known write-path gap. This is the write path.
+  const live = (overrides: Partial<Process> = {}) =>
+    fakeProcess({ lifecycle: "uat", migration_stage: "in_development", went_live_at: null, ...overrides });
+
+  it("stamps when lifecycle flips to live", () => {
+    const out = stampGoLive(live(), { lifecycle: "live" }, "2026-09-08T10:00:00.000Z");
+    expect(out.went_live_at).toBe("2026-09-08T10:00:00.000Z");
+  });
+
+  it("stamps when migration_stage reaches live_on_v2", () => {
+    const out = stampGoLive(live(), { migration_stage: "live_on_v2" }, "2026-09-08T10:00:00.000Z");
+    expect(out.went_live_at).toBe("2026-09-08T10:00:00.000Z");
+  });
+
+  // Idempotency is the whole reason went_live_at exists rather than a boolean:
+  // re-saving a live process must not move the date, or "when did this ship"
+  // becomes "when was it last edited".
+  it("never re-stamps a process that already shipped", () => {
+    const already = live({ lifecycle: "live", went_live_at: "2026-05-14T00:00:00.000Z" });
+    const out = stampGoLive(already, { health: "on_track" }, "2026-09-08T10:00:00.000Z");
+    expect(out.went_live_at).toBeUndefined();
+  });
+
+  it("does not stamp an edit that leaves the process pre-live", () => {
+    const out = stampGoLive(live(), { lifecycle: "uat" }, "2026-09-08T10:00:00.000Z");
+    expect(out.went_live_at).toBeUndefined();
+  });
+
+  it("does not stamp on an unrelated field edit", () => {
+    const out = stampGoLive(live(), { total_effort_hours: 12 }, "2026-09-08T10:00:00.000Z");
+    expect(out.went_live_at).toBeUndefined();
+  });
+
+  // withDerivedFields runs first and can promote lifecycle to "live" from a
+  // migration_stage change alone, so the derived value has to count.
+  it("stamps a lifecycle that was derived rather than sent", () => {
+    const derived = withDerivedFields(live(), { migration_stage: "migrated_pending_commercial" });
+    expect(derived.lifecycle).toBe("live");
+    const out = stampGoLive(live(), derived, "2026-09-08T10:00:00.000Z");
+    expect(out.went_live_at).toBe("2026-09-08T10:00:00.000Z");
+  });
+
+  it("leaves the rest of the patch alone", () => {
+    const out = stampGoLive(live(), { lifecycle: "live", health: "on_track" }, "2026-09-08T10:00:00.000Z");
+    expect(out).toMatchObject({ lifecycle: "live", health: "on_track" });
   });
 });

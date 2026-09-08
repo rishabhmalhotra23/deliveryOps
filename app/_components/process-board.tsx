@@ -20,6 +20,7 @@ import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delive
 import { resolveHue, hueStyle, hueDotStyle, type ColorMap, type Hue } from "@/lib/delivery/hues";
 import { BLOCKED_ON_LABELS, blockedOnLabel, healthLabel, platformLabel, stageLabel } from "@/lib/delivery/labels";
 import type { DetailProcess } from "@/app/_components/process-detail";
+import { RosterPicker } from "@/app/_components/roster-picker";
 
 // Lane dot colours, verbatim from the approved mockup's DELIVERY_LANES.
 // Stuck deliberately uses the semantic status token rather than one of the 8
@@ -422,6 +423,7 @@ export function ProcessBoard({ mode, laneSort, rows, cardFields, colorMap, vocab
                           setDragOverLane(null);
                         }}
                         onOpenDetail={onOpenDetail}
+                        onSave={onSave}
                       />
                     </div>
                   ))}
@@ -482,6 +484,25 @@ function DropMarker() {
   );
 }
 
+/** Keeps an in-card control from triggering the card itself. The whole card
+ *  is an onClick -> open-detail button and is `draggable`, so without this a
+ *  click on the owner picker opened the drawer and a mousedown started a drag
+ *  instead of opening the list. */
+function CardOwner({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      draggable={false}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      className="inline-flex max-w-full min-w-0 rounded border"
+      style={{ borderColor: "var(--brand-metal-line)", background: "var(--field)" }}
+    >
+      {children}
+    </span>
+  );
+}
+
 const HEALTH_BORDER: Record<string, string> = {
   on_track: "var(--status-good)",
   at_risk: "var(--status-warn)",
@@ -499,6 +520,7 @@ function Card({
   onDragStart,
   onDragEnd,
   onOpenDetail,
+  onSave,
 }: {
   row: DetailProcess;
   index: number;
@@ -510,6 +532,7 @@ function Card({
   onDragStart: () => void;
   onDragEnd: () => void;
   onOpenDetail: (id: string) => void;
+  onSave: (id: string, patch: Partial<Process>) => Promise<Process>;
 }) {
   return (
     // role/tabIndex because board view has no other way to open a record —
@@ -562,22 +585,83 @@ function Card({
           </span>
         ) : null}
         {fields.map((key) => (
-          <CardChip key={key} colKey={key} row={row} colorMap={colorMap} vocab={vocab} />
+          <CardChip key={key} colKey={key} row={row} colorMap={colorMap} vocab={vocab} onSave={onSave} />
         ))}
       </div>
     </div>
   );
 }
 
-function CardChip({ colKey, row, colorMap, vocab }: { colKey: ColKey; row: DetailProcess; colorMap: ColorMap; vocab: VocabMap }) {
+function CardChip({
+  colKey,
+  row,
+  colorMap,
+  vocab,
+  onSave,
+}: {
+  colKey: ColKey;
+  row: DetailProcess;
+  colorMap: ColorMap;
+  vocab: VocabMap;
+  onSave: (id: string, patch: Partial<Process>) => Promise<Process>;
+}) {
   const def = COLDEF_BY_KEY[colKey];
   switch (colKey) {
+    // Owners were dead text on a card while the table had a working picker
+    // in the same column — and Active work defaults to board, so this was
+    // the owner control most people actually saw. Now the same RosterPicker,
+    // isolated from the card's own click/drag handlers.
     case "owner":
-      return row.fde_owner ? <span className="text-[10.5px] px-1.5 py-0.5 rounded text-[color:var(--muted-foreground)]">{row.fde_owner}</span> : null;
+      return (
+        <CardOwner>
+          <RosterPicker
+            kind="person"
+            role="fde"
+            dense
+            valueLabel={row.fde_owner}
+            onPick={(entry) => void onSave(row.id, { fde_owner_id: entry.id })}
+            onClear={() => void onSave(row.id, { fde_owner_id: null })}
+          />
+        </CardOwner>
+      );
     case "tam":
-      return row.tam_owner ? <span className="text-[10.5px] px-1.5 py-0.5 rounded text-[color:var(--muted-foreground)]">{row.tam_owner}</span> : null;
+      return (
+        <CardOwner>
+          <RosterPicker
+            kind="person"
+            role="tam"
+            dense
+            valueLabel={row.tam_owner}
+            onPick={(entry) => void onSave(row.id, { tam_owner_id: entry.id })}
+            onClear={() => void onSave(row.id, { tam_owner_id: null })}
+          />
+        </CardOwner>
+      );
+    case "engg":
+      return (
+        <CardOwner>
+          <RosterPicker
+            kind="person"
+            role="engg"
+            dense
+            valueLabel={row.engg_owner}
+            onPick={(entry) => void onSave(row.id, { engg_owner_id: entry.id })}
+            onClear={() => void onSave(row.id, { engg_owner_id: null })}
+          />
+        </CardOwner>
+      );
     case "partner":
-      return row.partner ? <span className="text-[10.5px] px-1.5 py-0.5 rounded text-[color:var(--muted-foreground)]">{row.partner}</span> : null;
+      return (
+        <CardOwner>
+          <RosterPicker
+            kind="partner_org"
+            dense
+            valueLabel={row.partner}
+            onPick={(entry) => void onSave(row.id, { partner_id: entry.id })}
+            onClear={() => void onSave(row.id, { partner_id: null })}
+          />
+        </CardOwner>
+      );
     case "customer":
       return null; // already the card eyebrow
     case "stage": {

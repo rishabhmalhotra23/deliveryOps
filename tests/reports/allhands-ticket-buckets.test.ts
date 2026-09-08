@@ -14,7 +14,7 @@ function proc(overrides: Partial<Process>): Process {
     notes: null, feature_delta: null, linear_ticket_ids: [], v2_workspace_url: null,
     arr: null, company_size: null, source_phase: null, source_board: null, updated_by: null,
     created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
-    lifecycle: "in_development", phase: null, health: null, blocked_on: "none", work_mode: null,
+    lifecycle: "in_development", health: null, blocked_on: "none", work_mode: null,
     complexity: null, customer_id: "c1", k2_process_id: null, k2_workspace_id: null,
     kickoff_date: null, ttv_days: null, tam_owner: null, partner: null,
     total_effort_hours: null, value_minutes_saved_per_run: null, value_basis: null,

@@ -63,6 +63,11 @@ function initials(name: string): string {
   return s || name.slice(0, 2).toUpperCase() || "?";
 }
 
+/** Not a real category, just the "mint a new one" row in the picker. Chosen
+ *  to match app/_components/editable-value.tsx so both pickers behave the
+ *  same. */
+const CUSTOM_CATEGORY_SENTINEL = "__custom__";
+
 const COLOR_FIELDS: { key: ColorField; label: string }[] = [
   { key: "stage", label: "Migration stage" },
   { key: "health", label: "Health" },
@@ -77,15 +82,36 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [rosterLoading, setRosterLoading] = useState(false);
+  // Bumped to force the roster effect to refetch, e.g. after a merge.
+  const [rosterReload, setRosterReload] = useState(0);
   const [newName, setNewName] = useState("");
   // Which row's inline editor is open, plus its uncommitted draft. One at a
   // time: two half-finished renames would be a way to lose an edit.
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ display_name: string; roles: string[]; active: boolean }>({
+  const [draft, setDraft] = useState<{
+    display_name: string;
+    roles: string[];
+    active: boolean;
+    email: string;
+    notes: string;
+  }>({
     display_name: "",
     roles: [],
     active: true,
+    email: "",
+    notes: "",
   });
+  // Aliases for the entry being edited, loaded on demand. roster_aliases has
+  // existed since 0032 and had no UI at all, so a wrong alias silently
+  // mis-attributed processes on every import with no way to find or fix it.
+  const [aliases, setAliases] = useState<string[]>([]);
+  const [aliasDraft, setAliasDraft] = useState("");
+  const [aliasBusy, setAliasBusy] = useState(false);
+  // The merge target being chosen, if any. merge_roster_entry() (0040) and
+  // POST /api/roster/[id]/merge were fully built and tested with no caller —
+  // de-duplication had no front door until now.
+  const [mergeFor, setMergeFor] = useState<RosterEntry | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState("");
   const [saving, setSaving] = useState(false);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [showLeft, setShowLeft] = useState(false);
@@ -106,6 +132,8 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
   const [custSaving, setCustSaving] = useState(false);
   const [custError, setCustError] = useState<string | null>(null);
   const [showInactiveCust, setShowInactiveCust] = useState(false);
+  // True while the category field is a free-text box rather than the picker.
+  const [custCatCustom, setCustCatCustom] = useState(false);
   const [newCustomer, setNewCustomer] = useState("");
 
   // Vocabularies tab.
@@ -159,7 +187,7 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [tab, rosterKind]);
+  }, [tab, rosterKind, rosterReload]);
 
   useEffect(() => {
     if (tab !== "customers") return;
@@ -299,6 +327,14 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
       custom_category: c.custom_category ?? "",
       active: c.active,
     });
+    // A stored value that isn't in CUSTOMER_CATEGORIES is itself a minted one,
+    // so open in free-text mode. Without this the <select> has no matching
+    // <option>, shows "—", and saving silently overwrites the category —
+    // exactly the trap editable-value.tsx:104-108 guards against.
+    setCustCatCustom(
+      Boolean(c.custom_category) &&
+        !CUSTOMER_CATEGORIES.includes(c.custom_category as (typeof CUSTOMER_CATEGORIES)[number])
+    );
   }
 
   async function saveCustEditor(c: Customer) {
@@ -356,7 +392,73 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
   function openEditor(entry: RosterEntry) {
     setRosterError(null);
     setEditingId(entry.id);
-    setDraft({ display_name: entry.display_name, roles: [...entry.roles], active: entry.active });
+    setMergeFor(null);
+    setDraft({
+      display_name: entry.display_name,
+      roles: [...entry.roles],
+      active: entry.active,
+      email: entry.email ?? "",
+      notes: entry.notes ?? "",
+    });
+    setAliases([]);
+    setAliasDraft("");
+    void fetch(`/api/roster/${entry.id}/aliases`)
+      .then((r) => r.json())
+      .then((json) => setAliases(json.aliases ?? []))
+      .catch(() => setAliases([]));
+  }
+
+  async function mutateAliases(entryId: string, init: RequestInit, url: string) {
+    setAliasBusy(true);
+    setRosterError(null);
+    try {
+      const res = await fetch(url, init);
+      const json = await res.json();
+      if (!res.ok) {
+        setRosterError(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      setAliases(json.aliases ?? []);
+      setAliasDraft("");
+    } catch (err) {
+      setRosterError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAliasBusy(false);
+    }
+  }
+
+  /** Merges the loser into the target through merge_roster_entry(), which
+   *  moves both owner mirrors on `processes` in one transaction and preserves
+   *  updated_at. Refetches the whole roster rather than patching state: the
+   *  merge changes the target's assignment count too. */
+  async function runMerge(loser: RosterEntry) {
+    if (!mergeTargetId) return;
+    setSaving(true);
+    setRosterError(null);
+    try {
+      const res = await fetch(`/api/roster/${loser.id}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ into: mergeTargetId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setRosterError(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      setMergeFor(null);
+      setMergeTargetId("");
+      setEditingId(null);
+      // Refetch rather than patch state: a merge changes the TARGET's
+      // assignment count too, and the loser becomes inactive with a
+      // merged_into_id. The dialog's onClose already router.refresh()es, so
+      // the Delivery table behind it picks up the moved owner text.
+      setRosterReload((n) => n + 1);
+    } catch (err) {
+      setRosterError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveEditor(entry: RosterEntry) {
@@ -525,6 +627,26 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
                           />
                         </div>
 
+                        {/* roster_entries.email has existed since 0032.
+                            createRosterEntry accepted it, no caller ever sent
+                            one, and updateRosterEntry couldn't set it — so the
+                            column was unreachable from the product. */}
+                        {r.kind === "person" ? (
+                          <div>
+                            <label className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold mb-0.5" htmlFor={`roster-email-${r.id}`}>
+                              Email
+                            </label>
+                            <input
+                              id={`roster-email-${r.id}`}
+                              type="email"
+                              value={draft.email}
+                              placeholder="name@kognitos.com"
+                              onChange={(e) => setDraft((cur) => ({ ...cur, email: e.target.value }))}
+                              className="dops-input w-full px-2 py-1 text-[13px]"
+                            />
+                          </div>
+                        ) : null}
+
                         {/* Partner orgs hold no role — the pickers only ever
                             rank people by fde/tam/engg. */}
                         {r.kind === "person" ? (
@@ -553,6 +675,76 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
                             </div>
                           </div>
                         ) : null}
+
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold">Aliases</span>
+                          <p className="text-[11px] text-[color:var(--muted-foreground)] mt-0.5 mb-1">
+                            An alias makes an old spelling resolve to this
+                            {r.kind === "person" ? " person" : " organisation"} on import and in
+                            the picker.
+                          </p>
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            {aliases.map((alias) => (
+                              <span
+                                key={alias}
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] border"
+                                style={{ borderColor: "var(--brand-metal-line)", background: "var(--glass-bg)" }}
+                              >
+                                {alias}
+                                <button
+                                  type="button"
+                                  disabled={aliasBusy}
+                                  title={`Remove the alias "${alias}"`}
+                                  aria-label={`Remove the alias ${alias}`}
+                                  onClick={() =>
+                                    void mutateAliases(
+                                      r.id,
+                                      { method: "DELETE" },
+                                      `/api/roster/${r.id}/aliases?alias=${encodeURIComponent(alias)}`
+                                    )
+                                  }
+                                  className="opacity-50 hover:opacity-100 disabled:opacity-30"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <input
+                              value={aliasDraft}
+                              onChange={(e) => setAliasDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key !== "Enter" || !aliasDraft.trim()) return;
+                                e.preventDefault();
+                                void mutateAliases(
+                                  r.id,
+                                  {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ alias: aliasDraft }),
+                                  },
+                                  `/api/roster/${r.id}/aliases`
+                                );
+                              }}
+                              placeholder="Add an alias, then Enter"
+                              className="dops-input px-2 py-0.5 text-[11.5px] flex-1 min-w-[150px]"
+                            />
+                          </div>
+                        </div>
+
+                        {/* roster_entries.notes, written by nothing until now. */}
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold mb-0.5" htmlFor={`roster-notes-${r.id}`}>
+                            Notes
+                          </label>
+                          <textarea
+                            id={`roster-notes-${r.id}`}
+                            rows={2}
+                            value={draft.notes}
+                            placeholder="Why they're inactive, which partner they sit under, anything worth knowing."
+                            onChange={(e) => setDraft((cur) => ({ ...cur, notes: e.target.value }))}
+                            className="dops-input w-full px-2 py-1 text-[12.5px]"
+                          />
+                        </div>
 
                         <label className="flex items-center gap-2 text-[12px] cursor-pointer pt-0.5">
                           <input
@@ -599,7 +791,81 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
                           </div>
                         ) : null}
 
+                        {/* Merge. merge_roster_entry() (0040), mergeRosterEntries
+                            and POST /api/roster/[id]/merge were all built and
+                            tested, and no component ever called them — so
+                            de-duplication had no front door. The function
+                            moves both owner mirrors on `processes` in one
+                            transaction and preserves updated_at. */}
+                        {mergeFor?.id === r.id ? (
+                          <div
+                            className="rounded-md px-2.5 py-2 space-y-1.5"
+                            style={{ background: "var(--st-amber-bg)", border: "1px solid var(--st-amber-bd)" }}
+                          >
+                            <span className="block text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--st-amber-fg)" }}>
+                              Merge into
+                            </span>
+                            <select
+                              value={mergeTargetId}
+                              onChange={(e) => setMergeTargetId(e.target.value)}
+                              className="dops-field w-full text-[12.5px]"
+                            >
+                              <option value="">Pick who to keep…</option>
+                              {roster
+                                .filter((o) => o.id !== r.id && o.kind === r.kind && !o.merged_into_id)
+                                .map((o) => (
+                                  <option key={o.id} value={o.id}>
+                                    {o.display_name}
+                                    {counts[o.id] ? ` — ${counts[o.id]} process${counts[o.id] === 1 ? "" : "es"}` : ""}
+                                  </option>
+                                ))}
+                            </select>
+                            <p className="text-[11.5px]" style={{ color: "var(--st-amber-fg)" }}>
+                              {counts[r.id] ?? 0} process{(counts[r.id] ?? 0) === 1 ? "" : "es"} move to the
+                              entry you keep. &quot;{r.display_name}&quot; stops being selectable but keeps
+                              resolving as an alias, so old spellings still work. This cannot be undone
+                              from the UI.
+                            </p>
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMergeFor(null);
+                                  setMergeTargetId("");
+                                }}
+                                className="rounded-full px-3 py-1 text-[11.5px] border"
+                                style={{ borderColor: "var(--brand-metal-line)", color: "var(--foreground)" }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void runMerge(r)}
+                                disabled={saving || !mergeTargetId}
+                                className="rounded-full px-3 py-1 text-[11.5px] font-semibold border disabled:opacity-50"
+                                style={{ borderColor: "var(--st-amber-bd)", color: "var(--st-amber-fg)" }}
+                              >
+                                {saving ? "Merging…" : "Merge"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
                         <div className="flex gap-2 justify-end pt-0.5">
+                          {mergeFor?.id === r.id ? null : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMergeFor(r);
+                                setMergeTargetId("");
+                              }}
+                              className="rounded-full px-3 py-1 text-[11.5px] border mr-auto"
+                              style={{ borderColor: "var(--brand-metal-line)", color: "var(--muted-foreground)" }}
+                              title="Fold this duplicate into another entry"
+                            >
+                              Merge into…
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setEditingId(null)}
@@ -753,19 +1019,63 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
                           >
                             Category
                           </label>
-                          <select
-                            id={`cust-cat-${c.key}`}
-                            value={custDraft.custom_category}
-                            onChange={(e) => setCustDraft((cur) => ({ ...cur, custom_category: e.target.value }))}
-                            className="dops-field text-[13px]"
-                          >
-                            <option value="">—</option>
-                            {CUSTOMER_CATEGORIES.map((cat) => (
-                              <option key={cat} value={cat}>
-                                {cat}
-                              </option>
-                            ))}
-                          </select>
+                          {/* customers.custom_category is plain text in
+                              Postgres (0005) — no enum, no CHECK — and
+                              PATCH /api/customers/roster already accepts any
+                              string. This closed <select> was the ONLY thing
+                              making a new category need a code change, which
+                              breaks the "changing data must never need a code
+                              change" bar. Same escape hatch the 360 page's
+                              EditableValue has shipped since 09ffb48.
+                              custCatCustom also opens true for a value that
+                              isn't in the list, so an already-minted category
+                              doesn't silently reset to "—" on save. */}
+                          {custCatCustom ? (
+                            <div className="flex gap-1.5 items-center">
+                              <input
+                                id={`cust-cat-${c.key}`}
+                                autoFocus
+                                value={custDraft.custom_category}
+                                placeholder="New category name"
+                                onChange={(e) => setCustDraft((cur) => ({ ...cur, custom_category: e.target.value }))}
+                                className="dops-input flex-1 px-2 py-1 text-[13px]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCustCatCustom(false);
+                                  setCustDraft((cur) => ({ ...cur, custom_category: "" }));
+                                }}
+                                className="rounded-full px-2 py-0.5 text-[11px] border"
+                                style={{ borderColor: "var(--brand-metal-line)", color: "var(--muted-foreground)" }}
+                                title="Go back to the existing categories"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <select
+                              id={`cust-cat-${c.key}`}
+                              value={custDraft.custom_category}
+                              onChange={(e) => {
+                                if (e.target.value === CUSTOM_CATEGORY_SENTINEL) {
+                                  setCustCatCustom(true);
+                                  setCustDraft((cur) => ({ ...cur, custom_category: "" }));
+                                  return;
+                                }
+                                setCustDraft((cur) => ({ ...cur, custom_category: e.target.value }));
+                              }}
+                              className="dops-field text-[13px]"
+                            >
+                              <option value="">—</option>
+                              {CUSTOMER_CATEGORIES.map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {cat}
+                                </option>
+                              ))}
+                              <option value={CUSTOM_CATEGORY_SENTINEL}>+ Something else…</option>
+                            </select>
+                          )}
                         </div>
 
                         <label className="flex items-center gap-2 text-[12px] cursor-pointer pt-0.5">

@@ -84,6 +84,7 @@ export const CARD_FIELDS: ColKey[] = [
   "stage",
   "owner",
   "tam",
+  "engg",
   "partner",
   "health",
   "platform",

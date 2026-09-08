@@ -148,6 +148,17 @@ const LOADERS: { name: string; run: () => Promise<unknown> }[] = [
     run: async () => (await import("@/lib/roster/store")).countRosterAssignments(),
   },
   {
+    // Configure -> Roster's Aliases section. Executed here rather than only
+    // unit-tested because the store tests stub above the Supabase client, and
+    // that gap is exactly what let the 2026-09-08 outage ship.
+    name: "listRosterAliases",
+    run: async () => {
+      const store = await import("@/lib/roster/store");
+      const [first] = await store.listRosterEntries();
+      return first ? store.listRosterAliases(first.id) : [];
+    },
+  },
+  {
     name: "loadAnalytics (dashboard Trends)",
     run: async () => (await import("@/lib/analytics/loader")).loadAnalytics(),
   },

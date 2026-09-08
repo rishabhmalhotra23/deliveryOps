@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { listCustomers, countCustomerProcesses, updateCustomerManually } from "@/lib/customers";
+import { appendEvent } from "@/lib/events/events";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,29 @@ export async function PATCH(request: Request) {
 
   try {
     const customer = await updateCustomerManually(body.key, updates);
+
+    // Audit parity with POST /api/customers/[key]/manual-update, which has
+    // always logged these. Both routes write the same columns on the same
+    // table from the same product, so an edit made in Configure was silently
+    // missing from the customer's own activity log while the identical edit
+    // made on the 360 page appeared. Best-effort, like the other route: an
+    // event-log failure must not fail the write the user asked for.
+    for (const [field, value] of Object.entries(updates)) {
+      try {
+        await appendEvent(
+          body.key,
+          field === "custom_category" ? "CATEGORY_CHANGED" : "PROFILE_UPDATED",
+          { field, value, source: "configure-roster" },
+          {
+            summary: `${field} → ${value ?? "(none)"}`,
+            tags: ["manual-edit", field, "configure"],
+          }
+        );
+      } catch {
+        /* event logging is best-effort */
+      }
+    }
+
     return NextResponse.json({ customer });
   } catch (err) {
     return NextResponse.json(

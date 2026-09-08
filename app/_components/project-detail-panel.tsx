@@ -133,7 +133,9 @@ export function ProjectDetailPanel({
               { label: "Go-live", value: p.go_live_date },
               { label: "TTV", value: p.ttv_days_text ? `${p.ttv_days_text}d` : null },
               { label: "Effort", value: p.total_effort_days ? `${p.total_effort_days}d` : null },
-              { label: "Phase", value: p.current_phase?.replace(/^M\d\s+-\s+/, "") ?? null },
+              // Fed from the lifecycle label since 2026-09-08 (phase retired), so
+              // there is no "M2 - " prefix left to strip.
+              { label: "Stage", value: p.current_phase ?? null },
               { label: "Complexity", value: p.complexity },
             ].filter(x => x.value).map(({ label, value }) => (
               <div key={label} className="rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3">

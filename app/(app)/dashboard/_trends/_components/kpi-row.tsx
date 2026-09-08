@@ -303,7 +303,7 @@ function ActiveProjectsList({
               {p.name}
             </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-[color:var(--muted-foreground)]">
-              {p.phase ? <span>{p.phase}</span> : null}
+              {p.phase ? <span>{p.phase}</span> : null}{/* lifecycle label since 2026-09-08 */}
               {p.health ? <Pill tone={/risk|stuck/i.test(p.health) ? "red" : "emerald"}>{p.health}</Pill> : null}
               {p.go_live_date ? <span>go-live {p.go_live_date}</span> : null}
             </div>

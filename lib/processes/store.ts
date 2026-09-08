@@ -20,7 +20,7 @@ import {
   type ProcessView,
   type ProcessLifecycle,
   type ProcessPlatform,
-  type ProcessPhase,
+  MIGRATION_DONE_STAGE,
   type MigrationStage,
   type RosterKind,
 } from "@/lib/supabase/types";
@@ -50,7 +50,6 @@ const EDITABLE_FIELDS: (keyof Process)[] = [
   "process_name",
   "customer_id",
   "lifecycle",
-  "phase",
   "health",
   "blocked_on",
   "work_mode",
@@ -130,15 +129,6 @@ const MIGRATION_STAGE_TO_LIFECYCLE: Partial<Record<MigrationStage, ProcessLifecy
   v2_native: "live",
 };
 
-const LIFECYCLE_TO_PHASE: Partial<Record<ProcessLifecycle, ProcessPhase>> = {
-  backlog: "pre_kickoff",
-  upcoming: "pre_kickoff",
-  discovery: "m1_discovery",
-  in_development: "m2_development",
-  uat: "m3_testing_uat",
-  live: "m4_deployment",
-};
-
 // Auto-derivation only ever moves a process forward through its normal flow —
 // it never overrides a hold or terminal state a human deliberately set.
 const FLOW_LIFECYCLES = new Set<ProcessLifecycle>([
@@ -168,13 +158,43 @@ export function withDerivedFields(
     if (derived && derived !== existing.lifecycle) next.lifecycle = derived;
   }
 
-  const effectiveLifecycle = (next.lifecycle as ProcessLifecycle | undefined) ?? existing.lifecycle;
-  if ("lifecycle" in next && !("phase" in next) && FLOW_LIFECYCLES.has(effectiveLifecycle)) {
-    const derivedPhase = LIFECYCLE_TO_PHASE[effectiveLifecycle];
-    if (derivedPhase && derivedPhase !== existing.phase) next.phase = derivedPhase;
-  }
-
   return next;
+}
+
+/** Pure: adds `went_live_at` when this edit is the moment the process ships,
+ *  and only then. Exported for unit testing.
+ *
+ *  Nothing stamped this column before 2026-09-08. The notifier was designed in
+ *  0019's header comment ("when a row first enters 'live_on_v2', the app posts
+ *  to Slack ... went_live_at gives idempotency so we post exactly once"),
+ *  built, then archived to archive/superseded/lib-migrations/ — leaving
+ *  MIGRATION_DONE_STAGE in the types with no caller and the column
+ *  permanently null. lib/reports/delivery-review-loader.ts documents the
+ *  resulting under-reporting as a write-path gap. This closes it.
+ *
+ *  Idempotent by design: it's a timestamp rather than a boolean precisely so
+ *  re-saving a live process can't move it. Once set, never touched again —
+ *  otherwise "when did this ship" degrades into "when was it last edited",
+ *  and the Slack post this unblocks would fire on every save.
+ *
+ *  Reads the EFFECTIVE lifecycle, not just the sent one: withDerivedFields
+ *  runs first and can promote lifecycle to "live" from a migration_stage
+ *  change alone, and that is still the process going live. */
+export function stampGoLive(
+  existing: Process,
+  update: Record<string, unknown>,
+  now: string = new Date().toISOString()
+): Record<string, unknown> {
+  if (existing.went_live_at) return update;
+
+  const effectiveLifecycle = (update.lifecycle as ProcessLifecycle | undefined) ?? existing.lifecycle;
+  const effectiveStage = (update.migration_stage as MigrationStage | undefined) ?? existing.migration_stage;
+
+  const shipped = effectiveLifecycle === "live" || effectiveStage === MIGRATION_DONE_STAGE;
+  const wasShipped = existing.lifecycle === "live" || existing.migration_stage === MIGRATION_DONE_STAGE;
+  if (!shipped || wasShipped) return update;
+
+  return { ...update, went_live_at: now };
 }
 
 // ─── Roster resolution ──────────────────────────────────────────────────────
@@ -318,6 +338,7 @@ export async function updateProcess(
   let update = pickEditable(patch);
   if (Object.keys(update).length === 0) return existing;
   update = withDerivedFields(existing, update);
+  update = stampGoLive(existing, update);
   await resolveRosterFields(update);
 
   clearAttentionOnEdit(existing, update);
@@ -337,6 +358,41 @@ export async function updateProcess(
     .select("*")
     .single();
   if (error) throw error;
+
+  // The first process-side writer `events` has had — until now every caller
+  // was customer-scoped (NPS, approvals, ingestion), so a process going live
+  // left no trace anywhere except its own updated_at. Fired only on the
+  // stamping edit, which stampGoLive already guarantees happens once.
+  //
+  // Deliberately after the write and best-effort: the row is what the user
+  // asked for, and a missing log line must not fail their edit or roll it
+  // back. appendEvent also REQUIRES a customer key while
+  // processes.customer_key is nullable, so a process with no customer gets the
+  // stamp and no event rather than an exception.
+  if (update.went_live_at && existing.customer_key) {
+    try {
+      const { appendEvent } = await import("@/lib/events/events");
+      const row = data as Process;
+      await appendEvent(
+        existing.customer_key,
+        "MILESTONE",
+        {
+          process_id: id,
+          process_name: row.process_name,
+          lifecycle: row.lifecycle,
+          migration_stage: row.migration_stage,
+          went_live_at: update.went_live_at,
+        },
+        {
+          summary: `${row.process_name} went live`,
+          tags: ["process", "went-live", row.migration_stage],
+        }
+      );
+    } catch {
+      /* event logging is best-effort */
+    }
+  }
+
   return data as Process;
 }
 

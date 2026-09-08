@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { DeliveryReviewLoaderResult } from "@/lib/reports/delivery-review-loader";
 import type { DeliveryReviewProcessItem, DeliveryReviewCustomerGroup } from "@/lib/reports/delivery-review";
 import type { RangePreset } from "@/lib/reports/date-range";
+// Shared label map rather than a local copy: the local PHASE_LABEL had already
+// drifted from lib/delivery/labels.ts ("M1 · Discovery" vs "M1 - Discovery").
+import { lifecycleLabel } from "@/lib/delivery/labels";
 
 // Colors reuse the --rt-* tokens already defined for this report theme
 // (app/globals.css) instead of the illustrative hex values in the mockups
@@ -21,15 +24,6 @@ const STATUS_LABEL: Record<string, { text: string; bg: string; fg: string }> = {
 // Same Linear-issue link convention as the All-Hands report
 // (allhands-client.tsx's LINEAR_ISSUE).
 const LINEAR_ISSUE = (id: string) => `https://linear.app/kognitos/issue/${id}`;
-
-const PHASE_LABEL: Record<string, string> = {
-  pre_kickoff: "Pre-Kickoff",
-  m1_discovery: "M1 · Discovery",
-  m2_development: "M2 · Development",
-  m3_testing_uat: "M3 · Testing/UAT",
-  m4_deployment: "M4 · Deployment",
-  m5_exception_handling: "M5 · Exception Handling",
-};
 
 const PLATFORM_LABEL: Record<string, string> = {
   v1: "V1",
@@ -60,7 +54,7 @@ function Caption({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Small pill chip for phase / complexity / platform ────────────────────────
+// ── Small pill chip for lifecycle / complexity / platform ───────────────────
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <span
@@ -182,7 +176,7 @@ function ProcessRow({ item, isLast }: { item: DeliveryReviewProcessItem; isLast:
           {item.name}
         </div>
         <div className="flex flex-wrap gap-1.5 mt-1.5">
-          {item.phase && <Chip>{PHASE_LABEL[item.phase] ?? item.phase}</Chip>}
+          {item.lifecycle && <Chip>{lifecycleLabel(item.lifecycle)}</Chip>}
           {item.complexity && <Chip>{item.complexity} complexity</Chip>}
           <Chip>{PLATFORM_LABEL[item.platform] ?? item.platform}</Chip>
         </div>
@@ -286,7 +280,7 @@ export function DeliveryReviewClient({ report }: { report: DeliveryReviewLoaderR
           "$0"; same for the renewal badge when renewalInDays is null — no
           "no renewal" placeholder). Inside,
           one row per process in g.processes, showing STATUS_LABEL[item.status]
-          as the trailing pill, phase/complexity/platform as leading chips, and
+          as the trailing pill, lifecycle/complexity/platform as leading chips, and
           — only when item.status === "blocked" — the blockedReasonLabel,
           daysSinceUpdate, blockedNote, and linkedTicketIds (as chips linking to
           https://linear.app/kognitos/issue/${id}) beneath the process name,
