@@ -58,6 +58,7 @@ export function EditableValue({
   onSaveOverride,
   onClearOverride,
   options,
+  allowCustom = false,
 }: {
   label: string;
   /** Formatted for reading — "$311,000", "12 Nov 2026". */
@@ -75,6 +76,11 @@ export function EditableValue({
   onSaveOverride?: (value: string, opts: { permanent: boolean; reason: string }) => Promise<void>;
   onClearOverride?: () => Promise<void>;
   options?: { value: string; label: string }[];
+  /** Lets a select mint a value that isn't in `options`. For fields the
+   *  database doesn't constrain — `customers.custom_category` is plain text,
+   *  and the agent tooling already tells people they can invent a bucket —
+   *  the picker was the only thing making a new value need a code change. */
+  allowCustom?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -84,6 +90,7 @@ export function EditableValue({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [custom, setCustom] = useState(false);
 
   const owned = source === "deliveryops";
 
@@ -92,6 +99,13 @@ export function EditableValue({
     setReason(override?.reason ?? "");
     setPermanent(true);
     setError(null);
+    // An existing value that isn't in the option list is itself a minted one,
+    // so the input opens in free-text mode rather than silently offering to
+    // replace it with "—".
+    setCustom(
+      Boolean(allowCustom && rawValue != null && String(rawValue) !== "" &&
+        !(options ?? []).some((o) => o.value === String(rawValue)))
+    );
     setEditing(true);
   }
 
@@ -235,11 +249,18 @@ export function EditableValue({
     return (
       <div className="space-y-1.5">
         <span className="dops-tiny-label">{label}</span>
-        {kind === "select" && options ? (
+        {kind === "select" && options && !custom ? (
           <select
             autoFocus
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              if (e.target.value === "__custom__") {
+                setCustom(true);
+                setDraft("");
+                return;
+              }
+              setDraft(e.target.value);
+            }}
             className="dops-field text-[13px] w-full"
           >
             <option value="">—</option>
@@ -248,6 +269,7 @@ export function EditableValue({
                 {o.label}
               </option>
             ))}
+            {allowCustom ? <option value="__custom__">+ Something else…</option> : null}
           </select>
         ) : (
           <input

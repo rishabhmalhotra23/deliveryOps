@@ -197,6 +197,7 @@ export function CustomerRecordCard(props: CustomerRecordCardProps) {
           source="deliveryops"
           kind="select"
           options={CUSTOMER_CATEGORIES.map((c) => ({ value: c, label: c }))}
+          allowCustom
           onSaveOwned={(v) => saveOwned("custom_category", v)}
         />
         <EditableValue
