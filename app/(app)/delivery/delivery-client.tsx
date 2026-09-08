@@ -24,6 +24,8 @@ import { PageHeader } from "@/app/_components/brand";
 import { ProcessTable } from "@/app/_components/process-table";
 import { ProcessBoard, LANE_SORTS, type LaneSort, type PositionWrite } from "@/app/_components/process-board";
 import type { TablePositionWrite } from "@/app/_components/process-table";
+import type { ColorMap } from "@/lib/delivery/hues";
+import type { VocabMap } from "@/lib/delivery/vocab";
 import { byPosition } from "@/lib/delivery/reorder";
 import {
   sectionFor,
@@ -187,11 +189,18 @@ function optionLabel(field: FilterField, value: string): string {
 
 interface DeliveryClientProps {
   processesOverview: ProcessesOverview;
+  /** Chip colours, from `vocabulary_values` (0042). Server-loaded rather than
+   *  read from localStorage, which made the scheme per-browser. */
+  colorMap: ColorMap;
+  /** Labels, short labels, order and retirement for the three chip
+   *  vocabularies — editable in Configure, so they can't come from the
+   *  compiled maps alone. */
+  vocab: VocabMap;
 }
 
 const byTablePosition = byPosition<DetailProcess>((r) => r.table_position);
 
-export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
+export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -949,7 +958,8 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
                   sortKey={sortKey}
                   sortDir={sortDir}
                   onSort={onSort}
-                  colorMap={prefs.colorMap}
+                  colorMap={colorMap}
+              vocab={vocab}
                   onSave={saveField}
                   onArchive={(id) => void bulkArchive([id])}
                   onRestore={(id) => void restoreProcesses([id])}
@@ -978,7 +988,8 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
               sortKey={sortKey}
               sortDir={sortDir}
               onSort={onSort}
-              colorMap={prefs.colorMap}
+              colorMap={colorMap}
+              vocab={vocab}
               onSave={saveField}
               onArchive={(id) => void bulkArchive([id])}
               onRestore={() => {}}
@@ -993,7 +1004,8 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
               laneSort={laneSort}
               rows={sorted}
               cardFields={prefs.cardFields}
-              colorMap={prefs.colorMap}
+              colorMap={colorMap}
+              vocab={vocab}
               onSave={saveField}
               onReorder={reorderProcesses}
               onOpenDetail={setOpenId}
@@ -1129,10 +1141,12 @@ export function DeliveryClient({ processesOverview }: DeliveryClientProps) {
           (or present in) every dropdown until a manual reload. */}
       {configureOpen ? (
         <ConfigureDialog
-          colorMap={prefs.colorMap}
-          onColorMapChange={(next) => setPrefs((cur) => ({ ...cur, colorMap: next }))}
           onClose={() => {
             setConfigureOpen(false);
+            // Configure now writes customers AND vocabulary_values (labels,
+            // colours, retired values), all of which arrive in the server
+            // payload — so the refresh is what makes an edit visible on the
+            // board behind the dialog.
             router.refresh();
           }}
         />

@@ -26,6 +26,7 @@ import {
 } from "@/lib/supabase/types";
 import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delivery/columns";
 import { chipVars, resolveHue, type ColorMap } from "@/lib/delivery/hues";
+import { vocabLabel, vocabOptions, type VocabMap } from "@/lib/delivery/vocab";
 import {
   HEALTH_LABELS,
   LIFECYCLE_LABELS,
@@ -96,6 +97,8 @@ export interface ProcessTableProps {
   sortDir: "asc" | "desc";
   onSort: (key: ColKey) => void;
   colorMap: ColorMap;
+  /** Editable labels/order/retirement for the chip vocabularies (0042). */
+  vocab?: VocabMap;
   onSave: (id: string, patch: Partial<Process>) => Promise<Process>;
   /** Commits a hand-dragged row order. Only ever called while `sortKey` is
    *  null — a manual order and a column sort can't both be in effect, so the
@@ -134,6 +137,7 @@ export function ProcessTable({
   sortDir,
   onSort,
   colorMap,
+  vocab = {},
   onSave,
   onReorderRows,
   allowRowDrag = true,
@@ -413,7 +417,7 @@ export function ProcessTable({
               </div>
               {cols.map((key) => (
                 <div key={key} className="flex items-center px-2 py-1.5 min-w-0">
-                  <Cell colKey={key} row={row} customerOptions={customerOptions} colorMap={colorMap} onSave={onSave} onOpenDetail={onOpenDetail} />
+                  <Cell colKey={key} row={row} customerOptions={customerOptions} colorMap={colorMap} vocab={vocab} onSave={onSave} onOpenDetail={onOpenDetail} />
                 </div>
               ))}
               <div className="sticky right-0 z-10 flex items-center justify-center gap-0.5 py-1.5" style={{ background: "var(--row-bg)" }}>
@@ -589,6 +593,7 @@ function Cell({
   row,
   customerOptions,
   colorMap,
+  vocab,
   onSave,
   onOpenDetail,
 }: {
@@ -596,6 +601,8 @@ function Cell({
   row: DetailProcess;
   customerOptions: { id: string; display_name: string }[];
   colorMap: ColorMap;
+  /** Editable labels/order/retirement for the chip vocabularies (0042). */
+  vocab?: VocabMap;
   onSave: (id: string, patch: Partial<Process>) => Promise<Process>;
   onOpenDetail: (id: string) => void;
 }) {
@@ -643,9 +650,9 @@ function Cell({
           className={chip}
           style={chipVars(resolveHue("stage", row.migration_stage, colorMap))}
         >
-          {STAGE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
+          {vocabOptions("stage", MIGRATION_STAGES, vocab, row.migration_stage).map((o) => (
+            <option key={o} value={o}>
+              {vocabLabel("stage", o, vocab)}
             </option>
           ))}
         </select>
@@ -663,9 +670,9 @@ function Cell({
           className={chip}
           style={chipVars(resolveHue("lifecycle", row.lifecycle, colorMap))}
         >
-          {LIFECYCLE_OPTIONS.map((o) => (
+          {vocabOptions("lifecycle", PROCESS_LIFECYCLES, vocab, row.lifecycle).map((o) => (
             <option key={o} value={o}>
-              {LIFECYCLE_LABELS[o]}
+              {vocabLabel("lifecycle", o, vocab)}
             </option>
           ))}
         </select>
@@ -686,9 +693,9 @@ function Cell({
         return (
           <select disabled={busy} value="" onChange={(e) => save({ health: e.target.value as Process["health"] })} className={`${field} text-[13px]`}>
             <option value="">—</option>
-            {HEALTH_OPTIONS.map((o) => (
+            {vocabOptions("health", PROCESS_HEALTHS, vocab, row.health).map((o) => (
               <option key={o} value={o}>
-                {HEALTH_LABELS[o]}
+                {vocabLabel("health", o, vocab)}
               </option>
             ))}
           </select>
@@ -702,9 +709,9 @@ function Cell({
           className={chip}
           style={chipVars(resolveHue("health", row.health, colorMap))}
         >
-          {HEALTH_OPTIONS.map((o) => (
+          {vocabOptions("health", PROCESS_HEALTHS, vocab, row.health).map((o) => (
             <option key={o} value={o}>
-              {HEALTH_LABELS[o]}
+              {vocabLabel("health", o, vocab)}
             </option>
           ))}
         </select>
@@ -839,12 +846,6 @@ function Cell({
 
 // Derived from the enum + shared labels rather than a hand-kept copy, so a
 // new stage can't silently render as a blank option.
-const STAGE_OPTIONS: { value: Process["migration_stage"]; label: string }[] = MIGRATION_STAGES.map((value) => ({
-  value,
-  label: MIGRATION_STAGE_LABELS[value],
-}));
 
-const LIFECYCLE_OPTIONS = PROCESS_LIFECYCLES;
 const PHASE_OPTIONS = PROCESS_PHASES;
-const HEALTH_OPTIONS = PROCESS_HEALTHS;
 const PLATFORM_OPTIONS = PROCESS_PLATFORMS;

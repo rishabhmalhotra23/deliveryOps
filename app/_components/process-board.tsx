@@ -14,6 +14,7 @@ import type { Process, ProcessBlockedOn, ProcessLifecycle } from "@/lib/supabase
 import { PROCESS_BLOCKED_ON, MIGRATION_STAGES, MIGRATION_STAGE_LABELS } from "@/lib/supabase/types";
 import { laneFor, type ActiveLane } from "@/lib/import/monday-taxonomy";
 import { byPosition, planPositions } from "@/lib/delivery/reorder";
+import { vocabLabel, vocabShortLabel, type VocabMap } from "@/lib/delivery/vocab";
 import { ACTIVE_LANES, ACTIVE_LANE_LABELS } from "@/lib/processes/loader";
 import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delivery/columns";
 import { resolveHue, hueStyle, hueDotStyle, type ColorMap, type Hue } from "@/lib/delivery/hues";
@@ -73,6 +74,8 @@ export interface ProcessBoardProps {
   rows: DetailProcess[];
   cardFields: ColKey[];
   colorMap: ColorMap;
+  /** Editable labels/order for the chip vocabularies (0042). */
+  vocab?: VocabMap;
   onSave: (id: string, patch: Partial<Process>) => Promise<Process>;
   /** Writes a board_position per row — a reorder needs a different value on
    *  each row, which the single-patch bulk endpoint can't express. */
@@ -101,7 +104,8 @@ function comparatorFor(sort: LaneSort): (a: DetailProcess, b: DetailProcess) => 
 function bucketRows(
   mode: "active" | "v2",
   rows: DetailProcess[],
-  laneSort: LaneSort
+  laneSort: LaneSort,
+  vocab: VocabMap
 ): { lanes: LaneDef[]; byLane: Map<string, DetailProcess[]> } {
   const compare = comparatorFor(laneSort);
   if (mode === "active") {
@@ -119,10 +123,15 @@ function bucketRows(
     byLane.forEach((laneRows) => laneRows.sort(compare));
     return { lanes, byLane };
   }
-  const stages = MIGRATION_STAGES.filter((s) => s !== "not_required");
+  // Retired stages (Configure -> Vocabularies) get no lane: an empty column
+  // for a value nobody can pick any more is just noise. Rows still carrying
+  // one are unaffected — they keep their own chip.
+  const stages = MIGRATION_STAGES.filter(
+    (s) => s !== "not_required" && (vocab.stage?.[s]?.active ?? true)
+  );
   const lanes: LaneDef[] = stages.map((s) => ({
     key: s,
-    label: MIGRATION_STAGE_LABELS[s],
+    label: vocabLabel("stage", s, vocab),
     hue: resolveHue("stage", s, {}),
     // "V2 native" means built on V2 with nothing migrated, so
     // isV2Relevant() drops rows in it that carry no migration evidence (no
@@ -160,7 +169,7 @@ export function planReorder(
   );
 }
 
-export function ProcessBoard({ mode, laneSort, rows, cardFields, colorMap, onSave, onReorder, onOpenDetail, onCreateInLane }: ProcessBoardProps) {
+export function ProcessBoard({ mode, laneSort, rows, cardFields, colorMap, vocab = {}, onSave, onReorder, onOpenDetail, onCreateInLane }: ProcessBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragOverLane, setDragOverLane] = useState<string | null>(null);
   const [pendingStuck, setPendingStuck] = useState<{
@@ -172,7 +181,7 @@ export function ProcessBoard({ mode, laneSort, rows, cardFields, colorMap, onSav
   const [dropSlot, setDropSlot] = useState<{ lane: string; index: number } | null>(null);
   const [blockedReason, setBlockedReason] = useState<ProcessBlockedOn>("customer");
 
-  const { lanes, byLane } = bucketRows(mode, rows, laneSort);
+  const { lanes, byLane } = bucketRows(mode, rows, laneSort, vocab);
   // Dragging only makes sense against the order it writes to.
   const canReorder = laneSort === "manual";
 
@@ -355,6 +364,7 @@ export function ProcessBoard({ mode, laneSort, rows, cardFields, colorMap, onSav
                         index={i}
                         fields={cardFields}
                         colorMap={colorMap}
+                        vocab={vocab}
                         canDrag={canReorder}
                         dragging={dragging === row.id}
                         onDragStart={() => setDragging(row.id)}
@@ -435,6 +445,7 @@ function Card({
   index,
   fields,
   colorMap,
+  vocab,
   canDrag,
   dragging,
   onDragStart,
@@ -445,6 +456,7 @@ function Card({
   index: number;
   fields: ColKey[];
   colorMap: ColorMap;
+  vocab: VocabMap;
   canDrag: boolean;
   dragging: boolean;
   onDragStart: () => void;
@@ -502,14 +514,14 @@ function Card({
           </span>
         ) : null}
         {fields.map((key) => (
-          <CardChip key={key} colKey={key} row={row} colorMap={colorMap} />
+          <CardChip key={key} colKey={key} row={row} colorMap={colorMap} vocab={vocab} />
         ))}
       </div>
     </div>
   );
 }
 
-function CardChip({ colKey, row, colorMap }: { colKey: ColKey; row: DetailProcess; colorMap: ColorMap }) {
+function CardChip({ colKey, row, colorMap, vocab }: { colKey: ColKey; row: DetailProcess; colorMap: ColorMap; vocab: VocabMap }) {
   const def = COLDEF_BY_KEY[colKey];
   switch (colKey) {
     case "owner":
@@ -524,7 +536,7 @@ function CardChip({ colKey, row, colorMap }: { colKey: ColKey; row: DetailProces
       const hue = resolveHue("stage", row.migration_stage, colorMap);
       return (
         <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium" style={hueStyle(hue)}>
-          {stageLabel(row.migration_stage, { short: true })}
+          {vocabShortLabel("stage", row.migration_stage, vocab)}
         </span>
       );
     }
@@ -532,7 +544,7 @@ function CardChip({ colKey, row, colorMap }: { colKey: ColKey; row: DetailProces
       if (!row.health) return null;
       return (
         <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium" style={hueStyle(resolveHue("health", row.health, colorMap))}>
-          {healthLabel(row.health)}
+          {vocabLabel("health", row.health, vocab)}
         </span>
       );
     case "platform":

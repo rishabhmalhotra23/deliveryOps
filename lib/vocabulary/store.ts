@@ -15,7 +15,8 @@
 // un-seeded value degrades rather than breaks.
 
 import { requireAdmin } from "@/lib/supabase/server";
-import { HUES, type Hue } from "@/lib/delivery/hues";
+import { HUES, type ColorField, type ColorMap, type Hue } from "@/lib/delivery/hues";
+import type { VocabMap } from "@/lib/delivery/vocab";
 
 /** The seven enums add_vocabulary_value() will extend. Mirrors its
  *  allow-list; the function is the enforcement, this is for the UI. */
@@ -51,6 +52,15 @@ export interface VocabularyValue {
   active: boolean;
 }
 
+/** The three vocabularies whose values render as coloured chips, mapped to
+ *  the `ColorField` key `resolveHue()` uses. Only these three are coloured —
+ *  phase, blocked_on, work_mode and platform render as plain text. */
+export const COLOR_FIELD_VOCABULARY: Record<ColorField, VocabularyName> = {
+  stage: "migration_stage",
+  health: "process_health",
+  lifecycle: "process_lifecycle",
+};
+
 export class InvalidVocabularyInputError extends Error {}
 
 export async function listVocabularyValues(
@@ -76,6 +86,51 @@ export async function loadVocabularyMap(): Promise<
   const out: Record<string, Record<string, VocabularyValue>> = {};
   for (const row of rows) {
     (out[row.vocabulary] ??= {})[row.value] = row;
+  }
+  return out;
+}
+
+/** The chip colours, in the `${field}:${value}` shape resolveHue() already
+ *  takes — so moving colour out of localStorage needed no change to any
+ *  consumer, just a different source for the same map.
+ *
+ *  Configure -> Colours used to write `dops.viewPrefs` in localStorage, which
+ *  made the scheme per-browser: two people looking at the same board saw
+ *  different colours and a new laptop started from defaults. Colour belongs to
+ *  the value. */
+export async function loadColorMap(): Promise<ColorMap> {
+  const rows = await listVocabularyValues();
+  const byVocabulary = new Map<string, ColorField>(
+    Object.entries(COLOR_FIELD_VOCABULARY).map(([field, vocab]) => [vocab, field as ColorField])
+  );
+  const out: ColorMap = {};
+  for (const row of rows) {
+    const field = byVocabulary.get(row.vocabulary);
+    if (!field || !row.hue) continue;
+    if (!(HUES as readonly string[]).includes(row.hue)) continue;
+    out[`${field}:${row.value}`] = row.hue as Hue;
+  }
+  return out;
+}
+
+/** The label/short-label/order/active map the delivery surfaces render from,
+ *  in the `VocabMap` shape lib/delivery/vocab.ts resolves through. Loaded
+ *  server-side and threaded as a prop next to the colour map. */
+export async function loadVocabMap(): Promise<VocabMap> {
+  const rows = await listVocabularyValues();
+  const byVocabulary = new Map<string, ColorField>(
+    Object.entries(COLOR_FIELD_VOCABULARY).map(([field, vocab]) => [vocab, field as ColorField])
+  );
+  const out: VocabMap = {};
+  for (const row of rows) {
+    const field = byVocabulary.get(row.vocabulary);
+    if (!field) continue;
+    (out[field] ??= {})[row.value] = {
+      label: row.label,
+      shortLabel: row.short_label,
+      active: row.active,
+      sortOrder: row.sort_order,
+    };
   }
   return out;
 }

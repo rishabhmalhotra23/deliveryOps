@@ -5,8 +5,12 @@
 // needs an additive migration, not a client-side list, so those two tabs are
 // shown read-only with that explained rather than faking support the schema
 // can't back. Roster and Colours are both genuinely live here: Roster POSTs
-// to /api/roster, and Colours writes into the same colorMap every chip
-// (table, board, lane dot) resolves through.
+// to /api/roster, and both Vocabularies and Colours write `vocabulary_values`
+// (0042) — the same rows every chip resolves its label and colour through.
+//
+// Colours used to write a colorMap into localStorage, which made the scheme
+// per-browser: two people looking at one board saw different colours. It is a
+// property of the value now, so it is stored with the value.
 // Approved design: 2026-09-03-v2-delivery-redesign.html, Configure dialog.
 
 import { useEffect, useState } from "react";
@@ -26,9 +30,19 @@ import {
 } from "@/lib/supabase/types";
 import { HUES, hueStyle, resolveHue, type ColorField, type ColorMap, type Hue } from "@/lib/delivery/hues";
 import { slugifyCustomerKey } from "@/lib/customers/slug";
+import {
+  EXTENDABLE_VOCABULARIES,
+  VOCABULARY_LABELS,
+  COLOR_FIELD_VOCABULARY,
+  type VocabularyName,
+  type VocabularyValue,
+} from "@/lib/vocabulary/store";
 import { healthLabel, lifecycleLabel, stageLabel } from "@/lib/delivery/labels";
 
-type Tab = "stages" | "lifecycle" | "roster" | "customers" | "colours";
+// `stages` and `lifecycle` were two read-only lists explaining that adding a
+// value needed a schema migration. They are one editable `vocab` tab now,
+// covering all seven delivery vocabularies (0042).
+type Tab = "roster" | "customers" | "vocab" | "colours";
 
 const ROLE_LABELS: Record<string, string> = { fde: "FDE", tam: "TAM", engg: "Engineering" };
 
@@ -55,27 +69,7 @@ const COLOR_FIELDS: { key: ColorField; label: string }[] = [
   { key: "lifecycle", label: "Lifecycle" },
 ];
 
-const VALUES_BY_FIELD: Record<ColorField, readonly string[]> = {
-  stage: MIGRATION_STAGES,
-  health: PROCESS_HEALTHS,
-  lifecycle: PROCESS_LIFECYCLES,
-};
-
-const VALUE_LABEL: Record<ColorField, (v: string) => string> = {
-  stage: (v) => stageLabel(v as MigrationStage),
-  health: (v) => healthLabel(v as ProcessHealth),
-  lifecycle: (v) => lifecycleLabel(v as ProcessLifecycle),
-};
-
-export function ConfigureDialog({
-  colorMap,
-  onColorMapChange,
-  onClose,
-}: {
-  colorMap: ColorMap;
-  onColorMapChange: (next: ColorMap) => void;
-  onClose: () => void;
-}) {
+export function ConfigureDialog({ onClose }: { onClose: () => void }) {
   // Roster is the tab people actually come here for (stages/lifecycle are
   // fixed enums), so it opens first.
   const [tab, setTab] = useState<Tab>("roster");
@@ -113,6 +107,22 @@ export function ConfigureDialog({
   const [custError, setCustError] = useState<string | null>(null);
   const [showInactiveCust, setShowInactiveCust] = useState(false);
   const [newCustomer, setNewCustomer] = useState("");
+
+  // Vocabularies tab.
+  const [vocab, setVocab] = useState<VocabularyName>("migration_stage");
+  const [vocabValues, setVocabValues] = useState<VocabularyValue[]>([]);
+  const [vocabLoading, setVocabLoading] = useState(false);
+  const [vocabError, setVocabError] = useState<string | null>(null);
+  const [vocabEditing, setVocabEditing] = useState<string | null>(null);
+  const [vocabDraft, setVocabDraft] = useState<{
+    label: string;
+    short_label: string;
+    hue: string;
+    active: boolean;
+  }>({ label: "", short_label: "", hue: "", active: true });
+  const [vocabSaving, setVocabSaving] = useState(false);
+  const [newValueLabel, setNewValueLabel] = useState("");
+  const [addingValue, setAddingValue] = useState(false);
 
   // Always loads leavers and counts: this is the management view, and the
   // leavers are exactly who you come here to edit. `showLeft` only controls
@@ -178,6 +188,108 @@ export function ConfigureDialog({
       cancelled = true;
     };
   }, [tab]);
+
+  // Loaded for the Vocabularies tab AND the Colours tab: both edit the same
+  // rows now, so they share one fetch and one refresh.
+  const vocabTab = tab === "vocab" || tab === "colours";
+  useEffect(() => {
+    if (!vocabTab) return;
+    let cancelled = false;
+    setVocabLoading(true);
+    setVocabError(null);
+    fetch("/api/vocabulary")
+      .then(async (r) => {
+        if (!r.ok) throw new Error(describeFetchFailure(r.status));
+        return r.json();
+      })
+      .then((json) => {
+        if (!cancelled) setVocabValues(json.values ?? []);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setVocabValues([]);
+        setVocabError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setVocabLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vocabTab]);
+
+  function openVocabEditor(v: VocabularyValue) {
+    setVocabError(null);
+    setVocabEditing(v.value);
+    setVocabDraft({
+      label: v.label,
+      short_label: v.short_label ?? "",
+      hue: v.hue ?? "",
+      active: v.active,
+    });
+  }
+
+  async function patchVocabValue(value: string, patch: Record<string, unknown>) {
+    setVocabError(null);
+    const res = await fetch("/api/vocabulary", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vocabulary: vocab, value, ...patch }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setVocabError(json.error || `HTTP ${res.status}`);
+      return false;
+    }
+    const updated = json.value as VocabularyValue;
+    setVocabValues((cur) =>
+      cur.map((v) => (v.vocabulary === updated.vocabulary && v.value === updated.value ? updated : v))
+    );
+    return true;
+  }
+
+  async function saveVocabEditor(v: VocabularyValue) {
+    setVocabSaving(true);
+    const ok = await patchVocabValue(v.value, {
+      label: vocabDraft.label,
+      short_label: vocabDraft.short_label,
+      hue: vocabDraft.hue || null,
+      active: vocabDraft.active,
+    });
+    setVocabSaving(false);
+    if (ok) setVocabEditing(null);
+  }
+
+  async function addVocabValue() {
+    const label = newValueLabel.trim();
+    if (!label) return;
+    setAddingValue(true);
+    setVocabError(null);
+    try {
+      const res = await fetch("/api/vocabulary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // The machine value is derived from the label rather than asked for:
+        // it has to be lower_snake_case, it can never be changed afterwards,
+        // and nobody should have to know that to add a stage.
+        body: JSON.stringify({ vocabulary: vocab, value: label, label }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setVocabError(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      // POST returns the whole vocabulary, so the new row lands in order
+      // without a second fetch.
+      setVocabValues((cur) => [
+        ...cur.filter((v) => v.vocabulary !== vocab),
+        ...((json.values ?? []) as VocabularyValue[]),
+      ]);
+      setNewValueLabel("");
+    } finally {
+      setAddingValue(false);
+    }
+  }
 
   function openCustEditor(c: Customer) {
     setCustError(null);
@@ -278,6 +390,10 @@ export function ConfigureDialog({
     }
   }
 
+  const valuesForVocab = vocabValues
+    .filter((v) => v.vocabulary === vocab)
+    .sort((a, b) => a.sort_order - b.sort_order);
+
   const inactiveCustomers = customers.filter((c) => !c.active);
   const visibleCustomers = customers.filter(
     (c) => c.active || showInactiveCust || c.key === custEditingKey
@@ -320,14 +436,6 @@ export function ConfigureDialog({
     }
   }
 
-  function setHue(field: ColorField, value: string, hue: Hue) {
-    onColorMapChange({ ...colorMap, [`${field}:${value}`]: hue });
-  }
-
-  function resetColors() {
-    onColorMapChange({});
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
@@ -341,7 +449,7 @@ export function ConfigureDialog({
               dialog, and flex's default shrinking wrapped "Migration stages"
               onto two lines and pushed Customers out of easy reach. */}
           <div className="flex gap-4 border-b overflow-x-auto" style={{ borderColor: "var(--brand-metal-line)" }}>
-            {(["roster", "customers", "colours", "stages", "lifecycle"] as Tab[]).map((t) => (
+            {(["roster", "customers", "vocab", "colours"] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -352,40 +460,19 @@ export function ConfigureDialog({
                   borderBottom: tab === t ? "2px solid var(--yellow-ink)" : "2px solid transparent",
                 }}
               >
-                {t === "stages"
-                  ? "Migration stages"
-                  : t === "lifecycle"
-                    ? "Lifecycle states"
-                    : t === "roster"
-                      ? "Roster"
-                      : t === "customers"
-                        ? "Customers"
-                        : "Colours"}
+                {t === "roster"
+                  ? "Roster"
+                  : t === "customers"
+                    ? "Customers"
+                    : t === "vocab"
+                      ? "Vocabularies"
+                      : "Colours"}
               </button>
             ))}
           </div>
         </div>
 
         <div className="px-4 py-3 overflow-y-auto flex-1">
-          {tab === "stages" || tab === "lifecycle" ? (
-            <div className="space-y-2">
-              <div className="max-h-64 overflow-auto space-y-1">
-                {(tab === "stages" ? MIGRATION_STAGES : PROCESS_LIFECYCLES).map((v) => (
-                  <div key={v} className="rounded-md px-2.5 py-1.5 text-[13px] flex items-center gap-2" style={{ background: "var(--field)" }}>
-                    <span className="text-[color:var(--foreground)]">
-                      {tab === "stages" ? stageLabel(v as MigrationStage) : lifecycleLabel(v as ProcessLifecycle)}
-                    </span>
-                    <span className="font-mono text-[10.5px] text-[color:var(--muted-foreground)] ml-auto">{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="text-[11px] text-[color:var(--muted-foreground)] pt-1">
-                {tab === "stages" ? "Migration stage" : "Lifecycle"} is a fixed Postgres enum — adding a value here would need an
-                additive schema migration, not a client-side list. Ping an engineer to add one.
-              </div>
-            </div>
-          ) : null}
-
           {tab === "roster" ? (
             <div className="space-y-2">
               <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--brand-metal-line)" }}>
@@ -818,6 +905,196 @@ export function ConfigureDialog({
             </div>
           ) : null}
 
+          {tab === "vocab" ? (
+            <div className="space-y-2">
+              <select
+                value={vocab}
+                onChange={(e) => {
+                  setVocab(e.target.value as VocabularyName);
+                  setVocabEditing(null);
+                  setNewValueLabel("");
+                }}
+                className="dops-field text-[13px]"
+                aria-label="Vocabulary"
+              >
+                {EXTENDABLE_VOCABULARIES.map((v) => (
+                  <option key={v} value={v}>
+                    {VOCABULARY_LABELS[v]} —{" "}
+                    {vocabValues.filter((x) => x.vocabulary === v).length} values
+                  </option>
+                ))}
+              </select>
+
+              <div className="max-h-56 overflow-auto space-y-1">
+                {vocabLoading ? (
+                  <div className="text-[12px] text-[color:var(--muted-foreground)] py-2">Loading…</div>
+                ) : valuesForVocab.length === 0 ? (
+                  <div className="text-[12px] text-[color:var(--muted-foreground)] py-2 italic">
+                    {vocabError ? "Couldn't load this vocabulary — see below." : "No values yet."}
+                  </div>
+                ) : (
+                  valuesForVocab.map((v) =>
+                    vocabEditing === v.value ? (
+                      <div
+                        key={v.value}
+                        className="rounded-lg px-2.5 py-2.5 space-y-2.5"
+                        style={{ background: "var(--surface-3, var(--field))", border: "1px solid var(--yellow-line)" }}
+                      >
+                        <div>
+                          <label className="dops-tiny-label" htmlFor={`vlabel-${v.value}`}>
+                            Label
+                          </label>
+                          <input
+                            id={`vlabel-${v.value}`}
+                            autoFocus
+                            value={vocabDraft.label}
+                            onChange={(e) => setVocabDraft((c) => ({ ...c, label: e.target.value }))}
+                            className="dops-input w-full px-2 py-1 text-[13px]"
+                          />
+                        </div>
+                        <div>
+                          <label className="dops-tiny-label" htmlFor={`vshort-${v.value}`}>
+                            Short label — board cards are 268px wide
+                          </label>
+                          <input
+                            id={`vshort-${v.value}`}
+                            value={vocabDraft.short_label}
+                            onChange={(e) => setVocabDraft((c) => ({ ...c, short_label: e.target.value }))}
+                            placeholder={vocabDraft.label}
+                            className="dops-input w-full px-2 py-1 text-[13px]"
+                          />
+                        </div>
+                        <div>
+                          <span className="dops-tiny-label">Colour</span>
+                          <div className="flex gap-1.5 pt-0.5">
+                            {HUES.map((h) => (
+                              <button
+                                key={h}
+                                type="button"
+                                onClick={() => setVocabDraft((c) => ({ ...c, hue: c.hue === h ? "" : h }))}
+                                title={h}
+                                className="w-[19px] h-[19px] rounded-[5px] transition-transform hover:scale-[1.18]"
+                                style={{
+                                  background: `var(--st-${h}-fg)`,
+                                  boxShadow: vocabDraft.hue === h ? "0 0 0 2px var(--foreground)" : "none",
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-[12px] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={vocabDraft.active}
+                            onChange={(e) => setVocabDraft((c) => ({ ...c, active: e.target.checked }))}
+                            style={{ accentColor: "var(--brand-yellow)" }}
+                          />
+                          <span
+                            style={{
+                              color: vocabDraft.active ? "var(--foreground)" : "var(--muted-foreground)",
+                            }}
+                          >
+                            {vocabDraft.active
+                              ? "Offered in pickers"
+                              : "Retired — rows keep it, pickers won't offer it"}
+                          </span>
+                        </label>
+                        <div className="flex gap-2 justify-end">
+                          <button type="button" onClick={() => setVocabEditing(null)} className="dops-btn-ghost">
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveVocabEditor(v)}
+                            disabled={vocabSaving || !vocabDraft.label.trim()}
+                            className="btn-primary rounded-full px-3 py-1 text-[11.5px] font-semibold disabled:opacity-60"
+                          >
+                            {vocabSaving ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        key={v.value}
+                        className="rounded-md px-2.5 py-1.5 flex items-center gap-2"
+                        style={{ background: "var(--field)", opacity: v.active ? 1 : 0.45 }}
+                      >
+                        <span
+                          className="text-[11px] px-1.5 py-0.5 rounded border font-medium shrink-0 max-w-[150px] truncate"
+                          style={hueStyle(
+                            (v.hue && (HUES as readonly string[]).includes(v.hue) ? v.hue : "neutral") as Hue
+                          )}
+                        >
+                          {v.short_label || v.label}
+                        </span>
+                        <span className="font-mono text-[10px] text-[color:var(--muted-foreground)] ml-auto truncate">
+                          {v.value}
+                          {v.active ? "" : " · retired"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openVocabEditor(v)}
+                          title="Edit label, colour, or retire"
+                          className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
+                        >
+                          ⋯
+                        </button>
+                      </div>
+                    )
+                  )
+                )}
+              </div>
+
+              {vocabError ? (
+                <div className="text-[11.5px]" style={{ color: "var(--status-bad)" }}>
+                  {vocabError}
+                </div>
+              ) : null}
+
+              <div className="flex gap-2">
+                <input
+                  value={newValueLabel}
+                  onChange={(e) => setNewValueLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void addVocabValue();
+                  }}
+                  placeholder={`Add a ${VOCABULARY_LABELS[vocab].toLowerCase()}…`}
+                  className="dops-input dops-input-dashed flex-1 px-2.5 py-1.5 text-[13px]"
+                  style={{ borderColor: "var(--brand-metal-line)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void addVocabValue()}
+                  disabled={addingValue || !newValueLabel.trim()}
+                  className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                >
+                  {addingValue ? "Adding…" : "Add"}
+                </button>
+              </div>
+
+              {/* Said at the point of adding, because it is the one thing here
+                  that cannot be undone: Postgres has no DROP VALUE. */}
+              <div
+                className="rounded-md px-2.5 py-2 text-[11px] leading-snug"
+                style={{
+                  background: "var(--st-amber-bg)",
+                  border: "1px solid var(--st-amber-bd)",
+                  color: "var(--st-amber-fg)",
+                }}
+              >
+                Adding a value can&rsquo;t be undone — Postgres has no way to remove one once it
+                exists. To take a value out of circulation, open it and untick{" "}
+                <b>Offered in pickers</b> instead: rows already using it keep rendering.
+              </div>
+              <div className="text-[11px] text-[color:var(--muted-foreground)] leading-snug">
+                Label, short label, colour and order are yours to change any time — they follow
+                the value everywhere, for everyone. The machine value is derived from the label
+                and fixed once created, because rows point at it. A brand-new migration stage
+                lands in <b>V2 migration</b>, since Active work means V2 native specifically.
+              </div>
+            </div>
+          ) : null}
+
           {tab === "colours" ? (
             <div className="space-y-2">
               <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--brand-metal-line)" }}>
@@ -834,19 +1111,28 @@ export function ConfigureDialog({
                 ))}
               </div>
               <div className="max-h-64 overflow-auto space-y-1.5">
-                {VALUES_BY_FIELD[colorField].map((v) => {
-                  const hue = resolveHue(colorField, v, colorMap);
+                {vocabValues
+                  .filter((row) => row.vocabulary === COLOR_FIELD_VOCABULARY[colorField])
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((row) => {
+                  const v = row.value;
+                  // From the row, not from a colorMap prop: the prop comes
+                  // from the server payload and wouldn't change until the
+                  // page refreshes, so the swatch you just clicked would
+                  // appear not to have taken.
+                  const hue = ((v2: string | null) =>
+                    v2 && (HUES as readonly string[]).includes(v2) ? (v2 as Hue) : "neutral")(row.hue);
                   return (
                     <div key={v} className="flex items-center gap-2">
                       <span className="w-[132px] shrink-0 text-[11px] px-2 py-1 rounded border truncate" style={hueStyle(hue)}>
-                        {VALUE_LABEL[colorField](v)}
+                        {row.short_label || row.label}
                       </span>
                       <div className="flex gap-1">
                         {HUES.map((h) => (
                           <button
                             key={h}
                             type="button"
-                            onClick={() => setHue(colorField, v, h)}
+                            onClick={() => void patchVocabValue(v, { hue: h })}
                             title={h}
                             className="w-[17px] h-[17px] rounded-[5px] transition-transform hover:scale-[1.18]"
                             style={{
@@ -862,11 +1148,14 @@ export function ConfigureDialog({
               </div>
               <div className="flex items-center justify-between pt-1">
                 <div className="text-[11px] text-[color:var(--muted-foreground)]">
-                  Colours are per value, not per row. They follow the value everywhere — table, board, rollup.
+                  Colours are per value, not per row, and stored with the value — so they follow
+                  it everywhere (table, board, rollup) and everyone sees the same scheme. They
+                  used to live in this browser only.
                 </div>
-                <button type="button" onClick={resetColors} className="text-[11px] underline text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] shrink-0 ml-2">
-                  Reset
-                </button>
+                <span className="text-[11px] text-[color:var(--muted-foreground)] shrink-0 ml-2">
+                  {vocabValues.filter((r) => r.vocabulary === COLOR_FIELD_VOCABULARY[colorField]).length}{" "}
+                  values
+                </span>
               </div>
             </div>
           ) : null}

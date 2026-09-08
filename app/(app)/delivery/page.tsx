@@ -1,4 +1,5 @@
 import { loadProcessesOverview } from "@/lib/processes/loader";
+import { loadColorMap, loadVocabMap } from "@/lib/vocabulary/store";
 import { BackButton } from "@/app/_components/back-button";
 import { DeliveryClient } from "./delivery-client";
 
@@ -11,12 +12,18 @@ export const dynamic = "force-dynamic";
 // customers and Salesforce opps on every page load, and removes the reason 36
 // processes used to appear in two tabs at once.
 export default async function DeliveryPage() {
-  const processesOverview = await loadProcessesOverview();
+  const [processesOverview, colorMap, vocab] = await Promise.all([
+    loadProcessesOverview(),
+    // Chip colours and labels live with the value (0042) rather than in each
+    // browser's localStorage or a compiled map, so they arrive with the page.
+    loadColorMap(),
+    loadVocabMap(),
+  ]);
 
   return (
     <div className="px-6 lg:px-8 py-8 max-w-[1600px] mx-auto space-y-6">
       <BackButton href="/dashboard" label="Dashboard" />
-      <DeliveryClient processesOverview={processesOverview} />
+      <DeliveryClient processesOverview={processesOverview} colorMap={colorMap} vocab={vocab} />
     </div>
   );
 }

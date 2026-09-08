@@ -9,7 +9,6 @@
 
 import { useEffect, useState } from "react";
 import { CARD_FIELDS, COLDEFS, DEFAULT_CARD_FIELDS, DEFAULT_COLS, type ColKey } from "./columns";
-import type { ColorMap } from "./hues";
 
 // `person` matches ANY owner role (FDE, TAM or engineering) rather than one
 // column. It backs Configure -> Roster's "still assigned to N processes"
@@ -24,7 +23,6 @@ export interface ViewPrefs {
   cols: ColKey[];
   colW: Record<string, number>;
   cardFields: ColKey[];
-  colorMap: ColorMap;
   filterKeys: FilterField[];
   pattern: DetailPattern;
 }
@@ -34,6 +32,12 @@ const STORAGE_KEY = "dops.viewPrefs";
 const KNOWN_COLS = new Set<string>(COLDEFS.map((c) => c.key));
 const KNOWN_CARD_FIELDS = new Set<string>(CARD_FIELDS);
 const KNOWN_FILTERS = new Set<string>(["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam", "person"]);
+
+// `colorMap` used to live here. Chip colours moved to `vocabulary_values`
+// (0042) because localStorage made them per-browser: two people looking at
+// the same board saw different colours and a new laptop lost the scheme. A
+// stale colorMap left in a browser's storage is simply ignored now — sanitize
+// drops unknown keys.
 
 /** Anything persisted is untrusted input: a renamed column key or a
  *  half-written value used to throw on render (`COLDEF_BY_KEY[key].narrowW`
@@ -57,18 +61,11 @@ function sanitize(raw: unknown): ViewPrefs {
     }
   }
 
-  const colorMap: ColorMap = {};
-  if (typeof saved.colorMap === "object" && saved.colorMap !== null) {
-    for (const [k, v] of Object.entries(saved.colorMap)) {
-      if (typeof v === "string") colorMap[k] = v as ColorMap[string];
-    }
-  }
 
   return {
     cols: cols.length > 0 ? cols : DEFAULTS.cols,
     colW,
     cardFields: cardFields.length > 0 ? cardFields : DEFAULTS.cardFields,
-    colorMap,
     filterKeys: filterKeys.length > 0 ? filterKeys : DEFAULTS.filterKeys,
     pattern: saved.pattern === "overlay" ? "overlay" : "split",
   };
@@ -78,7 +75,6 @@ const DEFAULTS: ViewPrefs = {
   cols: DEFAULT_COLS,
   colW: {},
   cardFields: DEFAULT_CARD_FIELDS,
-  colorMap: {},
   filterKeys: ["stage", "owner", "customer", "health"],
   pattern: "split",
 };
