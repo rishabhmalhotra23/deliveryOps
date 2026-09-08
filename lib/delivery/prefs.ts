@@ -15,7 +15,7 @@ import { CARD_FIELDS, COLDEFS, DEFAULT_CARD_FIELDS, DEFAULT_COLS, type ColKey } 
 // link: that count spans all four owner FKs, so filtering by FDE alone
 // showed nothing for the 9 of 21 roster people who hold no FDE assignments
 // but 34 TAM/engineering ones between them.
-export type FilterField = "stage" | "owner" | "customer" | "health" | "partner" | "platform" | "lifecycle" | "phase" | "tam" | "person";
+export type FilterField = "stage" | "owner" | "customer" | "health" | "partner" | "platform" | "lifecycle" | "tam" | "engg" | "person";
 
 export type DetailPattern = "split" | "overlay";
 
@@ -31,7 +31,7 @@ const STORAGE_KEY = "dops.viewPrefs";
 
 const KNOWN_COLS = new Set<string>(COLDEFS.map((c) => c.key));
 const KNOWN_CARD_FIELDS = new Set<string>(CARD_FIELDS);
-const KNOWN_FILTERS = new Set<string>(["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam", "person"]);
+const KNOWN_FILTERS = new Set<string>(["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "tam", "engg", "person"]);
 
 // `colorMap` used to live here. Chip colours moved to `vocabulary_values`
 // (0042) because localStorage made them per-browser: two people looking at

@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Delivery workspace fixes — 2026-09-08</title>
+<style>
+/* Tokens lifted verbatim from app/globals.css (.dark block, lines 226-290)
+   so this mockup and the app read as one system. */
+.dark{
+  --background:#171717; --surface-1:#262626; --surface-2:#1F1F1F; --surface-3:#2F2F2F;
+  --foreground:#FAFAFA; --foreground-muted:#A3A3A3; --foreground-body:#D4D4D4;
+  --status-good:#4ADE80; --status-warn:#FB923C; --status-bad:#F87171;
+  --yellow-ink:#F2FF70; --yellow-soft:rgba(242,255,112,.14); --yellow-line:rgba(242,255,112,.45);
+  --field:rgba(255,255,255,.06); --row-open-bg:#3a3a1f; --row-hover-bg:#2e2e2e;
+  --muted-foreground:#A3A3A3; --border:rgba(255,255,255,.14);
+  --brand-metal-line:rgba(255,255,255,.12); --glass-bg:rgba(255,255,255,.10);
+  --st-neutral-fg:#A3A3A3; --st-neutral-bg:rgba(163,163,163,.14); --st-neutral-bd:rgba(163,163,163,.32);
+  --st-indigo-fg:#818CF8;  --st-indigo-bg:rgba(129,140,248,.14);  --st-indigo-bd:rgba(129,140,248,.32);
+  --st-orange-fg:#FB923C;  --st-orange-bg:rgba(251,146,60,.14);   --st-orange-bd:rgba(251,146,60,.32);
+  --st-blue-fg:#60A5FA;    --st-blue-bg:rgba(96,165,250,.14);     --st-blue-bd:rgba(96,165,250,.32);
+  --st-amber-fg:#FBBF24;   --st-amber-bg:rgba(251,191,36,.14);    --st-amber-bd:rgba(251,191,36,.32);
+  --st-emerald-fg:#4ADE80; --st-emerald-bg:rgba(74,222,128,.14);  --st-emerald-bd:rgba(74,222,128,.32);
+  --st-fuchsia-fg:#E879F9; --st-fuchsia-bg:rgba(232,121,249,.14); --st-fuchsia-bd:rgba(232,121,249,.32);
+  --st-red-fg:#F87171;     --st-red-bg:rgba(248,113,113,.14);     --st-red-bd:rgba(248,113,113,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--background);color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;padding:28px}
+h1{font-size:19px;margin:0 0 4px}
+h2{font-size:15px;margin:0 0 2px}
+.sub{color:var(--foreground-muted);font-size:12px}
+.wrap{max-width:1240px;margin:0 auto}
+section{margin:34px 0 0;padding:20px;border:1px solid var(--brand-metal-line);
+  border-radius:12px;background:var(--surface-1)}
+.shead{display:flex;align-items:baseline;gap:10px;margin-bottom:14px;
+  padding-bottom:12px;border-bottom:1px solid var(--brand-metal-line)}
+.tagn{font-family:ui-monospace,monospace;font-size:10px;padding:2px 7px;border-radius:999px;
+  background:var(--yellow-soft);border:1px solid var(--yellow-line);color:var(--yellow-ink);
+  text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:2px 7px;
+  border-radius:5px;border:1px solid;white-space:nowrap;font-weight:500}
+.h-neutral{color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)}
+.h-indigo {color:var(--st-indigo-fg); background:var(--st-indigo-bg); border-color:var(--st-indigo-bd)}
+.h-orange {color:var(--st-orange-fg); background:var(--st-orange-bg); border-color:var(--st-orange-bd)}
+.h-blue   {color:var(--st-blue-fg);   background:var(--st-blue-bg);   border-color:var(--st-blue-bd)}
+.h-amber  {color:var(--st-amber-fg);  background:var(--st-amber-bg);  border-color:var(--st-amber-bd)}
+.h-emerald{color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)}
+.h-fuchsia{color:var(--st-fuchsia-fg);background:var(--st-fuchsia-bg);border-color:var(--st-fuchsia-bd)}
+.h-red    {color:var(--st-red-fg);    background:var(--st-red-bg);    border-color:var(--st-red-bd)}
+/* tab strip */
+.tabs{display:flex;gap:22px;align-items:center;border-bottom:1px solid var(--brand-metal-line);
+  padding-bottom:9px;margin-bottom:14px}
+.tab{display:flex;gap:7px;align-items:center;padding-bottom:9px;margin-bottom:-10px;
+  color:var(--foreground-muted);font-size:13px;cursor:default}
+.tab.on{color:var(--foreground);font-weight:600;border-bottom:2px solid var(--yellow-ink)}
+.tab .n{font-family:ui-monospace,monospace;font-size:11px;opacity:.7}
+.tab .n.narrowed{opacity:1;color:var(--yellow-ink)}
+.hint{margin-left:auto;color:var(--foreground-muted);font-size:11.5px}
+/* toolbar */
+.bar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;
+  background:var(--surface-2);border:1px solid var(--brand-metal-line);border-radius:10px;padding:9px 11px}
+.inp{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:7px;
+  padding:6px 10px;color:var(--foreground-muted);font-size:12px;min-width:190px}
+.pill{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:7px;
+  padding:5px 9px;font-size:11.5px;color:var(--foreground-body);display:inline-flex;gap:6px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--brand-metal-line);border-radius:7px;overflow:hidden}
+.seg span{padding:5px 11px;font-size:11.5px;color:var(--foreground-muted)}
+.seg span.on{background:var(--surface-3);color:var(--foreground);font-weight:600}
+.mono{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--muted-foreground)}
+/* board */
+.lanes{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:6px}
+.lane{flex:0 0 auto;width:268px;background:var(--surface-2);border:1px solid var(--brand-metal-line);
+  border-radius:10px;padding:9px}
+.lane.ovf{border-style:dashed;border-color:var(--st-red-bd);background:rgba(248,113,113,.05)}
+.lhead{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;margin-bottom:9px}
+.dot{width:7px;height:7px;border-radius:99px;flex:0 0 auto}
+.lhead .n{margin-left:auto;font-family:ui-monospace,monospace;font-size:11px;color:var(--foreground-muted)}
+.card{background:var(--surface-1);border:1px solid var(--brand-metal-line);border-radius:8px;
+  padding:9px;margin-bottom:7px;border-top:2px solid var(--st-emerald-bd)}
+.card.bad{border-top-color:var(--st-red-bd)}
+.card .cust{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--foreground-muted)}
+.card .nm{font-size:12.5px;font-weight:600;margin:2px 0 7px;line-height:1.35}
+.card .row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+/* the owner affordance fix */
+.own{display:inline-flex;align-items:center;gap:5px;padding:2px 5px;border-radius:6px;
+  background:var(--glass-bg);border:1px solid var(--brand-metal-line);font-size:10.5px;
+  color:var(--foreground-body)}
+.own .av{width:17px;height:17px;border-radius:99px;background:var(--st-indigo-bg);
+  color:var(--st-indigo-fg);border:1px solid var(--st-indigo-bd);font-size:8px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center}
+.own .cv{opacity:.75;font-size:8px}
+.own.dead{background:none;border-color:transparent;color:var(--foreground-muted)}
+/* table */
+.tbl{border:1px solid var(--brand-metal-line);border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.tr{display:grid;align-items:center;border-bottom:1px solid var(--brand-metal-line)}
+.tr:last-child{border-bottom:none}
+.tr.hd{background:var(--surface-3);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--foreground-muted);font-weight:600}
+.td{padding:8px 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.td.clip{border-right:1px solid rgba(255,255,255,.04)}
+.tfoot{display:flex;align-items:center;gap:9px;padding:7px 10px;background:var(--surface-3);
+  font-size:11px;color:var(--foreground-muted);border-top:1px solid var(--brand-metal-line)}
+.fade{position:relative}
+.fade::after{content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(38,38,38,0),rgba(31,31,31,.96))}
+/* historical */
+.qg{border:1px solid var(--brand-metal-line);border-radius:9px;margin-bottom:7px;background:var(--surface-2)}
+.qh{display:flex;align-items:center;gap:9px;padding:9px 11px;font-size:12.5px}
+.qh .q{font-family:ui-monospace,monospace;font-weight:700;min-width:44px}
+.qh .n{margin-left:auto;display:flex;gap:5px;align-items:center}
+.qg.nodate{border-color:var(--st-amber-bd);background:rgba(251,191,36,.05)}
+.bars{display:flex;gap:4px;align-items:flex-end;height:42px;margin:0 0 14px;padding:0 2px}
+.bars i{flex:1;background:var(--yellow-soft);border:1px solid var(--yellow-line);
+  border-radius:3px 3px 0 0;display:block}
+.barlab{display:flex;gap:4px;font-family:ui-monospace,monospace;font-size:8.5px;
+  color:var(--foreground-muted);margin-bottom:16px}
+.barlab span{flex:1;text-align:center}
+/* drawer */
+.grid2{display:grid;gap:14px;grid-template-columns:minmax(0,1fr) 420px;align-items:start}
+.panel{background:var(--surface-2);border:1px solid var(--brand-metal-line);border-radius:11px;padding:13px}
+.gh{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--foreground-muted);
+  font-weight:700;margin:15px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--brand-metal-line)}
+.gh:first-child{margin-top:0}
+.fgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.fw{min-width:0}
+.flab{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.flab b{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--foreground-muted);font-weight:700}
+.tog{margin-left:auto;width:19px;height:19px;flex:0 0 auto;display:inline-flex;
+  align-items:center;justify-content:center;border-radius:5px;font-size:12px;line-height:1;
+  border:1px solid var(--brand-metal-line);background:var(--field);color:var(--yellow-ink);cursor:pointer}
+.tog.shown{background:var(--yellow-soft);border-color:var(--yellow-line)}
+.fval{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:8px;
+  padding:6px 9px;font-size:12.5px;color:var(--foreground);display:flex;align-items:center;gap:6px}
+/* Picker affordance — real select chrome: the value sits on the raised --field
+   surface with a divided chevron gutter on the right, exactly like
+   select.dops-field in globals.css. A text field has neither. */
+.fval.picker{padding:0;overflow:hidden;background:var(--field);
+  border-color:var(--brand-metal-line)}
+.fval.picker>.pv{display:flex;align-items:center;gap:6px;padding:6px 9px;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fval.picker>.gut{flex:0 0 auto;align-self:stretch;display:flex;align-items:center;
+  padding:0 7px;border-left:1px solid var(--brand-metal-line);
+  background:rgba(255,255,255,.04);color:var(--yellow-ink);font-size:9px}
+.fval.picker.open{border-color:var(--yellow-line)}
+.fval.picker.open>.gut{background:var(--yellow-soft);border-left-color:var(--yellow-line)}
+.fval .cv{margin-left:auto;opacity:.8;font-size:9px;color:var(--yellow-ink)}
+.fval.ro{color:var(--foreground-muted);background:rgba(255,255,255,.03)}
+/* the opened option list */
+.ddown{margin-top:4px;border:1px solid var(--yellow-line);border-radius:8px;
+  background:var(--surface-1);padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.ddown .srch{display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;
+  border-radius:6px;background:var(--field);border:1px solid var(--yellow-line);
+  font-size:11.5px;color:var(--foreground-muted)}
+.ddown .grp{font-size:8.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:700;
+  color:var(--foreground-muted);padding:5px 8px 3px}
+.ddown .oi{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;
+  font-size:12px;color:var(--foreground-body)}
+.ddown .oi.on{background:var(--yellow-soft)}
+.ddown .oi .av{width:19px;height:19px;border-radius:99px;font-size:8px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.ddown .oi .al{margin-left:auto;font-size:9.5px;color:var(--foreground-muted);
+  font-family:ui-monospace,monospace}
+.ddown .foot{border-top:1px solid var(--brand-metal-line);margin-top:4px;padding:6px 8px 2px;
+  font-size:11.5px;color:var(--yellow-ink)}
+/* configure */
+.cfgtabs{display:flex;gap:3px;background:var(--surface-3);border-radius:8px;padding:3px;
+  margin-bottom:14px;width:fit-content}
+.cfgtabs span{padding:5px 13px;border-radius:6px;font-size:12px;color:var(--foreground-muted)}
+.cfgtabs span.on{background:var(--surface-1);color:var(--foreground);font-weight:600}
+.rrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--brand-metal-line);
+  border-radius:9px;margin-bottom:7px;background:var(--surface-2)}
+.rrow.edit{border-color:var(--yellow-line);background:var(--yellow-soft);display:block}
+.ck{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--foreground-body)}
+.ck i{width:13px;height:13px;border-radius:3px;border:1px solid var(--brand-metal-line);
+  background:var(--field);display:inline-block}
+.ck i.on{background:var(--yellow-ink);border-color:var(--yellow-ink)}
+.alias{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;padding:2px 6px;
+  border-radius:5px;background:var(--glass-bg);border:1px solid var(--brand-metal-line);
+  color:var(--foreground-body)}
+.alias b{opacity:.5;cursor:pointer;font-weight:400}
+.btn{font-size:11.5px;padding:5px 11px;border-radius:7px;border:1px solid var(--brand-metal-line);
+  background:var(--field);color:var(--foreground-body);cursor:pointer}
+.btn.pri{background:var(--yellow-ink);color:#171717;border-color:var(--yellow-ink);font-weight:600}
+.btn.dang{color:var(--st-red-fg);border-color:var(--st-red-bd)}
+.note{font-size:11.5px;color:var(--foreground-muted);margin-top:9px;padding-left:11px;
+  border-left:2px solid var(--brand-metal-line)}
+.warn{font-size:11.5px;padding:8px 11px;border-radius:8px;margin-top:9px;
+  background:var(--st-amber-bg);border:1px solid var(--st-amber-bd);color:var(--st-amber-fg)}
+.ba{display:grid;gap:12px;grid-template-columns:1fr 1fr;margin-bottom:6px}
+.ba>div{min-width:0}
+.balab{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:7px}
+.balab.b4{color:var(--st-red-fg)} .balab.af{color:var(--st-emerald-fg)}
+ul.f{margin:9px 0 0;padding-left:17px;color:var(--foreground-body);font-size:12px}
+ul.f li{margin-bottom:4px}
+code{font-family:ui-monospace,monospace;font-size:11px;background:var(--field);
+  padding:1px 4px;border-radius:4px;color:var(--foreground)}
+.sel{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:7px;
+  padding:5px 9px;font-size:12px;color:var(--foreground);display:flex;align-items:center;gap:6px}
+.sel .cv{margin-left:auto;font-size:9px;opacity:.7}
+.opt{font-size:12px;padding:5px 9px;border-radius:6px;color:var(--foreground-body)}
+.opt.mint{color:var(--yellow-ink);border-top:1px solid var(--brand-metal-line);margin-top:3px;padding-top:7px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Delivery workspace — the seven fixes</h1>
+<p class="sub">Mockup for approval, 2026-09-08. Every count below is live production data
+(149 processes, 0 soft-deleted). Tokens are lifted from <code>app/globals.css</code>.</p>
+
+<!-- ════════════════════ 1 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">A · B · C</span>
+    <div><h2>Counts match what's on screen, and live work leaves Active</h2>
+    <p class="sub">Active work drops from 9 to 7: <code>lifecycle = live</code> now routes to Historical.
+      V2 migration (65) and Historical (134) are unchanged.</p></div></div>
+
+  <div class="ba">
+    <div><div class="balab b4">Before — three numbers, three answers</div></div>
+    <div><div class="balab af">After</div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on">Active work <span class="n">7</span></div>
+    <div class="tab">V2 migration <span class="n">65</span></div>
+    <div class="tab">Historical <span class="n">134</span></div>
+    <span class="hint">New V2 development, in flight</span>
+  </div>
+
+  <div class="bar">
+    <span class="inp">Search processes…</span>
+    <span class="pill">FDE · any <b style="opacity:.5">×</b></span>
+    <span class="pill">Anyone involved · any <b style="opacity:.5">×</b></span>
+    <span class="pill" style="opacity:.6">+ Filter</span>
+    <span style="margin-left:auto"></span>
+    <span class="seg"><span>Table</span><span class="on">Board</span></span>
+    <span class="pill">⚙ Configure</span>
+    <span class="pill">14 columns</span>
+    <span class="mono">7 of 7</span>
+  </div>
+
+  <div class="lanes">
+    <div class="lane">
+      <div class="lhead"><i class="dot" style="background:var(--st-neutral-fg)"></i>Pipeline<span class="n">2</span></div>
+      <div class="card"><div class="cust">JBI</div><div class="nm">JBI · Compass Quote Update</div>
+        <div class="row"><span class="own"><i class="av">AB</i>Arushi Bohra<i class="cv">▾</i></span></div>
+        <div class="row" style="margin-top:5px"><span class="chip h-neutral">Backlog</span><span class="chip h-emerald">On track</span><span class="chip h-emerald">V2 native</span></div></div>
+      <div class="card"><div class="cust">JBI</div><div class="nm">JBI · Material Allocation Import Process</div>
+        <div class="row"><span class="own dead">— <i class="cv">▾</i></span></div>
+        <div class="row" style="margin-top:5px"><span class="chip h-neutral">Backlog</span><span class="chip h-emerald">V2 native</span></div></div>
+    </div>
+    <div class="lane">
+      <div class="lhead"><i class="dot" style="background:var(--st-indigo-fg)"></i>Building<span class="n">2</span></div>
+      <div class="card"><div class="cust">CONECTIV</div><div class="nm">Conectiv · SONY Billing</div>
+        <div class="row"><span class="own"><i class="av">AG</i>Ayush Ghosh<i class="cv">▾</i></span></div>
+        <div class="row" style="margin-top:5px"><span class="chip h-indigo">Discovery</span><span class="chip h-emerald">On track</span><span class="chip h-emerald">V2 native</span></div></div>
+      <div class="card"><div class="cust">JBI</div><div class="nm">JBI · Receiving Process</div>
+        <div class="row"><span class="own"><i class="av">A</i>Alejo<i class="cv">▾</i></span></div>
+        <div class="row" style="margin-top:5px"><span class="chip h-fuchsia">In development</span><span class="chip h-emerald">On track</span><span class="chip h-emerald">V2 native</span></div></div>
+    </div>
+    <div class="lane">
+      <div class="lhead"><i class="dot" style="background:var(--st-amber-fg)"></i>Validating<span class="n">2</span></div>
+      <div class="card"><div class="cust">NORCO</div><div class="nm">Norco · Warranty</div>
+        <div class="row"><span class="own"><i class="av">KN</i>Karthik Nagabhushana<i class="cv">▾</i></span></div>
+        <div class="row" style="margin-top:5px"><span class="chip h-amber">UAT</span><span class="chip h-emerald">On track</span><span class="chip h-emerald">V2 native</span></div></div>
+      <div class="card bad"><div class="cust">CENTURY</div><div class="nm">Century · Accounting Ops</div>
+        <div class="row"><span class="own"><i class="av">RM</i>Rishabh Malhotra<i class="cv">▾</i></span></div>
+        <div class="row" style="margin-top:5px"><span class="chip h-amber">UAT</span><span class="chip h-red">Off track</span><span class="chip h-emerald">V2 native</span></div></div>
+    </div>
+    <div class="lane">
+      <div class="lhead"><i class="dot" style="background:var(--st-red-fg)"></i>Stuck<span class="n">1</span></div>
+      <div class="card bad"><div class="cust">CHARLESTON COUNTY SCHOOL DISTRICT</div>
+        <div class="nm">Charleston County School District · Workflow Planning · POV</div>
+        <div class="row"><span class="chip h-red">⛔ Blocked: Customer</span></div>
+        <div class="row" style="margin-top:5px"><span class="own"><i class="av">KN</i>Karthik Nagabhushana<i class="cv">▾</i></span></div>
+        <div class="row" style="margin-top:5px"><span class="chip h-orange">On hold</span><span class="chip h-red">Off track</span><span class="chip h-emerald">V2 native</span></div></div>
+    </div>
+  </div>
+
+  <ul class="f">
+    <li><b>The board was already right.</b> It showed 7 because <code>laneFor()</code> returns
+      <code>null</code> for <code>live</code> and <code>bucketRows</code> silently discarded those rows.
+      Now 7 is the honest count: the two live processes moved to Historical, so nothing is dropped.</li>
+    <li><b>Tab counts now respect filters</b> — they were computed pre-filter while the table was
+      post-filter, so a tab could read 11 above an empty table. With a filter active the tab reads
+      <span class="tab" style="display:inline-flex;padding:0;margin:0"><span class="n narrowed">3 of 7</span></span>.</li>
+    <li><b>Owners on cards are now pickers</b>, not dead text — avatar, name, chevron, same
+      <code>RosterPicker</code> the table uses.</li>
+    <li><b>Phase is gone</b> from the card fields and the column set (15 → 14 defaults).</li>
+  </ul>
+</section>
+
+<!-- ════════════════════ 2 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">B</span>
+    <div><h2>No row can vanish from a board</h2>
+    <p class="sub">V2 migration counts 65 but its board could only card 36 — <code>not_required</code>
+      (29 rows) was filtered out of the lane list entirely.</p></div></div>
+
+  <div class="lanes">
+    <div class="lane"><div class="lhead"><i class="dot" style="background:var(--st-indigo-fg)"></i>In development<span class="n">4</span></div>
+      <div class="card" style="height:52px"></div><div class="card" style="height:52px"></div></div>
+    <div class="lane"><div class="lhead"><i class="dot" style="background:var(--st-orange-fg)"></i>Engg pending<span class="n">3</span></div>
+      <div class="card" style="height:52px"></div></div>
+    <div class="lane"><div class="lhead"><i class="dot" style="background:var(--st-blue-fg)"></i>Parity testing<span class="n">1</span></div>
+      <div class="card" style="height:52px"></div></div>
+    <div class="lane"><div class="lhead"><i class="dot" style="background:var(--st-amber-fg)"></i>Customer validation<span class="n">8</span></div>
+      <div class="card" style="height:52px"></div></div>
+    <div class="lane"><div class="lhead"><i class="dot" style="background:var(--st-neutral-fg)"></i>Not required<span class="n">29</span></div>
+      <div class="card" style="height:52px"></div>
+      <div class="sub" style="font-size:10.5px;padding:2px">Newly carded — 29 rows the board counted but never showed.</div></div>
+    <div class="lane ovf"><div class="lhead"><i class="dot" style="background:var(--st-red-fg)"></i>Needs a stage<span class="n">0</span></div>
+      <div class="sub" style="font-size:10.5px;padding:6px 2px">Guardrail lane. Anything the board
+        can't place lands here instead of disappearing. Empty today, and a unit test asserts
+        lane totals equal the row count.</div></div>
+  </div>
+</section>
+
+<!-- ════════════════════ 3 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">A · C</span>
+    <div><h2>Historical — by go-live fiscal quarter, and the undated nudge</h2>
+    <p class="sub">Counts on every collapsed header so 134 is fully accounted for. Groups sum to 134.</p></div></div>
+
+  <div class="bars">
+    <i style="height:7%"></i><i style="height:14%"></i><i style="height:14%"></i><i style="height:28%"></i>
+    <i style="height:57%"></i><i style="height:28%"></i><i style="height:35%"></i><i style="height:50%"></i>
+    <i style="height:35%"></i><i style="height:100%"></i><i style="height:43%"></i><i style="height:28%"></i>
+  </div>
+  <div class="barlab"><span>1Q24</span><span>4Q24</span><span>1Q25</span><span>2Q25</span><span>4Q25</span>
+    <span>3Q25</span><span>1Q26</span><span>2Q26</span><span>3Q26</span><span>4Q26</span><span>1Q27</span><span>2Q27</span></div>
+
+  <div class="qg"><div class="qh"><span class="q">2Q27</span>
+    <span class="sub">May – Jul 2026</span>
+    <span class="n"><span class="chip h-emerald">4 shipped</span><span class="mono">4</span><span style="opacity:.5">▾</span></span></div>
+    <div style="padding:0 11px 11px">
+      <div class="tbl"><div class="tr" style="grid-template-columns:1fr 130px 120px 110px">
+        <span class="td">JBI · Time Cards</span><span class="td">JBI</span>
+        <span class="td"><span class="chip h-emerald">Live</span></span><span class="td mono">14 May 2026</span></div></div>
+      <p class="note">Moved here from Active work by this change — <code>v2_native</code> + <code>live</code>.</p>
+    </div></div>
+
+  <div class="qg"><div class="qh"><span class="q">1Q27</span><span class="sub">Feb – Apr 2026</span>
+    <span class="n"><span class="chip h-emerald">6 shipped</span><span class="chip h-neutral">1 ended</span><span class="mono">7</span><span style="opacity:.5">▸</span></span></div></div>
+  <div class="qg"><div class="qh"><span class="q">4Q26</span><span class="sub">Nov 2025 – Jan 2026</span>
+    <span class="n"><span class="chip h-emerald">14 shipped</span><span class="chip h-neutral">3 ended</span><span class="mono">17</span><span style="opacity:.5">▸</span></span></div></div>
+  <div class="qg"><div class="qh"><span class="q">3Q26</span><span class="sub">Aug – Oct 2025</span>
+    <span class="n"><span class="chip h-emerald">7 shipped</span><span class="chip h-neutral">3 ended</span><span class="chip h-red">1 triage</span><span class="mono">11</span><span style="opacity:.5">▸</span></span></div></div>
+  <div class="qg"><div class="qh"><span class="q">2Q26</span><span class="sub">May – Jul 2025</span>
+    <span class="n"><span class="chip h-emerald">5 shipped</span><span class="chip h-neutral">2 ended</span><span class="chip h-red">1 triage</span><span class="mono">8</span><span style="opacity:.5">▸</span></span></div></div>
+  <div class="qg"><div class="qh"><span class="q">…</span><span class="sub">1Q26 · 4Q25 · 3Q25 · 2Q25 · 1Q25 · 4Q24 · 1Q24</span>
+    <span class="n"><span class="mono">38</span><span style="opacity:.5">▸</span></span></div></div>
+
+  <div class="qg nodate"><div class="qh"><span class="q" style="color:var(--st-amber-fg)">—</span>
+    <span>No go-live date</span>
+    <span class="n"><span class="chip h-red">22 triage</span><span class="chip h-neutral">27 ended</span><span class="mono">49</span><span style="opacity:.5">▾</span></span></div>
+    <div style="padding:0 11px 11px">
+      <div class="warn">No live process is undated today. If one lands here it means a process
+        was marked live without a go-live date — it would otherwise leave Active work and appear
+        nowhere. Each such row gets an inline <b>Set a go-live date</b> action right here.</div>
+    </div></div>
+</section>
+
+<!-- ════════════════════ 4 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">D · E</span>
+    <div><h2>Table — no overlap, no Phase, and an honest row count</h2>
+    <p class="sub">Cells clip instead of painting over their neighbour. Every column gains a narrow
+      width, so split mode actually narrows (was 2038px → 1958px).</p></div></div>
+
+  <div class="tbl">
+    <div class="tr hd" style="grid-template-columns:38px 1fr 118px 78px 116px 132px 100px 92px 104px">
+      <span class="td"></span><span class="td clip">Process</span><span class="td clip">Customer</span>
+      <span class="td clip">Platform</span><span class="td clip">Lifecycle</span><span class="td clip">FDE</span>
+      <span class="td clip">TAM</span><span class="td clip">Health</span><span class="td">Kickoff</span></div>
+
+    <div class="tr" style="grid-template-columns:38px 1fr 118px 78px 116px 132px 100px 92px 104px">
+      <span class="td"></span><span class="td clip">Norco · Warranty</span>
+      <span class="td clip">Norco</span><span class="td clip"><span class="sel" style="padding:2px 6px">V2<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="chip h-amber">UAT ▾</span></span>
+      <span class="td clip"><span class="own"><i class="av">KN</i>Karthik N.<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="own"><i class="av">RM</i>Rishabh<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="chip h-emerald">On track ▾</span></span>
+      <span class="td mono">06/04/2026</span></div>
+
+    <div class="tr" style="grid-template-columns:38px 1fr 118px 78px 116px 132px 100px 92px 104px;background:var(--row-hover-bg)">
+      <span class="td"></span><span class="td clip">Charleston County School District · Workflow…</span>
+      <span class="td clip">Charleston Cou…</span><span class="td clip"><span class="sel" style="padding:2px 6px">V2<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="chip h-orange">On hold ▾</span></span>
+      <span class="td clip"><span class="own"><i class="av">KN</i>Karthik N.<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="own dead">— <i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="chip h-red">Off track ▾</span></span>
+      <span class="td mono">10/12/2025</span></div>
+
+    <div class="tr" style="grid-template-columns:38px 1fr 118px 78px 116px 132px 100px 92px 104px">
+      <span class="td"></span><span class="td clip">Century · Accounting Ops</span>
+      <span class="td clip">Century</span><span class="td clip"><span class="sel" style="padding:2px 6px">V2<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="chip h-amber">UAT ▾</span></span>
+      <span class="td clip"><span class="own"><i class="av">RM</i>Rishabh<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="own"><i class="av">RM</i>Rishabh<i class="cv">▾</i></span></span>
+      <span class="td clip"><span class="chip h-red">Off track ▾</span></span>
+      <span class="td mono">27/03/2026</span></div>
+
+    <div class="tfoot"><span>All 7 rows shown</span><span style="margin-left:auto" class="mono">7 of 7</span></div>
+  </div>
+
+  <ul class="f">
+    <li><b>Overlap cause:</b> the roster combobox's search input carried <code>min-w-[180px]</code>
+      inside the 120px TAM and 118px Partner tracks. The input moves into the already
+      fixed-position dropdown, so the in-cell control is display-only and can't overhang.</li>
+    <li><b>Cells now clip</b> — <code>min-w-0</code> let boxes shrink but nothing clipped, so any
+      over-wide grid item painted straight over the next column.</li>
+    <li><b>Scroll cue:</b> the table sized itself with a measured <code>maxHeight</code> and a
+      320px floor, hiding rows behind an inner scroll with no indication. It now grows to content
+      when content fits, and shows a fade plus a row count when it doesn't.</li>
+    <li><b>Resize handle</b> was 12px at <code>z-20</code>, above the sticky header — narrowed and
+      dropped below it.</li>
+  </ul>
+</section>
+
+<!-- ════════════════════ 5 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">E · H</span>
+    <div><h2>Drawer — owner fields read as pickers, <code>+</code> becomes a toggle</h2>
+    <p class="sub">The owner control was always a dropdown; it just looked like a text input.
+      Adds Engineering owner, drops Phase.</p></div></div>
+
+  <div class="grid2">
+    <div class="panel" style="display:flex;align-items:center;justify-content:center;
+      min-height:250px;color:var(--foreground-muted);font-size:12px">← table keeps its width</div>
+    <div class="panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <b style="font-size:13.5px">Norco · Warranty</b>
+        <span class="btn" style="margin-left:auto;padding:2px 7px">⤢</span>
+        <span class="btn" style="padding:2px 7px">×</span></div>
+
+      <div class="gh">Status</div>
+      <div class="fgrid">
+        <div class="fw"><div class="flab"><b>Lifecycle</b><span class="tog shown" title="Remove Lifecycle column">−</span></div>
+          <div class="fval"><span class="chip h-amber">UAT</span><i class="cv" style="margin-left:auto;opacity:.7;font-size:9px">▾</i></div></div>
+        <div class="fw"><div class="flab"><b>Health</b><span class="tog shown" title="Remove Health column">−</span></div>
+          <div class="fval"><span class="chip h-emerald">On track</span><i class="cv" style="margin-left:auto;opacity:.7;font-size:9px">▾</i></div></div>
+        <div class="fw"><div class="flab"><b>Migration stage</b><span class="tog shown" title="Remove Migration stage column">−</span></div>
+          <div class="fval"><span class="chip h-emerald">V2 native</span><i class="cv" style="margin-left:auto;opacity:.7;font-size:9px">▾</i></div></div>
+        <div class="fw"><div class="flab"><b>Work mode</b><span class="tog" title="Add Work mode as a column">+</span></div>
+          <div class="fval">Steady state<i class="cv" style="margin-left:auto;opacity:.7;font-size:9px">▾</i></div></div>
+      </div>
+      <p class="note"><b>Phase is gone.</b> It was derived 1:1 from Lifecycle on every write, blank
+        on 111 of 149 rows, and its only independent value — deployment vs exception handling —
+        is already carried by Work mode.</p>
+
+      <div class="gh">Ownership — every one a dropdown</div>
+      <div class="fgrid">
+        <div class="fw"><div class="flab"><b>FDE owner</b><span class="tog shown" title="Remove FDE column">−</span></div>
+          <div class="fval picker open"><span class="pv"><i class="av" style="width:19px;height:19px;
+            border-radius:99px;background:var(--st-indigo-bg);color:var(--st-indigo-fg);
+            border:1px solid var(--st-indigo-bd);font-size:8px;font-weight:700;display:inline-flex;
+            align-items:center;justify-content:center;flex:0 0 auto">KN</i>Karthik Nagabhushana</span>
+            <span class="gut">▾</span></div>
+          <div class="ddown">
+            <div class="srch">🔍 Search people, or just pick one</div>
+            <div class="grp">FDEs</div>
+            <div class="oi on"><i class="av" style="background:var(--st-indigo-bg);color:var(--st-indigo-fg);
+              border:1px solid var(--st-indigo-bd)">KN</i>Karthik Nagabhushana<span class="al">✓</span></div>
+            <div class="oi"><i class="av" style="background:var(--st-amber-bg);color:var(--st-amber-fg);
+              border:1px solid var(--st-amber-bd)">AB</i>Arushi Bohra</div>
+            <div class="oi"><i class="av" style="background:var(--st-blue-bg);color:var(--st-blue-fg);
+              border:1px solid var(--st-blue-bd)">AG</i>Ayush Ghosh</div>
+            <div class="oi"><i class="av" style="background:var(--st-emerald-bg);color:var(--st-emerald-fg);
+              border:1px solid var(--st-emerald-bd)">A</i>Alejo<span class="al">alias</span></div>
+            <div class="grp">Everyone else</div>
+            <div class="oi"><i class="av" style="background:var(--st-fuchsia-bg);color:var(--st-fuchsia-fg);
+              border:1px solid var(--st-fuchsia-bd)">RM</i>Rishabh Malhotra</div>
+            <div class="foot">+ Add someone to the roster</div>
+          </div>
+        </div>
+        <div class="fw"><div class="flab"><b>TAM owner</b><span class="tog shown" title="Remove TAM column">−</span></div>
+          <div class="fval picker"><span class="pv"><i class="av" style="width:19px;height:19px;
+            border-radius:99px;background:var(--st-fuchsia-bg);color:var(--st-fuchsia-fg);
+            border:1px solid var(--st-fuchsia-bd);font-size:8px;font-weight:700;display:inline-flex;
+            align-items:center;justify-content:center;flex:0 0 auto">RM</i>Rishabh Malhotra</span>
+            <span class="gut">▾</span></div></div>
+        <div class="fw"><div class="flab"><b>Engineering owner</b><span class="tog" title="Add Engineering as a column">+</span></div>
+          <div class="fval picker"><span class="pv" style="color:var(--foreground-muted)">Unassigned</span>
+            <span class="gut">▾</span></div></div>
+        <div class="fw"><div class="flab"><b>Partner</b><span class="tog shown" title="Remove Partner column">−</span></div>
+          <div class="fval picker"><span class="pv" style="color:var(--foreground-muted)">—</span>
+            <span class="gut">▾</span></div></div>
+      </div>
+      <p class="note"><b>New:</b> Engineering owner. <code>engg_owner_id</code> has existed since
+        0032 and the person filter already matches it, but it had no drawer field and no column —
+        editable only via bulk actions until now.</p>
+
+      <div class="gh">Dates</div>
+      <div class="fgrid">
+        <div class="fw"><div class="flab"><b>Kickoff</b><span class="tog shown">−</span></div>
+          <div class="fval mono" style="color:var(--foreground)">06/04/2026</div></div>
+        <div class="fw"><div class="flab"><b>Go-live</b><span class="tog shown">−</span></div>
+          <div class="fval mono" style="color:var(--foreground)">dd/mm/yyyy</div></div>
+        <div class="fw"><div class="flab"><b>Went live at</b></div>
+          <div class="fval ro mono">— <span style="font-size:10px">stamped automatically</span></div></div>
+        <div class="fw"><div class="flab"><b>TTV</b><span class="tog">+</span></div>
+          <div class="fval ro mono">— <span style="font-size:10px">generated</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <ul class="f">
+    <li><b>FDE, TAM, Engineering and Partner all get real select chrome</b> — a divided chevron
+      gutter on the right, on the raised <code>--field</code> surface, matching
+      <code>select.dops-field</code>. A text field has neither, so the two can no longer be
+      confused at a glance. Compare the Dates group below, which keeps plain field boxes.</li>
+    <li><b>Clicking opens an option list, it doesn't turn into a text box.</b> Today the value is
+      replaced by a bare search input, which is the single biggest reason the control reads as a
+      text field. Now the value stays put, the list opens beneath it with the roster grouped
+      FDEs / Everyone else, and the search box lives <i>inside</i> the dropdown for when the list
+      is long. Aliases are marked, and "+ Add someone to the roster" stays at the foot.</li>
+    <li><b>This also fixes the column overlap</b> in section 4 — the search input was what carried
+      <code>min-w-[180px]</code> into a 120px table track. Moving it into the dropdown solves both
+      complaints with one change.</li>
+    <li><b><code>+</code> is now a toggle.</b> It was add-only and idempotent, with the tooltip always
+      reading "Add X as a column" even when visible, so clicking did nothing silently. Shown columns
+      get <code>−</code>.</li>
+    <li><b>Customer gets a handle too</b> — it's a real column that had no way to be promoted.</li>
+  </ul>
+</section>
+
+<!-- ════════════════════ 6 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">G</span>
+    <div><h2>Configure → Roster — four fields and two whole features that had no UI</h2>
+    <p class="sub"><code>email</code> is unreachable from the product today; <code>notes</code> is
+      written by nothing; <code>merge_roster_entry()</code> (0040) and its API route are fully built
+      with no caller; <code>roster_aliases</code> has no view.</p></div></div>
+
+  <div class="cfgtabs"><span class="on">Roster</span><span>Customers</span><span>Vocabularies</span><span>Colours</span></div>
+  <div style="display:flex;gap:7px;margin-bottom:12px">
+    <span class="seg"><span class="on">People</span><span>Partners</span></span>
+    <span class="pill" style="margin-left:auto">+ Add person</span></div>
+
+  <div class="rrow"><b style="font-size:12.5px">Arushi Bohra</b>
+    <span class="chip h-indigo">FDE</span>
+    <span class="mono" style="margin-left:auto">1 process</span><span class="btn">⋯</span></div>
+
+  <div class="rrow edit">
+    <div style="display:flex;gap:9px;align-items:baseline;margin-bottom:11px">
+      <b style="font-size:12.5px">Karthik Nagabhushana</b>
+      <span class="mono">2 processes</span>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <span class="btn">Merge into…</span><span class="btn">Cancel</span><span class="btn pri">Save</span></span></div>
+
+    <div class="fgrid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">
+      <div class="fw"><div class="flab"><b>Display name</b></div>
+        <div class="fval">Karthik Nagabhushana</div></div>
+      <div class="fw"><div class="flab"><b>Email</b> <span class="chip h-emerald" style="font-size:9px">new</span></div>
+        <div class="fval">karthik@kognitos.com</div></div>
+    </div>
+
+    <div style="margin-top:11px"><div class="flab"><b>Roles</b></div>
+      <div style="display:flex;gap:14px;margin-top:3px">
+        <span class="ck"><i class="on"></i>FDE</span><span class="ck"><i class="on"></i>TAM</span><span class="ck"><i></i>Engineering</span></div></div>
+
+    <div style="margin-top:11px"><div class="flab"><b>Aliases</b>
+      <span class="chip h-emerald" style="font-size:9px">new</span></div>
+      <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+        <span class="alias">Karthik N. <b>×</b></span><span class="alias">K. Nagabhushana <b>×</b></span>
+        <span class="alias" style="color:var(--yellow-ink);border-color:var(--yellow-line)">+ Add alias</span></div>
+      <p class="note" style="margin-top:6px">An alias makes an old spelling resolve to this person
+        on import and in the picker. Written implicitly on rename today, with no way to see or fix one.</p></div>
+
+    <div style="margin-top:11px"><div class="flab"><b>Notes</b>
+      <span class="chip h-emerald" style="font-size:9px">new</span></div>
+      <div class="fval" style="min-height:44px;align-items:flex-start;color:var(--foreground-body)">
+        Covering Norco while Arushi is on leave.</div></div>
+
+    <div style="margin-top:11px"><span class="ck"><i class="on"></i>Still at Kognitos</span></div>
+  </div>
+
+  <div class="rrow" style="border-color:var(--yellow-line)">
+    <b style="font-size:12.5px">Alejo</b><span class="chip h-indigo">FDE</span>
+    <span class="chip h-amber">possible duplicate</span>
+    <span class="mono" style="margin-left:auto">3 processes</span><span class="btn">⋯</span></div>
+
+  <div class="warn"><b>Merge into…</b> — reassigns all 3 of Alejo's processes to Alejandro Vega,
+    records <code>merged_into_id</code>, and keeps "Alejo" resolving via <code>roster_aliases</code>.
+    Runs through <code>merge_roster_entry()</code>, which moves both owner mirrors in one transaction
+    and preserves <code>updated_at</code>. Confirm step names both entries and the process count.</div>
+</section>
+
+<!-- ════════════════════ 7 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">G</span>
+    <div><h2>Configure → Customers — mint a category, and more fields</h2>
+    <p class="sub"><code>customers.custom_category</code> is free text in Postgres — no enum, no CHECK —
+      and the PATCH route already accepts any string. The closed <code>&lt;select&gt;</code> was the
+      only thing making a new category need a code change.</p></div></div>
+
+  <div class="cfgtabs"><span>Roster</span><span class="on">Customers</span><span>Vocabularies</span><span>Colours</span></div>
+
+  <div class="ba">
+    <div>
+      <div class="balab b4">Before — 8 fixed options</div>
+      <div class="rrow edit" style="background:var(--surface-2);border-color:var(--brand-metal-line)">
+        <div class="flab"><b>Category</b></div>
+        <div class="sel">Strategic Growth<i class="cv">▾</i></div>
+        <div style="margin-top:5px;border:1px solid var(--brand-metal-line);border-radius:7px;
+          padding:3px;background:var(--surface-1)">
+          <div class="opt">—</div><div class="opt">At Risk</div><div class="opt">Upcoming Renewals</div>
+          <div class="opt" style="background:var(--surface-3)">Strategic Growth</div>
+          <div class="opt">Active</div><div class="opt" style="opacity:.5">…4 more</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="balab af">After — <code>EditableValue</code> + <code>allowCustom</code></div>
+      <div class="rrow edit">
+        <div class="flab"><b>Category</b></div>
+        <div class="sel" style="border-color:var(--yellow-line)">Strategic Growth<i class="cv">▾</i></div>
+        <div style="margin-top:5px;border:1px solid var(--yellow-line);border-radius:7px;
+          padding:3px;background:var(--surface-1)">
+          <div class="opt">—</div><div class="opt">At Risk</div><div class="opt">Upcoming Renewals</div>
+          <div class="opt" style="background:var(--surface-3)">Strategic Growth</div>
+          <div class="opt">Active</div><div class="opt" style="opacity:.5">…4 more</div>
+          <div class="opt mint">+ Something else…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">Exactly the pattern already shipped on <code>/customers/[key]</code>
+    (<code>customer-record-card.tsx:193-202</code>). Its re-open branch matters as much as the
+    sentinel: without it, opening the editor on an already-minted value shows "—" and saving
+    silently overwrites it.</p>
+
+  <div class="rrow edit" style="margin-top:14px">
+    <div style="display:flex;gap:9px;align-items:baseline;margin-bottom:11px">
+      <b style="font-size:12.5px">Norco</b><span class="mono">6 processes</span>
+      <span style="margin-left:auto;display:flex;gap:6px"><span class="btn">Cancel</span><span class="btn pri">Save</span></span></div>
+    <div class="fgrid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">
+      <div class="fw"><div class="flab"><b>Customer name</b></div><div class="fval">Norco</div></div>
+      <div class="fw"><div class="flab"><b>Category</b></div><div class="sel">Strategic Growth<i class="cv">▾</i></div></div>
+      <div class="fw"><div class="flab"><b>AE owner</b> <span class="chip h-emerald" style="font-size:9px">new</span></div>
+        <div class="fval picker" style="color:var(--foreground-muted)">—<i class="cv">▾</i></div></div>
+      <div class="fw"><div class="flab"><b>Partner</b> <span class="chip h-emerald" style="font-size:9px">new</span></div>
+        <div class="fval picker" style="color:var(--foreground-muted)">—<i class="cv">▾</i></div></div>
+      <div class="fw"><div class="flab"><b>Slack channel</b> <span class="chip h-emerald" style="font-size:9px">new</span></div>
+        <div class="fval mono">#norco-kognitos</div></div>
+      <div class="fw"><div class="flab"><b>SF account ID</b> <span class="chip h-emerald" style="font-size:9px">new</span></div>
+        <div class="fval mono" style="color:var(--foreground-muted)">—</div></div>
+    </div>
+    <div style="margin-top:11px"><span class="ck"><i class="on"></i>Still a customer</span></div>
+  </div>
+  <p class="note">Tier, industry and HQ stay on the 360 page — Configure is for bulk roster work,
+    not the full record. Category changes now log the same <code>CATEGORY_CHANGED</code> audit event
+    the 360 page already logs; the Configure route was silently skipping it.</p>
+</section>
+
+<!-- ════════════════════ 8 ════════════════════ -->
+<section>
+  <div class="shead"><span class="tagn">F</span>
+    <div><h2>Go-live plumbing — no Slack yet</h2></div></div>
+  <ul class="f">
+    <li>Nothing stamps <code>went_live_at</code> today. The notifier was designed in 0019's header,
+      built, then archived; <code>MIGRATION_DONE_STAGE</code> still exists with no caller.</li>
+    <li><code>updateProcess</code> will stamp it once, idempotently, when <code>lifecycle</code>
+      flips to <code>live</code> or <code>migration_stage</code> to <code>live_on_v2</code>, and
+      append a <code>MILESTONE</code> event — the first process-side writer <code>events</code> has had.</li>
+    <li>Processes with no customer get the stamp but no event, since <code>appendEvent</code>
+      requires a customer key and <code>customer_id</code> is nullable.</li>
+    <li>Migration 0044 backfills <code>went_live_at</code> from <code>go_live_date</code> for
+      existing live rows, so history isn't empty on day one.</li>
+    <li><b>No Slack post in this change.</b> Wiring it later is one call at the stamp site plus
+      <code>MIGRATION_SLACK_CHANNEL</code>; the archived template has the copy.</li>
+  </ul>
+</section>
+
+</div>
+</body>
+</html>

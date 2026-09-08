@@ -33,7 +33,7 @@ export const SECTION_LABELS: Record<DeliverySection, string> = {
 };
 
 export const SECTION_HINTS: Record<DeliverySection, string> = {
-  active: "New V2 development",
+  active: "New V2 development, in flight",
   v2: "Not yet V2-native — migrate or retire",
   historical: "Shipped and ended work, by quarter",
 };
@@ -51,14 +51,53 @@ const ENDED_LIFECYCLES = new Set<ProcessLifecycle>([
 ]);
 
 /** The one routing rule. Order matters: an ended process is Historical
- *  whatever its migration stage says. */
+ *  whatever its migration stage says.
+ *
+ *  `live` leaves Active work (2026-09-08, Rishabh): "once something goes live
+ *  it should move to Historical section and for that quarter Go-Live instead,
+ *  and Active Work should show the work in dev, test, upcoming pipeline or
+ *  discovery and stuff like that." Active work means in flight — shipping is
+ *  an exit from it, not a state within it. This also removed the last source
+ *  of rows the Active board could not lane, which is what made its tab count
+ *  disagree with its own cards.
+ *
+ *  The asymmetry with V2 migration is deliberate and load-bearing: that
+ *  section is a migrate-or-retire to-do list, and a process running live on V1
+ *  is still on the list. Applying the same rule there would move 58 of
+ *  production's 65 rows out and collapse the section to 5, gutting the view of
+ *  the migration programme. Two sections, two questions, two rules. */
 export function sectionFor(row: {
   lifecycle: ProcessLifecycle;
   migration_stage: MigrationStage;
 }): DeliverySection {
   if (ENDED_LIFECYCLES.has(row.lifecycle)) return "historical";
-  if (row.migration_stage === "v2_native") return "active";
+  if (row.migration_stage === "v2_native") {
+    return row.lifecycle === "live" ? "historical" : "active";
+  }
   return "v2";
+}
+
+/** Historical's real membership test, and the one every caller must use.
+ *
+ *  Historical is the UNION of "routed here by sectionFor" and "in the shipped
+ *  lens" — it cannot be the lens alone. sectionFor() sends live + v2_native
+ *  here, but inHistoricalLens() is false for a row with no go-live date, so
+ *  the lens by itself would leave a process marked live without a date in no
+ *  section at all: gone from Active work, absent from Historical, invisible in
+ *  the app. With the union it lands in the "No go-live date" bucket, which is
+ *  exactly where somebody can fix it.
+ *
+ *  Pinned by tests/delivery/sections.test.ts ("leaves every process in at
+ *  least one section"). */
+export function inHistoricalSection(
+  row: {
+    lifecycle: ProcessLifecycle;
+    migration_stage: MigrationStage;
+    go_live_date: string | null;
+  },
+  today?: string
+): boolean {
+  return sectionFor(row) === "historical" || inHistoricalLens(row, today);
 }
 
 /** Historical is a LENS, not a partition — it answers "what have we shipped"

@@ -6,10 +6,9 @@
 // delivery-client.tsx. Replaces app/_components/process-drawer.tsx.
 // Approved design: 2026-09-03-v2-delivery-redesign.html, Process detail panel.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, createContext, useContext } from "react";
 import {
   PROCESS_LIFECYCLES,
-  PROCESS_PHASES,
   PROCESS_HEALTHS,
   PROCESS_BLOCKED_ON,
   PROCESS_WORK_MODES,
@@ -25,7 +24,6 @@ import {
   BLOCKED_ON_LABELS,
   HEALTH_LABELS,
   LIFECYCLE_LABELS,
-  PHASE_LABELS,
   PLATFORM_LABELS,
   WORK_MODE_LABELS,
   attentionReasons,
@@ -52,7 +50,6 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   customer_id: "Customer",
   lifecycle: "Lifecycle",
   migration_stage: "Migration stage",
-  phase: "Phase",
   health: "Health",
   blocked_on: "Blocked on",
   work_mode: "Work mode",
@@ -113,24 +110,43 @@ interface ProcessDetailProps {
   onUpdated: (updated: Process) => void;
   onArchived: (id: string) => void;
   onClose: () => void;
-  onAddColumn: (colKey: ColKey) => void;
+  /** Columns currently shown in the table, so each field's toggle can read
+   *  as add or remove rather than always offering to add. */
+  visibleCols: ColKey[];
+  onToggleColumn: (colKey: ColKey) => void;
   /** Attaching a ticket or posting a blocker is mirrored into
    *  processes.linear_ticket_ids / .blockers server-side, so the row's Linear
    *  cell and ⚑ indicator only update once the page data is refetched. */
   onDataChanged: () => void;
 }
 
+/** Lets any nested field ask whether its table column is currently shown and
+ *  toggle it, without every one of the ~20 call sites threading two more
+ *  props. The "+" used to be add-only and idempotent: its tooltip said "Add X
+ *  as a column" even when X was already visible, and clicking then did
+ *  nothing with no feedback — reported 2026-09-08 as "there is an option to
+ *  add a column by clicking on +, but no - to remove it". */
+const ColumnToggle = createContext<{
+  isShown: (col: ColKey) => boolean;
+  toggle: (col: ColKey) => void;
+} | null>(null);
+
 function FieldWrapper({
   fieldLabel,
-  promote,
+  promoteField,
   flashed,
   children,
 }: {
   fieldLabel: string;
-  promote?: () => void;
+  /** The `processes` field this box edits. Mapped to a column through
+   *  FIELD_TO_COL; fields with no column get no toggle. */
+  promoteField?: keyof Process;
   flashed: boolean;
   children: React.ReactNode;
 }) {
+  const ctx = useContext(ColumnToggle);
+  const col = promoteField ? FIELD_TO_COL[promoteField] : undefined;
+  const shown = col && ctx ? ctx.isShown(col) : false;
   return (
     <div
       className="rounded-lg border px-2.5 py-1.5"
@@ -144,15 +160,21 @@ function FieldWrapper({
         <span className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold">
           {fieldLabel}
         </span>
-        {promote ? (
+        {col && ctx ? (
           <button
             type="button"
-            onClick={promote}
-            title={`Add ${fieldLabel} as a column`}
-            className="ml-auto w-[15px] h-[15px] shrink-0 flex items-center justify-center rounded text-[10px] leading-none opacity-55 hover:opacity-100 transition-opacity"
-            style={{ color: "var(--yellow-ink)" }}
+            onClick={() => ctx.toggle(col)}
+            title={shown ? `Remove ${fieldLabel} from the table` : `Add ${fieldLabel} as a column`}
+            aria-label={shown ? `Remove ${fieldLabel} from the table` : `Add ${fieldLabel} as a column`}
+            aria-pressed={shown}
+            className="ml-auto w-[19px] h-[19px] shrink-0 flex items-center justify-center rounded border text-[11px] leading-none transition-colors"
+            style={{
+              color: "var(--yellow-ink)",
+              background: shown ? "var(--yellow-soft)" : "var(--field)",
+              borderColor: shown ? "var(--yellow-line)" : "var(--brand-metal-line)",
+            }}
           >
-            +
+            {shown ? "\u2212" : "+"}
           </button>
         ) : null}
       </div>
@@ -177,7 +199,8 @@ export function ProcessDetail({
   onUpdated,
   onArchived,
   onClose,
-  onAddColumn,
+  visibleCols,
+  onToggleColumn,
   onDataChanged,
 }: ProcessDetailProps) {
   const [proc, setProc] = useState<DetailProcess>(process);
@@ -300,11 +323,6 @@ export function ProcessDetail({
     });
   }
 
-  function promote(field: keyof Process) {
-    const col = FIELD_TO_COL[field];
-    if (col) onAddColumn(col);
-  }
-
   async function markReviewed() {
     setReviewBusy(true);
     setError(null);
@@ -402,448 +420,456 @@ export function ProcessDetail({
     // internal scrollbar work: a flex item defaults to min-height:auto, so it
     // refuses to shrink below its content and overflow-y-auto never engages —
     // the panel just grew past its container and got clipped instead.
-    <div className="flex flex-col h-full min-h-0 flex-1">
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
-        <div className="flex items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
-              {proc.customer_display_name}
-            </div>
-            <input
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={() => {
-                if (nameDraft.trim() && nameDraft !== proc.process_name) {
-                  void commit("process_name" as keyof Process, "Process name", nameDraft.trim());
-                } else {
-                  setNameDraft(proc.process_name);
-                }
-              }}
-              className="dops-field text-[17px] font-semibold tracking-tight"
-              style={{ borderColor: "transparent" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--brand-yellow)")}
-            />
-          </div>
-          <div className="flex items-center gap-1 shrink-0 pt-1">
-            <button
-              type="button"
-              disabled={navIndex <= 0}
-              onClick={() => navIndex > 0 && onSelectId(list[navIndex - 1].id)}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)] disabled:opacity-30"
-              title="Previous"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              disabled={navIndex < 0 || navIndex >= total - 1}
-              onClick={() => navIndex >= 0 && navIndex < total - 1 && onSelectId(list[navIndex + 1].id)}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)] disabled:opacity-30"
-              title="Next"
-            >
-              ›
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
-              title="Close"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-          <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
-            {platformLabel(proc.platform)}
-          </span>
-          {proc.health ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
-              {healthLabel(proc.health)}
-            </span>
-          ) : null}
-          <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
-            updated {staleDays(proc.updated_at)}d ago
-          </span>
-          <span className="ml-auto text-[10px] font-mono text-[color:var(--muted-foreground)]">
-            {index >= 0 ? `${index + 1} of ${total}` : "not in current filter"}
-          </span>
-          <a href={`/processes/${proc.id}`} className="text-[10px] font-mono text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] underline">
-            /processes/{proc.id.slice(0, 8)}
-          </a>
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-4">
-        {/* Import-attention notes. Amber until 2026-09-04, which read as an
-            alarm for what is only "somebody should confirm this" — and could
-            never be cleared, because needs_attention wasn't editable. Now a
-            neutral note with a dismiss, and the copy is rewritten out of
-            Monday's dead vocabulary by attentionReasons(). Any field edit
-            clears it server-side too (clearAttentionOnEdit). */}
-        {proc.needs_attention ? (
-          <div className="space-y-1.5">
-            {attentionReasons(proc.needs_attention_reason).map((reason, i, all) => (
-              <div
-                key={reason}
-                className="flex items-start gap-2 rounded-lg border px-3 py-2 text-xs"
-                style={{
-                  background: "var(--field)",
-                  borderColor: "var(--brand-metal-line)",
-                  color: "var(--muted-foreground)",
+    // Every field's +/- toggle reads through this rather than each of the
+    // ~20 call sites threading two more props down.
+    <ColumnToggle.Provider
+      value={{
+        isShown: (col) => visibleCols.includes(col),
+        toggle: onToggleColumn,
+      }}
+    >
+      <div className="flex flex-col h-full min-h-0 flex-1">
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--brand-metal-line)" }}>
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
+                {proc.customer_display_name}
+              </div>
+              <input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={() => {
+                  if (nameDraft.trim() && nameDraft !== proc.process_name) {
+                    void commit("process_name" as keyof Process, "Process name", nameDraft.trim());
+                  } else {
+                    setNameDraft(proc.process_name);
+                  }
                 }}
+                className="dops-field text-[17px] font-semibold tracking-tight"
+                style={{ borderColor: "transparent" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--brand-yellow)")}
+              />
+            </div>
+            <div className="flex items-center gap-1 shrink-0 pt-1">
+              <button
+                type="button"
+                disabled={navIndex <= 0}
+                onClick={() => navIndex > 0 && onSelectId(list[navIndex - 1].id)}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)] disabled:opacity-30"
+                title="Previous"
               >
-                <span className="flex-1">{reason}</span>
-                {/* One × per note would imply per-note dismissal, which the
-                    single boolean column can't express — so only the last
-                    row carries it, and it clears the whole flag. */}
-                {i === all.length - 1 ? (
+                ‹
+              </button>
+              <button
+                type="button"
+                disabled={navIndex < 0 || navIndex >= total - 1}
+                onClick={() => navIndex >= 0 && navIndex < total - 1 && onSelectId(list[navIndex + 1].id)}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)] disabled:opacity-30"
+                title="Next"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] hover:bg-[var(--glass-bg)]"
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
+              {platformLabel(proc.platform)}
+            </span>
+            {proc.health ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
+                {healthLabel(proc.health)}
+              </span>
+            ) : null}
+            <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium bg-[var(--glass-bg)] text-[color:var(--muted-foreground)] border-[var(--brand-metal-line)]">
+              updated {staleDays(proc.updated_at)}d ago
+            </span>
+            <span className="ml-auto text-[10px] font-mono text-[color:var(--muted-foreground)]">
+              {index >= 0 ? `${index + 1} of ${total}` : "not in current filter"}
+            </span>
+            <a href={`/processes/${proc.id}`} className="text-[10px] font-mono text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] underline">
+              /processes/{proc.id.slice(0, 8)}
+            </a>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-4">
+          {/* Import-attention notes. Amber until 2026-09-04, which read as an
+              alarm for what is only "somebody should confirm this" — and could
+              never be cleared, because needs_attention wasn't editable. Now a
+              neutral note with a dismiss, and the copy is rewritten out of
+              Monday's dead vocabulary by attentionReasons(). Any field edit
+              clears it server-side too (clearAttentionOnEdit). */}
+          {proc.needs_attention ? (
+            <div className="space-y-1.5">
+              {attentionReasons(proc.needs_attention_reason).map((reason, i, all) => (
+                <div
+                  key={reason}
+                  className="flex items-start gap-2 rounded-lg border px-3 py-2 text-xs"
+                  style={{
+                    background: "var(--field)",
+                    borderColor: "var(--brand-metal-line)",
+                    color: "var(--muted-foreground)",
+                  }}
+                >
+                  <span className="flex-1">{reason}</span>
+                  {/* One × per note would imply per-note dismissal, which the
+                      single boolean column can't express — so only the last
+                      row carries it, and it clears the whole flag. */}
+                  {i === all.length - 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => void dismissAttention()}
+                      title="Dismiss — I've checked this"
+                      className="shrink-0 opacity-50 hover:opacity-100 leading-none"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Why this row is in the Stuck lane, and the one control that gets it
+              out. Stuck is derived (laneFor: on_hold OR blocked_on != none), not
+              stored, so there is nothing named "Stuck" to un-set — which left
+              people with no idea how to leave it. */}
+          {stuckCauses.length > 0 ? (
+            <div className="space-y-1.5">
+              {stuckCauses.map((cause) => (
+                <div
+                  key={cause.kind}
+                  className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs"
+                  style={{
+                    background: cause.kind === "blocked" ? "var(--st-red-bg)" : "var(--st-orange-bg)",
+                    borderColor: cause.kind === "blocked" ? "var(--st-red-bd)" : "var(--st-orange-bd)",
+                    color: cause.kind === "blocked" ? "var(--st-red-fg)" : "var(--st-orange-fg)",
+                  }}
+                >
+                  <span className="flex-1">{cause.text}</span>
                   <button
                     type="button"
-                    onClick={() => void dismissAttention()}
-                    title="Dismiss — I've checked this"
-                    className="shrink-0 opacity-50 hover:opacity-100 leading-none"
+                    onClick={cause.action}
+                    className="shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold"
+                    style={{ background: "var(--brand-yellow)", color: "#171717" }}
                   >
+                    {cause.actionLabel}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Key facts strip */}
+          <div className="grid grid-cols-4 divide-x rounded-lg border" style={{ borderColor: "var(--brand-metal-line)" }}>
+            <KeyFact label="Migration stage" value={stageLabel(proc.migration_stage)} />
+            <KeyFact label="Progress" value={proc.completion_pct != null ? `${Math.round(proc.completion_pct * 100)}%` : "—"} accent />
+            <KeyFact
+              label={proc.confirmed_arr != null ? "Confirmed ARR" : "ARR (snapshot)"}
+              value={formatMoney(confirmedArr ?? null)}
+              accent
+            />
+            <KeyFact label="TTV" value={proc.ttv_days != null ? `${proc.ttv_days}d` : "—"} />
+          </div>
+
+          <GroupHeader title="Identity" />
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+            <FieldWrapper fieldLabel="Customer" flashed={savedField === "Customer"}>
+              <CustomerPicker
+                value={proc.customer_id}
+                valueLabel={proc.customer_display_name}
+                options={customerOptions}
+                onPick={(id) => void commit("customer_id", "Customer", id)}
+              />
+            </FieldWrapper>
+          </div>
+
+          <GroupHeader title="State" />
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+            <SelectField
+              fieldLabel="Lifecycle"
+              value={proc.lifecycle}
+              options={PROCESS_LIFECYCLES}
+              optionLabels={LIFECYCLE_LABELS}
+              flashed={savedField === "Lifecycle"}
+              selectRef={lifecycleRef}
+              onCommit={(v) => commit("lifecycle", "Lifecycle", v)}
+              onPromoteField="lifecycle"
+            />
+            <SelectField
+              fieldLabel="Migration stage"
+              value={proc.migration_stage}
+              options={MIGRATION_STAGES}
+              optionLabels={MIGRATION_STAGE_LABELS}
+              flashed={savedField === "Migration stage"}
+              onCommit={(v) => commit("migration_stage", "Migration stage", v)}
+              onPromoteField="migration_stage"
+            />
+            <SelectField
+              fieldLabel="Health"
+              value={proc.health}
+              options={PROCESS_HEALTHS}
+              optionLabels={HEALTH_LABELS}
+              flashed={savedField === "Health"}
+              clearable
+              onCommit={(v) => commit("health", "Health", v)}
+              onPromoteField="health"
+            />
+            <SelectField
+              fieldLabel="Blocked on"
+              value={proc.blocked_on}
+              options={PROCESS_BLOCKED_ON}
+              optionLabels={BLOCKED_ON_LABELS}
+              flashed={savedField === "Blocked on"}
+              onCommit={(v) => commit("blocked_on", "Blocked on", v)}
+            />
+            <SelectField
+              fieldLabel="Work mode"
+              value={proc.work_mode}
+              options={PROCESS_WORK_MODES}
+              optionLabels={WORK_MODE_LABELS}
+              flashed={savedField === "Work mode"}
+              clearable
+              onCommit={(v) => commit("work_mode", "Work mode", v)}
+            />
+            <SelectField
+              fieldLabel="Platform"
+              value={proc.platform}
+              options={PROCESS_PLATFORMS}
+              optionLabels={PLATFORM_LABELS}
+              flashed={savedField === "Platform"}
+              onCommit={(v) => commit("platform", "Platform", v)}
+              onPromoteField="platform"
+            />
+          </div>
+
+          <GroupHeader title="Dates & effort" />
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+            <DateField fieldLabel="Kickoff" value={proc.kickoff_date} flashed={savedField === "Kickoff"} onCommit={(v) => commit("kickoff_date", "Kickoff", v)} onPromoteField="kickoff_date" />
+            <DateField fieldLabel="Go live" value={proc.go_live_date} flashed={savedField === "Go live"} onCommit={(v) => commit("go_live_date", "Go live", v)} onPromoteField="go_live_date" />
+            <DateField fieldLabel="Parity complete" value={proc.date_parity_complete} flashed={savedField === "Parity complete"} onCommit={(v) => commit("date_parity_complete", "Parity complete", v)} />
+            <DateField fieldLabel="Customer handover" value={proc.date_customer_handover} flashed={savedField === "Customer handover"} onCommit={(v) => commit("date_customer_handover", "Customer handover", v)} />
+            <DateField fieldLabel="Customer validation" value={proc.date_customer_validation} flashed={savedField === "Customer validation"} onCommit={(v) => commit("date_customer_validation", "Customer validation", v)} />
+            {/* Stored 0..1, shown 0..100. This field used to bind the raw
+                value under a "%" label, so it displayed 0.65 and a user typing
+                the obvious 65 wrote completion_pct = 65 — which rendered as
+                6500% in the table and blew the progress bar across the row. */}
+            <NumberField
+              fieldLabel="Completion %"
+              value={proc.completion_pct != null ? Math.round(proc.completion_pct * 100) : null}
+              min={0}
+              max={100}
+              flashed={savedField === "Completion %"}
+              onCommit={(v) => commit("completion_pct", "Completion %", v == null ? null : clampPct(v) / 100)}
+              onPromoteField="completion_pct"
+            />
+            <NumberField fieldLabel="Effort hours" value={proc.total_effort_hours} flashed={savedField === "Effort hours"} onCommit={(v) => commit("total_effort_hours", "Effort hours", v)} onPromoteField="total_effort_hours" />
+            <DerivedField fieldLabel="TTV" display={proc.ttv_days != null ? `${proc.ttv_days} days` : "Set once kickoff and go-live are both filled in"} />
+          </div>
+
+          <GroupHeader title="Ownership" />
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+            <FieldWrapper fieldLabel="FDE owner" promoteField="fde_owner_id" flashed={savedField === "FDE owner"}>
+              <RosterPicker
+                kind="person"
+                role="fde"
+                valueLabel={proc.fde_owner}
+                onPick={(entry: RosterEntry) => commit("fde_owner_id", "FDE owner", entry.id)}
+                onClear={() => commit("fde_owner_id", "FDE owner", null)}
+              />
+            </FieldWrapper>
+            <FieldWrapper fieldLabel="TAM owner" promoteField="tam_owner_id" flashed={savedField === "TAM owner"}>
+              <RosterPicker
+                kind="person"
+                role="tam"
+                valueLabel={proc.tam_owner}
+                onPick={(entry: RosterEntry) => commit("tam_owner_id", "TAM owner", entry.id)}
+                onClear={() => commit("tam_owner_id", "TAM owner", null)}
+              />
+            </FieldWrapper>
+            <FieldWrapper fieldLabel="Engineering owner" promoteField="engg_owner_id" flashed={savedField === "Engineering owner"}>
+              <RosterPicker
+                kind="person"
+                role="engg"
+                valueLabel={proc.engg_owner}
+                onPick={(entry: RosterEntry) => commit("engg_owner_id", "Engineering owner", entry.id)}
+                onClear={() => commit("engg_owner_id", "Engineering owner", null)}
+              />
+            </FieldWrapper>
+            <FieldWrapper fieldLabel="Partner" promoteField="partner_id" flashed={savedField === "Partner"}>
+              <RosterPicker
+                kind="partner_org"
+                valueLabel={proc.partner}
+                onPick={(entry: RosterEntry) => commit("partner_id", "Partner", entry.id)}
+                onClear={() => commit("partner_id", "Partner", null)}
+              />
+            </FieldWrapper>
+          </div>
+
+          <GroupHeader title="Value" />
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+            {/* The editable column is the one-time import snapshot; the strip
+                above prefers Salesforce's confirmed ARR where we have it. */}
+            <NumberField
+              fieldLabel="ARR (snapshot)"
+              value={proc.arr}
+              flashed={savedField === "ARR (snapshot)"}
+              onCommit={(v) => commit("arr", "ARR (snapshot)", v)}
+              onPromoteField="arr"
+            />
+            <TextField fieldLabel="Company size" value={proc.company_size} flashed={savedField === "Company size"} onCommit={(v) => commit("company_size", "Company size", v)} />
+            <NumberField fieldLabel="Minutes saved / run" value={proc.value_minutes_saved_per_run} flashed={savedField === "Minutes saved / run"} onCommit={(v) => commit("value_minutes_saved_per_run", "Minutes saved / run", v)} />
+            <DerivedField
+              fieldLabel="Runs this quarter"
+              display={proc.k2_process_id ? "—" : "Not linked to a Kognitos automation yet"}
+            />
+          </div>
+
+          <GroupHeader title="Notes on the record" />
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+            {/* The ⚑ flag in the table reads from `blockers`, which the activity
+                feed mirrors into. Without an editable field here a flag raised
+                by a note that was later deleted could never be cleared. */}
+            <TextField
+              fieldLabel="Blocker flag"
+              value={proc.blockers}
+              flashed={savedField === "Blocker flag"}
+              onCommit={(v) => commit("blockers", "Blocker flag", v)}
+            />
+            <TextField
+              fieldLabel="Latest note"
+              value={proc.notes}
+              flashed={savedField === "Latest note"}
+              onCommit={(v) => commit("notes", "Latest note", v)}
+            />
+          </div>
+
+          <GroupHeader title="Linear tickets" />
+          <div className="space-y-1.5">
+            {tickets.length === 0 ? (
+              <div className="text-[12px] text-[color:var(--muted-foreground)] italic">No tickets attached.</div>
+            ) : (
+              tickets.map((t) => (
+                <div key={t.id} className="flex items-center gap-2 rounded-md border px-2 py-1.5" style={{ borderColor: "var(--brand-metal-line)" }}>
+                  <span className="text-[11px] font-mono text-[color:var(--muted-foreground)]">{t.id}</span>
+                  <span className="text-[12px] text-[color:var(--foreground)] truncate flex-1">{t.title}</span>
+                  {t.linear_status ? (
+                    <span className="text-[10px] text-[color:var(--muted-foreground)] shrink-0">{t.linear_status}</span>
+                  ) : null}
+                  <button type="button" onClick={() => detachTicket(t.id)} className="text-[12px] opacity-50 hover:opacity-100 hover:text-red-500 shrink-0">
                     ×
                   </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {/* Why this row is in the Stuck lane, and the one control that gets it
-            out. Stuck is derived (laneFor: on_hold OR blocked_on != none), not
-            stored, so there is nothing named "Stuck" to un-set — which left
-            people with no idea how to leave it. */}
-        {stuckCauses.length > 0 ? (
-          <div className="space-y-1.5">
-            {stuckCauses.map((cause) => (
-              <div
-                key={cause.kind}
-                className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs"
-                style={{
-                  background: cause.kind === "blocked" ? "var(--st-red-bg)" : "var(--st-orange-bg)",
-                  borderColor: cause.kind === "blocked" ? "var(--st-red-bd)" : "var(--st-orange-bd)",
-                  color: cause.kind === "blocked" ? "var(--st-red-fg)" : "var(--st-orange-fg)",
-                }}
-              >
-                <span className="flex-1">{cause.text}</span>
-                <button
-                  type="button"
-                  onClick={cause.action}
-                  className="shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold"
-                  style={{ background: "var(--brand-yellow)", color: "#171717" }}
+                </div>
+              ))
+            )}
+            <div className="relative">
+              <input
+                value={ticketQuery}
+                onChange={(e) => setTicketQuery(e.target.value)}
+                placeholder="Attach a ticket — search Linear…"
+                className="dops-input dops-input-dashed w-full px-2.5 py-1.5 text-[12.5px]"
+                style={{ borderColor: "var(--brand-metal-line)" }}
+              />
+              {ticketResults.length > 0 ? (
+                <div
+                  className="dops-rise-in absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border shadow-lg"
+                  style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--brand-metal-line)" }}
                 >
-                  {cause.actionLabel}
-                </button>
-              </div>
-            ))}
+                  {ticketResults.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => t.id && attachTicket(t.id)}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-[var(--glass-bg)]"
+                    >
+                      <span className="text-[11px] font-mono text-[color:var(--muted-foreground)]">{t.id}</span>
+                      <span className="text-[12px] text-[color:var(--foreground)] truncate">{t.title}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
-        ) : null}
 
-        {/* Key facts strip */}
-        <div className="grid grid-cols-4 divide-x rounded-lg border" style={{ borderColor: "var(--brand-metal-line)" }}>
-          <KeyFact label="Migration stage" value={stageLabel(proc.migration_stage)} />
-          <KeyFact label="Progress" value={proc.completion_pct != null ? `${Math.round(proc.completion_pct * 100)}%` : "—"} accent />
-          <KeyFact
-            label={proc.confirmed_arr != null ? "Confirmed ARR" : "ARR (snapshot)"}
-            value={formatMoney(confirmedArr ?? null)}
-            accent
-          />
-          <KeyFact label="TTV" value={proc.ttv_days != null ? `${proc.ttv_days}d` : "—"} />
-        </div>
+          <GroupHeader title="Activity" />
+          <ActivityFeed processId={proc.id} compact onPosted={onDataChanged} />
 
-        <GroupHeader title="Identity" />
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-          <FieldWrapper fieldLabel="Customer" flashed={savedField === "Customer"}>
-            <CustomerPicker
-              value={proc.customer_id}
-              valueLabel={proc.customer_display_name}
-              options={customerOptions}
-              onPick={(id) => void commit("customer_id", "Customer", id)}
-            />
-          </FieldWrapper>
-        </div>
-
-        <GroupHeader title="State" />
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-          <SelectField
-            fieldLabel="Lifecycle"
-            value={proc.lifecycle}
-            options={PROCESS_LIFECYCLES}
-            optionLabels={LIFECYCLE_LABELS}
-            flashed={savedField === "Lifecycle"}
-            selectRef={lifecycleRef}
-            onCommit={(v) => commit("lifecycle", "Lifecycle", v)}
-            onPromote={() => promote("lifecycle")}
-          />
-          <SelectField
-            fieldLabel="Migration stage"
-            value={proc.migration_stage}
-            options={MIGRATION_STAGES}
-            optionLabels={MIGRATION_STAGE_LABELS}
-            flashed={savedField === "Migration stage"}
-            onCommit={(v) => commit("migration_stage", "Migration stage", v)}
-            onPromote={() => promote("migration_stage")}
-          />
-          <SelectField
-            fieldLabel="Phase"
-            value={proc.phase}
-            options={PROCESS_PHASES}
-            optionLabels={PHASE_LABELS}
-            flashed={savedField === "Phase"}
-            clearable
-            onCommit={(v) => commit("phase", "Phase", v)}
-            onPromote={() => promote("phase")}
-          />
-          <SelectField
-            fieldLabel="Health"
-            value={proc.health}
-            options={PROCESS_HEALTHS}
-            optionLabels={HEALTH_LABELS}
-            flashed={savedField === "Health"}
-            clearable
-            onCommit={(v) => commit("health", "Health", v)}
-            onPromote={() => promote("health")}
-          />
-          <SelectField
-            fieldLabel="Blocked on"
-            value={proc.blocked_on}
-            options={PROCESS_BLOCKED_ON}
-            optionLabels={BLOCKED_ON_LABELS}
-            flashed={savedField === "Blocked on"}
-            onCommit={(v) => commit("blocked_on", "Blocked on", v)}
-          />
-          <SelectField
-            fieldLabel="Work mode"
-            value={proc.work_mode}
-            options={PROCESS_WORK_MODES}
-            optionLabels={WORK_MODE_LABELS}
-            flashed={savedField === "Work mode"}
-            clearable
-            onCommit={(v) => commit("work_mode", "Work mode", v)}
-          />
-          <SelectField
-            fieldLabel="Platform"
-            value={proc.platform}
-            options={PROCESS_PLATFORMS}
-            optionLabels={PLATFORM_LABELS}
-            flashed={savedField === "Platform"}
-            onCommit={(v) => commit("platform", "Platform", v)}
-            onPromote={() => promote("platform")}
-          />
-        </div>
-
-        <GroupHeader title="Dates & effort" />
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-          <DateField fieldLabel="Kickoff" value={proc.kickoff_date} flashed={savedField === "Kickoff"} onCommit={(v) => commit("kickoff_date", "Kickoff", v)} onPromote={() => promote("kickoff_date")} />
-          <DateField fieldLabel="Go live" value={proc.go_live_date} flashed={savedField === "Go live"} onCommit={(v) => commit("go_live_date", "Go live", v)} onPromote={() => promote("go_live_date")} />
-          <DateField fieldLabel="Parity complete" value={proc.date_parity_complete} flashed={savedField === "Parity complete"} onCommit={(v) => commit("date_parity_complete", "Parity complete", v)} />
-          <DateField fieldLabel="Customer handover" value={proc.date_customer_handover} flashed={savedField === "Customer handover"} onCommit={(v) => commit("date_customer_handover", "Customer handover", v)} />
-          <DateField fieldLabel="Customer validation" value={proc.date_customer_validation} flashed={savedField === "Customer validation"} onCommit={(v) => commit("date_customer_validation", "Customer validation", v)} />
-          {/* Stored 0..1, shown 0..100. This field used to bind the raw
-              value under a "%" label, so it displayed 0.65 and a user typing
-              the obvious 65 wrote completion_pct = 65 — which rendered as
-              6500% in the table and blew the progress bar across the row. */}
-          <NumberField
-            fieldLabel="Completion %"
-            value={proc.completion_pct != null ? Math.round(proc.completion_pct * 100) : null}
-            min={0}
-            max={100}
-            flashed={savedField === "Completion %"}
-            onCommit={(v) => commit("completion_pct", "Completion %", v == null ? null : clampPct(v) / 100)}
-            onPromote={() => promote("completion_pct")}
-          />
-          <NumberField fieldLabel="Effort hours" value={proc.total_effort_hours} flashed={savedField === "Effort hours"} onCommit={(v) => commit("total_effort_hours", "Effort hours", v)} onPromote={() => promote("total_effort_hours")} />
-          <DerivedField fieldLabel="TTV" display={proc.ttv_days != null ? `${proc.ttv_days} days` : "Set once kickoff and go-live are both filled in"} />
-        </div>
-
-        <GroupHeader title="Ownership" />
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-          <FieldWrapper fieldLabel="FDE owner" promote={() => promote("fde_owner_id")} flashed={savedField === "FDE owner"}>
-            <RosterPicker
-              kind="person"
-              role="fde"
-              valueLabel={proc.fde_owner}
-              onPick={(entry: RosterEntry) => commit("fde_owner_id", "FDE owner", entry.id)}
-              onClear={() => commit("fde_owner_id", "FDE owner", null)}
-            />
-          </FieldWrapper>
-          <FieldWrapper fieldLabel="TAM owner" promote={() => promote("tam_owner_id")} flashed={savedField === "TAM owner"}>
-            <RosterPicker
-              kind="person"
-              role="tam"
-              valueLabel={proc.tam_owner}
-              onPick={(entry: RosterEntry) => commit("tam_owner_id", "TAM owner", entry.id)}
-              onClear={() => commit("tam_owner_id", "TAM owner", null)}
-            />
-          </FieldWrapper>
-          <FieldWrapper fieldLabel="Partner" promote={() => promote("partner_id")} flashed={savedField === "Partner"}>
-            <RosterPicker
-              kind="partner_org"
-              valueLabel={proc.partner}
-              onPick={(entry: RosterEntry) => commit("partner_id", "Partner", entry.id)}
-              onClear={() => commit("partner_id", "Partner", null)}
-            />
-          </FieldWrapper>
-        </div>
-
-        <GroupHeader title="Value" />
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-          {/* The editable column is the one-time import snapshot; the strip
-              above prefers Salesforce's confirmed ARR where we have it. */}
-          <NumberField
-            fieldLabel="ARR (snapshot)"
-            value={proc.arr}
-            flashed={savedField === "ARR (snapshot)"}
-            onCommit={(v) => commit("arr", "ARR (snapshot)", v)}
-            onPromote={() => promote("arr")}
-          />
-          <TextField fieldLabel="Company size" value={proc.company_size} flashed={savedField === "Company size"} onCommit={(v) => commit("company_size", "Company size", v)} />
-          <NumberField fieldLabel="Minutes saved / run" value={proc.value_minutes_saved_per_run} flashed={savedField === "Minutes saved / run"} onCommit={(v) => commit("value_minutes_saved_per_run", "Minutes saved / run", v)} />
-          <DerivedField
-            fieldLabel="Runs this quarter"
-            display={proc.k2_process_id ? "—" : "Not linked to a Kognitos automation yet"}
-          />
-        </div>
-
-        <GroupHeader title="Notes on the record" />
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-          {/* The ⚑ flag in the table reads from `blockers`, which the activity
-              feed mirrors into. Without an editable field here a flag raised
-              by a note that was later deleted could never be cleared. */}
-          <TextField
-            fieldLabel="Blocker flag"
-            value={proc.blockers}
-            flashed={savedField === "Blocker flag"}
-            onCommit={(v) => commit("blockers", "Blocker flag", v)}
-          />
-          <TextField
-            fieldLabel="Latest note"
-            value={proc.notes}
-            flashed={savedField === "Latest note"}
-            onCommit={(v) => commit("notes", "Latest note", v)}
-          />
-        </div>
-
-        <GroupHeader title="Linear tickets" />
-        <div className="space-y-1.5">
-          {tickets.length === 0 ? (
-            <div className="text-[12px] text-[color:var(--muted-foreground)] italic">No tickets attached.</div>
-          ) : (
-            tickets.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 rounded-md border px-2 py-1.5" style={{ borderColor: "var(--brand-metal-line)" }}>
-                <span className="text-[11px] font-mono text-[color:var(--muted-foreground)]">{t.id}</span>
-                <span className="text-[12px] text-[color:var(--foreground)] truncate flex-1">{t.title}</span>
-                {t.linear_status ? (
-                  <span className="text-[10px] text-[color:var(--muted-foreground)] shrink-0">{t.linear_status}</span>
-                ) : null}
-                <button type="button" onClick={() => detachTicket(t.id)} className="text-[12px] opacity-50 hover:opacity-100 hover:text-red-500 shrink-0">
-                  ×
-                </button>
-              </div>
-            ))
-          )}
-          <div className="relative">
-            <input
-              value={ticketQuery}
-              onChange={(e) => setTicketQuery(e.target.value)}
-              placeholder="Attach a ticket — search Linear…"
-              className="dops-input dops-input-dashed w-full px-2.5 py-1.5 text-[12.5px]"
-              style={{ borderColor: "var(--brand-metal-line)" }}
-            />
-            {ticketResults.length > 0 ? (
-              <div
-                className="dops-rise-in absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border shadow-lg"
-                style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--brand-metal-line)" }}
-              >
-                {ticketResults.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => t.id && attachTicket(t.id)}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-[var(--glass-bg)]"
-                  >
-                    <span className="text-[11px] font-mono text-[color:var(--muted-foreground)]">{t.id}</span>
-                    <span className="text-[12px] text-[color:var(--foreground)] truncate">{t.title}</span>
-                  </button>
-                ))}
+          <div>
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((v) => !v)}
+              className="text-[11px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] flex items-center gap-1"
+            >
+              <span className="inline-block transition-transform" style={{ transform: historyOpen ? "rotate(90deg)" : "none" }}>
+                ▸
+              </span>
+              Field history · {historyEntries.length} changes
+            </button>
+            {historyOpen ? (
+              <div className="mt-1.5 space-y-1 border-l pl-2.5" style={{ borderColor: "var(--brand-metal-line)" }}>
+                {historyEntries.length === 0 ? (
+                  <div className="text-[11px] italic text-[color:var(--muted-foreground)] py-1">No edits since import.</div>
+                ) : (
+                  historyEntries.map(([field, prov]) => (
+                    <div key={field} className="text-[11px] text-[color:var(--muted-foreground)] py-0.5">
+                      {fieldName(field)} changed · {prov?.by ?? "unknown"}
+                      {prov?.at ? ` · ${staleDays(prov.at)}d ago` : ""}
+                    </div>
+                  ))
+                )}
               </div>
             ) : null}
           </div>
         </div>
 
-        <GroupHeader title="Activity" />
-        <ActivityFeed processId={proc.id} compact onPosted={onDataChanged} />
-
-        <div>
-          <button
-            type="button"
-            onClick={() => setHistoryOpen((v) => !v)}
-            className="text-[11px] text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)] flex items-center gap-1"
-          >
-            <span className="inline-block transition-transform" style={{ transform: historyOpen ? "rotate(90deg)" : "none" }}>
-              ▸
-            </span>
-            Field history · {historyEntries.length} changes
-          </button>
-          {historyOpen ? (
-            <div className="mt-1.5 space-y-1 border-l pl-2.5" style={{ borderColor: "var(--brand-metal-line)" }}>
-              {historyEntries.length === 0 ? (
-                <div className="text-[11px] italic text-[color:var(--muted-foreground)] py-1">No edits since import.</div>
-              ) : (
-                historyEntries.map(([field, prov]) => (
-                  <div key={field} className="text-[11px] text-[color:var(--muted-foreground)] py-0.5">
-                    {fieldName(field)} changed · {prov?.by ?? "unknown"}
-                    {prov?.at ? ` · ${staleDays(prov.at)}d ago` : ""}
-                  </div>
-                ))
-              )}
-            </div>
-          ) : null}
+        {/* Footer */}
+        <div className="px-4 py-3 border-t flex items-center justify-between gap-3" style={{ borderColor: "var(--brand-metal-line)" }}>
+          <div className="text-[11px] text-[color:var(--muted-foreground)] min-w-0 truncate">
+            {error ? (
+              <span className="text-red-500">{error}</span>
+            ) : savedField ? (
+              <span style={{ color: "var(--yellow-ink)" }}>{savedField} saved</span>
+            ) : (
+              <>
+                Changes save as you make them.
+                {proc.reviewed_at ? (
+                  <span className="ml-2" style={{ color: "var(--yellow-ink)" }}>
+                    reviewed {staleDays(proc.reviewed_at)}d ago
+                  </span>
+                ) : null}
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={archive}
+              disabled={archiveBusy}
+              className="rounded-full border px-3 py-1.5 text-xs font-semibold text-red-600 border-red-600/30 hover:bg-red-500/10 disabled:opacity-60"
+            >
+              {archiveBusy ? "…" : "Archive"}
+            </button>
+            <button
+              type="button"
+              onClick={markReviewed}
+              disabled={reviewBusy}
+              className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+            >
+              {reviewBusy ? "…" : "Mark reviewed"}
+            </button>
+          </div>
         </div>
       </div>
-
-      {/* Footer */}
-      <div className="px-4 py-3 border-t flex items-center justify-between gap-3" style={{ borderColor: "var(--brand-metal-line)" }}>
-        <div className="text-[11px] text-[color:var(--muted-foreground)] min-w-0 truncate">
-          {error ? (
-            <span className="text-red-500">{error}</span>
-          ) : savedField ? (
-            <span style={{ color: "var(--yellow-ink)" }}>{savedField} saved</span>
-          ) : (
-            <>
-              Changes save as you make them.
-              {proc.reviewed_at ? (
-                <span className="ml-2" style={{ color: "var(--yellow-ink)" }}>
-                  reviewed {staleDays(proc.reviewed_at)}d ago
-                </span>
-              ) : null}
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={archive}
-            disabled={archiveBusy}
-            className="rounded-full border px-3 py-1.5 text-xs font-semibold text-red-600 border-red-600/30 hover:bg-red-500/10 disabled:opacity-60"
-          >
-            {archiveBusy ? "…" : "Archive"}
-          </button>
-          <button
-            type="button"
-            onClick={markReviewed}
-            disabled={reviewBusy}
-            className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-          >
-            {reviewBusy ? "…" : "Mark reviewed"}
-          </button>
-        </div>
-      </div>
-    </div>
+    </ColumnToggle.Provider>
   );
 }
 
@@ -878,7 +904,7 @@ function SelectField<T extends string>({
   flashed,
   clearable = false,
   onCommit,
-  onPromote,
+  onPromoteField,
   selectRef,
 }: {
   fieldLabel: string;
@@ -890,14 +916,14 @@ function SelectField<T extends string>({
    *  non-nullable ones (lifecycle, migration_stage, platform) don't. */
   clearable?: boolean;
   onCommit: (v: T | null) => void;
-  onPromote?: () => void;
+  onPromoteField?: keyof Process;
   /** Lets a caller focus the control — used by the Stuck banner's "Resume",
    *  which points at Lifecycle rather than picking a value on the user's
    *  behalf. */
   selectRef?: React.Ref<HTMLSelectElement>;
 }) {
   return (
-    <FieldWrapper fieldLabel={fieldLabel} promote={onPromote} flashed={flashed}>
+    <FieldWrapper fieldLabel={fieldLabel} promoteField={onPromoteField} flashed={flashed}>
       <select
         ref={selectRef}
         value={value ?? ""}
@@ -922,18 +948,18 @@ function DateField({
   value,
   flashed,
   onCommit,
-  onPromote,
+  onPromoteField,
 }: {
   fieldLabel: string;
   value: string | null;
   flashed: boolean;
   onCommit: (v: string | null) => void;
-  onPromote?: () => void;
+  onPromoteField?: keyof Process;
 }) {
   const [draft, setDraft] = useState(value ?? "");
   useEffect(() => setDraft(value ?? ""), [value]);
   return (
-    <FieldWrapper fieldLabel={fieldLabel} promote={onPromote} flashed={flashed}>
+    <FieldWrapper fieldLabel={fieldLabel} promoteField={onPromoteField} flashed={flashed}>
       <input
         type="date"
         value={draft}
@@ -952,7 +978,7 @@ function NumberField({
   min,
   max,
   onCommit,
-  onPromote,
+  onPromoteField,
 }: {
   fieldLabel: string;
   value: number | null;
@@ -960,12 +986,12 @@ function NumberField({
   min?: number;
   max?: number;
   onCommit: (v: number | null) => void;
-  onPromote?: () => void;
+  onPromoteField?: keyof Process;
 }) {
   const [draft, setDraft] = useState(value != null ? String(value) : "");
   useEffect(() => setDraft(value != null ? String(value) : ""), [value]);
   return (
-    <FieldWrapper fieldLabel={fieldLabel} promote={onPromote} flashed={flashed}>
+    <FieldWrapper fieldLabel={fieldLabel} promoteField={onPromoteField} flashed={flashed}>
       <input
         type="number"
         value={draft}
@@ -991,18 +1017,18 @@ function TextField({
   value,
   flashed,
   onCommit,
-  onPromote,
+  onPromoteField,
 }: {
   fieldLabel: string;
   value: string | null;
   flashed: boolean;
   onCommit: (v: string | null) => void;
-  onPromote?: () => void;
+  onPromoteField?: keyof Process;
 }) {
   const [draft, setDraft] = useState(value ?? "");
   useEffect(() => setDraft(value ?? ""), [value]);
   return (
-    <FieldWrapper fieldLabel={fieldLabel} promote={onPromote} flashed={flashed}>
+    <FieldWrapper fieldLabel={fieldLabel} promoteField={onPromoteField} flashed={flashed}>
       <input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

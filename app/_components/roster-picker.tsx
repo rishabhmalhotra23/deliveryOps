@@ -57,7 +57,13 @@ export function RosterPicker({
   const [justAdded, setJustAdded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  // The panel is measured off the TRIGGER, not off a search input. Until
+  // 2026-09-08 opening the control replaced the value with a bare <input>,
+  // which is the main reason a dropdown read as a text field — and that input
+  // carried min-w-[180px] into the 120px TAM and 118px Partner table tracks,
+  // where it overhung its neighbours. The trigger now stays put and the search
+  // box lives inside the panel.
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
 
@@ -103,7 +109,7 @@ export function RosterPicker({
       return;
     }
     function place() {
-      const el = inputRef.current;
+      const el = triggerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const width = 288;
@@ -183,32 +189,68 @@ export function RosterPicker({
     ];
   })();
 
-  if (!editing) {
-    return (
-      <div className={`flex items-center gap-1 ${dense ? "" : "w-full"}`}>
+  return (
+    <div ref={wrapRef} className={dense ? "" : "w-full"}>
+      <div className="flex items-center gap-1">
+        {/* Real select chrome when not dense: the value sits on the raised
+            --field surface with a divided chevron gutter, matching
+            select.dops-field. Before this it was a transparent bordered box
+            cued only by an 8px 50%-opacity glyph, so in the drawer it was
+            indistinguishable from the TextField and DateField boxes either
+            side of it — which is why it kept getting reported as a text
+            field. The dense (table) variant stays compact but keeps a
+            visible chevron. */}
         <button
+          ref={triggerRef}
           type="button"
-          onClick={() => setEditing(true)}
-          className={`flex items-center gap-1.5 min-w-0 flex-1 text-left rounded transition-colors hover:bg-[var(--glass-bg)] ${
-            dense ? "px-1 py-0.5" : "px-2 py-1.5 border border-transparent hover:border-[var(--brand-metal-line)]"
+          onClick={() => setEditing((v) => !v)}
+          aria-haspopup="listbox"
+          aria-expanded={editing}
+          aria-label={`${valueLabel ?? "Unassigned"} — change`}
+          className={`flex items-center min-w-0 flex-1 text-left overflow-hidden transition-colors ${
+            dense ? "gap-1.5 rounded px-1 py-0.5 hover:bg-[var(--glass-bg)]" : "rounded-lg border"
           }`}
+          style={
+            dense
+              ? undefined
+              : {
+                  background: "var(--field)",
+                  borderColor: editing ? "var(--yellow-line)" : "var(--brand-metal-line)",
+                }
+          }
         >
-          {valueLabel ? (
-            <>
-              <span
-                className="shrink-0 flex items-center justify-center text-[9px] font-semibold"
-                style={{ width: avatarSize, height: avatarSize, borderRadius: avatarRadius, background: "var(--brand-yellow)", color: "#171717" }}
-              >
-                {initials(valueLabel)}
-              </span>
-              <span className="truncate text-[color:var(--foreground)]">{valueLabel}</span>
-            </>
-          ) : (
-            <span className="text-[color:var(--muted-foreground)]">—</span>
-          )}
-          {/* Same affordance the .dops-field selects now carry: without it
-              an unset owner cell was indistinguishable from a dead "—". */}
-          <span className="ml-auto shrink-0 text-[8px] opacity-50" aria-hidden>
+          <span className={`flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden ${dense ? "" : "px-2 py-1.5"}`}>
+            {valueLabel ? (
+              <>
+                <span
+                  className="shrink-0 flex items-center justify-center text-[9px] font-semibold"
+                  style={{ width: avatarSize, height: avatarSize, borderRadius: avatarRadius, background: "var(--brand-yellow)", color: "#171717" }}
+                >
+                  {initials(valueLabel)}
+                </span>
+                <span className="truncate text-[color:var(--foreground)]">{valueLabel}</span>
+              </>
+            ) : (
+              <span className="text-[color:var(--muted-foreground)]">—</span>
+            )}
+          </span>
+          <span
+            className={
+              dense
+                ? "ml-auto shrink-0 text-[8px] opacity-60 pl-1"
+                : "shrink-0 self-stretch flex items-center px-1.5 border-l text-[9px]"
+            }
+            style={
+              dense
+                ? undefined
+                : {
+                    borderColor: editing ? "var(--yellow-line)" : "var(--brand-metal-line)",
+                    background: editing ? "var(--yellow-soft)" : "rgba(255,255,255,0.04)",
+                    color: "var(--yellow-ink)",
+                  }
+            }
+            aria-hidden
+          >
             ▼
           </span>
         </button>
@@ -228,20 +270,7 @@ export function RosterPicker({
           </button>
         ) : null}
       </div>
-    );
-  }
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <input
-        ref={inputRef}
-        autoFocus
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={kind === "person" ? "Search people, or just pick one" : "Search partners, or just pick one"}
-        className="dops-input dops-input-accent w-full min-w-[180px] px-2 py-1 text-[13px]"
-        style={{ borderColor: "var(--yellow-line)" }}
-      />
+      {editing ? (
       <div
         ref={menuRef}
         className="dops-rise-in fixed z-50 w-72 max-h-72 overflow-auto rounded-md border shadow-lg"
@@ -253,6 +282,19 @@ export function RosterPicker({
           borderColor: "var(--brand-metal-line)",
         }}
       >
+        {/* Search lives INSIDE the panel. It used to replace the trigger,
+            which made the control behave like a text box and pushed a
+            180px-min input into 118px table cells. */}
+        <div className="sticky top-0 p-1.5 border-b" style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--brand-metal-line)" }}>
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={kind === "person" ? "Search people, or just pick one" : "Search partners, or just pick one"}
+            className="dops-input dops-input-accent w-full px-2 py-1 text-[12.5px]"
+            style={{ borderColor: "var(--yellow-line)" }}
+          />
+        </div>
         {error ? (
           <div className="px-2.5 py-2 text-[11.5px]" style={{ color: "var(--status-bad)" }}>
             {error}
@@ -319,6 +361,7 @@ export function RosterPicker({
           </span>
         </button>
       </div>
+      ) : null}
       {justAdded ? (
         <div className="mt-1 text-[10.5px]" style={{ color: "var(--yellow-ink)" }}>
           Added to the roster — available on every process from now on.

@@ -16,10 +16,9 @@ import type {
   MigrationStage,
   ProcessHealth,
   ProcessLifecycle,
-  ProcessPhase,
   ProcessPlatform,
 } from "@/lib/supabase/types";
-import { healthLabel, lifecycleLabel, phaseLabel, platformLabel, stageLabel } from "@/lib/delivery/labels";
+import { healthLabel, lifecycleLabel, platformLabel, stageLabel } from "@/lib/delivery/labels";
 import { PageHeader } from "@/app/_components/brand";
 import { ProcessTable } from "@/app/_components/process-table";
 import { ProcessBoard, LANE_SORTS, type LaneSort, type PositionWrite } from "@/app/_components/process-board";
@@ -29,7 +28,7 @@ import type { VocabMap } from "@/lib/delivery/vocab";
 import { byPosition } from "@/lib/delivery/reorder";
 import {
   sectionFor,
-  inHistoricalLens,
+  inHistoricalSection,
   DELIVERY_SECTIONS,
   SECTION_LABELS,
   SECTION_HINTS,
@@ -59,12 +58,12 @@ const FILTER_LABEL: Record<FilterField, string> = {
   partner: "Partner",
   platform: "Platform",
   lifecycle: "Lifecycle",
-  phase: "Phase",
+  engg: "Engineering",
   tam: "TAM",
   person: "Anyone involved",
 };
 
-const ALL_FILTER_FIELDS: FilterField[] = ["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "phase", "tam", "person"];
+const ALL_FILTER_FIELDS: FilterField[] = ["stage", "owner", "customer", "health", "partner", "platform", "lifecycle", "tam", "engg", "person"];
 
 function matchesFilters(row: DetailProcess, values: Partial<Record<FilterField, string>>): boolean {
   if (values.stage && row.migration_stage !== values.stage) return false;
@@ -74,7 +73,7 @@ function matchesFilters(row: DetailProcess, values: Partial<Record<FilterField, 
   if (values.partner && row.partner !== values.partner) return false;
   if (values.platform && row.platform !== values.platform) return false;
   if (values.lifecycle && row.lifecycle !== values.lifecycle) return false;
-  if (values.phase && row.phase !== values.phase) return false;
+  if (values.engg && row.engg_owner !== values.engg) return false;
   if (values.tam && row.tam_owner !== values.tam) return false;
   // Any owner role, not one column — see the FilterField comment in
   // lib/delivery/prefs.ts for why the roster's hand-over link needs this.
@@ -105,12 +104,12 @@ function compareBy(key: ColKey, a: DetailProcess, b: DetailProcess): number {
       return a.migration_stage.localeCompare(b.migration_stage);
     case "lifecycle":
       return a.lifecycle.localeCompare(b.lifecycle);
-    case "phase":
-      return (a.phase ?? "").localeCompare(b.phase ?? "");
     case "owner":
       return (a.fde_owner ?? "").localeCompare(b.fde_owner ?? "");
     case "tam":
       return (a.tam_owner ?? "").localeCompare(b.tam_owner ?? "");
+    case "engg":
+      return (a.engg_owner ?? "").localeCompare(b.engg_owner ?? "");
     case "partner":
       return (a.partner ?? "").localeCompare(b.partner ?? "");
     case "health":
@@ -158,8 +157,8 @@ function optionsForField(field: FilterField, rows: DetailProcess[], processesOve
       return Array.from(new Set(rows.map((r) => r.health).filter((v): v is NonNullable<typeof v> => !!v))).sort();
     case "lifecycle":
       return Array.from(new Set(rows.map((r) => r.lifecycle))).sort();
-    case "phase":
-      return Array.from(new Set(rows.map((r) => r.phase).filter((v): v is NonNullable<typeof v> => !!v))).sort();
+    case "engg":
+      return Array.from(new Set(rows.map((r) => r.engg_owner).filter((v): v is NonNullable<typeof v> => !!v))).sort();
     case "platform":
       return Array.from(new Set(rows.map((r) => r.platform))).sort();
     default:
@@ -180,8 +179,7 @@ function optionLabel(field: FilterField, value: string): string {
       return healthLabel(value as ProcessHealth);
     case "lifecycle":
       return lifecycleLabel(value as ProcessLifecycle);
-    case "phase":
-      return phaseLabel(value as ProcessPhase);
+
     default:
       return value;
   }
@@ -229,7 +227,7 @@ export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryC
           : r.fde_owner === who
       );
       const hit = DELIVERY_SECTIONS.find((s) =>
-        mine.some((r) => (s === "historical" ? inHistoricalLens(r) : sectionFor(r) === s))
+        mine.some((r) => (s === "historical" ? inHistoricalSection(r) : sectionFor(r) === s))
       );
       if (hit) return hit;
     }
@@ -361,13 +359,40 @@ export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryC
       else if (s === "v2") v2.push(row);
     }
     // Wrapped, not passed by reference: Array#filter hands the callback
-    // (value, index, array), and inHistoricalLens's second parameter is the
+    // (value, index, array), and inHistoricalSection's second parameter is the
     // `today` cutoff — a bare reference would compare go-live dates against
     // the row's array index.
-    return { active, v2, historical: allRows.filter((r) => inHistoricalLens(r)) };
+    //
+    // inHistoricalSection, not inHistoricalLens: since live + v2_native now
+    // routes here, the lens alone would strand a process marked live with no
+    // go-live date in no section at all. See the comment on that function.
+    return { active, v2, historical: allRows.filter((r) => inHistoricalSection(r)) };
   }, [allRows]);
 
   const baseRows: DetailProcess[] = bySection[section];
+
+  // Tab counts have to describe what the section will actually show. They used
+  // to be bySection[key].length — computed BEFORE search and filters — while
+  // the table rendered `sorted`, computed after. So a tab could read 11 above
+  // a table showing 3, or above an empty one, and the only hint was the "N of
+  // M" indicator buried in the toolbar. Worse, ?person= / ?owner= deep links
+  // from Configure -> Roster seed a filter on mount, so the mismatch appeared
+  // without anyone touching a control.
+  //
+  // Filtering all three sections costs nothing at 149 rows, and it keeps the
+  // count honest for the two tabs you are not looking at, which is the whole
+  // point of a tab count.
+  const isNarrowed = search.trim().length > 0 || Object.values(filterValues).some(Boolean);
+  const sectionCounts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const shown = (rows: DetailProcess[]) =>
+      rows.filter((r) => matchesSearch(r, q) && matchesFilters(r, filterValues)).length;
+    return {
+      active: { shown: shown(bySection.active), total: bySection.active.length },
+      v2: { shown: shown(bySection.v2), total: bySection.v2.length },
+      historical: { shown: shown(bySection.historical), total: bySection.historical.length },
+    };
+  }, [bySection, search, filterValues]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -400,13 +425,27 @@ export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryC
   // default branch and printed the literal word "Lifecycle" on every card —
   // and the Fields menu only lists CARD_FIELDS, so there was no way to turn
   // it back off without wiping saved preferences.
-  function promoteToColumn(col: ColKey) {
-    setPrefs((cur) => ({
-      ...cur,
-      cols: cur.cols.includes(col) ? cur.cols : [...cur.cols, col],
-      cardFields:
-        CARD_FIELDS.includes(col) && !cur.cardFields.includes(col) ? [...cur.cardFields, col] : cur.cardFields,
-    }));
+  // Toggle, not add-only. The drawer's per-field control used to only ever
+  // add: its tooltip read "Add X as a column" even when X was already
+  // showing, and clicking was then a silent no-op with no way back except the
+  // Fields menu. Removing the last column is refused rather than silently
+  // restoring all 15, which is what prefs.sanitize's `cols.length > 0` did.
+  function toggleColumn(col: ColKey) {
+    setPrefs((cur) => {
+      const shown = cur.cols.includes(col);
+      if (shown && cur.cols.length === 1) return cur;
+      return {
+        ...cur,
+        cols: shown ? cur.cols.filter((c) => c !== col) : [...cur.cols, col],
+        cardFields: !CARD_FIELDS.includes(col)
+          ? cur.cardFields
+          : shown
+            ? cur.cardFields.filter((c) => c !== col)
+            : cur.cardFields.includes(col)
+              ? cur.cardFields
+              : [...cur.cardFields, col],
+      };
+    });
   }
 
   // Shared by the flat table and every Historical quarter group, so a column
@@ -683,7 +722,7 @@ export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryC
 
       {/* Section tabs */}
       <div className="flex items-center gap-4 border-b" style={{ borderColor: "var(--glass-border)" }}>
-        {DELIVERY_SECTIONS.map((key) => ({ key, label: SECTION_LABELS[key], count: bySection[key].length })).map((s) => (
+        {DELIVERY_SECTIONS.map((key) => ({ key, label: SECTION_LABELS[key], ...sectionCounts[key] })).map((s) => (
           <button
             key={s.key}
             type="button"
@@ -702,7 +741,17 @@ export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryC
             }}
           >
             {s.label}
-            <span className="font-mono text-[11px] opacity-70">{s.count}</span>
+            {isNarrowed && s.shown !== s.total ? (
+              <span
+                className="font-mono text-[11px]"
+                style={{ color: "var(--yellow-ink)" }}
+                title={`${s.shown} of ${s.total} match the current search and filters`}
+              >
+                {s.shown} of {s.total}
+              </span>
+            ) : (
+              <span className="font-mono text-[11px] opacity-70">{s.total}</span>
+            )}
           </button>
         ))}
         <span className="ml-auto text-[11px] text-[color:var(--muted-foreground)] pb-2">
@@ -1039,7 +1088,8 @@ export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryC
               onArchived={(id) => removeRows([id])}
               onDataChanged={() => router.refresh()}
               onClose={closeDetail}
-              onAddColumn={promoteToColumn}
+              visibleCols={prefs.cols}
+              onToggleColumn={toggleColumn}
             />
           </div>
         ) : null}
@@ -1087,7 +1137,8 @@ export function DeliveryClient({ processesOverview, colorMap, vocab }: DeliveryC
               onArchived={(id) => removeRows([id])}
               onDataChanged={() => router.refresh()}
               onClose={closeDetail}
-              onAddColumn={promoteToColumn}
+              visibleCols={prefs.cols}
+              onToggleColumn={toggleColumn}
             />
           </div>
         </div>

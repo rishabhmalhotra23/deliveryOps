@@ -101,7 +101,11 @@ function comparatorFor(sort: LaneSort): (a: DetailProcess, b: DetailProcess) => 
   }
 }
 
-function bucketRows(
+/** Exported for tests/delivery/board-lanes.test.ts, which pins the property
+ *  that every row handed in lands in some lane. Both loops below used to drop
+ *  rows they couldn't place, silently: a `live` row in active mode (laneFor
+ *  returns null) and every `not_required` row in v2 mode. */
+export function bucketRows(
   mode: "active" | "v2",
   rows: DetailProcess[],
   laneSort: LaneSort,
@@ -116,19 +120,29 @@ function bucketRows(
       dot: ACTIVE_LANE_DOT[l],
     }));
     const byLane = new Map<string, DetailProcess[]>(lanes.map((l) => [l.key, []]));
+    const unplaced: DetailProcess[] = [];
     for (const row of rows) {
       const lane = laneFor(row.lifecycle, row.blocked_on);
       if (lane) byLane.get(lane)!.push(row);
+      else unplaced.push(row);
     }
+    addOverflowLane(lanes, byLane, unplaced, {
+      label: "Not in flight",
+      noDrop: "These lifecycles have no lane — change the lifecycle to move the card",
+    });
     byLane.forEach((laneRows) => laneRows.sort(compare));
     return { lanes, byLane };
   }
-  // Retired stages (Configure -> Vocabularies) get no lane: an empty column
-  // for a value nobody can pick any more is just noise. Rows still carrying
-  // one are unaffected — they keep their own chip.
-  const stages = MIGRATION_STAGES.filter(
-    (s) => s !== "not_required" && (vocab.stage?.[s]?.active ?? true)
-  );
+  // Retired stages (Configure -> Vocabularies) get no lane of their own: an
+  // empty column for a value nobody can pick any more is just noise. Rows
+  // still carrying one land in the overflow lane below rather than vanishing,
+  // which is the whole reason retiring is `active = false` and not a delete.
+  //
+  // `not_required` DOES get a lane. It used to be filtered out here while
+  // sectionFor() kept every not_required row inside the section, so 29 of
+  // production's 65 V2-migration rows were counted by the tab and uncardable
+  // on the board. It is a legitimate state in the migrate-or-retire list.
+  const stages = MIGRATION_STAGES.filter((s) => vocab.stage?.[s]?.active ?? true);
   const lanes: LaneDef[] = stages.map((s) => ({
     key: s,
     label: vocabLabel("stage", s, vocab),
@@ -141,11 +155,45 @@ function bucketRows(
     noDrop: s === "v2_native" ? "V2 native is for work built on V2, not migrated to it" : undefined,
   }));
   const byLane = new Map<string, DetailProcess[]>(lanes.map((l) => [l.key, []]));
+  const unplaced: DetailProcess[] = [];
   for (const row of rows) {
     if (byLane.has(row.migration_stage)) byLane.get(row.migration_stage)!.push(row);
+    else unplaced.push(row);
   }
+  addOverflowLane(lanes, byLane, unplaced, {
+    label: "Needs a stage",
+    noDrop: "This migration stage was retired — pick a current stage to move the card",
+  });
   byLane.forEach((laneRows) => laneRows.sort(compare));
   return { lanes, byLane };
+}
+
+/** The lane key for rows the board could not place. Not a migration_stage and
+ *  not an ActiveLane, so it can never collide with a real lane. */
+export const OVERFLOW_LANE = "__unplaced";
+
+/** Appends a visible lane for anything the board couldn't place, and only when
+ *  there is something to show — an always-on empty column would be noise.
+ *
+ *  The point is that a row can never disappear again. Both loops above used to
+ *  drop what they couldn't lane, which is what made Active work's tab count
+ *  disagree with its board (2 of 9 rows in production) and V2 migration's
+ *  disagree with its own (29 of 65). Pinned by tests/delivery/board-lanes.test.ts. */
+function addOverflowLane(
+  lanes: LaneDef[],
+  byLane: Map<string, DetailProcess[]>,
+  unplaced: DetailProcess[],
+  copy: { label: string; noDrop: string }
+): void {
+  if (unplaced.length === 0) return;
+  lanes.push({
+    key: OVERFLOW_LANE,
+    label: copy.label,
+    hue: "neutral",
+    dot: "var(--status-bad)",
+    noDrop: copy.noDrop,
+  });
+  byLane.set(OVERFLOW_LANE, unplaced);
 }
 
 const byBoardPosition = byPosition<DetailProcess>((r) => r.board_position);

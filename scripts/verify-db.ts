@@ -237,26 +237,52 @@ async function phaseInvariants() {
   }
 
   // A section is derived from lifecycle + migration_stage, so every process
-  // must resolve to exactly one. A value present in the enum but absent from
-  // the routing rules would silently strand rows.
+  // must resolve to one. A value present in the enum but absent from the
+  // routing rules would silently strand rows.
+  //
+  // Checked against inHistoricalSection rather than sectionFor alone, because
+  // sectionFor's return value being a valid string is not the invariant that
+  // matters — being VISIBLE somewhere is. Since 2026-09-08 live + v2_native
+  // routes to "historical", and Historical renders the union of that and the
+  // shipped lens; a process marked live with no go-live date satisfies
+  // sectionFor but would fail the lens, so only the union catches it.
   try {
-    const { sectionFor } = await import("@/lib/delivery/sections");
+    const { sectionFor, inHistoricalSection } = await import("@/lib/delivery/sections");
     const { data, error } = await s
       .from("processes")
-      .select("id, lifecycle, migration_stage")
+      .select("id, process_name, lifecycle, migration_stage, go_live_date")
       .is("deleted_at", null);
     if (error) throw error;
-    const rows = (data as { id: string; lifecycle: string; migration_stage: string }[]) ?? [];
-    const bad = rows.filter(
-      (r) =>
-        !["active", "v2", "historical"].includes(
-          sectionFor(r as Parameters<typeof sectionFor>[0])
+    type Row = Parameters<typeof inHistoricalSection>[0] & { id: string; process_name: string };
+    const rows = (data as Row[]) ?? [];
+    const stranded = rows.filter((r) => {
+      const routed = sectionFor(r);
+      if (routed === "active" || routed === "v2") return false;
+      return !inHistoricalSection(r);
+    });
+    if (stranded.length > 0) {
+      fail(
+        "every process is visible in a section",
+        new Error(
+          `${stranded.length} stranded: ${stranded
+            .slice(0, 5)
+            .map((r) => `${r.process_name} (${r.lifecycle}/${r.migration_stage}, go_live=${r.go_live_date ?? "null"})`)
+            .join("; ")}`
         )
-    );
-    if (bad.length > 0) fail("every process routes to a section", new Error(`${bad.length} stranded`));
-    else pass("every process routes to a section", `${rows.length} rows`);
+      );
+    } else {
+      const counts = {
+        active: rows.filter((r) => sectionFor(r) === "active").length,
+        v2: rows.filter((r) => sectionFor(r) === "v2").length,
+        historical: rows.filter((r) => inHistoricalSection(r)).length,
+      };
+      pass(
+        "every process is visible in a section",
+        `${rows.length} rows — active ${counts.active}, v2 ${counts.v2}, historical ${counts.historical} (lens overlaps, so these do not sum)`
+      );
+    }
   } catch (err) {
-    fail("every process routes to a section", err);
+    fail("every process is visible in a section", err);
   }
 
   // Every enum value used by a row must have a presentation row, or it

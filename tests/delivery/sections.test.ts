@@ -16,7 +16,28 @@ describe("sectionFor", () => {
   it("routes V2 native in-flight work to Active work", () => {
     expect(sectionFor(row("in_development", "v2_native"))).toBe("active");
     expect(sectionFor(row("discovery", "v2_native"))).toBe("active");
-    expect(sectionFor(row("live", "v2_native"))).toBe("active");
+    expect(sectionFor(row("backlog", "v2_native"))).toBe("active");
+    expect(sectionFor(row("uat", "v2_native"))).toBe("active");
+    expect(sectionFor(row("on_hold", "v2_native"))).toBe("active");
+  });
+
+  // Changed 2026-09-08 on Rishabh's call: "once something goes live it should
+  // move to Historical section and for that quarter Go-Live instead, and
+  // Active Work should show the work in dev, test, upcoming pipeline or
+  // discovery". Active work means in flight; shipping is an exit, not a state.
+  it("routes a shipped V2-native process out of Active work", () => {
+    expect(sectionFor(row("live", "v2_native"))).toBe("historical");
+  });
+
+  // Deliberately NOT symmetric with Active work. V2 migration is a
+  // migrate-or-retire to-do list, and a process running live on V1 is still
+  // on that list. Applying the Active-work rule here would have moved 58 of
+  // production's 65 rows out and collapsed the section to 5.
+  it("keeps live work in V2 migration, because it still needs migrating", () => {
+    expect(sectionFor(row("live", "not_required"))).toBe("v2");
+    expect(sectionFor(row("live", "customer_validation"))).toBe("v2");
+    expect(sectionFor(row("live", "migrated_pending_commercial"))).toBe("v2");
+    expect(sectionFor(row("live", "live_on_v2"))).toBe("v2");
   });
 
   it("routes everything not yet V2 native to V2 migration", () => {
@@ -117,6 +138,45 @@ describe("inHistoricalLens", () => {
     expect(
       inHistoricalLens({ lifecycle: "cancelled", go_live_date: "2027-01-01" }, "2026-09-04")
     ).toBe(true);
+  });
+});
+
+describe("Historical is the union of the routed section and the lens", () => {
+  // The orphan guard for the 2026-09-08 change. sectionFor() now sends
+  // live + v2_native to "historical", but inHistoricalLens() is FALSE for a
+  // row with no go-live date — so if Historical rendered the lens alone, a
+  // process marked live without a date would leave Active work and appear in
+  // no section whatsoever. delivery-client.tsx therefore renders the union,
+  // and that row shows up in the "No go-live date" bucket where it can be
+  // fixed. Production has 6 undated live rows today, 0 of them v2_native, so
+  // this guards a future edit rather than existing data.
+  const inHistorical = (r: {
+    lifecycle: ProcessLifecycle;
+    migration_stage: MigrationStage;
+    go_live_date: string | null;
+  }) => sectionFor(r) === "historical" || inHistoricalLens(r);
+
+  it("keeps an undated live V2-native process reachable", () => {
+    const orphanCandidate = { lifecycle: "live" as ProcessLifecycle, migration_stage: "v2_native" as MigrationStage, go_live_date: null };
+    expect(sectionFor(orphanCandidate)).toBe("historical");
+    expect(inHistoricalLens(orphanCandidate)).toBe(false);
+    expect(inHistorical(orphanCandidate)).toBe(true);
+  });
+
+  it("leaves every process in at least one section", () => {
+    for (const lifecycle of PROCESS_LIFECYCLES) {
+      for (const stage of MIGRATION_STAGES) {
+        for (const go_live_date of [null, "2026-01-01", "2099-01-01"]) {
+          const r = { lifecycle, migration_stage: stage, go_live_date };
+          const sections = [
+            sectionFor(r) === "active",
+            sectionFor(r) === "v2",
+            inHistorical(r),
+          ].filter(Boolean);
+          expect(sections.length, `${lifecycle}/${stage}/${go_live_date}`).toBeGreaterThan(0);
+        }
+      }
+    }
   });
 });
 

@@ -21,17 +21,15 @@ import {
   MIGRATION_STAGES,
   PROCESS_HEALTHS,
   PROCESS_LIFECYCLES,
-  PROCESS_PHASES,
   PROCESS_PLATFORMS,
 } from "@/lib/supabase/types";
-import { COLDEF_BY_KEY, formatMoney, staleDays, type ColKey } from "@/lib/delivery/columns";
+import { COLDEF_BY_KEY, formatMoney, minColWidth, staleDays, type ColKey } from "@/lib/delivery/columns";
 import { chipVars, resolveHue, type ColorMap } from "@/lib/delivery/hues";
 import { vocabLabel, vocabOptions, type VocabMap } from "@/lib/delivery/vocab";
 import {
   HEALTH_LABELS,
   LIFECYCLE_LABELS,
   MIGRATION_STAGE_LABELS,
-  PHASE_LABELS,
   PLATFORM_LABELS,
 } from "@/lib/delivery/labels";
 import { RosterPicker } from "@/app/_components/roster-picker";
@@ -64,7 +62,6 @@ const ACTIONS_W_WIDE = 66;
 const ACTIONS_W_NARROW = 44;
 const NAME_W_WIDE = 260;
 const NAME_W_NARROW = 220;
-const MIN_COL_W = 56;
 
 function prefixFor(narrow: boolean): string {
   return narrow ? "n:" : "w:";
@@ -178,6 +175,30 @@ export function ProcessTable({
     return () => window.removeEventListener("resize", measure);
   }, [narrow, cols.length]);
 
+  // Whether rows are hidden below the fold of the INNER scrollport. The
+  // measured maxHeight above has a 320px floor, so on a laptop the table
+  // routinely showed ~8 of its rows with the rest reachable only by scrolling
+  // inside the table — with no scrollbar gutter, no fade and no count, which
+  // is what made "the number on top is not same as actual projects" look like
+  // a counting bug rather than a clipped viewport. Drives the fade and the
+  // row-count footer below.
+  const [rowsBelow, setRowsBelow] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    function check() {
+      const node = scrollRef.current;
+      if (!node) return;
+      // 4px of slack: sub-pixel row heights make scrollHeight exceed
+      // clientHeight by a fraction on tables that actually fit.
+      setRowsBelow(node.scrollHeight - node.clientHeight > 4);
+    }
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [maxH, rows.length, cols.length, narrow]);
+
   useEffect(() => {
     if (!menuFor) return;
     function close() {
@@ -214,8 +235,12 @@ export function ProcessTable({
     e.stopPropagation();
     const startX = e.clientX;
     const cap = scrollRef.current ? Math.max(240, scrollRef.current.clientWidth - 140) : 2000;
+    // Per-column floor. A flat 56px let "Migration stage" shrink to a sliver
+    // while "Effort" still had slack. `name` has no ColDef, so it keeps a
+    // sensible fixed floor of its own.
+    const floor = key === "name" ? 160 : minColWidth(COLDEF_BY_KEY[key as ColKey]);
     function onMove(ev: MouseEvent) {
-      const next = Math.min(cap, Math.max(MIN_COL_W, startW + (ev.clientX - startX)));
+      const next = Math.min(cap, Math.max(floor, startW + (ev.clientX - startX)));
       onColWChange(`${prefixFor(narrow)}${key}`, next);
     }
     function onUp() {
@@ -268,6 +293,7 @@ export function ProcessTable({
 
   return (
     <>
+      <div className="relative">
       <div
         ref={scrollRef}
         className="rounded-xl border overflow-auto relative"
@@ -416,7 +442,12 @@ export function ProcessTable({
                 <NameCell row={row} onSave={onSave} onOpenDetail={onOpenDetail} />
               </div>
               {cols.map((key) => (
-                <div key={key} className="flex items-center px-2 py-1.5 min-w-0">
+                // overflow-hidden, not just min-w-0: min-w-0 lets the box
+                // shrink but clips nothing, so any control wider than its
+                // fixed Npx grid track painted straight over the next
+                // column. That was the reported "column width is
+                // overlapping with other columns".
+                <div key={key} className="flex items-center px-2 py-1.5 min-w-0 overflow-hidden">
                   <Cell colKey={key} row={row} customerOptions={customerOptions} colorMap={colorMap} vocab={vocab} onSave={onSave} onOpenDetail={onOpenDetail} />
                 </div>
               ))}
@@ -466,6 +497,36 @@ export function ProcessTable({
           </div>
         ) : null}
       </div>
+      {/* Sits outside the scrollport so it doesn't drift with horizontal
+          scroll, and only when rows are actually hidden. */}
+      {rowsBelow ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-0 right-0 bottom-0 h-7 rounded-b-xl"
+          style={{ background: "linear-gradient(to bottom, transparent, var(--surface-1, var(--card)))" }}
+        />
+      ) : null}
+      </div>
+
+      {/* Row count, so the section tab's number is always accounted for. The
+          tab counts post-filter now, and this says how many of those are on
+          screen — the two together mean a mismatch can't be silent. */}
+      {rows.length > 0 ? (
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-[color:var(--muted-foreground)]"
+        >
+          <span>
+            {rows.length} {rows.length === 1 ? "row" : "rows"}
+          </span>
+          {rowsBelow ? (
+            <span style={{ marginLeft: "auto", color: "var(--yellow-ink)" }}>
+              Scroll inside the table to see the rest ↓
+            </span>
+          ) : (
+            <span style={{ marginLeft: "auto" }}>all shown</span>
+          )}
+        </div>
+      ) : null}
 
       {/* Rendered outside the scrollport on purpose: a position:fixed menu
           nested inside an overflow:auto ancestor gets clipped once the table
@@ -519,15 +580,19 @@ export function ProcessTable({
   );
 }
 
-/** 12px invisible hit-zone on a header cell's right edge. z-index keeps it
- *  above the neighbouring cell's content so the grab target never gets
- *  covered at a column boundary. */
+/** Invisible hit-zone on a header cell's right edge, straddling the boundary
+ *  so it stays grabbable without eating the neighbour.
+ *
+ *  Was `w-3 z-20 right-0` — 12px sitting entirely inside its own cell and
+ *  above the header's own z-10 sticky cells, so it covered the last 12px of
+ *  the adjacent header label. Now 8px centred on the boundary (-right-1) and
+ *  below the sticky cells. */
 function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
   return (
     <div
       onMouseDown={onMouseDown}
       onDragStart={(e) => e.preventDefault()}
-      className="absolute right-0 top-0 bottom-0 w-3 z-20 cursor-col-resize hover:bg-[var(--yellow-line)]"
+      className="absolute -right-1 top-0 bottom-0 w-2 z-[5] cursor-col-resize hover:bg-[var(--yellow-line)]"
       title="Drag to resize"
     />
   );
@@ -677,16 +742,16 @@ function Cell({
           ))}
         </select>
       );
-    case "phase":
+    case "engg":
       return (
-        <select disabled={busy} value={row.phase ?? ""} onChange={(e) => save({ phase: (e.target.value || null) as Process["phase"] })} className={`${field} text-[13px]`}>
-          <option value="">—</option>
-          {PHASE_OPTIONS.map((o) => (
-            <option key={o} value={o}>
-              {PHASE_LABELS[o]}
-            </option>
-          ))}
-        </select>
+        <RosterPicker
+          kind="person"
+          role="engg"
+          dense
+          valueLabel={row.engg_owner}
+          onPick={(entry: RosterEntry) => save({ engg_owner_id: entry.id })}
+          onClear={() => save({ engg_owner_id: null })}
+        />
       );
     case "health":
       if (!row.health) {
@@ -847,5 +912,4 @@ function Cell({
 // Derived from the enum + shared labels rather than a hand-kept copy, so a
 // new stage can't silently render as a blank option.
 
-const PHASE_OPTIONS = PROCESS_PHASES;
 const PLATFORM_OPTIONS = PROCESS_PLATFORMS;

@@ -13,9 +13,9 @@ export type ColKey =
   | "customer"
   | "stage"
   | "lifecycle"
-  | "phase"
   | "owner"
   | "tam"
+  | "engg"
   | "partner"
   | "health"
   | "platform"
@@ -34,41 +34,49 @@ export interface ColDef {
   label: string;
   kind: ColKind;
   wideW: number;
-  /** Width used only when the split detail panel is open and the table has
-   *  collapsed to NARROW_COLS. Falls back to wideW when absent. */
+  /** Width used when the split detail panel is open. Every column declares
+   *  one now: only 3 of 16 used to, so opening the 420px panel took ~500px of
+   *  viewport and gave back 80px, and the table stayed horizontally scrolled
+   *  at half width. Falls back to wideW when absent. */
   narrowW?: number;
   align?: "left" | "right";
 }
 
 export const COLDEFS: ColDef[] = [
-  { key: "customer", label: "Customer", kind: "select", wideW: 132 },
+  { key: "customer", label: "Customer", kind: "select", wideW: 132, narrowW: 100 },
   { key: "stage", label: "Migration stage", kind: "chip", wideW: 150, narrowW: 106 },
-  { key: "lifecycle", label: "Lifecycle", kind: "select", wideW: 126 },
-  { key: "phase", label: "Phase", kind: "select", wideW: 136 },
+  { key: "lifecycle", label: "Lifecycle", kind: "select", wideW: 126, narrowW: 104 },
   { key: "owner", label: "FDE", kind: "owner", wideW: 140, narrowW: 112 },
-  { key: "tam", label: "TAM", kind: "owner", wideW: 120 },
-  { key: "partner", label: "Partner", kind: "owner", wideW: 118 },
-  { key: "health", label: "Health", kind: "chip", wideW: 104 },
-  { key: "platform", label: "Platform", kind: "select", wideW: 90 },
+  { key: "tam", label: "TAM", kind: "owner", wideW: 120, narrowW: 100 },
+  { key: "engg", label: "Engineering", kind: "owner", wideW: 130, narrowW: 104 },
+  { key: "partner", label: "Partner", kind: "owner", wideW: 118, narrowW: 100 },
+  { key: "health", label: "Health", kind: "chip", wideW: 104, narrowW: 92 },
+  { key: "platform", label: "Platform", kind: "select", wideW: 96, narrowW: 82 },
   { key: "pct", label: "Progress", kind: "pct", wideW: 104, narrowW: 96, align: "right" },
-  { key: "arr", label: "ARR", kind: "money", wideW: 80, align: "right" },
-  { key: "effort", label: "Effort", kind: "num", wideW: 72, align: "right" },
-  { key: "kickoff", label: "Kickoff", kind: "date", wideW: 124 },
-  { key: "golive", label: "Go-live", kind: "date", wideW: 124 },
-  { key: "tickets", label: "Linear", kind: "tickets", wideW: 84 },
-  { key: "stale", label: "Last touched", kind: "read", wideW: 92 },
+  { key: "arr", label: "ARR", kind: "money", wideW: 80, narrowW: 72, align: "right" },
+  { key: "effort", label: "Effort", kind: "num", wideW: 72, narrowW: 64, align: "right" },
+  { key: "kickoff", label: "Kickoff", kind: "date", wideW: 124, narrowW: 100 },
+  { key: "golive", label: "Go-live", kind: "date", wideW: 124, narrowW: 100 },
+  { key: "tickets", label: "Linear", kind: "tickets", wideW: 84, narrowW: 72 },
+  { key: "stale", label: "Last touched", kind: "read", wideW: 92, narrowW: 80 },
 ];
 
 export const COLDEF_BY_KEY: Record<ColKey, ColDef> = Object.fromEntries(
   COLDEFS.map((c) => [c.key, c])
 ) as Record<ColKey, ColDef>;
 
-/** The 15 columns shown out of the box — everything except Phase. */
-export const DEFAULT_COLS: ColKey[] = COLDEFS.filter((c) => c.key !== "phase").map((c) => c.key);
+/** The 15 columns shown out of the box — everything except Engineering owner,
+ *  which most processes leave unassigned. Phase used to be the exclusion here;
+ *  it was removed entirely on 2026-09-08 (it restated `lifecycle` 1:1). */
+export const DEFAULT_COLS: ColKey[] = COLDEFS.filter((c) => c.key !== "engg").map((c) => c.key);
 
-/** Columns kept when the split-panel detail is open — the rest collapse out
- *  of the table to make room for the 420px detail column. */
-export const NARROW_COLS: ColKey[] = ["stage", "owner", "pct"];
+/** Smallest width a drag-resize may produce, per column. A flat floor (it was
+ *  56px for everything) let "Migration stage" shrink to a sliver while
+ *  "Effort" still had room to spare. Three-quarters of the narrow width keeps
+ *  every column legible at its own scale. */
+export function minColWidth(def: ColDef): number {
+  return Math.max(52, Math.round((def.narrowW ?? def.wideW) * 0.75));
+}
 
 /** Columns eligible to render as chips on a board card. */
 export const CARD_FIELDS: ColKey[] = [
@@ -94,9 +102,9 @@ export const FIELD_FOR_COL: Record<ColKey, keyof Process | null> = {
   customer: "customer_id",
   stage: "migration_stage",
   lifecycle: "lifecycle",
-  phase: "phase",
   owner: "fde_owner_id",
   tam: "tam_owner_id",
+  engg: "engg_owner_id",
   partner: "partner_id",
   health: "health",
   platform: "platform",
@@ -112,9 +120,9 @@ export const FIELD_FOR_COL: Record<ColKey, keyof Process | null> = {
 /** Reverse of FIELD_FOR_COL, for Process Detail's per-field "+" promote
  *  control — only fields that map onto a real table column get a "+". */
 export const FIELD_TO_COL: Partial<Record<keyof Process, ColKey>> = {
+  customer_id: "customer",
   lifecycle: "lifecycle",
   migration_stage: "stage",
-  phase: "phase",
   health: "health",
   platform: "platform",
   kickoff_date: "kickoff",
@@ -123,6 +131,7 @@ export const FIELD_TO_COL: Partial<Record<keyof Process, ColKey>> = {
   completion_pct: "pct",
   fde_owner_id: "owner",
   tam_owner_id: "tam",
+  engg_owner_id: "engg",
   partner_id: "partner",
   arr: "arr",
 };
