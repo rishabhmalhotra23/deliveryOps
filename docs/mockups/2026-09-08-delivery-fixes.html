@@ -207,8 +207,15 @@ code{font-family:ui-monospace,monospace;font-size:11px;background:var(--field);
 <div class="wrap">
 
 <h1>Delivery workspace — the seven fixes</h1>
-<p class="sub">Mockup for approval, 2026-09-08. Every count below is live production data
+<p class="sub">Mockup for approval, 2026-09-08 — <b>approved and implemented</b>
+(commits <code>b1fa9b4</code>, <code>85e7e15</code>). Every count below is live production data
 (149 processes, 0 soft-deleted). Tokens are lifted from <code>app/globals.css</code>.</p>
+<p class="sub" style="margin-top:6px">Two names changed during implementation, recorded here so the
+mockup doesn't drift from the code: the Trends chart became <b>"Projects by delivery stage"</b>
+(<code>projects_by_stage</code>) rather than reusing "by lifecycle", because
+<code>projects_by_lifecycle</code> already existed as a coarser group-based aggregate. And the
+owner picker got stronger chrome than drawn here — a divided chevron gutter plus a real option
+list, because the first pass still read as a text field.</p>
 
 <!-- ════════════════════ 1 ════════════════════ -->
 <section>
