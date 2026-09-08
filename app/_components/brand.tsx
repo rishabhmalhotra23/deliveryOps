@@ -71,33 +71,65 @@ const CATEGORY_TONE: Record<string, { class: string; label?: string; weight: num
 // One category always maps to exactly one zone. Zones give the long list a
 // scannable structure (Focus / Pipeline / Evaluation / Closed) without a
 // data-model change.
-export const ZONE_ORDER = ["Focus", "Pipeline", "Evaluation", "Closed"] as const;
-export type Zone = (typeof ZONE_ORDER)[number];
+/** A zone is a row in `vocabulary_values` since 0045, so the set is defined at
+ *  runtime and this is a plain string rather than a union. Values are stable
+ *  slugs ("focus"); the label and sub-label are editable, which is what makes
+ *  the group headers on /customers editable. */
+export type Zone = string;
 
-export const ZONE_DESC: Record<Zone, string> = {
-  Focus: "the active book",
-  Pipeline: "proving value",
-  Evaluation: "under strategic review",
-  Closed: "no longer active",
+/** The four zones the app shipped with, and the fallback whenever the
+ *  vocabulary hasn't been threaded in — or when a category rolls up to a zone
+ *  that has since been deleted. 0045 seeded these verbatim, so this mirrors
+ *  the database rather than competing with it. Same "DB wins, compiled default
+ *  behind it" shape as resolveHue().
+ *
+ *  Note the values are slugs while the old ZONE_ORDER held labels: nothing
+ *  stores a zone, so slugs cost nothing and let a label change freely. */
+export const FALLBACK_ZONES: { value: string; label: string; description: string }[] = [
+  { value: "focus", label: "Focus", description: "the active book" },
+  { value: "pipeline", label: "Pipeline", description: "proving value" },
+  { value: "evaluation", label: "Evaluation", description: "under strategic review" },
+  { value: "closed", label: "Closed", description: "no longer active" },
+];
+
+/** Pre-0045 category -> zone map, retained as the fallback for the same reason
+ *  as FALLBACK_ZONES. Keyed on the literal text `customers.custom_category`
+ *  holds. */
+const FALLBACK_CATEGORY_TO_ZONE: Record<string, Zone> = {
+  "At Risk": "focus",
+  "Upcoming Renewals": "focus",
+  "Strategic Growth": "focus",
+  "Secondary Priority": "focus",
+  Active: "focus",
+  "Partner Managed": "focus",
+  POV: "pipeline",
+  Evaluation: "evaluation",
+  "To Drop": "closed",
+  Past: "closed",
+  Churned: "closed",
+  Dropped: "closed",
 };
 
-const CATEGORY_TO_ZONE: Record<string, Zone> = {
-  "At Risk": "Focus",
-  "Upcoming Renewals": "Focus",
-  "Strategic Growth": "Focus",
-  "Secondary Priority": "Focus",
-  Active: "Focus",
-  "Partner Managed": "Focus",
-  POV: "Pipeline",
-  Evaluation: "Evaluation",
-  "To Drop": "Closed",
-  Past: "Closed",
-  Churned: "Closed",
-  Dropped: "Closed",
-};
-
-export function zoneForCategory(category: string): Zone {
-  return CATEGORY_TO_ZONE[category] ?? "Focus";
+/** Which zone a category files under.
+ *
+ *  Takes the vocabulary rather than fetching it — the convention CLAUDE.md
+ *  spells out, and the one both of 2026-09-08's database bugs came from
+ *  breaking. Callers load it once per request and thread it through.
+ *
+ *  An unknown category falls back to the first zone rather than throwing.
+ *  That is the same outcome the old `?? "Focus"` produced, but 0045 also seeds
+ *  a row for anything already stored, so in practice a minted category now
+ *  arrives with a real zone instead of silently joining the active book. */
+export function zoneForCategory(
+  category: string,
+  vocab?: { categories: { value: string; zone: string }[]; zones: { value: string }[] }
+): Zone {
+  if (vocab) {
+    const def = vocab.categories.find((c) => c.value === category);
+    if (def && vocab.zones.some((z) => z.value === def.zone)) return def.zone;
+    return vocab.zones[0]?.value ?? "focus";
+  }
+  return FALLBACK_CATEGORY_TO_ZONE[category] ?? "focus";
 }
 
 // Legacy lifecycle group → category mapping for any customer that still

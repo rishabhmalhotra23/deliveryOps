@@ -148,6 +148,25 @@ const LOADERS: { name: string; run: () => Promise<unknown> }[] = [
     run: async () => (await import("@/lib/roster/store")).countRosterAssignments(),
   },
   {
+    // /customers renders zones and category chips from these (0045). Executed
+    // here because the whole page groups by the result: a broken query would
+    // take the customer list down the way loadOverrideMap took Delivery down.
+    name: "loadCustomerVocabulary",
+    run: async () => (await import("@/lib/vocabulary/store")).loadCustomerVocabulary(),
+  },
+  {
+    name: "countLiveCustomerProcesses",
+    run: async () => (await import("@/lib/customers")).countLiveCustomerProcesses(),
+  },
+  {
+    name: "countCustomerVocabularyUsage (delete guard)",
+    run: async () =>
+      (await import("@/lib/vocabulary/store")).countCustomerVocabularyUsage(
+        "customer_category",
+        "Churned"
+      ),
+  },
+  {
     // Configure -> Roster's Aliases section. Executed here rather than only
     // unit-tested because the store tests stub above the Supabase client, and
     // that gap is exactly what let the 2026-09-08 outage ship.
@@ -294,6 +313,57 @@ async function phaseInvariants() {
     }
   } catch (err) {
     fail("every process is visible in a section", err);
+  }
+
+  // Every category a customer carries must have a vocabulary row, and every
+  // category must roll up to a zone that exists — otherwise /customers groups
+  // that customer under a header it cannot name. 0045 seeds a row for anything
+  // already stored, so a failure here means something was written since.
+  try {
+    const { loadCustomerVocabulary } = await import("@/lib/vocabulary/store");
+    const vocab = await loadCustomerVocabulary();
+    const { data, error } = await s
+      .from("customers")
+      .select("display_name, custom_category")
+      .is("deleted_at", null)
+      .not("custom_category", "is", null);
+    if (error) throw error;
+
+    const known = new Set(vocab.categories.map((c) => c.value));
+    const zoneValues = new Set(vocab.zones.map((z) => z.value));
+    const rows = (data as { display_name: string; custom_category: string }[]) ?? [];
+    const unknown = rows.filter((r) => !known.has(r.custom_category));
+    const orphanZone = vocab.categories.filter((c) => !zoneValues.has(c.zone));
+
+    if (unknown.length > 0 || orphanZone.length > 0) {
+      fail(
+        "every customer category is configured",
+        new Error(
+          [
+            unknown.length > 0
+              ? `${unknown.length} customer(s) hold an unconfigured category: ${unknown
+                  .slice(0, 4)
+                  .map((r) => `${r.display_name} (${r.custom_category})`)
+                  .join("; ")}`
+              : null,
+            orphanZone.length > 0
+              ? `${orphanZone.length} category/ies roll up to a missing zone: ${orphanZone
+                  .map((c) => `${c.value} -> ${c.zone}`)
+                  .join("; ")}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" | ")
+        )
+      );
+    } else {
+      pass(
+        "every customer category is configured",
+        `${vocab.categories.length} categories across ${vocab.zones.length} zones`
+      );
+    }
+  } catch (err) {
+    fail("every customer category is configured", err);
   }
 
   // Every enum value used by a row must have a presentation row, or it

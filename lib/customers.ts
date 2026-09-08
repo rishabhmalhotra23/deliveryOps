@@ -98,6 +98,27 @@ export async function countCustomerProcesses(): Promise<Record<string, number>> 
   return counts;
 }
 
+/** Live processes per customer id.
+ *
+ *  What makes "retired customer, work still running" visible on /customers.
+ *  Six customers were in that state on 2026-09-08 — Halemeyer with 2 live
+ *  processes while categorised To Drop — and nothing surfaced it. */
+export async function countLiveCustomerProcesses(): Promise<Record<string, number>> {
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.processes)
+    .select("customer_id")
+    .is("deleted_at", null)
+    .eq("lifecycle", "live");
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  for (const row of (data as { customer_id: string | null }[] | null) ?? []) {
+    if (row.customer_id) counts[row.customer_id] = (counts[row.customer_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 // Filter that powers the operations chat. All filters are optional and AND'd.
 export interface CustomerFilter {
   ae_owner?: string;

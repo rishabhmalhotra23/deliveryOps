@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { listCustomers } from "@/lib/customers";
+import { listCustomers, countLiveCustomerProcesses } from "@/lib/customers";
+import { loadCustomerVocabulary } from "@/lib/vocabulary/store";
 import {
   loadCustomerCommercialsMap,
   loadCustomerDomainMap,
@@ -21,13 +22,19 @@ import type { Customer } from "@/lib/supabase/types";
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  const [customers, summary, sfDomains, commercialsMap, fdesByCustomer, staleCounts] = await Promise.all([
+  const [customers, summary, sfDomains, commercialsMap, fdesByCustomer, staleCounts, vocabulary, liveCounts] = await Promise.all([
     listCustomers().catch(() => []),
     loadPortfolioSummary().catch(() => null),
     loadCustomerDomainMap().catch(() => new Map<string, string | null>()),
     loadCustomerCommercialsMap().catch(() => new Map<string, CustomerCommercials>()),
     loadFdesByCustomerId().catch(() => new Map<string, string[]>()),
     loadCustomerStaleCounts().catch(() => new Map<string, number>()),
+    // Zones and category presentation (0045). Loaded here and threaded down so
+    // the browser stays pure presentation, and so a category minted in the
+    // product carries its real colour and zone rather than falling through to
+    // grey and Focus.
+    loadCustomerVocabulary().catch(() => ({ zones: [], categories: [] })),
+    countLiveCustomerProcesses().catch(() => ({} as Record<string, number>)),
   ]);
 
   // Resolve a domain per customer with a graceful fallback chain so favicon
@@ -50,7 +57,7 @@ export default async function CustomersPage() {
       logoUrl: c.logo_url ?? null,
       domain: domainFor(c),
       category,
-      zone: zoneForCategory(category),
+      zone: zoneForCategory(category, vocabulary),
       aeOwner: c.ae_owner,
       fdes: fdesByCustomer.get(c.id) ?? [],
       partner: c.partner,
@@ -58,6 +65,8 @@ export default async function CustomersPage() {
       renewalDate: commercials?.renewal_date ?? null,
       editedCount: c.deliveryops_protected_fields?.length ?? 0,
       staleCount: staleCounts.get(c.id) ?? 0,
+      active: c.active,
+      liveProcesses: liveCounts[c.id] ?? 0,
     };
   });
 
@@ -77,7 +86,7 @@ export default async function CustomersPage() {
         }
       />
 
-      <CustomersBrowser rows={rows} />
+      <CustomersBrowser rows={rows} vocabulary={vocabulary} />
     </div>
   );
 }
