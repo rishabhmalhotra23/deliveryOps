@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Configure: editable vocabularies (mockup, 2026-09-08)</title>
+<style>
+:root{
+  --surface-1:#262626;--surface-2:#1F1F1F;--surface-3:#2F2F2F;--card:#262626;
+  --foreground:#FAFAFA;--muted-foreground:#A3A3A3;
+  --brand-yellow:#F2FF70;--yellow-ink:#F2FF70;
+  --yellow-soft:rgba(242,255,112,.14);--yellow-line:rgba(242,255,112,.45);
+  --field:rgba(255,255,255,.06);--glass-bg:rgba(255,255,255,.10);
+  --brand-metal-line:rgba(255,255,255,.12);--status-bad:#F87171;
+  --st-neutral-fg:#A3A3A3;--st-neutral-bg:rgba(163,163,163,.14);--st-neutral-bd:rgba(163,163,163,.32);
+  --st-indigo-fg:#818CF8;--st-indigo-bg:rgba(129,140,248,.14);--st-indigo-bd:rgba(129,140,248,.32);
+  --st-orange-fg:#FB923C;--st-orange-bg:rgba(251,146,60,.14);--st-orange-bd:rgba(251,146,60,.32);
+  --st-blue-fg:#60A5FA;--st-blue-bg:rgba(96,165,250,.14);--st-blue-bd:rgba(96,165,250,.32);
+  --st-amber-fg:#FBBF24;--st-amber-bg:rgba(251,191,36,.14);--st-amber-bd:rgba(251,191,36,.32);
+  --st-emerald-fg:#4ADE80;--st-emerald-bg:rgba(74,222,128,.14);--st-emerald-bd:rgba(74,222,128,.32);
+  --st-fuchsia-fg:#E879F9;--st-fuchsia-bg:rgba(232,121,249,.14);--st-fuchsia-bd:rgba(232,121,249,.32);
+  --st-red-fg:#F87171;--st-red-bg:rgba(248,113,113,.14);--st-red-bd:rgba(248,113,113,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#171717;color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:28px 32px 80px}
+h1{font-size:19px;margin:0 0 4px}h1+p{margin:0 0 26px;color:var(--muted-foreground);font-size:12.5px}
+h2{font-size:13.5px;margin:0 0 12px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  background:var(--brand-yellow);color:#171717;font-size:11px;font-weight:700;margin-right:8px}
+section{margin:0 0 34px}
+.row{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-left:27px}
+.pane{background:var(--surface-1);border:1px solid var(--brand-metal-line);border-radius:11px;padding:13px 14px}
+.tag{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted-foreground);
+  display:block;margin-bottom:9px;font-weight:600}
+.tag.good{color:var(--brand-yellow)}.tag.bad{color:var(--status-bad)}
+.arrow{align-self:center;color:var(--muted-foreground);font-size:19px}
+.note{font-size:11.5px;color:var(--muted-foreground);margin:12px 0 0 27px;max-width:840px;line-height:1.65}
+.note b{color:var(--foreground);font-weight:600}
+code{background:var(--field);border-radius:4px;padding:1px 4px;font-size:11.5px}
+.dlg{width:452px;background:var(--card);border:1px solid var(--brand-metal-line);
+  border-radius:14px;padding:15px 16px;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.tabs{display:flex;gap:15px;border-bottom:1px solid var(--brand-metal-line);margin-bottom:12px;
+  overflow-x:auto}
+.tabs span{padding-bottom:8px;font-size:13px;color:var(--muted-foreground);white-space:nowrap;flex-shrink:0}
+.tabs span.on{color:var(--foreground);border-bottom:2px solid var(--yellow-ink)}
+.vsel{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:6px;
+  padding:4px 8px;font-size:12.5px;margin-bottom:10px;display:inline-block}
+.ent{display:flex;align-items:center;gap:8px;background:var(--field);border-radius:7px;
+  padding:6px 9px;margin-bottom:4px}
+.ent.off{opacity:.45}
+.chip{display:inline-flex;align-items:center;border-radius:6px;padding:2px 7px;
+  font-size:11px;font-weight:500;border:1px solid}
+.mono{font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;color:var(--muted-foreground)}
+.grip{color:var(--muted-foreground);opacity:.5;letter-spacing:-1px;cursor:grab}
+.kebab{color:var(--muted-foreground);cursor:pointer}
+.edit{background:var(--surface-3);border:1px solid var(--yellow-line);border-radius:8px;
+  padding:10px 11px;margin-bottom:6px}
+.lbl{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  font-weight:600;display:block;margin-bottom:2px}
+.inp{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:6px;
+  padding:4px 7px;font-size:12.5px;color:var(--foreground);width:100%}
+.hues{display:flex;gap:5px;margin-top:3px}
+.hue{width:19px;height:19px;border-radius:5px;border:1px solid}
+.hue.sel{outline:2px solid var(--brand-yellow);outline-offset:1px}
+.acts{display:flex;gap:7px;justify-content:flex-end;margin-top:10px}
+.btn{background:var(--brand-yellow);color:#171717;border:0;border-radius:9999px;
+  padding:4px 13px;font-size:11.5px;font-weight:600}
+.btn.g{background:transparent;color:var(--foreground);border:1px solid var(--brand-metal-line)}
+.warn{background:var(--st-amber-bg);border:1px solid var(--st-amber-bd);color:var(--st-amber-fg);
+  border-radius:7px;padding:8px 10px;font-size:11px;line-height:1.55;margin-top:9px}
+.foot{font-size:11px;color:var(--muted-foreground);margin-top:11px;line-height:1.5}
+</style></head><body>
+
+<h1>Configure: vocabularies become editable</h1>
+<p>Mockup for approval · 2026-09-08 · backend already built and verified against production</p>
+
+<section>
+  <h2><span class="n">1</span>Today the tab explains why you can't</h2>
+  <div class="row">
+    <div class="pane" style="width:400px">
+      <span class="tag bad">Migration stages — read-only list</span>
+      <div class="ent"><span>Not required</span><span class="mono" style="margin-left:auto">not_required</span></div>
+      <div class="ent"><span>In development</span><span class="mono" style="margin-left:auto">in_development</span></div>
+      <div class="ent"><span>To be retired</span><span class="mono" style="margin-left:auto">to_be_retired</span></div>
+      <p style="font-size:11px;color:var(--status-bad);margin:9px 0 0">
+        &ldquo;Migration stage is a fixed Postgres enum — adding a value here would need an
+        additive schema migration, not a client-side list. Ping an engineer to add one.&rdquo;
+      </p>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:8px 0 0">
+        Honest, and exactly the wall you hit. Adding <code>to_be_retired</code> took a
+        migration plus edits to three label maps and a hue map.
+      </p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="dlg">
+      <div class="tabs"><span>Roster</span><span>Customers</span><span class="on">Vocabularies</span><span>Colours</span></div>
+      <select class="vsel"><option>Migration stage — 9 values</option></select>
+
+      <div class="ent"><span class="grip">⠿</span>
+        <span class="chip" style="color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)">Not required</span>
+        <span class="mono" style="margin-left:auto">not_required</span><span class="kebab">⋯</span></div>
+      <div class="ent"><span class="grip">⠿</span>
+        <span class="chip" style="color:var(--st-indigo-fg);background:var(--st-indigo-bg);border-color:var(--st-indigo-bd)">In development</span>
+        <span class="mono" style="margin-left:auto">in_development</span><span class="kebab">⋯</span></div>
+
+      <!-- expanded editor -->
+      <div class="edit">
+        <span class="lbl">Label</span>
+        <input class="inp" value="Migrated, pending commercial">
+        <div style="margin-top:8px">
+          <span class="lbl">Short label — board cards are 268px wide</span>
+          <input class="inp" value="Migrated · commercial">
+        </div>
+        <div style="margin-top:8px">
+          <span class="lbl">Colour</span>
+          <div class="hues">
+            <span class="hue" style="background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)"></span>
+            <span class="hue" style="background:var(--st-indigo-bg);border-color:var(--st-indigo-bd)"></span>
+            <span class="hue" style="background:var(--st-blue-bg);border-color:var(--st-blue-bd)"></span>
+            <span class="hue" style="background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)"></span>
+            <span class="hue" style="background:var(--st-amber-bg);border-color:var(--st-amber-bd)"></span>
+            <span class="hue" style="background:var(--st-orange-bg);border-color:var(--st-orange-bd)"></span>
+            <span class="hue" style="background:var(--st-red-bg);border-color:var(--st-red-bd)"></span>
+            <span class="hue sel" style="background:var(--st-fuchsia-bg);border-color:var(--st-fuchsia-bd)"></span>
+          </div>
+        </div>
+        <label style="display:flex;gap:7px;align-items:center;margin-top:9px;font-size:12px">
+          <input type="checkbox" checked style="accent-color:var(--brand-yellow)">
+          <span>Offered in pickers</span>
+        </label>
+        <div class="acts"><button class="btn g">Cancel</button><button class="btn">Save</button></div>
+      </div>
+
+      <div class="ent off"><span class="grip">⠿</span>
+        <span class="chip" style="color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)">Parity testing</span>
+        <span class="mono" style="margin-left:auto">parity_testing · retired</span><span class="kebab">⋯</span></div>
+
+      <div style="display:flex;gap:8px;margin-top:11px">
+        <input class="inp" placeholder="Add a stage… e.g. Awaiting security review" style="flex:1">
+        <button class="btn">Add</button>
+      </div>
+      <div class="warn">
+        Adding a value can&rsquo;t be undone — Postgres has no way to remove an enum value once
+        it exists. To take one out of circulation, untick <b>Offered in pickers</b> instead:
+        rows already using it keep rendering.
+      </div>
+      <div class="foot">Label, short label, colour and order are yours to change any time.
+        The value itself (<span class="mono">to_be_retired</span>) is fixed once created,
+        because rows point at it.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">2</span>Colours stop being per-browser</h2>
+  <div class="row">
+    <div class="pane" style="max-width:820px">
+      <p style="margin:0;font-size:12px;color:var(--muted-foreground);line-height:1.65">
+        Configure → Colours wrote into <code>localStorage</code> (<code>dops.viewPrefs</code>),
+        so it was <b style="color:var(--foreground)">per browser</b>: two people looking at the
+        same board saw different colours, and a new laptop started from defaults. Colour is a
+        property of the value, not of the viewer — so it moved into
+        <code>vocabulary_values.hue</code> alongside the label, and the Colours tab now edits
+        the same rows this tab does. One place, shared by everyone.
+      </p>
+      <p style="margin:10px 0 0;font-size:11.5px;color:var(--muted-foreground);line-height:1.6">
+        The 8-hue palette is unchanged, and the per-value defaults seeded from today's
+        <code>hues.ts</code> maps, so nothing looks different on the first load after deploy.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">3</span>What stays in code, and why</h2>
+  <div class="row">
+    <div class="pane" style="max-width:820px">
+      <p style="margin:0 0 9px;font-size:12px;color:var(--muted-foreground);line-height:1.65">
+        The enum <b style="color:var(--foreground)">types</b> stay. I looked at converting the
+        columns to plain text and decided against it: 17 exhaustive
+        <code>Record&lt;MigrationStage, …&gt;</code> maps depend on those unions, and that is
+        the safety net which forced <code>to_be_retired</code> to be given a label, a short
+        label and a colour — the build would have failed if any had been missed. Converting
+        would trade &ldquo;adding a value needs a migration&rdquo; for &ldquo;adding a value
+        silently renders a blank grey chip,&rdquo; which is a worse deal.
+      </p>
+      <p style="margin:0;font-size:12px;color:var(--muted-foreground);line-height:1.65">
+        So a value added in the product is known to the database and to every picker
+        immediately, and gets its label and colour from the table. What it does <em>not</em>
+        get is a place in the routing rules — a brand-new migration stage lands in
+        <b style="color:var(--foreground)">V2 migration</b>, because
+        <code>sectionFor()</code> sends everything that isn't <code>v2_native</code> there.
+        That is the correct default, and changing it is still a code decision.
+      </p>
+    </div>
+  </div>
+</section>
+
+</body></html>
