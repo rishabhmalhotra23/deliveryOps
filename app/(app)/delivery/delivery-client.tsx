@@ -40,7 +40,7 @@ import { ConfigureDialog } from "@/app/_components/configure-dialog";
 import { BulkActionBar, type BulkResult } from "@/app/_components/bulk-action-bar";
 import { NewProcessModal } from "./_components/new-process-modal";
 import { useViewPrefs, type FilterField } from "@/lib/delivery/prefs";
-import { COLDEFS, CARD_FIELDS, type ColKey } from "@/lib/delivery/columns";
+import { COLDEFS, CARD_FIELDS, COL_GROUPS, type ColKey } from "@/lib/delivery/columns";
 
 // Sections are DERIVED from each row (lib/delivery/sections.ts), never
 // stored — change a lifecycle or migration_stage and the row moves. "all" is
@@ -1297,22 +1297,45 @@ function FieldsMenu({
       className="dops-rise-in absolute right-0 z-30 mt-1 w-52 rounded-md border shadow-lg py-1.5"
       style={{ background: "var(--surface-3, var(--card))", borderColor: "var(--glass-border)" }}
     >
-      <div className="px-3 py-1 text-[10.5px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
-        {view === "table" ? "Show as columns" : "Show on cards"}
+      <div className="px-3 py-1 flex items-baseline gap-1.5">
+        <span className="text-[10.5px] uppercase tracking-wider text-[color:var(--muted-foreground)]">
+          {view === "table" ? "Show as columns" : "Show on cards"}
+        </span>
+        <span className="ml-auto font-mono text-[10px] text-[color:var(--muted-foreground)]">
+          {active.length}/{universe.length}
+        </span>
       </div>
 
-      <div className="max-h-64 overflow-auto">
-        {universe.map((def) => (
-          <button key={def.key} type="button" onClick={() => onToggle(def.key)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)]">
-            <span
-              className="w-[13px] h-[13px] rounded-[3.5px] border flex items-center justify-center shrink-0"
-              style={{ borderColor: "var(--glass-border)", background: active.includes(def.key) ? "var(--brand-yellow)" : "transparent" }}
-            >
-              {active.includes(def.key) ? <span style={{ color: "#171717", fontSize: 9 }}>✓</span> : null}
-            </span>
-            {def.label}
-          </button>
-        ))}
+      {/* Grouped under the same headings the drawer uses. It was a flat
+          16-item list with no headings, which is a lot to scan for one
+          column — and the groups make it obvious that Ownership has four
+          entries, which the flat list buried. */}
+      <div className="max-h-72 overflow-auto">
+        {COL_GROUPS.map((group) => {
+          const defs = group.keys
+            .map((k) => universe.find((d) => d.key === k))
+            .filter((d): d is (typeof universe)[number] => Boolean(d));
+          // Board view offers a subset, so a group can be empty there.
+          if (defs.length === 0) return null;
+          return (
+            <div key={group.label}>
+              <div className="px-3 pt-1.5 pb-0.5 text-[9.5px] uppercase tracking-wider font-semibold text-[color:var(--muted-foreground)] opacity-80">
+                {group.label}
+              </div>
+              {defs.map((def) => (
+                <button key={def.key} type="button" onClick={() => onToggle(def.key)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-[var(--glass-bg)] text-[color:var(--foreground)]">
+                  <span
+                    className="w-[13px] h-[13px] rounded-[3.5px] border flex items-center justify-center shrink-0"
+                    style={{ borderColor: "var(--glass-border)", background: active.includes(def.key) ? "var(--brand-yellow)" : "transparent" }}
+                  >
+                    {active.includes(def.key) ? <span style={{ color: "#171717", fontSize: 9 }}>✓</span> : null}
+                  </span>
+                  {def.label}
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </div>
       {view === "table" && hasCustomWidths ? (
         <button type="button" onClick={onResetWidths} className="w-full text-left px-3 py-1.5 text-[11.5px] border-t text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]" style={{ borderColor: "var(--glass-border)" }}>

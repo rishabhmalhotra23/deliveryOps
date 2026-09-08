@@ -328,7 +328,10 @@ export function ProcessTable({
             return (
               <div
                 key={key}
-                draggable={!narrow}
+                // Was `!narrow`, so column reorder went dead whenever the
+                // split panel was open — which is exactly when you most want
+                // to move a column into the reduced width.
+                draggable
                 onDragStart={() => setDragCol(key)}
                 onDragEnd={() => setDragCol(null)}
                 onDragOver={(e) => e.preventDefault()}
@@ -337,14 +340,24 @@ export function ProcessTable({
                   if (dragCol && dragCol !== key) onReorderCol(dragCol, key);
                   setDragCol(null);
                 }}
-                className={`relative flex items-center px-2 py-2 select-none ${narrow ? "" : "cursor-grab"}`}
+                // `align` was declared on 4 ColDefs and never read — the
+                // numeric columns right-aligned their values but left-aligned
+                // their headers, so "ARR" sat over empty space with the
+                // figures against the far edge. Honoured now rather than
+                // deleted from the model.
+                className={`relative flex items-center px-2 py-2 select-none cursor-grab ${
+                  def.align === "right" ? "justify-end" : ""
+                }`}
               >
                 <button
                   type="button"
                   onClick={() => onSort(key)}
-                  className={`inline-flex items-center gap-1 hover:text-[color:var(--foreground)] truncate ${active ? "text-[color:var(--foreground)]" : ""}`}
+                  className={`inline-flex items-center gap-1 min-w-0 hover:text-[color:var(--foreground)] ${active ? "text-[color:var(--foreground)]" : ""}`}
                 >
-                  <span className="truncate">{def.label}</span>
+                  {/* min-w-0 on both: a flex item won't shrink below its text
+                      without it, so `truncate` never ellipsized and a narrow
+                      column guillotined the header ("Migration stag"). */}
+                  <span className="truncate min-w-0">{def.label}</span>
                   {active ? <span className="text-[9px] opacity-90">{sortDir === "asc" ? "↑" : "↓"}</span> : null}
                 </button>
                 <ResizeHandle onMouseDown={(e) => startResize(e, key, colWidths[i])} />

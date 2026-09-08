@@ -124,10 +124,22 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
   const [custCounts, setCustCounts] = useState<Record<string, number>>({});
   const [custLoading, setCustLoading] = useState(false);
   const [custEditingKey, setCustEditingKey] = useState<string | null>(null);
-  const [custDraft, setCustDraft] = useState<{ display_name: string; custom_category: string; active: boolean }>({
+  const [custDraft, setCustDraft] = useState<{
+    display_name: string;
+    custom_category: string;
+    active: boolean;
+    ae_owner: string;
+    partner: string;
+    slack_channel: string;
+    salesforce_account_id: string;
+  }>({
     display_name: "",
     custom_category: "",
     active: true,
+    ae_owner: "",
+    partner: "",
+    slack_channel: "",
+    salesforce_account_id: "",
   });
   const [custSaving, setCustSaving] = useState(false);
   const [custError, setCustError] = useState<string | null>(null);
@@ -326,6 +338,10 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
       display_name: c.display_name,
       custom_category: c.custom_category ?? "",
       active: c.active,
+      ae_owner: c.ae_owner ?? "",
+      partner: c.partner ?? "",
+      slack_channel: c.slack_channel ?? "",
+      salesforce_account_id: c.salesforce_account_id ?? "",
     });
     // A stored value that isn't in CUSTOMER_CATEGORIES is itself a minted one,
     // so open in free-text mode. Without this the <select> has no matching
@@ -541,7 +557,7 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="dops-rise-in w-full max-w-lg rounded-2xl border shadow-2xl flex flex-col max-h-[80vh]"
+        className="dops-rise-in w-full max-w-2xl rounded-2xl border shadow-2xl flex flex-col max-h-[85vh]"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -595,7 +611,9 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
                   Partners
                 </button>
               </div>
-              <div className="max-h-56 overflow-auto space-y-1">
+              <div
+                className={`overflow-auto space-y-1 ${editingId ? "max-h-[52vh]" : "max-h-56"}`}
+              >
                 {rosterLoading ? (
                   <div className="text-[12px] text-[color:var(--muted-foreground)] py-2">Loading…</div>
                 ) : visibleRoster.length === 0 ? (
@@ -978,7 +996,9 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
 
           {tab === "customers" ? (
             <div className="space-y-2">
-              <div className="max-h-56 overflow-auto space-y-1">
+              <div
+                className={`overflow-auto space-y-1 ${custEditingKey ? "max-h-[52vh]" : "max-h-56"}`}
+              >
                 {custLoading ? (
                   <div className="text-[12px] text-[color:var(--muted-foreground)] py-2">Loading…</div>
                 ) : visibleCustomers.length === 0 ? (
@@ -1076,6 +1096,40 @@ export function ConfigureDialog({ onClose }: { onClose: () => void }) {
                               <option value={CUSTOM_CATEGORY_SENTINEL}>+ Something else…</option>
                             </select>
                           )}
+                        </div>
+
+                        {/* The rest of the DeliveryOps-owned columns worth
+                            editing across the roster. Configure was a strictly
+                            smaller editor than the /customers/[key] record
+                            card for the same row, so retiring a customer or
+                            fixing an AE meant two different screens. Tier,
+                            industry and HQ stay on the 360 page — there's room
+                            for them there and they aren't bulk work. */}
+                        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                          {([
+                            { key: "ae_owner", label: "AE owner", placeholder: "Unassigned" },
+                            { key: "partner", label: "Partner", placeholder: "None" },
+                            { key: "slack_channel", label: "Slack channel", placeholder: "#customer-kognitos" },
+                            { key: "salesforce_account_id", label: "SF account ID", placeholder: "001…" },
+                          ] as const).map((f) => (
+                            <div key={f.key}>
+                              <label
+                                className="block text-[10px] uppercase tracking-wider text-[color:var(--muted-foreground)] font-semibold mb-0.5"
+                                htmlFor={`cust-${f.key}-${c.key}`}
+                              >
+                                {f.label}
+                              </label>
+                              <input
+                                id={`cust-${f.key}-${c.key}`}
+                                value={custDraft[f.key]}
+                                placeholder={f.placeholder}
+                                onChange={(e) =>
+                                  setCustDraft((cur) => ({ ...cur, [f.key]: e.target.value }))
+                                }
+                                className="dops-input w-full px-2 py-1 text-[13px]"
+                              />
+                            </div>
+                          ))}
                         </div>
 
                         <label className="flex items-center gap-2 text-[12px] cursor-pointer pt-0.5">

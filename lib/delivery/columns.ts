@@ -78,6 +78,21 @@ export function minColWidth(def: ColDef): number {
   return Math.max(52, Math.round((def.narrowW ?? def.wideW) * 0.75));
 }
 
+/** Column groups for the Fields menu, in the order the drawer's own group
+ *  headers use — the menu was a flat 16-item checkbox list with no headings
+ *  and no reorder, which is a lot to scan for "where is Go-live". Declared
+ *  here rather than in the menu so a new ColKey can't be added without
+ *  deciding where it belongs; COL_GROUPS is asserted to cover every column in
+ *  tests/delivery/columns.test.ts. */
+export const COL_GROUPS: { label: string; keys: ColKey[] }[] = [
+  { label: "Record", keys: ["customer"] },
+  { label: "State", keys: ["stage", "lifecycle", "health", "platform"] },
+  { label: "Ownership", keys: ["owner", "tam", "engg", "partner"] },
+  { label: "Progress", keys: ["pct", "arr", "effort"] },
+  { label: "Dates", keys: ["kickoff", "golive"] },
+  { label: "Signals", keys: ["tickets", "stale"] },
+];
+
 /** Columns eligible to render as chips on a board card. */
 export const CARD_FIELDS: ColKey[] = [
   "customer",

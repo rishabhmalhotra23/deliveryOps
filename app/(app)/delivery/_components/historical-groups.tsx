@@ -57,6 +57,19 @@ export function HistoricalGroups({
 
   const peak = Math.max(1, ...series.map((p) => p.delivered));
 
+  /** Live processes with no go-live date.
+   *
+   *  This is the one way the 2026-09-08 routing change can hide work. `live` +
+   *  `v2_native` now routes to Historical, but with no date it lands in the
+   *  undated bucket rather than a quarter — so it has left Active work and has
+   *  no place on the delivered-per-quarter strip either. Production has 6
+   *  undated live rows today and none of them are v2_native, so nothing is
+   *  hidden right now; this makes it visible the moment somebody marks a
+   *  process live without filling the date in. Surfaced on the collapsed
+   *  header too, because the bucket holds 49 rows and nobody expands it. */
+  const undatedLive = (groupRows: DetailProcess[]) =>
+    groupRows.filter((r) => r.lifecycle === "live" && !r.go_live_date);
+
   function toggle(quarter: string) {
     setOverrides((cur) => ({ ...cur, [quarter]: !isCollapsedFor(quarter) }));
   }
@@ -144,10 +157,50 @@ export function HistoricalGroups({
                   .filter(Boolean)
                   .join(" · ")}
               </span>
+              {group.quarter === NO_QUARTER && undatedLive(group.rows).length > 0 ? (
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10.5px] font-medium border"
+                  style={{
+                    color: "var(--st-amber-fg)",
+                    background: "var(--st-amber-bg)",
+                    borderColor: "var(--st-amber-bd)",
+                  }}
+                >
+                  {undatedLive(group.rows).length} live without a date
+                </span>
+              ) : null}
               <span className="ml-auto font-mono text-[11px] text-[color:var(--muted-foreground)]">
                 {group.rows.length}
               </span>
             </button>
+            {!isCollapsed && group.quarter === NO_QUARTER && undatedLive(group.rows).length > 0 ? (
+              <div
+                className="rounded-lg border px-3 py-2 mb-1.5 text-[11.5px]"
+                style={{
+                  color: "var(--st-amber-fg)",
+                  background: "var(--st-amber-bg)",
+                  borderColor: "var(--st-amber-bd)",
+                }}
+              >
+                <b>
+                  {undatedLive(group.rows).length}{" "}
+                  {undatedLive(group.rows).length === 1 ? "process is" : "processes are"} live with no
+                  go-live date
+                </b>{" "}
+                — {undatedLive(group.rows).length === 1 ? "it has" : "they have"} left Active work but
+                {undatedLive(group.rows).length === 1 ? " has" : " have"} no quarter to file under, so
+                {undatedLive(group.rows).length === 1 ? " it is" : " they are"} missing from the
+                delivered-per-quarter strip above. Set the <b>Go-live</b> date in the table below and
+                the row moves into that quarter on the next render.
+                <div className="mt-1 opacity-90">
+                  {undatedLive(group.rows)
+                    .slice(0, 4)
+                    .map((r) => r.process_name)
+                    .join(" · ")}
+                  {undatedLive(group.rows).length > 4 ? ` · +${undatedLive(group.rows).length - 4} more` : ""}
+                </div>
+              </div>
+            ) : null}
             {!isCollapsed ? renderGroup(group.rows) : null}
           </div>
         );

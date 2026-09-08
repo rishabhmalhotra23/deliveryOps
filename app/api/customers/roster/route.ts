@@ -30,6 +30,14 @@ interface PatchBody {
   active?: boolean;
   display_name?: string;
   custom_category?: string;
+  // Widened 2026-09-08 so Configure -> Customers isn't a strictly smaller
+  // editor than the /customers/[key] record card for the same row. Kept to
+  // the fields worth editing in bulk across the roster; tier, industry and HQ
+  // stay on the 360 page where there's room for them.
+  ae_owner?: string | null;
+  partner?: string | null;
+  slack_channel?: string | null;
+  salesforce_account_id?: string | null;
 }
 
 // PATCH /api/customers/roster — mark a customer active/inactive, or fix its
@@ -69,6 +77,16 @@ export async function PATCH(request: Request) {
   // string would render as a blank category that matches no filter.
   if (body.custom_category !== undefined) {
     updates.custom_category = body.custom_category.trim() || null;
+  }
+  // Same ""-means-NULL rule as custom_category above: a blank input is
+  // "unset", and every reader filters falsy rather than matching "".
+  for (const field of ["ae_owner", "partner", "slack_channel", "salesforce_account_id"] as const) {
+    const value = body[field];
+    if (value === undefined) continue;
+    if (value !== null && typeof value !== "string") {
+      return NextResponse.json({ error: `${field} must be a string or null.` }, { status: 400 });
+    }
+    updates[field] = value?.trim() || null;
   }
 
   if (Object.keys(updates).length === 0) {

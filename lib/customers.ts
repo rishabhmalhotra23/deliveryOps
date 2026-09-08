@@ -217,7 +217,7 @@ export async function upsertCustomer(input: CreateCustomerInput): Promise<Custom
 // Used by the operations chat + dashboard inline edits.
 export async function updateCustomerManually(
   key: string,
-  updates: Partial<Pick<Customer, "ae_owner" | "partner" | "custom_category" | "lifecycle_group" | "slack_channel" | "email_alias" | "display_name" | "active">>,
+  updates: Partial<Pick<Customer, "ae_owner" | "partner" | "custom_category" | "lifecycle_group" | "slack_channel" | "email_alias" | "display_name" | "active" | "salesforce_account_id">>,
   opts: { updatedBy?: string } = {}
 ): Promise<Customer> {
   const existing = await requireCustomerByKey(key);

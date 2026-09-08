@@ -41,6 +41,7 @@ export function RosterPicker({
   onPick,
   onClear,
   dense = false,
+  avatarPx,
 }: {
   kind: RosterKind;
   role?: RosterRole;
@@ -49,6 +50,10 @@ export function RosterPicker({
   onPick: (entry: RosterEntry) => void;
   onClear?: () => void;
   dense?: boolean;
+  /** Override the collapsed avatar size. Board cards need a smaller one than
+   *  the table: their chips run at 10-11px, and the default 18px avatar next
+   *  to that reads as a different class of control. */
+  avatarPx?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
@@ -170,7 +175,7 @@ export function RosterPicker({
   }
 
   const avatarRadius = kind === "person" ? 9999 : 6;
-  const avatarSize = dense ? 18 : 22;
+  const avatarSize = avatarPx ?? (dense ? 18 : 22);
 
   // The server already sorted role-holders to the front (rankByRole); this
   // just draws the boundary so the order reads as intentional. Unheaded
@@ -228,7 +233,7 @@ export function RosterPicker({
                 >
                   {initials(valueLabel)}
                 </span>
-                <span className="truncate text-[color:var(--foreground)]">{valueLabel}</span>
+                <span className="truncate min-w-0 text-[color:var(--foreground)]">{valueLabel}</span>
               </>
             ) : (
               <span className="text-[color:var(--muted-foreground)]">—</span>
