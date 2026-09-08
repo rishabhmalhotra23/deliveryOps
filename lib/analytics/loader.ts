@@ -5,6 +5,12 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
 import { loadOverrideMap } from "@/lib/overrides/store";
+import {
+  loadSettings,
+  valueModelTierHours,
+  valueModelRates,
+  valueModelHoursPerFte,
+} from "@/lib/settings/store";
 
 /** Slim project row used by the chart drill-down panels. */
 export interface DrillDownProject {
@@ -154,10 +160,13 @@ function projectDomain(name: string): string {
   if (/enrollment|court|translat|extraction|\bscan\b|mailroom|returned mail|data extraction/.test(n)) return "Document Processing";
   return "Operations & Shared Services";
 }
-const VAL_TIER_HOURS: Record<string, number> = { low: 1200, medium: 2600, high: 5200 };
-const VAL_RATE_LOW = 30, VAL_RATE_MID = 35, VAL_RATE_HIGH = 45, VAL_HOURS_PER_FTE = 2080;
-function valTierHours(complexity: string | null): number {
-  return VAL_TIER_HOURS[(complexity ?? "").toLowerCase()] ?? VAL_TIER_HOURS.medium;
+// The value-delivered model. Tunable in Configure since 0043 — these six
+// figures drive every number in the "Value delivered by domain" section, and
+// changing an assumption used to mean a deploy. The compiled objects here are
+// the fallback the store returns when a setting is absent, so a missing row
+// renders today's numbers rather than zeros.
+function valTierHours(complexity: string | null, tierHours: Record<string, number>): number {
+  return tierHours[(complexity ?? "").toLowerCase()] ?? tierHours.medium ?? 2600;
 }
 
 // Use the canonical helper from brand.tsx so the dynamic rules (90-day
@@ -167,6 +176,12 @@ import { categoryFromCustomer as brandCategoryFromCustomer } from "@/app/_compon
 
 export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const arrOverrides = (await loadOverrideMap("confirmed_arr")) as Record<string, number>;
+  // Value-model assumptions, tunable in Configure (0043). Loaded once here
+  // and passed down rather than fetched inside the pure aggregation.
+  const settings = await loadSettings();
+  const valTierHoursMap = valueModelTierHours(settings);
+  const valRates = valueModelRates(settings);
+  const valHoursPerFte = valueModelHoursPerFte(settings);
   const sb = requireAdmin();
 
   const [
@@ -665,7 +680,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   let liveProjects = 0, liveHours = 0;
   for (const p of projectList) {
     if (!isDelivered(p.status, p.group_title)) continue;
-    const hrs = valTierHours(p.complexity);
+    const hrs = valTierHours(p.complexity, valTierHoursMap);
     liveProjects++; liveHours += hrs;
     const dom = projectDomain(p.name);
     const d = domainAgg.get(dom) ?? { count: 0, hours: 0 };
@@ -677,16 +692,16 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const value = {
     live_projects: liveProjects,
     annual_hours: liveHours,
-    fte: Math.round(liveHours / VAL_HOURS_PER_FTE),
-    value_low: Math.round(liveHours * VAL_RATE_LOW),
-    value_mid: Math.round(liveHours * VAL_RATE_MID),
-    value_high: Math.round(liveHours * VAL_RATE_HIGH),
+    fte: Math.round(liveHours / valHoursPerFte),
+    value_low: Math.round(liveHours * (valRates.low ?? 30)),
+    value_mid: Math.round(liveHours * (valRates.mid ?? 35)),
+    value_high: Math.round(liveHours * (valRates.high ?? 45)),
   };
   const value_by_domain = [...domainAgg.entries()]
-    .map(([domain, v]) => ({ domain, count: v.count, annual_hours: v.hours, fte: Math.round((v.hours / VAL_HOURS_PER_FTE) * 10) / 10, value_mid: Math.round(v.hours * VAL_RATE_MID) }))
+    .map(([domain, v]) => ({ domain, count: v.count, annual_hours: v.hours, fte: Math.round((v.hours / valHoursPerFte) * 10) / 10, value_mid: Math.round(v.hours * (valRates.mid ?? 35)) }))
     .sort((a, b) => b.annual_hours - a.annual_hours);
   const value_by_customer = [...custValAgg.entries()]
-    .map(([customer, v]) => ({ customer, count: v.count, annual_hours: v.hours, value_mid: Math.round(v.hours * VAL_RATE_MID) }))
+    .map(([customer, v]) => ({ customer, count: v.count, annual_hours: v.hours, value_mid: Math.round(v.hours * (valRates.mid ?? 35)) }))
     .sort((a, b) => b.annual_hours - a.annual_hours);
 
   return {

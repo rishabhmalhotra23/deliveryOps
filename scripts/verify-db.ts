@@ -164,6 +164,10 @@ const LOADERS: { name: string; run: () => Promise<unknown> }[] = [
     run: async () => (await import("@/lib/cache/integrations")).loadCustomerCommercialsMap(),
   },
   {
+    name: "loadSettings (value model + NPS cadence)",
+    run: async () => (await import("@/lib/settings/store")).loadSettings(),
+  },
+  {
     name: "loadAllHandsReport",
     run: async () => (await import("@/lib/reports/allhands-loader")).loadAllHandsReport(),
   },
@@ -285,6 +289,38 @@ async function phaseInvariants() {
     }
   } catch (err) {
     fail("every value in use has a label and colour", err);
+  }
+
+  // A setting whose stored shape doesn't match its compiled default is worse
+  // than a missing one: the reader falls back silently, so the value in the
+  // table is a lie about what the app is using.
+  try {
+    const { SETTING_DEFAULTS } = await import("@/lib/settings/store");
+    const { data, error } = await s.from("app_settings").select("key, value");
+    if (error) throw error;
+    const bad: string[] = [];
+    for (const row of (data as { key: string; value: unknown }[] | null) ?? []) {
+      const expected = (SETTING_DEFAULTS as Record<string, unknown>)[row.key];
+      if (expected === undefined) {
+        bad.push(`${row.key} (not a known setting)`);
+        continue;
+      }
+      if (typeof expected !== typeof row.value) {
+        bad.push(`${row.key} (stored ${typeof row.value}, expected ${typeof expected})`);
+        continue;
+      }
+      if (typeof expected === "object" && expected !== null) {
+        for (const k of Object.keys(expected)) {
+          if (typeof (row.value as Record<string, unknown>)?.[k] !== "number") {
+            bad.push(`${row.key}.${k} (not a number)`);
+          }
+        }
+      }
+    }
+    if (bad.length > 0) fail("every setting matches its compiled shape", new Error(bad.join(", ")));
+    else pass("every setting matches its compiled shape");
+  } catch (err) {
+    fail("every setting matches its compiled shape", err);
   }
 
   // An override that points at nothing is dead weight and its value silently
