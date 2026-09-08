@@ -165,7 +165,6 @@ function CustomerStrip({
     <Link
       href={`/customers/${row.key}`}
       className="group glass-card glass-card-hover flex items-center gap-4 pl-4 pr-10 py-3 transition-all"
-      style={row.active ? undefined : { opacity: 0.62 }}
     >
       <CustomerAvatar
         name={row.displayName}
@@ -456,11 +455,17 @@ export function CustomersBrowser({
   // Filtering to contradictions reveals retired rows regardless of the toggle:
   // 6 of the 6 in production are retired, so respecting the toggle would show
   // an empty list from a chip that says there are 6.
-  const scoped = useMemo(
-    () => rows.filter((r) => r.active || showRetired || contradictionsOnly),
-    [rows, showRetired, contradictionsOnly]
-  );
-  const retiredCount = useMemo(() => rows.filter((r) => !r.active).length, [rows]);
+  // Retired customers are NOT mixed into the zone groups. Showing them used to
+  // scatter greyed-out rows through Focus, Pipeline and Closed — a retired
+  // "Partner Managed" account landed inside the active book, which is the
+  // opposite of what hiding them was for. They get one block of their own at
+  // the end instead (reported 2026-09-08).
+  //
+  // Zones are therefore always derived from active rows only, so the chip
+  // counts describe the live portfolio whatever the toggle is set to.
+  const scoped = useMemo(() => rows.filter((r) => r.active), [rows]);
+  const retiredRows = useMemo(() => rows.filter((r) => !r.active), [rows]);
+  const retiredCount = retiredRows.length;
 
   // Per-zone counts for the filter chips, over the scoped set so a chip never
   // promises rows the list won't show.
@@ -525,7 +530,28 @@ export function CustomersBrowser({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scoped, zones, zoneFilter, q, sort, attentionOnly, contradictionsOnly, contradictionKeys]);
 
-  const anyResults = visibleZones.length > 0;
+  // Same search, sort and contradiction filter as the zone groups, but flat:
+  // a retired customer's zone is a statement about a book it has left, so
+  // grouping them by it would be re-asserting the thing the block exists to
+  // separate.
+  const visibleRetired = useMemo(() => {
+    return retiredRows
+      .filter(
+        (r) =>
+          matches(r, q) &&
+          (!attentionOnly || r.staleCount > 0) &&
+          (!contradictionsOnly || contradictionKeys.has(r.key))
+      )
+      .sort(sortRows);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retiredRows, q, sort, attentionOnly, contradictionsOnly, contradictionKeys]);
+
+  // Contradictions are mostly retired rows (6 of 6 in production), so
+  // filtering to them opens the block rather than showing an empty list under
+  // a chip that says there are 6.
+  const retiredOpen = showRetired || contradictionsOnly;
+
+  const anyResults = visibleZones.length > 0 || (retiredOpen && visibleRetired.length > 0);
 
   return (
     <div className="space-y-4">
@@ -718,15 +744,56 @@ export function CustomersBrowser({
           by URL and by search either way — this is a list default, not a
           restriction. */}
       {retiredCount > 0 ? (
-        <button
-          type="button"
-          onClick={() => setShowRetired((v) => !v)}
-          className="w-full text-left rounded-lg border px-3 py-2 text-[12.5px]"
-          style={{ borderColor: "var(--glass-border)", color: "var(--yellow-ink)", background: "var(--glass-bg)" }}
+        <section
+          className="space-y-2 rounded-xl border p-3"
+          style={{
+            borderColor: "var(--glass-border)",
+            // Its own surface, not just dimmed rows: the block is a different
+            // kind of thing from a zone, and shading it says so without
+            // needing every row inside it to shout.
+            background: "color-mix(in srgb, var(--glass-bg) 55%, transparent)",
+          }}
         >
-          {showRetired ? "▾ Hide" : "▸ Show"} the {retiredCount} no longer customer
-          {retiredCount === 1 ? "" : "s"}
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowRetired((v) => !v)}
+            aria-expanded={retiredOpen}
+            className="flex items-center gap-2 w-full text-left py-0.5"
+          >
+            <svg
+              className={`w-3.5 h-3.5 text-[color:var(--muted-foreground)] transition-transform ${retiredOpen ? "rotate-90" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+            <span className="text-sm font-semibold tracking-tight text-[color:var(--foreground)]">
+              No longer customers
+            </span>
+            <span className="data-label text-[color:var(--muted-foreground)] tabular-nums">
+              {retiredOpen ? visibleRetired.length : retiredCount}
+            </span>
+            <span className="text-[10px] text-[color:var(--muted-foreground)] italic">
+              kept for their history — hidden from every customer picker
+            </span>
+          </button>
+
+          {retiredOpen ? (
+            visibleRetired.length > 0 ? (
+              <div className="space-y-2">
+                {visibleRetired.map((r) => (
+                  <CustomerStrip key={r.key} row={r} vocabulary={vocabulary} />
+                ))}
+              </div>
+            ) : (
+              <div className="px-2 py-4 text-center text-[12px] text-[color:var(--muted-foreground)]">
+                None of the {retiredCount} match {query ? `“${query}”` : "this filter"}.
+              </div>
+            )
+          ) : null}
+        </section>
       ) : null}
 
       {configOpen ? (
