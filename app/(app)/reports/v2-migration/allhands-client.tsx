@@ -4,22 +4,12 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { AllHandsReport } from "@/lib/reports/allhands-loader";
 import type { RangePreset } from "@/lib/reports/date-range";
-import { DOMAIN_LABELS, type TicketDomain } from "@/lib/tickets/types";
-
-function domainLabel(domain: TicketDomain | "unclassified"): string {
-  return domain === "unclassified" ? "Unclassified" : DOMAIN_LABELS[domain];
-}
-
 const PRESETS: Array<{ value: RangePreset; label: string }> = [
   { value: "week", label: "Week" },
   { value: "month", label: "Month" },
   { value: "quarter", label: "Quarter" },
   { value: "custom", label: "Custom" },
 ];
-
-// Same Linear-issue link convention as the deleted lib/reports/v2-migrations.ts
-// (inlined here since that file goes away in Task 9).
-const LINEAR_ISSUE = (id: string) => `https://linear.app/kognitos/issue/${id}`;
 
 // Stage colors reuse the four --rt-* accents already defined for this report
 // theme (good/accent/warn/bad) rather than introducing a new hex value for
@@ -51,15 +41,6 @@ const FRESH_BUILD_STAGE_COLORS: Record<string, string> = {
   on_hold: "var(--rt-status-bad)",
 };
 
-function fmtShort(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-}
-function fmtMoney(v: number): string {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
-  return `$${v}`;
-}
-
 // ── Section caption ──────────────────────────────────────────────────────────
 function Caption({ children }: { children: React.ReactNode }) {
   return (
@@ -72,7 +53,7 @@ function Caption({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Stat tile (top row of the merged status card, spotlight, ticket health) ──
+// ── Stat tile (top row of the portfolio and migration-program cards) ────────
 function StatTile({ value, label, color }: { value: number | string; label: string; color?: string }) {
   return (
     <div>
@@ -120,30 +101,6 @@ function StageColumn({
         {lines.map((line, i) => (
           <div key={i}>{line}</div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Ticket-data error banner ─────────────────────────────────────────────────
-// The Linear-backed sections (blockers, ticket health) read tables that may not
-// exist in this Supabase project. loadTicketsBundle() returns empty arrays plus
-// a data_error rather than throwing, so without this banner the report would
-// present a failed read as "no blockers / 0 open / 0 hard blockers" — confident
-// fabricated zeros. Same wording as the /reports/v2-migration/tickets page.
-function TicketDataErrorBanner({ message }: { message: string }) {
-  return (
-    <div
-      className="rounded-[14px] px-3.5 py-3 mb-3 text-[14px] leading-relaxed"
-      style={{
-        border: "1px solid var(--rt-status-bad)",
-        background: "rgba(248,113,113,0.08)",
-        color: "var(--rt-status-bad)",
-      }}
-    >
-      <span className="font-bold">Couldn&apos;t load ticket data:</span> {message}
-      <div className="mt-1" style={{ color: "var(--rt-fg-muted)" }}>
-        Blockers and ticket health below are unavailable for this run — they are not zero.
       </div>
     </div>
   );
@@ -263,25 +220,14 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
     }
   }
 
-  const {
-    status,
-    renewalSpotlight,
-    atRiskMigrating,
-    blockers,
-    ticketDomainBuckets,
-    customerTicketConcentration,
-    ticketHealth,
-    ticketDataError,
-  } = report;
+  // Only `status` is rendered: the renewal-spotlight, at-risk, blocker and
+  // ticket-health sections were removed 2026-09-08 (Rishabh) so All-Hands shows
+  // just the current portfolio and the V2 migration programme. AllHandsReport
+  // still carries those fields, so bringing a section back is a UI-only change.
+  const { status } = report;
 
   const exportLabel =
     exportState === "loading" ? "Rendering…" : exportState === "done" ? "Saved ✓" : exportState === "error" ? "Failed" : "Download PNG";
-
-  const spotlightAlsoAtRisk =
-    renewalSpotlight != null && atRiskMigrating.some((a) => a.customerKey === renewalSpotlight.customerKey);
-  const spotlightRenewalDate = renewalSpotlight
-    ? new Date(new Date(report.generatedAt).getTime() + renewalSpotlight.renewalInDays * 86_400_000)
-    : null;
 
   return (
     <div className="report-theme rounded-2xl p-6" ref={reportRef}>
@@ -416,240 +362,6 @@ export function AllHandsClient({ report }: { report: AllHandsReport }) {
           );
         })()}
       </div>
-
-      {/* Section 3: upcoming renewal spotlight — only when non-null */}
-      {renewalSpotlight && (
-        <>
-          <Caption>Upcoming renewal spotlight</Caption>
-          <div
-            className="rounded-[14px] p-3.5 mb-5"
-            style={{
-              background: "linear-gradient(135deg, var(--rt-surface-1), var(--rt-surface-2))",
-              border: "1px solid rgba(242,255,112,0.35)",
-            }}
-          >
-            <div className="flex justify-between items-baseline mb-2 gap-2">
-              <div className="text-[16px] font-extrabold" style={{ color: "var(--rt-fg)" }}>
-                {renewalSpotlight.customerName} renews in {renewalSpotlight.renewalInDays} days
-              </div>
-              {spotlightRenewalDate && (
-                <span
-                  className="text-[12px] font-bold rounded-full px-2 py-0.5"
-                  style={{ background: "var(--rt-accent)", color: "var(--rt-bg)" }}
-                >
-                  {fmtShort(spotlightRenewalDate)}
-                </span>
-              )}
-            </div>
-            <div className="flex gap-4 mb-2">
-              <StatTile value={fmtMoney(renewalSpotlight.arr)} label="ARR" />
-              <StatTile value={renewalSpotlight.liveProcessCount} label="Live processes" />
-              <StatTile value={renewalSpotlight.migratingProcessCount} label="Migrating now" />
-            </div>
-            {spotlightAlsoAtRisk && (
-              <div className="text-[13px]" style={{ color: "var(--rt-status-bad)" }}>
-                Also flagged At Risk — see below.
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Section 3b: at-risk-and-migrating cross-signal — only when non-empty */}
-      {atRiskMigrating.length > 0 && (
-        <>
-          <Caption>At risk &amp; actively migrating</Caption>
-          <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
-            {atRiskMigrating.map((entry) => (
-              <div
-                key={entry.customerKey}
-                className="flex justify-between items-center py-1.5"
-                style={{ borderBottom: "1px solid var(--rt-surface-2)" }}
-              >
-                <span className="text-[14px] font-medium" style={{ color: "var(--rt-fg)" }}>
-                  {entry.customerName}
-                </span>
-                <span className="text-[13px]" style={{ color: "var(--rt-status-bad)" }}>
-                  {entry.migratingProcessCount} migrating
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Sections 4 & 5 both read Linear-backed tables — surface a read failure
-          once, above them, instead of rendering fabricated zeros. */}
-      {ticketDataError && <TicketDataErrorBanner message={ticketDataError} />}
-
-      {/* Section 4: blockers. Team-curated asks (if any are filed) show first;
-          the domain/customer breakdowns below always show — they're a volume
-          view, not conditional on whether anyone filed an ask this week. */}
-      {!ticketDataError && blockers.length > 0 && (
-        <>
-          <Caption>This week&apos;s blockers</Caption>
-          <div className="rounded-[14px] p-2.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
-            {blockers.map((b, i) => (
-              <div
-                key={i}
-                className="py-2 px-1"
-                style={{ borderBottom: i < blockers.length - 1 ? "1px solid var(--rt-surface-2)" : undefined }}
-              >
-                <div className="flex justify-between items-start gap-2">
-                  <span className="text-[14px] font-bold" style={{ color: "var(--rt-fg)" }}>
-                    {b.title}
-                  </span>
-                  <span
-                    className="text-[12px] font-bold rounded-full px-1.5 py-0.5 shrink-0"
-                    style={{
-                      background: b.priorityLabel === "NOW" ? "var(--rt-status-bad)" : "var(--rt-status-warn)",
-                      color: "var(--rt-bg)",
-                    }}
-                  >
-                    {b.priorityLabel}
-                  </span>
-                </div>
-                {b.linkedTicketIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {b.linkedTicketIds.map((id) => (
-                      <a
-                        key={id}
-                        href={LINEAR_ISSUE(id)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[13px] rounded-full px-2 py-0.5"
-                        style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg-muted)" }}
-                      >
-                        {id}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Compact chip rows, not a detailed breakdown — this is a company-wide
-          quick overview, not a ticket triage view (Rishabh, 2026-08-10). No
-          sample titles; that level of detail (plus manual Refresh) lives on
-          /reports/v2-migration/tickets, linked below since this page has no
-          other pointer to it (Rishabh, 2026-08-10). */}
-      <div className="flex justify-between items-baseline mb-2">
-        <div className="text-[13px] uppercase tracking-[0.06em]" style={{ color: "var(--rt-fg-muted)" }}>
-          Hard blockers — {ticketHealth.hardBlockers} total
-        </div>
-        <a href="/reports/v2-migration/tickets" className="text-[12px] font-semibold" style={{ color: "var(--rt-accent)" }}>
-          Manage tickets &amp; refresh from Linear →
-        </a>
-      </div>
-      <div className="rounded-[14px] p-3.5 mb-5" style={{ background: "var(--rt-surface-1)" }}>
-        {ticketDataError ? (
-          <div className="text-xs italic" style={{ color: "var(--rt-status-bad)" }}>
-            Unavailable — ticket data could not be read (see above).
-          </div>
-        ) : (
-          <>
-            <div className="text-[12px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
-              By category:
-            </div>
-            {ticketDomainBuckets.length === 0 ? (
-              <div className="text-xs italic mb-3" style={{ color: "var(--rt-fg-muted)" }}>
-                No open hard blockers.
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {ticketDomainBuckets.map((bucket) => (
-                  <span
-                    key={bucket.domain}
-                    className="text-[13px] rounded-full px-2 py-1"
-                    style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg)" }}
-                  >
-                    {domainLabel(bucket.domain)} · <span style={{ color: "var(--rt-status-bad)", fontWeight: 700 }}>{bucket.count}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="text-[12px] mb-1.5" style={{ color: "var(--rt-fg-muted)" }}>
-              By migration:
-            </div>
-            {customerTicketConcentration.length === 0 ? (
-              <div className="text-xs italic" style={{ color: "var(--rt-fg-muted)" }}>
-                No open hard blockers linked to a specific migration.
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {customerTicketConcentration.map((c) => (
-                  <span
-                    key={c.customerName}
-                    className="text-[13px] rounded-full px-2 py-1"
-                    style={{ background: "var(--rt-surface-2)", color: "var(--rt-fg)" }}
-                  >
-                    {c.customerName} · <span style={{ color: "var(--rt-status-bad)", fontWeight: 700 }}>{c.ticketCount}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-            {/* Manually-maintained, deliberately not ticket-derived (Rishabh, 2026-08-10):
-                IDP experience is a recurring gap across several customers' migrations, not
-                fully captured as tracked tickets today. Revisit/remove once it is. */}
-            <div className="text-[12px] italic mt-3" style={{ color: "var(--rt-fg-muted)" }}>
-              Known gap beyond what&apos;s tracked above: IDP experience is a recurring need across multiple customers&apos;
-              migrations.
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Section 5: ticket health. The closed/new tiles are a rolling 7-day
-          delta from loadTicketsBundle(), independent of the selected preset —
-          labelled "last 7 days" rather than "this period" so a Quarter view
-          doesn't imply a quarter's worth of movement. */}
-      <Caption>Ticket health — live Linear pull</Caption>
-      {ticketDataError ? (
-        <div
-          className="rounded-xl p-2.5 text-xs italic"
-          style={{ background: "var(--rt-surface-1)", color: "var(--rt-status-bad)" }}
-        >
-          Unavailable — ticket data could not be read (see above).
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-xl font-extrabold" style={{ color: "var(--rt-fg)" }}>
-              {ticketHealth.openInScope}
-            </div>
-            <div className="text-[12px]" style={{ color: "var(--rt-fg-muted)" }}>
-              open, in scope
-            </div>
-          </div>
-          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-xl font-extrabold" style={{ color: "var(--rt-status-bad)" }}>
-              {ticketHealth.hardBlockers}
-            </div>
-            <div className="text-[12px]" style={{ color: "var(--rt-fg-muted)" }}>
-              hard blockers
-            </div>
-          </div>
-          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-xl font-extrabold" style={{ color: "var(--rt-status-good)" }}>
-              +{ticketHealth.closedLast7Days}
-            </div>
-            <div className="text-[12px]" style={{ color: "var(--rt-fg-muted)" }}>
-              closed, last 7 days
-            </div>
-          </div>
-          <div className="flex-1 rounded-xl p-2.5" style={{ background: "var(--rt-surface-1)" }}>
-            <div className="text-xl font-extrabold" style={{ color: "var(--rt-fg)" }}>
-              +{ticketHealth.newLast7Days}
-            </div>
-            <div className="text-[12px]" style={{ color: "var(--rt-fg-muted)" }}>
-              new, last 7 days
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

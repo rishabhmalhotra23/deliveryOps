@@ -20,7 +20,7 @@ const REPORT_CARDS: ReportCard[] = [
     title: "All-Hands",
     subtitle: "Company-wide · Delivery & Customer Success",
     description:
-      "Portfolio and migration status, cumulative migration progress since the program started, upcoming-renewal spotlight, this week's blockers, and live ticket health. All from live processes + Linear data — export as PNG or print for the meeting.",
+      "Current delivery portfolio, fresh V2 builds, and V2 migration status by stage. All from live process data — export as PNG or print for the meeting.",
     icon: "🚀",
     status: "available",
     needs: [],
