@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customers in one place — 2026-09-08</title>
+<style>
+/* Tokens verbatim from app/globals.css (.dark block). */
+.dark{
+  --background:#171717; --surface-1:#262626; --surface-2:#1F1F1F; --surface-3:#2F2F2F;
+  --foreground:#FAFAFA; --foreground-muted:#A3A3A3; --foreground-body:#D4D4D4;
+  --status-good:#4ADE80; --status-warn:#FB923C; --status-bad:#F87171;
+  --yellow-ink:#F2FF70; --yellow-soft:rgba(242,255,112,.14); --yellow-line:rgba(242,255,112,.45);
+  --brand-yellow:#F2FF70;
+  --field:rgba(255,255,255,.06); --row-hover-bg:#2e2e2e;
+  --muted-foreground:#A3A3A3; --glass-border:rgba(255,255,255,.14); --glass-bg:rgba(255,255,255,.10);
+  --brand-metal-line:rgba(255,255,255,.12);
+  --st-neutral-fg:#A3A3A3; --st-neutral-bg:rgba(163,163,163,.14); --st-neutral-bd:rgba(163,163,163,.32);
+  --st-amber-fg:#FBBF24;   --st-amber-bg:rgba(251,191,36,.14);    --st-amber-bd:rgba(251,191,36,.32);
+  --st-emerald-fg:#4ADE80; --st-emerald-bg:rgba(74,222,128,.14);  --st-emerald-bd:rgba(74,222,128,.32);
+  --st-red-fg:#F87171;     --st-red-bg:rgba(248,113,113,.14);     --st-red-bd:rgba(248,113,113,.32);
+  --st-blue-fg:#60A5FA;    --st-blue-bg:rgba(96,165,250,.14);     --st-blue-bd:rgba(96,165,250,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--background);color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;padding:28px}
+h1{font-size:19px;margin:0 0 4px}
+h2{font-size:15px;margin:0 0 2px}
+.sub{color:var(--foreground-muted);font-size:12px}
+.wrap{max-width:1180px;margin:0 auto}
+section{margin:32px 0 0;padding:20px;border:1px solid var(--brand-metal-line);
+  border-radius:12px;background:var(--surface-1)}
+.shead{display:flex;align-items:baseline;gap:10px;margin-bottom:14px;
+  padding-bottom:12px;border-bottom:1px solid var(--brand-metal-line)}
+.tagn{font-family:ui-monospace,monospace;font-size:10px;padding:2px 7px;border-radius:999px;
+  background:var(--yellow-soft);border:1px solid var(--yellow-line);color:var(--yellow-ink);
+  text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:2px 7px;
+  border-radius:5px;border:1px solid;white-space:nowrap;font-weight:500}
+.c-focus  {color:var(--st-emerald-fg);background:var(--st-emerald-bg);border-color:var(--st-emerald-bd)}
+.c-renew  {color:var(--st-amber-fg);  background:var(--st-amber-bg);  border-color:var(--st-amber-bd)}
+.c-risk   {color:var(--st-red-fg);    background:var(--st-red-bg);    border-color:var(--st-red-bd)}
+.c-neutral{color:var(--st-neutral-fg);background:var(--st-neutral-bg);border-color:var(--st-neutral-bd)}
+.c-pov    {color:var(--st-blue-fg);   background:var(--st-blue-bg);   border-color:var(--st-blue-bd)}
+/* toolbar */
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.inp{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:7px;
+  padding:7px 10px;color:var(--foreground-muted);font-size:12.5px;flex:1;min-width:220px}
+.sel{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:7px;
+  padding:7px 10px;font-size:12.5px;color:var(--foreground-body);display:inline-flex;gap:6px;align-items:center}
+.btn{font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--glass-border);
+  background:var(--glass-bg);color:var(--foreground-body);cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--brand-yellow);color:#171717;border-color:var(--brand-yellow);font-weight:600}
+.zones{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.zc{font-size:11px;padding:4px 11px;border-radius:999px;border:1px solid var(--glass-border);
+  color:var(--foreground-muted);display:inline-flex;gap:6px;align-items:center}
+.zc.on{background:var(--brand-yellow);color:#171717;border-color:var(--brand-yellow);font-weight:600}
+.zc b{font-family:ui-monospace,monospace;font-size:10px;opacity:.75;font-weight:400}
+/* rows */
+.rows{border:1px solid var(--brand-metal-line);border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.zhead{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--surface-3);
+  font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:700;
+  color:var(--foreground-muted);border-bottom:1px solid var(--brand-metal-line)}
+.zhead .n{margin-left:auto;font-family:ui-monospace,monospace;font-size:10px}
+.r{display:grid;grid-template-columns:26px 1fr 150px 92px 78px 92px 30px;gap:10px;
+  align-items:center;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+.r:last-child{border-bottom:none}
+.r:hover{background:var(--row-hover-bg)}
+.r.dim{opacity:.55}
+.av{width:22px;height:22px;border-radius:999px;background:var(--brand-yellow);color:#171717;
+  font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.nm{font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--muted-foreground)}
+.kebab{opacity:.5;text-align:center;cursor:pointer}
+/* toggle line */
+.toggle{display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:12px;
+  color:var(--yellow-ink);border-top:1px solid var(--brand-metal-line);background:var(--surface-3);cursor:pointer}
+/* row menu */
+.menu{border:1px solid var(--yellow-line);border-radius:9px;background:var(--surface-1);
+  padding:4px;width:250px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mi{padding:6px 9px;border-radius:6px;font-size:12px;color:var(--foreground-body)}
+.mi.dangerish{color:var(--st-amber-fg)}
+.mi.head{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:700;
+  color:var(--foreground-muted);padding:6px 9px 3px}
+.mi.sep{border-top:1px solid var(--brand-metal-line);margin-top:3px;padding-top:7px}
+/* callouts */
+.note{font-size:11.5px;color:var(--foreground-muted);margin-top:10px;padding-left:11px;
+  border-left:2px solid var(--brand-metal-line)}
+.warn{font-size:11.5px;padding:9px 12px;border-radius:9px;margin-top:10px;
+  background:var(--st-amber-bg);border:1px solid var(--st-amber-bd);color:var(--st-amber-fg)}
+.bad{background:var(--st-red-bg);border-color:var(--st-red-bd);color:var(--st-red-fg)}
+ul.f{margin:10px 0 0;padding-left:17px;color:var(--foreground-body);font-size:12px}
+ul.f li{margin-bottom:5px}
+code{font-family:ui-monospace,monospace;font-size:11px;background:var(--field);
+  padding:1px 4px;border-radius:4px;color:var(--foreground)}
+table.map{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+table.map th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--foreground-muted);padding:6px 8px;border-bottom:1px solid var(--brand-metal-line)}
+table.map td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--foreground-body);vertical-align:top}
+table.map td.was{color:var(--st-red-fg)} table.map td.now{color:var(--st-emerald-fg)}
+.ba{display:grid;gap:14px;grid-template-columns:1fr 1fr}
+.balab{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:8px}
+.balab.b4{color:var(--st-red-fg)} .balab.af{color:var(--st-emerald-fg)}
+.cfgtabs{display:flex;gap:3px;background:var(--surface-3);border-radius:8px;padding:3px;width:fit-content}
+.cfgtabs span{padding:5px 13px;border-radius:6px;font-size:12px;color:var(--foreground-muted)}
+.cfgtabs span.on{background:var(--surface-1);color:var(--foreground);font-weight:600}
+.cfgtabs span.gone{text-decoration:line-through;opacity:.45}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Customers, in one place</h1>
+<p class="sub">Mockup for approval, 2026-09-08. Every name, category and count below is live
+production data (41 customers, 17 active, 24 retired, 1 soft-deleted).</p>
+
+<!-- ═══════════════ why ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">Why</span>
+    <div><h2>What's broken today</h2></div></div>
+  <ul class="f">
+    <li><b><code>active</code> does almost nothing.</b> It is honoured in exactly two places, both
+      in <code>lib/processes/loader.ts</code> (lines 293 and 444) — the <code>customerOptions</code>
+      list feeding Delivery's process picker. So retiring a customer stops you assigning new
+      processes to it, and has no other effect anywhere.</li>
+    <li><b><code>/customers</code> ignores it completely.</b> <code>listCustomers()</code> has no
+      <code>active</code> filter and <code>CustomerRow</code> doesn't carry the field. <b>24 of 41
+      customers are retired and the list shows all 41 identically</b>, including 13 marked
+      Churned.</li>
+    <li><b>Two editors, one row.</b> Delivery → Configure → Customers edits name, category, active,
+      AE, partner, Slack and SF ID — a strict subset of the <code>/customers/[key]</code> record
+      card, through a different route with a different allow-list. (I widened Configure on
+      2026-09-08 to close a gap, which deepened the duplication instead of resolving it.)</li>
+    <li><b>Two axes disagree.</b> The zone chips derive "Closed — no longer active" from
+      <code>custom_category</code>, while <code>active</code> is its own column. They agree on 35 of
+      41 rows and <b>contradict each other on 6</b>. Section 4 surfaces those rather than picking a
+      winner silently.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ 1 ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">1</span>
+    <div><h2>/customers — default view</h2>
+    <p class="sub">Retired hidden, matching what Configure → Roster already does for people who
+      have left. 17 rows instead of 41.</p></div></div>
+
+  <div class="bar">
+    <span class="inp">🔍 Search accounts, AE, FDE, partner…</span>
+    <span class="sel">Sort: ARR high → low <i style="opacity:.6;font-size:9px">▾</i></span>
+    <span class="btn pri">+ Add customer</span>
+  </div>
+
+  <div class="zones">
+    <span class="zc on">All <b>17</b></span>
+    <span class="zc">Focus <b>15</b></span>
+    <span class="zc">Pipeline <b>1</b></span>
+    <span class="zc">Evaluation <b>0</b></span>
+    <span class="zc">Closed <b>1</b></span>
+    <span class="zc" style="color:var(--st-amber-fg);border-color:var(--st-amber-bd)">⚠ Needs attention <b>6</b></span>
+  </div>
+
+  <div class="rows">
+    <div class="zhead">Focus <span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">the active book</span><span class="n">15</span></div>
+
+    <div class="r"><span class="av">WF</span><span class="nm">Wipro FSS</span>
+      <span><span class="chip c-renew">Upcoming Renewals</span></span>
+      <span class="mono">Rajesh</span><span class="mono">20 proc</span><span class="mono">11 live</span><span class="kebab">⋯</span></div>
+    <div class="r"><span class="av">JB</span><span class="nm">JBI</span>
+      <span><span class="chip c-renew">Upcoming Renewals</span></span>
+      <span class="mono">Andrew</span><span class="mono">14 proc</span><span class="mono">7 live</span><span class="kebab">⋯</span></div>
+    <div class="r"><span class="av">TT</span><span class="nm">TTX</span>
+      <span><span class="chip c-focus">Strategic Growth</span></span>
+      <span class="mono">Binny</span><span class="mono">8 proc</span><span class="mono">7 live</span><span class="kebab">⋯</span></div>
+    <div class="r"><span class="av">NO</span><span class="nm">Norco</span>
+      <span><span class="chip c-focus">Strategic Growth</span></span>
+      <span class="mono">Andrew</span><span class="mono">13 proc</span><span class="mono">6 live</span><span class="kebab">⋯</span></div>
+    <div class="r"><span class="av">CE</span><span class="nm">Century</span>
+      <span><span class="chip c-renew">Upcoming Renewals</span></span>
+      <span class="mono">Binny</span><span class="mono">7 proc</span><span class="mono">5 live</span><span class="kebab">⋯</span></div>
+    <div class="r"><span class="av">PL</span><span class="nm">Plunkett</span>
+      <span><span class="chip c-focus">Active</span></span>
+      <span class="mono">Binny</span><span class="mono">8 proc</span><span class="mono">4 live</span><span class="kebab">⋯</span></div>
+    <div class="r" style="color:var(--foreground-muted)"><span></span>
+      <span class="nm" style="font-weight:400">…9 more in Focus</span>
+      <span></span><span></span><span></span><span></span><span></span></div>
+
+    <div class="zhead">Pipeline <span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">proving value</span><span class="n">1</span></div>
+    <div class="r"><span class="av">CC</span><span class="nm">Charleston County School District</span>
+      <span><span class="chip c-pov">POV</span></span>
+      <span class="mono">Binny</span><span class="mono">1 proc</span><span class="mono">—</span><span class="kebab">⋯</span></div>
+
+    <div class="zhead">Closed <span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">no longer active</span><span class="n">1</span></div>
+    <div class="r"><span class="av">BB</span><span class="nm">Bradley &amp; Beams</span>
+      <span><span class="chip c-risk">To Drop</span></span>
+      <span class="mono">Andrew</span><span class="mono">4 proc</span><span class="mono">4 live</span><span class="kebab">⋯</span></div>
+
+    <div class="toggle">▸ Show the 24 no longer customers</div>
+  </div>
+
+  <div class="warn">Bradley &amp; Beams is the contradiction the current UI hides: category
+    <b>To Drop</b> files it under Closed, but <code>active = true</code> and it has <b>4 live
+    processes</b> — one of which is in Delivery's Active work. Either the category is stale or it
+    isn't really being dropped. It shows because <code>active</code>, not category, decides whether
+    a customer is still a customer.</div>
+</section>
+
+<!-- ═══════════════ 2 ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">2</span>
+    <div><h2>Retired, expanded</h2>
+    <p class="sub">One click. Their 360 pages stay reachable by URL and by search either way —
+      hiding is a list default, not a restriction.</p></div></div>
+
+  <div class="rows">
+    <div class="zhead" style="background:rgba(163,163,163,.10)">No longer customers
+      <span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">hidden by default</span><span class="n">24</span></div>
+    <div class="r dim"><span class="av" style="background:var(--st-neutral-bd);color:var(--foreground-muted)">PA</span>
+      <span class="nm">Paysafe</span><span><span class="chip c-neutral">Churned</span></span>
+      <span class="mono">—</span><span class="mono">9 proc</span><span class="mono">—</span><span class="kebab">⋯</span></div>
+    <div class="r dim" style="opacity:.8"><span class="av" style="background:var(--st-amber-bd);color:#171717">HA</span>
+      <span class="nm">Halemeyer <span class="chip c-amber" style="color:var(--st-amber-fg);background:var(--st-amber-bg);border-color:var(--st-amber-bd)">⚠ 2 live</span></span>
+      <span><span class="chip c-risk">To Drop</span></span>
+      <span class="mono">—</span><span class="mono">2 proc</span><span class="mono">2 live</span><span class="kebab">⋯</span></div>
+    <div class="r dim" style="opacity:.8"><span class="av" style="background:var(--st-amber-bd);color:#171717">UN</span>
+      <span class="nm">Union <span class="chip" style="color:var(--st-amber-fg);background:var(--st-amber-bg);border-color:var(--st-amber-bd)">⚠ 1 live</span></span>
+      <span><span class="chip c-focus">Partner Managed</span></span>
+      <span class="mono">—</span><span class="mono">2 proc</span><span class="mono">1 live</span><span class="kebab">⋯</span></div>
+    <div class="r dim"><span class="av" style="background:var(--st-neutral-bd);color:var(--foreground-muted)">OZ</span>
+      <span class="nm">Ozark River</span><span><span class="chip c-risk">To Drop</span></span>
+      <span class="mono">—</span><span class="mono">4 proc</span><span class="mono">—</span><span class="kebab">⋯</span></div>
+    <div class="r dim"><span class="av" style="background:var(--st-neutral-bd);color:var(--foreground-muted)">SR</span>
+      <span class="nm">Srinar</span><span><span class="chip c-neutral">Churned</span></span>
+      <span class="mono">—</span><span class="mono">3 proc</span><span class="mono">—</span><span class="kebab">⋯</span></div>
+    <div class="r dim" style="color:var(--foreground-muted)"><span></span>
+      <span class="nm" style="font-weight:400">…19 more</span>
+      <span></span><span></span><span></span><span></span><span></span></div>
+  </div>
+  <p class="note">Retired rows keep their process counts, because that history is the reason not to
+    delete them. The amber <b>⚠ N live</b> badge marks the 6 customers that are retired with work
+    still running — see section 4.</p>
+</section>
+
+<!-- ═══════════════ 3 ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">3</span>
+    <div><h2>The row menu — what Configure used to be for</h2>
+    <p class="sub">Everything the Customers tab did, on the row it applies to. Category is editable
+      inline because it's a reporting bucket you re-file often; the rest opens the record card.</p></div></div>
+
+  <div class="ba">
+    <div>
+      <div class="balab af">Active customer</div>
+      <div class="menu">
+        <div class="mi head">Norco</div>
+        <div class="mi">Open customer 360 →</div>
+        <div class="mi">Category ▸ <span class="chip c-focus" style="margin-left:4px">Strategic Growth</span></div>
+        <div class="mi sep dangerish">Mark as no longer a customer…</div>
+      </div>
+      <p class="note">Confirm step names the consequence: 13 processes stay attributed, and Norco
+        leaves every customer picker in Delivery.</p>
+    </div>
+    <div>
+      <div class="balab b4">Retired customer</div>
+      <div class="menu">
+        <div class="mi head">Paysafe</div>
+        <div class="mi">Open customer 360 →</div>
+        <div class="mi">Category ▸ <span class="chip c-neutral" style="margin-left:4px">Churned</span></div>
+        <div class="mi sep" style="color:var(--st-emerald-fg)">Restore as a customer</div>
+      </div>
+      <p class="note">Restoring is the same one-field write in reverse — nothing about the row was
+        destroyed, which is why <code>active</code> exists instead of a delete.</p>
+    </div>
+  </div>
+
+  <div class="warn" style="background:var(--st-emerald-bg);border-color:var(--st-emerald-bd);color:var(--st-emerald-fg)">
+    <b>+ Add customer</b> moves here from Configure, keeping the same behaviour: type a name, the
+    key is slugified (<code>slugifyCustomerKey</code>), and the customer appears in every Delivery
+    picker immediately.</div>
+</section>
+
+<!-- ═══════════════ 4 ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">4</span>
+    <div><h2>Needs attention — the contradictions, made visible</h2>
+    <p class="sub">6 rows where the two axes disagree. Not invented for the mockup: this is the
+      production cross-tab.</p></div></div>
+
+  <div class="rows">
+    <div class="zhead" style="background:var(--st-amber-bg);color:var(--st-amber-fg)">
+      Retired, but work is still live<span class="n">6</span></div>
+    <div class="r"><span class="av" style="background:var(--st-amber-bd);color:#171717">HA</span>
+      <span class="nm">Halemeyer</span><span><span class="chip c-risk">To Drop</span></span>
+      <span class="mono">—</span><span class="mono">2 proc</span><span class="mono">2 live</span><span class="kebab">⋯</span></div>
+    <div class="r"><span class="av" style="background:var(--st-amber-bd);color:#171717">UN</span>
+      <span class="nm">Union</span><span><span class="chip c-focus">Partner Managed</span></span>
+      <span class="mono">—</span><span class="mono">2 proc</span><span class="mono">1 live</span><span class="kebab">⋯</span></div>
+    <div class="r"><span class="av" style="background:var(--st-amber-bd);color:#171717">TS</span>
+      <span class="nm">TSM Law</span><span><span class="chip c-neutral">Churned</span></span>
+      <span class="mono">—</span><span class="mono">1 proc</span><span class="mono">1 live</span><span class="kebab">⋯</span></div>
+    <div class="r" style="color:var(--foreground-muted)"><span></span>
+      <span class="nm" style="font-weight:400">Salesbricks · Hwy Haul · ET Global</span>
+      <span></span><span></span><span></span><span class="mono">1 live each</span><span></span></div>
+  </div>
+
+  <div class="warn">Five more disagree the other way — <b>CSA Transport, Dish - Ecostar, TPI, Union,
+    Xenon Arc</b> are retired while their category still files them under Focus (Partner Managed,
+    Upcoming Renewals). An "Upcoming Renewal" for a non-customer is a number that would embarrass
+    us in a board pack, which is the whole reason to surface it rather than let the zone chip paper
+    over it.</div>
+  <p class="note">This chip is a filter, not a blocker — nothing is prevented, it's just findable.
+    Whether these are stale categories or genuine wind-downs is your call, not the app's.</p>
+</section>
+
+<!-- ═══════════════ 5 ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">5</span>
+    <div><h2>Delivery → Configure loses the Customers tab</h2></div></div>
+
+  <div class="ba">
+    <div><div class="balab b4">Before</div>
+      <div class="cfgtabs"><span class="on">Roster</span><span>Customers</span><span>Vocabularies</span><span>Colours</span></div>
+      <p class="note">Customer state lived behind a Delivery dialog — the last place you'd look for
+        it, and a second write path for a row the 360 page already owns.</p></div>
+    <div><div class="balab af">After</div>
+      <div class="cfgtabs"><span class="on">Roster</span><span class="gone">Customers</span><span>Vocabularies</span><span>Colours</span></div>
+      <p class="note">What's left is genuinely delivery configuration: the FDE/TAM/Partner roster,
+        the process vocabularies and their chip colours.</p></div>
+  </div>
+
+  <h2 style="margin-top:20px;font-size:13px">Nothing is lost — where each field goes</h2>
+  <table class="map">
+    <tr><th>Was in Configure → Customers</th><th>Now</th></tr>
+    <tr><td>Customer name</td><td class="now">Record card (already there)</td></tr>
+    <tr><td>Category</td><td class="now">Row menu inline, and the record card</td></tr>
+    <tr><td>Still a customer / retired</td><td class="now">Row menu, and the record card's Status field</td></tr>
+    <tr><td>AE owner · Partner · Slack channel · SF account ID</td><td class="now">Record card (already there — these were the duplicates I added on 2026-09-08)</td></tr>
+    <tr><td>+ Add a customer</td><td class="now"><code>+ Add customer</code> on /customers</td></tr>
+    <tr><td>Process counts, "show inactive"</td><td class="now">The list itself</td></tr>
+  </table>
+  <p class="note">One consequence worth stating plainly: retiring a customer becomes a trip to
+    <code>/customers</code> rather than something you can do without leaving Delivery. That seems
+    right — it's a rare, consequential change, and it takes effect on Delivery's pickers either way.</p>
+</section>
+
+<!-- ═══════════════ 6 ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">6</span>
+    <div><h2>Under the hood</h2></div></div>
+  <ul class="f">
+    <li><code>listCustomers()</code> keeps returning every non-deleted row; the list page threads
+      <code>active</code> onto <code>CustomerRow</code> and hides retired client-side, so the
+      counts, search and zone chips all stay computed from one array.</li>
+    <li><code>PATCH /api/customers/roster</code> and its route are <b>deleted</b>. The row menu uses
+      the record card's existing <code>POST /api/customers/[key]/manual-update</code>, so there is
+      one allow-list, one provenance write and one audit event
+      (<code>CATEGORY_CHANGED</code> / <code>PROFILE_UPDATED</code>) instead of two that drift.</li>
+    <li><code>countCustomerProcesses()</code> moves from serving the Configure tab to serving the
+      list — same query, and its comment gets corrected.</li>
+    <li><code>customers.active</code> stays the single truth for "still a customer".
+      <code>custom_category</code> stays a reporting bucket, as
+      <code>lib/supabase/types.ts</code> already documents — the zone chips keep deriving from it,
+      but they no longer claim to answer a question <code>active</code> owns.</li>
+    <li>A test pins that a retired customer is excluded from the default list and included with the
+      toggle, and that its 360 page and search still resolve — the guardrail against "hidden"
+      quietly becoming "gone".</li>
+  </ul>
+</section>
+
+
+<!-- ═══════════════ 7 ═══════════════ -->
+<section>
+  <div class="shead"><span class="tagn">7</span>
+    <div><h2>Categories become configurable — label, colour, <i>and</i> zone</h2>
+    <p class="sub">Because minting one from the picker today only gets you the label. Everything
+      else about a new category is hardcoded.</p></div></div>
+
+  <div class="warn bad">What happens today if you add <b>"To be dropped post contract expiry"</b>
+    from the record card: the name saves fine (<code>custom_category</code> is free text), but
+    <code>zoneForCategory()</code> has no entry for it and falls through to
+    <code>?? "Focus"</code> — so a customer you are winding down files under <b>Focus, the active
+    book</b>, and its chip renders untoned because <code>CATEGORY_VARIANT</code> has no entry
+    either. The label is configurable; its meaning is not.</div>
+
+  <div class="bar" style="margin-top:16px">
+    <span class="inp" style="flex:0 0 auto;min-width:0">🔍 Search…</span>
+    <span class="btn pri">+ Add customer</span>
+    <span class="btn" style="border-color:var(--yellow-line);color:var(--yellow-ink)">⚙ Categories</span>
+  </div>
+
+  <div class="rows">
+    <div class="zhead">Customer categories<span class="n">7 in use, 4 unused · 41 customers</span></div>
+
+    <div class="r" style="grid-template-columns:1fr 130px 150px 74px 90px 30px">
+      <span class="nm"><span class="chip c-focus">Strategic Growth</span></span>
+      <span class="mono">emerald</span>
+      <span class="sel" style="padding:3px 8px;font-size:11.5px">Focus <i style="opacity:.6;font-size:9px">▾</i></span>
+      <span class="mono">10</span><span class="mono">3 customers</span><span class="kebab">⋯</span></div>
+
+    <div class="r" style="grid-template-columns:1fr 130px 150px 74px 90px 30px">
+      <span class="nm"><span class="chip c-renew">Upcoming Renewals</span></span>
+      <span class="mono">amber</span>
+      <span class="sel" style="padding:3px 8px;font-size:11.5px">Focus <i style="opacity:.6;font-size:9px">▾</i></span>
+      <span class="mono">20</span><span class="mono">11 customers</span><span class="kebab">⋯</span></div>
+
+    <div class="r" style="grid-template-columns:1fr 130px 150px 74px 90px 30px">
+      <span class="nm"><span class="chip c-pov">POV</span></span>
+      <span class="mono">blue</span>
+      <span class="sel" style="padding:3px 8px;font-size:11.5px">Pipeline <i style="opacity:.6;font-size:9px">▾</i></span>
+      <span class="mono">40</span><span class="mono">1 customer</span><span class="kebab">⋯</span></div>
+
+    <div class="r" style="grid-template-columns:1fr 130px 150px 74px 90px 30px">
+      <span class="nm"><span class="chip c-neutral">Churned</span></span>
+      <span class="mono">neutral</span>
+      <span class="sel" style="padding:3px 8px;font-size:11.5px">Closed <i style="opacity:.6;font-size:9px">▾</i></span>
+      <span class="mono">70</span><span class="mono">15 customers</span><span class="kebab">⋯</span></div>
+
+    <div class="r" style="grid-template-columns:1fr 130px 150px 74px 90px 30px;color:var(--foreground-muted)">
+      <span class="nm" style="font-weight:400">Partner Managed 5 · To Drop 5 · Active 1 &nbsp;·&nbsp; <i>unused in code:</i> At Risk · Past · Dropped · Evaluation</span>
+      <span></span><span></span><span></span><span class="mono">11 customers</span><span></span></div>
+
+    <!-- the new one, being added -->
+    <div class="r" style="grid-template-columns:1fr 130px 150px 74px 90px 30px;background:var(--yellow-soft)">
+      <span class="nm"><input style="background:var(--field);border:1px solid var(--yellow-line);
+        border-radius:6px;padding:4px 8px;color:var(--foreground);font-size:12px;width:100%"
+        value="To be dropped post contract expiry"></span>
+      <span class="sel" style="padding:3px 8px;font-size:11.5px">
+        <i style="width:9px;height:9px;border-radius:2px;background:var(--st-orange-fg,#FB923C);display:inline-block"></i>
+        orange <i style="opacity:.6;font-size:9px">▾</i></span>
+      <span class="sel" style="padding:3px 8px;font-size:11.5px;border-color:var(--yellow-line)">
+        Closed <i style="opacity:.6;font-size:9px">▾</i></span>
+      <span class="mono">80</span><span class="mono">—</span>
+      <span class="kebab" style="color:var(--yellow-ink);opacity:1">✓</span></div>
+
+    <div class="toggle" style="color:var(--yellow-ink)">+ Add a category</div>
+  </div>
+
+  <p class="note"><b>Zone is the field that matters.</b> It is the one thing a minted category
+    cannot currently express, and the one with real consequences — it decides which group a
+    customer appears under on this page and whether it reads as part of the active book. Picking
+    <b>Closed</b> here is what makes "to be dropped post contract expiry" behave like a wind-down
+    instead of quietly joining Focus.</p>
+
+  <div class="warn" style="background:var(--st-emerald-bg);border-color:var(--st-emerald-bd);color:var(--st-emerald-fg)">
+    <b>No migration risk, unlike the process vocabularies.</b>
+    <code>customers.custom_category</code> is plain <code>text</code> (0005) — no enum, no CHECK.
+    So adding a category is an ordinary <code>INSERT</code>, not the irreversible
+    <code>ALTER TYPE … ADD VALUE</code> that <code>add_vocabulary_value()</code> has to run for the
+    process enums. A customer category can therefore be genuinely deleted, not just retired.</div>
+
+  <h2 style="margin-top:20px;font-size:13px">Retiring a category that's in use</h2>
+  <div class="ba">
+    <div>
+      <div class="menu" style="width:100%">
+        <div class="mi head">Churned</div>
+        <div class="mi">Rename…</div>
+        <div class="mi">Colour ▸ neutral</div>
+        <div class="mi">Rolls up to ▸ Closed</div>
+        <div class="mi sep dangerish">Retire this category</div>
+      </div>
+    </div>
+    <div>
+      <div class="warn"><b>15 customers use Churned.</b> Retiring it removes it from the picker so
+        nobody files anything new under it; those 15 keep the value and keep rendering with its
+        colour and zone. Same rule as a retired process vocabulary value
+        (<code>active = false</code>), and the same reason: rewriting 15 customers' history to tidy
+        a list would be the wrong kind of tidy.</div>
+    </div>
+  </div>
+
+  <h2 style="margin-top:20px;font-size:13px">Under the hood</h2>
+  <ul class="f">
+    <li>A new <code>vocabulary = 'customer_category'</code> in <code>vocabulary_values</code>
+      (0042's table), seeded from today's <code>CUSTOMER_CATEGORIES</code>,
+      <code>CATEGORY_TO_ZONE</code> and <code>CATEGORY_VARIANT</code> so nothing changes
+      appearance on day one.</li>
+    <li>One new nullable column, <code>rollup</code>, holding the zone. Only
+      <code>customer_category</code> uses it; the process vocabularies leave it null.</li>
+    <li><code>zoneForCategory()</code> and the chip tone read the DB first and fall back to the
+      compiled maps — the same "DB wins, hardcoded default behind it" shape
+      <code>resolveHue()</code> already uses, so a missing row degrades to today's behaviour
+      rather than to nothing.</li>
+    <li><code>add_vocabulary_value()</code> is <b>not</b> touched: it exists to run
+      <code>ALTER TYPE</code> for real enums, and this isn't one. Customer categories go through a
+      plain insert, which is why they can also be deleted.</li>
+    <li>A test pins that every seeded category resolves to the same zone and tone it resolves to
+      today, and that an unknown category still lands somewhere legible rather than untoned in
+      Focus.</li>
+  </ul>
+</section>
+
+</div>
+</body>
+</html>
