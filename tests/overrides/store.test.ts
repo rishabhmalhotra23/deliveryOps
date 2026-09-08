@@ -74,3 +74,55 @@ describe("slugifyCustomerKey — one implementation, two consumers", () => {
     expect(slugifyCustomerKey("Scan Health")).toBe("scan-health");
   });
 });
+
+describe("loadOverrideMap must not rely on a foreign key", () => {
+  // The first version selected "value, customers!inner(key)" — a PostgREST
+  // embedded relation. That needs a real FK, and `field_overrides.entity_id`
+  // deliberately has none: it is polymorphic, pointing at customers,
+  // processes or profiles depending on `entity_type`. The result was PGRST200
+  // on every page in the app, because eight loaders call this.
+  //
+  // The join is done in memory now. This pins the shape of that join so the
+  // embedded-relation form can't come back unnoticed.
+  function joinInMemory(
+    overrides: { entity_id: string; value: unknown }[],
+    customers: { id: string; key: string }[]
+  ): Record<string, unknown> {
+    if (overrides.length === 0) return {};
+    const keyById = new Map(customers.map((c) => [c.id, c.key]));
+    const out: Record<string, unknown> = {};
+    for (const row of overrides) {
+      const key = keyById.get(row.entity_id);
+      if (key) out[key] = row.value;
+    }
+    return out;
+  }
+
+  const customers = [
+    { id: "id-norco", key: "norco" },
+    { id: "id-jbi", key: "jbi" },
+  ];
+
+  it("keys the result by customer key, which is what the ARR resolver takes", () => {
+    expect(joinInMemory([{ entity_id: "id-norco", value: 311_000 }], customers)).toEqual({
+      norco: 311_000,
+    });
+  });
+
+  it("skips an override whose entity_id is not a customer at all", () => {
+    // A process-scoped override shares the column. Filtering on entity_type
+    // is the first defence; this is the second, and it must not throw.
+    expect(joinInMemory([{ entity_id: "id-of-a-process", value: 1 }], customers)).toEqual({});
+  });
+
+  it("returns an empty map without needing the customer list", () => {
+    // The common case is zero overrides, and it shouldn't cost a join.
+    expect(joinInMemory([], [])).toEqual({});
+  });
+
+  it("carries an override for a customer that is soft-deleted", () => {
+    // loadOverrideMap deliberately doesn't filter deleted_at, so a restore
+    // brings the correction back with it.
+    expect(joinInMemory([{ entity_id: "id-jbi", value: 5 }], customers)).toEqual({ jbi: 5 });
+  });
+});

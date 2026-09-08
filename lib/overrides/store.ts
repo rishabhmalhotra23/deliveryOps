@@ -60,23 +60,42 @@ export async function listOverrides(entityType?: OverrideEntityType): Promise<Fi
 /** `{ [customerKey]: value }` for one field, which is the shape every ARR
  *  caller wants — the pure derivation functions take a customer key, not a
  *  uuid, so the join happens once here rather than at each of the eight call
- *  sites. */
+ *  sites.
+ *
+ *  Two queries joined in memory, NOT a PostgREST embedded relation. The first
+ *  version used `.select("value, customers!inner(key)")` and took every page
+ *  in the app down with PGRST200: embedding needs a real foreign key, and
+ *  `entity_id` deliberately has none because it is polymorphic — the same
+ *  column points at customers, processes or profiles depending on
+ *  `entity_type`. There is no FK to embed through, and adding one would mean
+ *  giving up the polymorphism this table exists to provide. */
 export async function loadOverrideMap(field: string): Promise<Record<string, unknown>> {
   const sb = requireAdmin();
-  const { data, error } = await sb
-    .from("field_overrides")
-    .select("value, customers!inner(key)")
-    .eq("entity_type", "customer")
-    .eq("field", field);
-  if (error) throw error;
-  // PostgREST types an embedded relation as an array even when the FK makes
-  // it at most one row, so this normalises both shapes rather than asserting
-  // one of them.
-  const rows = (data as { value: unknown; customers: { key: string } | { key: string }[] | null }[] | null) ?? [];
+  const [overridesRes, customersRes] = await Promise.all([
+    sb
+      .from("field_overrides")
+      .select("entity_id, value")
+      .eq("entity_type", "customer")
+      .eq("field", field),
+    // Not filtered on deleted_at: an override belonging to a soft-deleted
+    // customer costs nothing to carry and survives a restore.
+    sb.from("customers").select("id, key"),
+  ]);
+  if (overridesRes.error) throw overridesRes.error;
+  if (customersRes.error) throw customersRes.error;
+
+  const overrides = (overridesRes.data as { entity_id: string; value: unknown }[] | null) ?? [];
+  // Nothing to join against, so skip building the key map entirely — the
+  // common case is zero or one override.
+  if (overrides.length === 0) return {};
+
+  const keyById = new Map(
+    ((customersRes.data as { id: string; key: string }[] | null) ?? []).map((c) => [c.id, c.key])
+  );
   const out: Record<string, unknown> = {};
-  for (const row of rows) {
-    const rel = Array.isArray(row.customers) ? row.customers[0] : row.customers;
-    if (rel?.key) out[rel.key] = row.value;
+  for (const row of overrides) {
+    const key = keyById.get(row.entity_id);
+    if (key) out[key] = row.value;
   }
   return out;
 }
