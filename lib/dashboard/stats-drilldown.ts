@@ -14,6 +14,7 @@ import {
   legacyFieldsFromProcess,
 } from "@/lib/delivery/taxonomy";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
+import { loadOverrideMap } from "@/lib/overrides/store";
 import { TABLES, npsCategory, type Process, type NpsResponse } from "@/lib/supabase/types";
 
 const PAST_STATE_CATEGORIES = new Set(["Churned", "Dropped", "Past"]);
@@ -71,6 +72,7 @@ export interface ArrBreakdownRow {
 }
 
 export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
+  const arrOverrides = (await loadOverrideMap("confirmed_arr")) as Record<string, number>;
   const sb = requireAdmin();
   const [customers, oppsRes, accounts, fdesByCustomer] = await Promise.all([
     listCustomers(),
@@ -105,7 +107,7 @@ export async function loadArrBreakdown(): Promise<ArrBreakdownRow[]> {
   const rows: ArrBreakdownRow[] = [];
   for (const c of customers) {
     const opps = oppsByC.get(c.id) ?? [];
-    const { arr, stage, renewal_date } = getConfirmedArrForCustomer(c.key, opps);
+    const { arr, stage, renewal_date } = getConfirmedArrForCustomer(c.key, opps, arrOverrides);
 
     const cat = categoryFromCustomer(c, {
       renewal_date,

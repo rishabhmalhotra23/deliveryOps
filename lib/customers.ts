@@ -274,6 +274,20 @@ export async function bulkUpdateCustomerField<K extends keyof Customer>(
   return updated;
 }
 
+/** Undoes a soft delete. Pairs with deleteCustomer, which had no inverse —
+ *  so a customer removed by mistake could only be brought back with SQL. */
+export async function restoreCustomer(key: string): Promise<Customer> {
+  const sb = requireAdmin();
+  const { data, error } = await sb
+    .from(TABLES.customers)
+    .update({ deleted_at: null })
+    .eq("key", key)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Customer;
+}
+
 export async function deleteCustomer(key: string): Promise<boolean> {
   const sb = requireAdmin();
   const { data, error } = await sb
@@ -288,14 +302,7 @@ export async function deleteCustomer(key: string): Promise<boolean> {
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 
-export function slugifyCustomerKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-+/g, "-");
-}
+export { slugifyCustomerKey } from "@/lib/customers/slug";
 
 function toInsertRow(input: CreateCustomerInput): Record<string, unknown> {
   return {

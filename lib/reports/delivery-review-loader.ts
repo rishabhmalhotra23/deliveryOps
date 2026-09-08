@@ -10,9 +10,9 @@ import { resolveRange, type DateRange, type RangeRequest } from "@/lib/reports/d
 import { buildDeliveryReview, type DeliveryReviewReport } from "@/lib/reports/delivery-review";
 import {
   getConfirmedArrForCustomer,
-  CONFIRMED_ARR_OVERRIDES,
   type OppForConfirmedArr,
 } from "@/lib/commercials/confirmed-arr";
+import { loadOverrideMap } from "@/lib/overrides/store";
 import { TABLES, type Process } from "@/lib/supabase/types";
 
 export interface DeliveryReviewLoaderResult extends DeliveryReviewReport {
@@ -61,13 +61,19 @@ export async function loadDeliveryReview(req: RangeRequest = {}): Promise<Delive
   // opp to confirm ARR from — distinct from a confirmed $0. Surface that as a
   // null `arr` (Important 4) rather than defaulting to 0, which would
   // fabricate a figure the data doesn't support (real cases: iHeartRadio,
-  // SSD/SKP, TSM Law, Wipro FSS). A per-customer override (e.g. Norco) still
-  // counts as a confirmed source even if the derived opp-based lookup found
-  // none, since the override itself *is* GTM-confirmed truth.
+  // SSD/SKP, TSM Law, Wipro FSS). A human override (e.g. Norco) still counts
+  // as a confirmed source even if the derived opp-based lookup found none,
+  // since the override itself *is* GTM-confirmed truth — `overridden` says so
+  // directly now, rather than this loader re-checking a hardcoded map.
+  const arrOverrides = await loadOverrideMap("confirmed_arr");
   const arrByCustomer = new Map(
     customers.map((c) => {
-      const confirmed = getConfirmedArrForCustomer(c.key, oppsByCustomer.get(c.id) ?? []);
-      const hasConfirmedSource = confirmed.source_close_date != null || c.key in CONFIRMED_ARR_OVERRIDES;
+      const confirmed = getConfirmedArrForCustomer(
+        c.key,
+        oppsByCustomer.get(c.id) ?? [],
+        arrOverrides as Record<string, number>
+      );
+      const hasConfirmedSource = confirmed.source_close_date != null || confirmed.overridden === true;
       return [c.id, { arr: hasConfirmedSource ? confirmed.arr : null, renewal_date: confirmed.renewal_date }];
     })
   );

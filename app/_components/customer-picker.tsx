@@ -16,7 +16,7 @@
 // is one of nine in a dense table row.
 
 import { useState } from "react";
-import { slugifyCustomerKey } from "@/app/_components/configure-dialog";
+import { slugifyCustomerKey } from "@/lib/customers/slug";
 
 export function CustomerPicker({
   value,

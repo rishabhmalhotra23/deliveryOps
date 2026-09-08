@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { laneFor, viewForLifecycle, type ActiveLane } from "@/lib/import/monday-taxonomy";
 import { TABLES, MIGRATION_STAGES, MIGRATION_STAGE_LABELS, type Process, type ProcessView, type MigrationStage } from "@/lib/supabase/types";
 import { getConfirmedArrForCustomer, type OppForConfirmedArr } from "@/lib/commercials/confirmed-arr";
+import { loadOverrideMap } from "@/lib/overrides/store";
 import { listRosterEntries } from "@/lib/roster/store";
 import type { RosterEntry } from "@/lib/supabase/types";
 
@@ -153,6 +154,7 @@ async function fetchAllProcessRows(): Promise<{
     suggestionCounts.set(s.process_id, (suggestionCounts.get(s.process_id) ?? 0) + 1);
   }
 
+  const arrOverrides = (await loadOverrideMap("confirmed_arr")) as Record<string, number>;
   const oppsByCustomer = new Map<string, OppForConfirmedArr[]>();
   for (const o of (oppsRes.data as (OppForConfirmedArr & { customer_id: string })[] | null) ?? []) {
     const list = oppsByCustomer.get(o.customer_id) ?? [];
@@ -170,7 +172,7 @@ async function fetchAllProcessRows(): Promise<{
     const cached = arrByCustomer.get(cacheKey);
     if (cached !== undefined) return cached;
     const opps = (customerId && oppsByCustomer.get(customerId)) || [];
-    const { arr } = getConfirmedArrForCustomer(customerKey, opps);
+    const { arr } = getConfirmedArrForCustomer(customerKey, opps, arrOverrides);
     const value = arr > 0 ? arr : null;
     arrByCustomer.set(cacheKey, value);
     return value;

@@ -4,6 +4,7 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
+import { loadOverrideMap } from "@/lib/overrides/store";
 
 /** Slim project row used by the chart drill-down panels. */
 export interface DrillDownProject {
@@ -165,6 +166,7 @@ function valTierHours(complexity: string | null): number {
 import { categoryFromCustomer as brandCategoryFromCustomer } from "@/app/_components/brand";
 
 export async function loadAnalytics(): Promise<AnalyticsBundle> {
+  const arrOverrides = (await loadOverrideMap("confirmed_arr")) as Record<string, number>;
   const sb = requireAdmin();
 
   const [
@@ -250,7 +252,7 @@ export async function loadAnalytics(): Promise<AnalyticsBundle> {
   const confirmedByC = new Map(
     customerList.map((c) => [
       c.id,
-      getConfirmedArrForCustomer(c.key, oppsByC.get(c.id) ?? []),
+      getConfirmedArrForCustomer(c.key, oppsByC.get(c.id) ?? [], arrOverrides),
     ])
   );
   // Dynamic category — feeds renewal_date + annual_revenue so the 90-day

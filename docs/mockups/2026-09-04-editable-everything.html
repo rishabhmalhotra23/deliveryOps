@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Everything editable, with remembered corrections (mockup, 2026-09-04)</title>
+<style>
+:root{
+  --surface-1:#262626; --surface-2:#1F1F1F; --surface-3:#2F2F2F; --card:#262626;
+  --foreground:#FAFAFA; --muted-foreground:#A3A3A3;
+  --brand-yellow:#F2FF70; --yellow-ink:#F2FF70;
+  --yellow-soft:rgba(242,255,112,.14); --yellow-line:rgba(242,255,112,.45);
+  --field:rgba(255,255,255,.06); --glass-bg:rgba(255,255,255,.10);
+  --brand-metal-line:rgba(255,255,255,.12); --status-bad:#F87171; --status-good:#4ADE80;
+  --st-amber-fg:#FBBF24; --st-amber-bg:rgba(251,191,36,.14); --st-amber-bd:rgba(251,191,36,.32);
+  --st-blue-fg:#60A5FA; --st-blue-bg:rgba(96,165,250,.14); --st-blue-bd:rgba(96,165,250,.32);
+  --st-emerald-fg:#4ADE80; --st-emerald-bg:rgba(74,222,128,.14); --st-emerald-bd:rgba(74,222,128,.32);
+  --st-neutral-fg:#A3A3A3; --st-neutral-bg:rgba(163,163,163,.14); --st-neutral-bd:rgba(163,163,163,.32);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#171717;color:var(--foreground);
+  font:13px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:28px 32px 80px}
+h1{font-size:19px;margin:0 0 4px} h1+p{margin:0 0 26px;color:var(--muted-foreground);font-size:12.5px}
+h2{font-size:13.5px;margin:0 0 12px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  background:var(--brand-yellow);color:#171717;font-size:11px;font-weight:700;margin-right:8px}
+section{margin:0 0 36px}
+.row{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-left:27px}
+.pane{background:var(--surface-1);border:1px solid var(--brand-metal-line);border-radius:11px;padding:13px 14px}
+.tag{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted-foreground);
+  display:block;margin-bottom:9px;font-weight:600}
+.tag.good{color:var(--brand-yellow)} .tag.bad{color:var(--status-bad)}
+.arrow{align-self:center;color:var(--muted-foreground);font-size:19px}
+.note{font-size:11.5px;color:var(--muted-foreground);margin:12px 0 0 27px;max-width:840px;line-height:1.65}
+.note b{color:var(--foreground);font-weight:600}
+code{background:var(--field);border-radius:4px;padding:1px 4px;font-size:11.5px}
+table{border-collapse:collapse;font-size:12.5px;width:100%}
+th{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  text-align:left;font-weight:600;padding:5px 8px;border-bottom:1px solid var(--brand-metal-line)}
+td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+.lbl{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-foreground);
+  font-weight:600;display:block;margin-bottom:2px}
+.pip{background:var(--surface-2);border:1px solid var(--brand-metal-line);border-radius:9px;
+  padding:8px 11px;min-width:118px}
+.pip .v{font-size:17px;font-weight:600;letter-spacing:-.3px}
+.pip .s{font-size:10px;color:var(--muted-foreground)}
+.src{font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted-foreground);
+  display:inline-flex;align-items:center;gap:3px;margin-top:3px}
+.dot{width:5px;height:5px;border-radius:9999px;display:inline-block}
+.pencil{opacity:.35;font-size:10px;margin-left:5px}
+.pip:hover .pencil{opacity:1}
+.dlg{width:390px;background:var(--card);border:1px solid var(--yellow-line);border-radius:12px;
+  padding:14px 15px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+.dlg h3{font-size:13.5px;margin:0 0 3px}
+.dlg p{font-size:12px;color:var(--muted-foreground);margin:0 0 11px;line-height:1.55}
+.cmp{display:flex;gap:9px;margin-bottom:11px}
+.cmp div{flex:1;background:var(--surface-2);border:1px solid var(--brand-metal-line);
+  border-radius:8px;padding:7px 9px}
+.cmp .was{opacity:.65}
+.cmp .now{border-color:var(--yellow-line);background:var(--yellow-soft)}
+.opt{display:flex;gap:8px;align-items:flex-start;background:var(--surface-2);
+  border:1px solid var(--brand-metal-line);border-radius:8px;padding:8px 10px;margin-bottom:6px}
+.opt.sel{border-color:var(--yellow-line);background:var(--yellow-soft)}
+.opt .r{width:12px;height:12px;border-radius:9999px;border:1px solid var(--muted-foreground);
+  margin-top:2px;flex-shrink:0}
+.opt.sel .r{border-color:var(--brand-yellow);background:var(--brand-yellow)}
+.opt .t{font-size:12px} .opt .d{font-size:10.5px;color:var(--muted-foreground);margin-top:1px}
+.inp{background:var(--field);border:1px solid var(--brand-metal-line);border-radius:6px;
+  padding:5px 8px;font-size:12px;color:var(--muted-foreground);width:100%}
+.acts{display:flex;gap:7px;justify-content:flex-end;margin-top:11px}
+.btn{background:var(--brand-yellow);color:#171717;border:0;border-radius:9999px;
+  padding:4px 13px;font-size:11.5px;font-weight:600}
+.btn.g{background:transparent;color:var(--foreground);border:1px solid var(--brand-metal-line)}
+.ovr{display:inline-flex;align-items:center;gap:4px;font-size:9px;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--st-amber-fg);background:var(--st-amber-bg);
+  border:1px solid var(--st-amber-bd);border-radius:9999px;padding:1px 6px;margin-top:3px}
+</style></head><body>
+
+<h1>Everything editable — and corrections that stick</h1>
+<p>Mockup for approval · 2026-09-04 · no code changed yet</p>
+
+<section>
+  <h2><span class="n">1</span>Where we are</h2>
+  <div class="row">
+    <div class="pane" style="max-width:800px">
+      <span class="tag bad">The Customer 360 has no editing at all</span>
+      <p style="margin:0 0 10px;font-size:12px;color:var(--muted-foreground);line-height:1.6">
+        There is not a single <code>manual-update</code> or <code>updateProfile</code> call anywhere
+        under <code>app/(app)/customers/[key]/</code>. ARR, renewal, industry, tier, contacts and
+        headquarters are display-only. The only inline editing in the whole app is on the
+        Dashboard → Trends workload drilldown.
+      </p>
+      <p style="margin:0;font-size:12px;color:var(--muted-foreground);line-height:1.6">
+        And correcting a Salesforce-derived number today means <b style="color:var(--foreground)">editing
+        TypeScript and deploying</b> — <code>CONFIRMED_ARR_OVERRIDES</code> in
+        <code>lib/commercials/confirmed-arr.ts</code> is a hardcoded map. It currently holds exactly
+        one entry, Norco, with a source comment explaining that Salesforce says $689K and GTM says
+        $311K. That is the thing you are describing, and it is the design to replace.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">2</span>Every value names its source</h2>
+  <div class="row">
+    <div class="pane">
+      <span class="tag">Stats rail — hover any value to edit</span>
+      <div style="display:flex;gap:9px;flex-wrap:wrap">
+        <div class="pip">
+          <span class="lbl">ARR</span>
+          <div class="v">$311,000 <span class="pencil">✎</span></div>
+          <div class="ovr">✎ corrected · you, Aug 6</div>
+        </div>
+        <div class="pip">
+          <span class="lbl">Renewal</span>
+          <div class="v">12 Nov 2026 <span class="pencil">✎</span></div>
+          <span class="src"><span class="dot" style="background:var(--st-blue-fg)"></span>Salesforce</span>
+        </div>
+        <div class="pip">
+          <span class="lbl">NPS</span>
+          <div class="v">9 <span class="pencil">✎</span></div>
+          <span class="src"><span class="dot" style="background:var(--st-emerald-fg)"></span>NPS responses</span>
+        </div>
+        <div class="pip">
+          <span class="lbl">Category</span>
+          <div class="v" style="font-size:14px">Strategic Growth <span class="pencil">✎</span></div>
+          <span class="src"><span class="dot" style="background:var(--brand-yellow)"></span>DeliveryOps</span>
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:11px 0 0;max-width:520px">
+        Three sources, three treatments — but <b style="color:var(--foreground)">all three are
+        editable</b>. The source label is the honest part: it tells you what will happen to your
+        edit tonight when the sync runs.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">3</span>Editing a synced value asks the question you asked for</h2>
+  <div class="row">
+    <div class="dlg">
+      <h3>Change ARR to $311,000?</h3>
+      <p>Salesforce is the source for this field. Tell me which it is, so tonight&rsquo;s sync
+         knows what to do.</p>
+      <div class="cmp">
+        <div class="was"><span class="lbl">Salesforce says</span><b>$689,000</b></div>
+        <div class="now"><span class="lbl">You say</span><b>$311,000</b></div>
+      </div>
+      <div class="opt sel">
+        <span class="r"></span>
+        <span><div class="t">Salesforce is wrong — remember mine</div>
+          <div class="d">$311,000 sticks. Tonight&rsquo;s sync won&rsquo;t touch it, and it stays
+            yours until you clear it.</div></span>
+      </div>
+      <div class="opt">
+        <span class="r"></span>
+        <span><div class="t">Just a one-off fix</div>
+          <div class="d">Applies now. Tonight&rsquo;s sync will overwrite it back to $689,000.</div></span>
+      </div>
+      <div style="margin-top:9px">
+        <span class="lbl">Why? (optional, but it&rsquo;s what future-you reads)</span>
+        <input class="inp" value="Renegotiated Feb — SF opp is the pre-renewal figure" readonly>
+      </div>
+      <div class="acts"><button class="btn g">Cancel</button><button class="btn">Save</button></div>
+    </div>
+
+    <div class="pane" style="width:330px">
+      <span class="tag good">Afterwards, on every surface</span>
+      <div class="pip" style="min-width:0">
+        <span class="lbl">ARR</span>
+        <div class="v">$311,000</div>
+        <div class="ovr">✎ corrected · you, Aug 6</div>
+      </div>
+      <div style="margin-top:11px;background:var(--surface-2);border:1px solid var(--brand-metal-line);
+        border-radius:8px;padding:9px 10px;font-size:11.5px;color:var(--muted-foreground);line-height:1.55">
+        <b style="color:var(--foreground)">Your correction</b><br>
+        $311,000 &middot; set by you, 6 Aug 2026<br>
+        &ldquo;Renegotiated Feb — SF opp is the pre-renewal figure&rdquo;<br>
+        <span style="color:var(--st-blue-fg)">Salesforce still says $689,000</span><br>
+        <span style="text-decoration:underline">Revert to Salesforce</span>
+      </div>
+      <p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0">
+        The chip is a link to this. Nothing is hidden: the sync value is still visible, so a
+        wrong correction is findable rather than silently permanent.
+      </p>
+    </div>
+  </div>
+  <p class="note">This is exactly the flow you described — ask whether the current value was
+  incorrect, and remember the one you gave. The <b>one-off</b> option matters: sometimes the sync
+  is right and the data is just late, and forcing every edit to become permanent would quietly
+  freeze fields that should keep tracking Salesforce.</p>
+</section>
+
+<section>
+  <h2><span class="n">4</span>How it's stored</h2>
+  <div class="row">
+    <div class="pane" style="max-width:820px">
+      <table>
+        <tr><th>Field kind</th><th>Where the value lives</th><th>How an edit is kept</th></tr>
+        <tr><td><b>DeliveryOps-owned</b><br><span style="color:var(--muted-foreground)">category, AE, partner, active, notes</span></td>
+            <td><code>customers</code> / <code>processes</code> column</td>
+            <td>Write the column. Already works; <code>deliveryops_protected_fields</code> shields it from sync.</td></tr>
+        <tr><td><b>Profile</b><br><span style="color:var(--muted-foreground)">industry, tier, HQ, contacts, objectives</span></td>
+            <td><code>profiles</code> column</td>
+            <td>Write the column via <code>updateProfile</code>, which already stamps <code>field_provenance</code>. <b>No sync writes this table</b>, so no conflict — it just has no UI yet.</td></tr>
+        <tr><td><b>Salesforce-derived</b><br><span style="color:var(--muted-foreground)">confirmed ARR, renewal date, employees</span></td>
+            <td><b>Nowhere.</b> Computed at read time from <code>sf_*</code></td>
+            <td>New <code>field_overrides</code> row. This is the only genuinely new mechanism.</td></tr>
+      </table>
+      <p style="font-size:11.5px;color:var(--muted-foreground);margin:12px 0 0;line-height:1.6">
+        The third row is the whole reason a new table is needed. The Salesforce sync writes
+        <b style="color:var(--foreground)">only</b> to <code>sf_accounts</code> /
+        <code>sf_opportunities</code> / <code>sf_cases</code> — it never touches
+        <code>customers</code> or <code>profiles</code>. So a derived value has no column to edit,
+        and "make it editable" means storing an override that wins over the derivation. One
+        table, keyed <code>(entity_type, entity_id, field)</code>, holding the value, who set it,
+        when, and why — which is <code>CONFIRMED_ARR_OVERRIDES</code> promoted out of source code
+        and given provenance.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">5</span>Scope</h2>
+  <div class="row">
+    <div class="pane" style="max-width:820px">
+      <p style="margin:0 0 8px;font-size:12px"><b>In this change</b></p>
+      <p style="margin:0 0 12px;font-size:11.5px;color:var(--muted-foreground);line-height:1.6">
+        <code>field_overrides</code> + resolver, replacing the hardcoded ARR map (Norco's entry
+        migrated across with its existing comment as the reason). The confirm dialog. The
+        override chip and its provenance card. Customer 360 hero + stats rail + profile fields
+        become editable. <code>manual-update</code>'s allow-list widened to every
+        DeliveryOps-owned column on <code>customers</code>.
+      </p>
+      <p style="margin:0 0 8px;font-size:12px"><b>Not in this change</b></p>
+      <p style="margin:0;font-size:11.5px;color:var(--muted-foreground);line-height:1.6">
+        Writing back to Salesforce — an override is local truth, not a push. Editing the
+        <code>sf_*</code> cache directly, which the next sync would flatten. Bulk override
+        editing. And nothing about the <code>events</code> pipe, which is a separate problem
+        (see below).
+      </p>
+    </div>
+  </div>
+</section>
+
+</body></html>

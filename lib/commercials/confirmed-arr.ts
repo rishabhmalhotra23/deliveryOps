@@ -4,7 +4,15 @@
 //   • No open/pipeline opps in the headline number
 //
 // When Salesforce has duplicate or forward-dated renewals that don't match
-// GTM truth, add a per-customer override here (key = customers.key).
+// GTM truth, the number is corrected in the product: a `field_overrides` row
+// (migration 0041), set from the customer record. This used to be a hardcoded
+// CONFIRMED_ARR_OVERRIDES map here, which meant a correction was a code change
+// and a deploy.
+//
+// This module stays PURE — it takes the overrides it should apply rather than
+// reading the database — so it remains unit-testable and so the eight callers
+// each fetch the map once alongside their existing queries instead of this
+// file opening a connection.
 
 export type OppForConfirmedArr = {
   amount: number | null;
@@ -19,14 +27,14 @@ export interface ConfirmedArrResult {
   stage: string | null;
   renewal_date: string | null;
   source_close_date: string | null;
+  /** True when a human correction replaced the Salesforce derivation. */
+  overridden?: boolean;
 }
 
-/** GTM-corrected confirmed ARR when SF cache is wrong or noisy. */
-export const CONFIRMED_ARR_OVERRIDES: Readonly<Record<string, number>> = {
-  // SF's most recent past Closed-Won opp for Norco is $689K, which doesn't
-  // match GTM truth after a renegotiation. Updated 2026-08-06 (was $284K).
-  norco: 311_000,
-};
+/** `{ [customers.key]: correctedArr }`, as loaded by
+ *  `loadOverrideMap("confirmed_arr")` in lib/overrides/store.ts. Passing an
+ *  empty object (or omitting it) yields the raw Salesforce derivation. */
+export type ArrOverrides = Readonly<Record<string, number>>;
 
 export function deriveConfirmedArrFromOpps(opps: OppForConfirmedArr[]): ConfirmedArrResult {
   const today = new Date().toISOString().slice(0, 10);
@@ -51,10 +59,13 @@ export function deriveConfirmedArrFromOpps(opps: OppForConfirmedArr[]): Confirme
 
 export function getConfirmedArrForCustomer(
   customerKey: string | null | undefined,
-  opps: OppForConfirmedArr[]
+  opps: OppForConfirmedArr[],
+  overrides: ArrOverrides = {}
 ): ConfirmedArrResult {
   const derived = deriveConfirmedArrFromOpps(opps);
-  const override = customerKey ? CONFIRMED_ARR_OVERRIDES[customerKey] : undefined;
+  const override = customerKey ? overrides[customerKey] : undefined;
   if (override == null) return derived;
-  return { ...derived, arr: override };
+  // `overridden` lets a caller label the number without re-deriving whether
+  // one applied — the customer record shows "corrected by you" beside it.
+  return { ...derived, arr: override, overridden: true };
 }

@@ -171,9 +171,13 @@ export function buildArrStatProps(
     probability: number | null;
   }>,
   profile: Profile | null,
-  customerKey?: string
+  customerKey?: string,
+  /** From `loadOverrideMap("confirmed_arr")`. Passed in rather than fetched
+   *  so this stays pure and unit-testable — the page loads it alongside its
+   *  other queries. */
+  arrOverrides: Readonly<Record<string, number>> = {}
 ): ArrStatProps {
-  const confirmed = getConfirmedArrForCustomer(customerKey, opps);
+  const confirmed = getConfirmedArrForCustomer(customerKey, opps, arrOverrides);
   const currentArr = confirmed.arr > 0 ? confirmed.arr : null;
 
   const wonHistory = opps

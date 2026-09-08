@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { loadV2MigrationOverview, type V2MigrationOverview } from "@/lib/processes/loader";
 import { loadTicketsBundle } from "@/lib/tickets/loader";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
+import { loadOverrideMap } from "@/lib/overrides/store";
 import { resolveRange, type DateRange, type RangeRequest } from "@/lib/reports/date-range";
 import { computeMigrationProgramStart, computeMigratedToV2Progress, V2_PROGRAM_LAUNCH, type ProgressPoint } from "@/lib/reports/migration-progress";
 import { findRenewalSpotlight, findAtRiskMigratingCustomers, type RenewalSpotlight, type AtRiskMigratingEntry } from "@/lib/reports/allhands-signals";
@@ -176,6 +177,7 @@ const FRESH_BUILD_LIFECYCLE_ORDER: ProcessLifecycle[] = [
  * delta and are labelled "last 7 days" in the UI accordingly.
  */
 export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHandsReport> {
+  const arrOverrides = (await loadOverrideMap("confirmed_arr")) as Record<string, number>;
   const sb = requireAdmin();
   const range = resolveRange(req);
 
@@ -208,7 +210,7 @@ export async function loadAllHandsReport(req: RangeRequest = {}): Promise<AllHan
     oppsByCustomer.set(o.customer_id, list);
   }
   const arrByCustomer = new Map(
-    customers.map((c) => [c.id, getConfirmedArrForCustomer(c.key, oppsByCustomer.get(c.id) ?? [])])
+    customers.map((c) => [c.id, getConfirmedArrForCustomer(c.key, oppsByCustomer.get(c.id) ?? [], arrOverrides)])
   );
 
   const allProcesses = (processesRes.data as Process[] | null) ?? [];

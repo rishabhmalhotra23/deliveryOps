@@ -25,23 +25,12 @@ import {
   type RosterKind,
 } from "@/lib/supabase/types";
 import { HUES, hueStyle, resolveHue, type ColorField, type ColorMap, type Hue } from "@/lib/delivery/hues";
+import { slugifyCustomerKey } from "@/lib/customers/slug";
 import { healthLabel, lifecycleLabel, stageLabel } from "@/lib/delivery/labels";
 
 type Tab = "stages" | "lifecycle" | "roster" | "customers" | "colours";
 
 const ROLE_LABELS: Record<string, string> = { fde: "FDE", tam: "TAM", engg: "Engineering" };
-
-/** Display name -> the stable `key` slug. Mirrors what the existing seed and
- *  sync paths produce, so a customer added here joins to the same
- *  /customers/[key] route and integration lookups as an imported one. */
-export function slugifyCustomerKey(displayName: string): string {
-  return displayName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
-}
 
 /** A 401 here means the Auth0 session lapsed, which the middleware answers
  *  before the route ever runs — so there is no error body to show and the

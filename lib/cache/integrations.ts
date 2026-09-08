@@ -5,6 +5,7 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { categoryFromCustomer as brandCategoryFromCustomer } from "@/app/_components/brand";
 import { getConfirmedArrForCustomer } from "@/lib/commercials/confirmed-arr";
+import { loadOverrideMap } from "@/lib/overrides/store";
 import { computeStaleFields, CUSTOMER_FRESHNESS_FIELDS } from "@/lib/customers/staleness";
 
 export interface SfAccountCache {
@@ -230,6 +231,7 @@ export interface PortfolioSummary {
 }
 
 export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
+  const arrOverrides = (await loadOverrideMap("confirmed_arr")) as Record<string, number>;
   const sb = requireAdmin();
 
   const { data: customers } = await sb
@@ -284,7 +286,7 @@ export async function loadPortfolioSummary(): Promise<PortfolioSummary> {
   const keyById = new Map(list.map((c) => [c.id, c.key]));
   function confirmedArrForCustomer(customerId: string): { arr: number; renewal_date: string | null } {
     const opps = oppsByC.get(customerId) ?? [];
-    const { arr, renewal_date } = getConfirmedArrForCustomer(keyById.get(customerId), opps);
+    const { arr, renewal_date } = getConfirmedArrForCustomer(keyById.get(customerId), opps, arrOverrides);
     return {
       arr,
       renewal_date: renewal_date ?? renewalByC.get(customerId) ?? null,
@@ -367,6 +369,7 @@ export interface CustomerCommercials {
 export async function loadCustomerCommercialsMap(): Promise<
   Map<string, CustomerCommercials>
 > {
+  const arrOverrides = (await loadOverrideMap("confirmed_arr")) as Record<string, number>;
   const sb = requireAdmin();
   const [oppsRes, accountsRes, customersRes] = await Promise.all([
     sb.from("sf_opportunities").select("customer_id, amount, close_date, is_won, is_closed"),
@@ -408,7 +411,7 @@ export async function loadCustomerCommercialsMap(): Promise<
   const map = new Map<string, CustomerCommercials>();
   for (const cid of allCustomerIds) {
     const opps = oppsByCId.get(cid) ?? [];
-    const { arr, renewal_date } = getConfirmedArrForCustomer(keyById.get(cid), opps);
+    const { arr, renewal_date } = getConfirmedArrForCustomer(keyById.get(cid), opps, arrOverrides);
     map.set(cid, {
       arr: arr > 0 ? arr : null,
       renewal_date,

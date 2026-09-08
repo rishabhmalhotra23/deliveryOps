@@ -2,7 +2,10 @@
 // Phase 3 will replace these with `supabase gen types typescript` output once
 // the live project is wired up.
 
-export type ContractTier = "starter" | "growth" | "enterprise";
+// Listed as a value array as well as a union so a picker can render the
+// options without a second, drifting copy in the UI.
+export const CONTRACT_TIERS = ["starter", "growth", "enterprise"] as const;
+export type ContractTier = (typeof CONTRACT_TIERS)[number];
 export type DeploymentStage = "onboarding" | "pilot" | "scaling" | "mature";
 export type ChurnRisk = "low" | "medium" | "high";
 export type CustomerUserRole = "owner" | "csm" | "viewer";
