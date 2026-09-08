@@ -496,16 +496,10 @@ function CardOwner({ children }: { children: React.ReactNode }) {
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
       className="inline-flex max-w-full min-w-0 rounded border align-middle"
-      // font-size inherits into the picker, which sets none of its own — this
-      // is what keeps an owner the same visual weight as the health and stage
-      // chips next to it. Without it the picker inherited the card's 13px and
-      // the owner name was the loudest thing on the card.
-      style={{
-        borderColor: "var(--brand-metal-line)",
-        background: "var(--field)",
-        fontSize: "10.5px",
-        lineHeight: 1.35,
-      }}
+      // The picker sets its own size from `compact` now, rather than relying
+      // on inheriting one from here — an inherited size only worked as long as
+      // nothing between the two set a font-size of its own.
+      style={{ borderColor: "var(--brand-metal-line)", background: "var(--field)" }}
     >
       {children}
     </span>
@@ -627,7 +621,7 @@ function CardChip({
             kind="person"
             role="fde"
             dense
-            avatarPx={15}
+            compact
             valueLabel={row.fde_owner}
             onPick={(entry) => void onSave(row.id, { fde_owner_id: entry.id })}
             onClear={() => void onSave(row.id, { fde_owner_id: null })}
@@ -641,7 +635,7 @@ function CardChip({
             kind="person"
             role="tam"
             dense
-            avatarPx={15}
+            compact
             valueLabel={row.tam_owner}
             onPick={(entry) => void onSave(row.id, { tam_owner_id: entry.id })}
             onClear={() => void onSave(row.id, { tam_owner_id: null })}
@@ -655,7 +649,7 @@ function CardChip({
             kind="person"
             role="engg"
             dense
-            avatarPx={15}
+            compact
             valueLabel={row.engg_owner}
             onPick={(entry) => void onSave(row.id, { engg_owner_id: entry.id })}
             onClear={() => void onSave(row.id, { engg_owner_id: null })}
@@ -668,7 +662,7 @@ function CardChip({
           <RosterPicker
             kind="partner_org"
             dense
-            avatarPx={15}
+            compact
             valueLabel={row.partner}
             onPick={(entry) => void onSave(row.id, { partner_id: entry.id })}
             onClear={() => void onSave(row.id, { partner_id: null })}

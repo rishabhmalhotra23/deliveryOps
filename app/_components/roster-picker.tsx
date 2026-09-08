@@ -15,6 +15,7 @@
 // that ranking legible rather than looking like an arbitrary order.
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RosterEntry, RosterKind, RosterRole } from "@/lib/supabase/types";
 
 interface RosterHit extends RosterEntry {
@@ -41,7 +42,7 @@ export function RosterPicker({
   onPick,
   onClear,
   dense = false,
-  avatarPx,
+  compact = false,
 }: {
   kind: RosterKind;
   role?: RosterRole;
@@ -50,10 +51,10 @@ export function RosterPicker({
   onPick: (entry: RosterEntry) => void;
   onClear?: () => void;
   dense?: boolean;
-  /** Override the collapsed avatar size. Board cards need a smaller one than
-   *  the table: their chips run at 10-11px, and the default 18px avatar next
-   *  to that reads as a different class of control. */
-  avatarPx?: number;
+  /** Board-card scale. Cards run their chips at 10-11px, so the table's
+   *  `dense` sizing reads as a different class of control there. Three sizes
+   *  total: default (drawer), dense (table), compact (card). */
+  compact?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
@@ -91,7 +92,15 @@ export function RosterPicker({
   useEffect(() => {
     if (!editing) return;
     function onDoc(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setEditing(false);
+      const target = e.target as Node;
+      // menuRef as well as wrapRef: the menu is portalled to <body>, so it is
+      // NOT a DOM descendant of the wrapper even though it is logically part
+      // of this control. Checking only wrapRef meant mousedown on an option
+      // counted as "outside", closed the menu, and the option's click never
+      // fired — the list opened and picking a name silently did nothing.
+      if (wrapRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setEditing(false);
     }
     function onEsc(e: KeyboardEvent) {
       if (e.key === "Escape") setEditing(false);
@@ -118,19 +127,55 @@ export function RosterPicker({
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const width = 288;
+      // Max the panel can be: max-h-72 (288px) plus the sticky search row.
+      const height = 322;
+      const gap = 4;
+
+      // Flip above rather than clamp. The old `Math.min(rect.bottom + 4,
+      // innerHeight - 300)` pinned a low trigger's menu to y=innerHeight-300,
+      // which for a field near the bottom of the drawer put the list ~200px
+      // ABOVE its own trigger — covering the field you had just clicked and
+      // the ones above it. Below is preferred; above only when below won't fit
+      // and above does.
+      const roomBelow = window.innerHeight - rect.bottom - gap;
+      const roomAbove = rect.top - gap;
+      const top =
+        roomBelow >= Math.min(height, 160) || roomBelow >= roomAbove
+          ? Math.min(rect.bottom + gap, window.innerHeight - Math.min(height, roomBelow) - gap)
+          : Math.max(gap, rect.top - gap - Math.min(height, roomAbove));
+
       setMenuPos({
         left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-        top: Math.min(rect.bottom + 4, window.innerHeight - 300),
+        top: Math.max(gap, top),
       });
     }
     place();
     function onScroll(e: Event) {
       // Capture-phase on window fires for *any* scroll, including the results
       // list itself — so scrolling a long roster closed the thing you were
-      // scrolling. Only an ancestor scrolling should dismiss it.
+      // scrolling. Only an ancestor scrolling is interesting here.
       const target = e.target as Node | null;
       if (target && (wrapRef.current?.contains(target) || menuRef.current?.contains(target))) return;
-      setEditing(false);
+
+      // Reposition rather than dismiss. Dismissing was wrong in two ways.
+      // The obvious one: scrolling the drawer to see a field shut the list you
+      // had just opened. The subtle one, which is why the drawer picker looked
+      // completely dead: clicking a partly-visible field makes the browser
+      // scroll it into view inside the panel's own overflow container, and
+      // that scroll fires AFTER `editing` flipped true — so the menu closed on
+      // the very gesture that opened it. Reported 2026-09-08 as "when we click
+      // on that area the dropdown menu doesn't open up".
+      //
+      // Only give up once the trigger itself has actually left the viewport,
+      // where an attached menu would be pointing at nothing.
+      const el = triggerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.bottom < 0 || rect.top > window.innerHeight) {
+        setEditing(false);
+        return;
+      }
+      place();
     }
     window.addEventListener("resize", place);
     window.addEventListener("scroll", onScroll, true);
@@ -175,7 +220,13 @@ export function RosterPicker({
   }
 
   const avatarRadius = kind === "person" ? 9999 : 6;
-  const avatarSize = avatarPx ?? (dense ? 18 : 22);
+  const avatarSize = compact ? 15 : dense ? 18 : 22;
+  // Explicit rather than inherited. The drawer's own base is 16px, so an
+  // inherited owner label sat 3px above every SelectField and DateField beside
+  // it and truncated "Rishabh Malhotra" to "Rishabh…" — reported 2026-09-08.
+  // 13px matches those siblings and the table's cells; cards get 10.5px to sit
+  // with their chips.
+  const textClass = compact ? "text-[10.5px]" : "text-[13px]";
 
   // The server already sorted role-holders to the front (rankByRole); this
   // just draws the boundary so the order reads as intentional. Unheaded
@@ -212,11 +263,15 @@ export function RosterPicker({
           aria-haspopup="listbox"
           aria-expanded={editing}
           aria-label={`${valueLabel ?? "Unassigned"} — change`}
-          className={`flex items-center min-w-0 flex-1 text-left overflow-hidden transition-colors ${
-            dense ? "gap-1.5 rounded px-1 py-0.5 hover:bg-[var(--glass-bg)]" : "rounded-lg border"
+          // The split panel gives each field ~167px, so a 20-character name
+          // still ellipsizes after the avatar and chevron gutter. Hover shows
+          // it in full rather than making the width the only way to read it.
+          title={valueLabel ?? undefined}
+          className={`flex items-center min-w-0 flex-1 text-left overflow-hidden transition-colors ${textClass} ${
+            dense || compact ? "gap-1.5 rounded px-1 py-0.5 hover:bg-[var(--glass-bg)]" : "rounded-lg border"
           }`}
           style={
-            dense
+            dense || compact
               ? undefined
               : {
                   background: "var(--field)",
@@ -224,7 +279,7 @@ export function RosterPicker({
                 }
           }
         >
-          <span className={`flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden ${dense ? "" : "px-2 py-1.5"}`}>
+          <span className={`flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden ${dense || compact ? "" : "px-2 py-1.5"}`}>
             {valueLabel ? (
               <>
                 <span
@@ -241,12 +296,12 @@ export function RosterPicker({
           </span>
           <span
             className={
-              dense
+              dense || compact
                 ? "ml-auto shrink-0 text-[8px] opacity-60 pl-1"
                 : "shrink-0 self-stretch flex items-center px-1.5 border-l text-[9px]"
             }
             style={
-              dense
+              dense || compact
                 ? undefined
                 : {
                     borderColor: editing ? "var(--yellow-line)" : "var(--brand-metal-line)",
@@ -275,9 +330,18 @@ export function RosterPicker({
           </button>
         ) : null}
       </div>
-      {editing ? (
+      {editing
+        ? createPortal(
       <div
         ref={menuRef}
+        // Portalled to <body>. `position: fixed` resolves against the nearest
+        // ancestor with a transform, and the split detail panel carries
+        // `.dops-panel-in`, whose `animation: ... both` RETAINS its final
+        // `transform: none` as an identity matrix — which still creates a
+        // containing block. So the drawer's menu was being offset by the
+        // panel's own position and landing off-screen. A portal makes the
+        // control immune to that wherever it is mounted: drawer, overlay,
+        // table scrollport, board card, bulk bar, new-process modal.
         className="dops-rise-in fixed z-50 w-72 max-h-72 overflow-auto rounded-md border shadow-lg"
         style={{
           left: menuPos?.left ?? 0,
@@ -365,8 +429,10 @@ export function RosterPicker({
             Add {query.trim() || (kind === "person" ? "a new person" : "a new partner organisation")} to the roster
           </span>
         </button>
-      </div>
-      ) : null}
+      </div>,
+            document.body
+          )
+        : null}
       {justAdded ? (
         <div className="mt-1 text-[10.5px]" style={{ color: "var(--yellow-ink)" }}>
           Added to the roster — available on every process from now on.
