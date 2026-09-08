@@ -1,0 +1,31 @@
+# Runs the checks that need a database, which the pre-commit hook can't
+# assume is up.
+#
+# This exists because of the 2026-09-08 outage: loadOverrideMap shipped a
+# PostgREST embedded relation that could never resolve, and passed
+# type-check, 405 unit tests and a clean production build on the way out —
+# none of which execute a query. verify-db does, against every loader the
+# pages call, plus the data invariants no constraint can enforce.
+#
+# Skipped (loudly, not silently) when there is no database reachable, so a
+# push from an environment without Supabase running is still possible — the
+# point is that you cannot push a broken query WITHOUT being told.
+#
+# Bypass deliberately with:  git push --no-verify
+
+if npx --no-install tsx scripts/verify-db.ts >/tmp/dops-verify-db.log 2>&1; then
+  echo "[verify-db] queries and invariants OK."
+else
+  code=$?
+  if grep -q "ECONNREFUSED\|fetch failed\|could not run\|timed out after" /tmp/dops-verify-db.log; then
+    echo "[verify-db] SKIPPED — no database reachable."
+    echo "            Start one with: npm run db:start && npx tsx scripts/safe-migrate.ts"
+    echo "            A query bug cannot be caught without it. Full log:"
+    echo "            /tmp/dops-verify-db.log"
+  else
+    echo "[verify-db] FAILED — a query or invariant is broken against the database."
+    echo "            This is the class of bug unit tests cannot see."
+    cat /tmp/dops-verify-db.log
+    exit $code
+  fi
+fi

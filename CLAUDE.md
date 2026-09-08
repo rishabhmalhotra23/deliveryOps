@@ -41,7 +41,27 @@ Roster and customer management both live in **Delivery → Configure** (Roster a
 
 ## Deploy workflow (follow exactly)
 
-Edit files and verify with `npm run build`, type-check, and `vitest run`. The agent may run `git add`/`commit`/`push` directly (2026-08-04: Rishabh lifted the earlier no-push rule) — stage only the files actually changed, never `git add -A`. Push to `main` over SSH; Vercel auto-deploys. Known risk: running git from the sandbox concurrently with the user's own terminal/IDE can leave a stale `.git/index.lock` that blocks the user's next local git command — if the user reports a stuck `git` command right after a sandbox push, that lock file is the first thing to check (`rm .git/index.lock` once no git process is actually running). A husky pre-commit hook runs vitest, so pin locales in code (`toLocaleString("en-US")`). After a push, confirm the Vercel deployment reached READY via the Vercel connector (project "delivery-ops").
+Edit files and verify with `npm run build`, type-check, and `vitest run`. The agent may run `git add`/`commit`/`push` directly (2026-08-04: Rishabh lifted the earlier no-push rule) — stage only the files actually changed, never `git add -A`. Push to `main` over SSH; Vercel auto-deploys. A husky pre-commit hook runs vitest, so pin locales in code (`toLocaleString("en-US")`). After a push, confirm the Vercel deployment reached READY via the Vercel connector (project "delivery-ops").
+
+**`npm run verify:db` is mandatory before pushing anything that touches a query or a migration.** A pre-push hook runs it; it blocks on failure and skips loudly if no database is reachable. Do not treat type-check + tests + build as evidence that a query works — see below.
+
+### Why: the 2026-09-08 outage
+
+`loadOverrideMap` shipped `.select("value, customers!inner(key)")`. PostgREST resolves an embedded relation through a foreign key, and `field_overrides.entity_id` deliberately has none — it is polymorphic. The query could never work. It took `/delivery`, `/customers/[key]` and `/reports/v2-migration` down, and it passed **type-check, 405 unit tests and a clean production build** on the way out, because **not one of those executes a query**. Every store test stubs above the Supabase client.
+
+Three guardrails now cover that gap:
+
+- `tests/schema/embedded-relations.test.ts` — parses every `.from(...).select(...)` pair out of the source and asserts each embedded relation has a real FK in `docs/schema/foreign-keys.json`. No database needed, so it runs in the pre-commit hook. Verified to fail on the exact outage query.
+- `scripts/verify-db.ts` (`npm run verify:db`) — **executes** every loader the pages call, then checks the data invariants no constraint can enforce (owner text mirrors matching their FK, every process routing to a section, every enum value in use having a label, no orphaned overrides). Verified to fail on the outage query, naming all 8 affected loaders.
+- `.husky/pre-push` — runs the above.
+
+`docs/schema/foreign-keys.json` is a checked-in snapshot; regenerate with `npm run verify:db -- --dump-fks` when a migration adds a FK. A stale snapshot can only cause a false failure, never a false pass.
+
+### Migrations
+
+Apply them locally too, not only to production. Migrations applied to production via the Supabase connector left the local database four versions behind on 2026-09-08, which is what made `verify:db` and `scripts/audit-queue-volume.ts` fail against a schema that no longer matched. `npx tsx scripts/safe-migrate.ts` applies pending files locally and is how you confirm a hand-pasted production change matches the checked-in SQL.
+
+Known risk: running git from the sandbox concurrently with the user's own terminal/IDE can leave a stale `.git/index.lock` that blocks the user's next local git command — if the user reports a stuck `git` command right after a sandbox push, that lock file is the first thing to check (`rm .git/index.lock` once no git process is actually running).
 
 ## Gotchas
 

@@ -16,7 +16,9 @@
     "db:status": "bin/safe-supabase status",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "verify:db": "tsx scripts/verify-db.ts",
+    "audit:queue": "tsx scripts/audit-queue-volume.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
