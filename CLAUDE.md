@@ -4,12 +4,68 @@ Operational system of record for the Kognitos FDE team. Next.js 15 (App Router) 
 
 Start here: [docs/INDEX.md](./docs/INDEX.md) maps every doc. The current plan and state are in [docs/DELIVERYOPS-CONSOLIDATION-PLAN.md](./docs/DELIVERYOPS-CONSOLIDATION-PLAN.md) and [docs/STATUS.md](./docs/STATUS.md). Read those before proposing architecture.
 
+## What this is for
+
+An **AI-first platform for Delivery and Customer Success**: the customer 360
+(everything happening with a customer, good or bad), the metrics (NPS, NRR,
+ARR, TTV), the projects delivered per customer plus the pipeline, team
+workload, reports for internal **and external** leadership, and Salesforce /
+Slack / Google Suite connections that automate as much of a user's work as
+possible. Full statement and its consequences: [docs/VISION.md](./docs/VISION.md).
+
+Four things that follow, worth holding when a call is close:
+
+- **"AI-first" is about removing steps, not adding a chat box.**
+- **"Good or bad" means bad news must surface** — blockers, escalations,
+  detractor NPS and stale records are what earn the 360 its place.
+- **"External leadership" raises the bar on every number.** Approximately
+  right is fine internally and not fine in a customer's boardroom. This is why
+  confirmed ARR beats the import snapshot, why an override records who and
+  why, and why the All-Hands report keeps a stricter definition of "migration
+  work" than the Delivery tab.
+- **"As much as possible" is bounded by trust.** Slack and email never write a
+  field — they append to `events` or create something a human accepts.
+
+Metric status: ARR, NPS and TTV are live. **NRR is not built** (needs renewal
+outcomes against prior-period ARR; `sf_opportunities` has the raw material).
+**Workload is a count, not a load** — no capacity model.
+
+## Everything is editable from the product
+
+The bar, set 2026-09-08: **changing data must never need a code change.** Add
+or remove a customer, retire one, change any customer or project state, edit
+the roster, correct a Salesforce number, add a migration stage — all from the
+UI. If something isn't editable, that's the bug.
+
+- **Customers** — `/customers/[key]`'s record card (right rail): name,
+  category (mint new ones), status, AE, partner, Slack, SF account ID,
+  industry, tier, HQ, plus remove/restore. Also Delivery → Configure →
+  Customers.
+- **Processes** — table and drawer, every field. Section follows from
+  `lifecycle` + `migration_stage`.
+- **Roster** — Delivery → Configure → Roster.
+- **Vocabularies** — Delivery → Configure → Vocabularies. Label, short label,
+  colour, order, retire, add. Adding runs `ALTER TYPE` via
+  `add_vocabulary_value()` and **cannot be undone**; retiring is
+  `active = false`.
+- **Salesforce-derived values** (confirmed ARR, renewal date) — editable with
+  a confirm step that asks whether the source was wrong, then remembers it in
+  `field_overrides` (0041) with who/when/why. Never written back to Salesforce.
+- **Tunables** — `app_settings` (0043): the value-delivered model
+  (hours-by-complexity, $/hr bands, hours per FTE) and the NPS cadence.
+
+Still code-only: the NPS invite/reminder email **bodies** (they carry `{{name}}`
+interpolation the send path renders).
+
 ## Architecture map
 
 - `app/(app)/` — routes: `dashboard` (Overview + Trends tabs — Trends is the former `/analytics`, folded in 2026-08-10; `/analytics` now redirects), `customers` and `customers/[key]` (the customer 360), `delivery` (Active work / V2 migration / Historical — see below), `reports`, `operations`.
 - `app/api/` — backend routes, including `cron/` (daily-sync, run-tasks, monthly-digest), `slack/`, `gmail/`, `jobs/`, `chat/`.
 - `lib/` — business logic: `delivery/` (`sections.ts` — derived section routing, `historical.ts`, `reorder.ts`, `hues.ts`, `labels.ts`, `columns.ts`), `roster/`, `agent/` (runner + 20-plus tools), `integrations/` (salesforce, kognitos, linear, google), `sync/` (per-source runners), `ingestion/` (doc pipeline), `approvals/` (Slack-gated human approval), `reports/` (`allhands-loader.ts`, `delivery-review.ts`, `migration-progress.ts`, `weekly-loader.ts`), `customers/`, `commercials/`, `supabase/`.
-- `supabase/migrations/` — schema (0001 to 0039). Full dump at `docs/supabase-schema-full.sql` (stale — predates 0020+, regenerate before trusting it).
+- `supabase/migrations/` — schema (0001 to 0043). Full dump at `docs/supabase-schema-full.sql` (stale — predates 0020+, regenerate before trusting it).
+- `docs/` — `VISION.md` (what this is for), `STATUS.md` (current state), `INDEX.md` (map of every doc), `briefs/` (implementation briefs from design work), `mockups/` (approved designs, dated), `schema/foreign-keys.json` (snapshot the embedded-relation test reads).
+- `archive/` — gitignored. Superseded code kept for reference (`superseded/`, with a README explaining what replaced what), design exports, one-off spreadsheets. Nothing here is built.
+- `legacy/` — the pre-Next.js Python prototype, tracked deliberately as reference. Zero imports from the app; excluded from tsc. Full dump at `docs/supabase-schema-full.sql` (stale — predates 0020+, regenerate before trusting it).
 
 ## Data model in one breath
 
@@ -62,6 +118,25 @@ Three guardrails now cover that gap:
 Apply them locally too, not only to production. Migrations applied to production via the Supabase connector left the local database four versions behind on 2026-09-08, which is what made `verify:db` and `scripts/audit-queue-volume.ts` fail against a schema that no longer matched. `npx tsx scripts/safe-migrate.ts` applies pending files locally and is how you confirm a hand-pasted production change matches the checked-in SQL.
 
 Known risk: running git from the sandbox concurrently with the user's own terminal/IDE can leave a stale `.git/index.lock` that blocks the user's next local git command — if the user reports a stuck `git` command right after a sandbox push, that lock file is the first thing to check (`rm .git/index.lock` once no git process is actually running).
+
+## Conventions worth knowing before writing a query
+
+- **Loaders take their inputs, they don't fetch them.** `getConfirmedArrForCustomer`
+  takes the override map; `buildArrStatProps` takes it too; `vocabLabel` takes
+  the vocab map. Pure functions stay testable, and per-request data threaded as
+  a prop can't leak between requests the way module state can. Both of
+  2026-09-08's database bugs came from breaking this in spirit.
+- **`processes` keeps both halves of every owner** (0032): `fde_owner_id` and
+  `fde_owner`. Any write that moves one must move the other, or the roster and
+  the Delivery table disagree. `rename_roster_entry()` (0038) and
+  `merge_roster_entry()` (0040) do it in one transaction with `updated_at`
+  preserved; `verify:db` asserts they agree.
+- **`field_overrides.entity_id` is polymorphic** — customer, process or
+  profile. It has no foreign key on purpose, so it **cannot** be used in a
+  PostgREST embedded relation. Join in memory. This is what caused the outage.
+- **`updated_at` on `processes` means "content last changed".** Manual
+  ordering, mark-reviewed, roster renames and merges all preserve it
+  (0036/0037/0038/0040). Every staleness signal reads it.
 
 ## Gotchas
 

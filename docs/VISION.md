@@ -6,6 +6,54 @@ The product, the principle behind it, and what the world looks like when it's do
 
 This is the long-form why. If you only have 30 seconds, [TL;DR](#tldr) is at the top. If you want the wiring, see [`README.md`](../README.md). If you want the architecture, see [`.cursor/plans/curator_full_vercel_rewrite_4412b274.plan.md`](../.cursor/plans/curator_full_vercel_rewrite_4412b274.plan.md). If you want to set up an integration, see [`docs/CREDENTIALS.md`](./CREDENTIALS.md).
 
+## The vision, in Rishabh's words (2026-09-08)
+
+The authoritative statement of what this is for. Everything below is the
+long-form reasoning behind it and remains accurate in intent; where the two
+differ, this section wins.
+
+> An **AI-first platform for Delivery and Customer Success**, where we can:
+>
+> - **Manage the customer 360** — everything happening with a customer, good
+>   or bad.
+> - **Maintain the metrics** — NPS, NRR, ARR, TTV and others.
+> - **Manage the projects** we have delivered for each customer, and what is
+>   in the pipeline.
+> - **Manage team members' workload.**
+> - **Produce the reports** we share with internal *and external* leadership.
+> - **Connect to Salesforce, Slack and Google Suite** to automate as much of
+>   any user's work as possible.
+
+Four things follow from that phrasing, and they are the ones worth holding on
+to when a design decision is close:
+
+1. **"AI-first" is about the work, not a chat box.** The agent exists to remove
+   steps a human would otherwise repeat. A feature that adds a place to type is
+   not automatically AI-first; one that drafts the follow-up, spots the stalled
+   process or proposes the field correction is.
+2. **"Good or bad" means the bad news has to surface.** A 360 that only shows
+   ARR and go-lives is a brochure. Blockers, escalations, detractor NPS and
+   stale records are the part that earns the page its place.
+3. **"External leadership" raises the bar on every number.** A figure that is
+   only approximately right is fine on an internal dashboard and not fine in a
+   customer's boardroom. This is why confirmed ARR beats the import snapshot,
+   why an override records who set it and why, and why the All-Hands report
+   keeps a stricter definition of "migration work" than the Delivery tab.
+4. **"As much as possible" is bounded by trust.** Slack and email never write a
+   field. They append to `events`, or they create something a human accepts.
+   The moment the platform writes customer-visible state unattended, people
+   stop believing the rest of it.
+
+### Metrics: where each one stands
+
+| Metric | State |
+|---|---|
+| **ARR** | Live. Salesforce-derived confirmed ARR, human-correctable with provenance (`field_overrides`, 0041). |
+| **NPS** | Live. Campaigns, responses, quarter history, per-customer score. |
+| **TTV** | Live. Generated column on `processes` from kickoff to go-live; distribution and trend on Trends. |
+| **NRR** | **Not built.** Needs renewal outcomes tracked against prior-period ARR — `sf_opportunities` has the raw material, nothing computes it yet. |
+| **Workload** | Partial. Per-FDE process counts exist on the Trends drilldown; there is no capacity model, so "workload" is a count, not a load. |
+
 ## TL;DR
 
 Delivering and supporting Kognitos customers is a daily archaeological dig across Salesforce, Kognitos, Slack, Gmail, Drive, Calendar, and Monday. DeliveryOps replaces that dig with one customer page, one event timeline, one agent, and one voice. Every fact about a customer lives in exactly one row in Postgres; every customer-facing string flows through one prompt with the brand voice baked in; every external system becomes part of one knowledge graph instead of seven separate dashboards. End state: an FDE does in 30 minutes what used to take half a day, and the company can support hundreds of customers without "Rishabh's brain" being the index.

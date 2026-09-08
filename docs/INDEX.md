@@ -24,3 +24,11 @@ A map of every doc so a new session (or engineer) knows what to read.
 | `../monday-backup-<date>/` | Full-fidelity Monday archive from a one-time backup pass ahead of the Monday decommission. The script that produced it (`scripts/monday-full-backup.ts`) has since been deleted — this folder is a historical snapshot only, nothing regenerates it. Read its `SUMMARY.md` and `_manifest.json` first. Gitignored (real customer data). | per run |
 
 Repo entry point for Claude: [../CLAUDE.md](../CLAUDE.md).
+
+## Added 2026-09-08
+
+- [VISION.md](./VISION.md) — now opens with the authoritative vision statement (AI-first Delivery + CS platform) ahead of the long-form why.
+- [briefs/](./briefs/) — implementation briefs moved out of the repo root: `2026-09-03-delivery-workspace-brief.md`, `2026-09-04-platform-ia-brief.md`.
+- [mockups/](./mockups/) — approved designs, dated. `2026-09-04-platform-ia.html` moved here from the root, where its own brief said it belonged.
+- [schema/foreign-keys.json](./schema/foreign-keys.json) — FK snapshot read by `tests/schema/embedded-relations.test.ts`. Regenerate with `npm run verify:db -- --dump-fks`.
+- [STATUS.md](./STATUS.md) — carries the PR 00 queue-volume audit and its recommendation to defer "Today".

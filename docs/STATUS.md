@@ -92,6 +92,75 @@ Verified after today's roster renames and merges: **14 of 149** processes carry
 today's timestamp, and 0038/0040's guard preserved it on all 84 rows the
 renames and merges touched. The staleness signal is intact.
 
+## 2026-09-08 — configurability pass, and one outage
+
+Migrations 0037–0043. The theme: **changing data must never need a code
+change.** See CLAUDE.md's "Everything is editable from the product".
+
+Shipped:
+
+- **Delivery reworked to three derived sections.** `sectionFor()` is a pure
+  function of `lifecycle` + `migration_stage` — no stored section, no
+  per-project override. 13 / 63 / 73, summing to 149 with zero orphans.
+  Historical is a *lens* (132 rows by fiscal quarter), so counts deliberately
+  don't sum. `isV2Relevant()` left untouched: it answers a different question
+  for the All-Hands report, and widening it would overstate the migration
+  programme by 28 live V1 processes.
+- **Owner pickers fixed.** All 27 roster rows had `roles = '{}'` from 0033, so
+  the FDE and TAM pickers matched zero rows *forever*. Backfilled from usage;
+  `role` is now a ranking hint, not a WHERE clause, so it can't recur.
+- **Roster management** — rename, roles, mark as left, merge. Renames and
+  merges move the denormalized owner text in the same transaction with
+  `updated_at` preserved (0038, 0040). Fixed 84 rows of pre-existing drift and
+  merged the Arushi / Paige Gill duplicates.
+- **Customer 360 is editable.** It previously had *no* editing at all.
+  `deleteCustomer` finally has a route and a button.
+- **Salesforce corrections** (0041) — `CONFIRMED_ARR_OVERRIDES` was a hardcoded
+  map requiring a deploy. Now `field_overrides`, with a confirm step asking
+  whether the source was wrong, and who/when/why recorded.
+- **Vocabularies editable** (0042) — label, short label, colour, order, retire,
+  add. Enum types kept deliberately; only the presentation moved. Chip colours
+  left `localStorage`, so they're shared rather than per-browser.
+- **Tunables** (0043) — the value-delivered model and NPS cadence.
+- **Row drag** on the table (`table_position`), **lifecycle colours**, select
+  chevrons, dismissable attention banners, a visible way out of Stuck.
+
+### The outage, and what changed because of it
+
+`loadOverrideMap` shipped `.select("value, customers!inner(key)")`. PostgREST
+needs a foreign key to embed, and `field_overrides.entity_id` is polymorphic
+and has none. It broke `/delivery`, `/customers/[key]` and
+`/reports/v2-migration`, and **passed type-check, 405 tests and a clean build**
+— none of which execute a query.
+
+Three guardrails now, each verified to fail on the real bug before being
+trusted:
+
+1. `tests/schema/embedded-relations.test.ts` — static, no database, runs in
+   pre-commit. Parses every `.from().select()` pair and demands a real FK from
+   `docs/schema/foreign-keys.json`.
+2. `npm run verify:db` — **executes** all 18 loaders, then checks five
+   invariants no constraint can enforce (owner mirrors vs FK, section routing,
+   every value in use having a label, setting shapes, orphaned overrides).
+3. `.husky/pre-push` — runs it; blocks on failure, skips loudly with no
+   database, 60s timeout so it can't hang a push.
+
+It found real drift on first run: the local database was four migrations
+behind production, because migrations had been applied through the Supabase
+connector without `safe-migrate` locally.
+
+### Housekeeping
+
+Repo root cleared of design zips, spreadsheets and two implementation briefs
+(now `docs/briefs/`). The IA mockup moved to `docs/mockups/`. The never-committed
+`lib/migrations/` + `app/api/migrations/` — superseded by `lib/processes/` and
+never deployed — moved to `archive/superseded/` with a README on what replaced
+what. `archive/` and the local-only data directories are gitignored, and
+`archive/` is excluded from tsc.
+
+**Left alone deliberately:** `.claude/worktrees/new-files-phased-plan-a56363`
+holds 13 commits not on main. Needs a decision, not a prune.
+
 ## Next up (per Rishabh, 2026-08-10)
 
 1. Finish verifying Weekly Delivery Review against production (in progress — see the SDD ledger under `.superpowers/sdd/` if resuming that plan).

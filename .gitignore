@@ -24,3 +24,12 @@ monday-backup-*/
 
 # Brainstorming visual-companion sessions
 .superpowers/
+
+# Local-only working material: design exports, one-off spreadsheets, vendor
+# API dumps, narrative drafts, and code superseded but kept for reference.
+# None of it is source; committing it would put customer data and 600KB of
+# design zips in the repo.
+archive/
+kognitos_api/
+value_narrative/
+v2-migration-data/
