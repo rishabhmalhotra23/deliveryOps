@@ -143,6 +143,21 @@ describe("withDerivedFields", () => {
     const next = withDerivedFields(existing, { migration_stage: "engg_pending" });
     expect(next.lifecycle).toBeUndefined();
   });
+
+  // v2_native says where a process was BUILT, not how far along it is — it is
+  // the default for every new process. Mapping it to "live" meant that setting
+  // a stage of V2 native, which is exactly how a process is moved from V2
+  // migration into Active work, marked it shipped instead: lifecycle -> live,
+  // went_live_at stamped, and sectionFor() sent it to Historical. Wipro GPO's
+  // BGV QC (2026-09-10) was in UAT, not live, and vanished from Active work.
+  it("never marks a process live because it is V2 native", () => {
+    for (const lifecycle of ["backlog", "upcoming", "discovery", "in_development", "uat"] as ProcessLifecycle[]) {
+      const existing = fakeProcess({ lifecycle, migration_stage: "not_required", went_live_at: null });
+      const next = withDerivedFields(existing, { migration_stage: "v2_native" });
+      expect(next.lifecycle, lifecycle).toBeUndefined();
+      expect(stampGoLive(existing, next).went_live_at, lifecycle).toBeUndefined();
+    }
+  });
 });
 
 describe("bulkApply", () => {

@@ -119,6 +119,14 @@ export function pickEditable(patch: Partial<Process>): Record<string, unknown> {
 // point of view, simply "this process is in development" or "in UAT" or
 // "live" — not_required is deliberately absent, since it carries no
 // delivery-status signal at all.
+//
+// So is v2_native. It says where a process was built, not how far along it
+// is, and it is the default for every new process. It mapped to "live" until
+// 2026-10-01, which turned the documented way to move a process into Active
+// work — set its stage to V2 native — into marking it shipped: lifecycle
+// flipped to live, stampGoLive recorded a go-live that never happened, and
+// sectionFor() filed it under Historical. Wipro GPO's BGV QC, then in UAT,
+// disappeared from Active work that way on 2026-09-10.
 const MIGRATION_STAGE_TO_LIFECYCLE: Partial<Record<MigrationStage, ProcessLifecycle>> = {
   in_development: "in_development",
   engg_pending: "in_development",
@@ -126,7 +134,6 @@ const MIGRATION_STAGE_TO_LIFECYCLE: Partial<Record<MigrationStage, ProcessLifecy
   customer_validation: "uat",
   live_on_v2: "live",
   migrated_pending_commercial: "live",
-  v2_native: "live",
 };
 
 // Auto-derivation only ever moves a process forward through its normal flow —

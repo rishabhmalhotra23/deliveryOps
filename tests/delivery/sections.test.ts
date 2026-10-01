@@ -54,10 +54,30 @@ describe("sectionFor", () => {
   });
 
   it("sends ended work to Historical whatever its stage says", () => {
-    for (const lifecycle of ["cancelled", "churned", "retired", "needs_triage"] as ProcessLifecycle[]) {
+    for (const lifecycle of ["cancelled", "churned", "retired"] as ProcessLifecycle[]) {
       expect(sectionFor(row(lifecycle, "v2_native"))).toBe("historical");
       expect(sectionFor(row(lifecycle, "in_development"))).toBe("historical");
     }
+  });
+
+  // needs_triage means "nobody has reviewed the lifecycle", not "ended". It
+  // used to sit with cancelled/churned/retired, so Kort Payments' four
+  // processes — stage In development, lifecycle unreviewed — were filed under
+  // Historical while the All-Hands report, which reads the stage, counted
+  // them in the migration programme. Ten rows were in the report and in
+  // neither operational tab (2026-10-01). V2 migration is a stage question,
+  // so an unknown lifecycle must not take a row off that list.
+  it("keeps an unreviewed process with a migration stage on the V2 migration list", () => {
+    expect(sectionFor(row("needs_triage", "in_development"))).toBe("v2");
+    expect(sectionFor(row("needs_triage", "migrated_pending_commercial"))).toBe("v2");
+    expect(sectionFor(row("needs_triage", "not_required"))).toBe("v2");
+  });
+
+  // Active work is a lifecycle question — "is this in flight?" — and an
+  // unreviewed lifecycle is no evidence that it is. These are mostly Monday
+  // imports with no dates; they stay in Historical until somebody triages one.
+  it("keeps an unreviewed V2-native process out of Active work", () => {
+    expect(sectionFor(row("needs_triage", "v2_native"))).toBe("historical");
   });
 
   it("assigns exactly one section to every lifecycle/stage combination", () => {
@@ -77,8 +97,9 @@ describe("sectionFor", () => {
       expect(sectionFor({ ...triaged, lifecycle: "discovery" })).toBe("active");
     });
 
-    it("moves a triaged V1 process to V2 migration, not Active work, on the same edit", () => {
+    it("keeps a V1 process in V2 migration through triage — it was never anywhere else", () => {
       const triaged = row("needs_triage", "engg_pending");
+      expect(sectionFor(triaged)).toBe("v2");
       expect(sectionFor({ ...triaged, lifecycle: "discovery" })).toBe("v2");
     });
 
@@ -110,7 +131,10 @@ describe("inHistoricalLens", () => {
 
   it("includes ended work with no go-live date", () => {
     expect(inHistoricalLens({ lifecycle: "churned", go_live_date: null })).toBe(true);
-    expect(inHistoricalLens({ lifecycle: "needs_triage", go_live_date: null })).toBe(true);
+    // Unreviewed is neither shipped nor ended. An undated needs-triage row is
+    // only in Historical when sectionFor() routes it there (V2 native), which
+    // inHistoricalSection's union covers.
+    expect(inHistoricalLens({ lifecycle: "needs_triage", go_live_date: null })).toBe(false);
   });
 
   it("excludes in-flight work that hasn't shipped", () => {

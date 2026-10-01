@@ -315,6 +315,37 @@ async function phaseInvariants() {
     fail("every process is visible in a section", err);
   }
 
+  // The All-Hands report and Delivery answer "which processes are being
+  // migrated?" with two functions (isV2Relevant, sectionFor) on purpose — but
+  // the answer must be the same. On 2026-10-01 ten rows the report counted as
+  // migration in flight (Kort Payments, Wipro FSS) were filed under Historical
+  // because sectionFor() let a needs-triage lifecycle outrank the stage, and
+  // nothing compared the two. v2_native rows are excluded: the report shows
+  // those as fresh builds, and Delivery puts them in Active work or Historical
+  // by design.
+  try {
+    const { loadV2MigrationOverview } = await import("@/lib/processes/loader");
+    const { sectionFor } = await import("@/lib/delivery/sections");
+    const { rows } = await loadV2MigrationOverview();
+    const missing = rows.filter((r) => r.migration_stage !== "v2_native" && sectionFor(r) !== "v2");
+    if (missing.length > 0) {
+      fail(
+        "every All-Hands migration row is on Delivery's V2 migration list",
+        new Error(
+          `${missing.length} missing: ${missing
+            .slice(0, 5)
+            .map((r) => `${r.process_name} (${r.lifecycle}/${r.migration_stage} -> ${sectionFor(r)})`)
+            .join("; ")}`
+        )
+      );
+    } else {
+      const counted = rows.filter((r) => r.migration_stage !== "v2_native").length;
+      pass("every All-Hands migration row is on Delivery's V2 migration list", `${counted} rows`);
+    }
+  } catch (err) {
+    fail("every All-Hands migration row is on Delivery's V2 migration list", err);
+  }
+
   // Every category a customer carries must have a vocabulary row, and every
   // category must roll up to a zone that exists — otherwise /customers groups
   // that customer under a header it cannot name. 0045 seeds a row for anything

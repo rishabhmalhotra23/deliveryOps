@@ -38,17 +38,16 @@ export const SECTION_HINTS: Record<DeliverySection, string> = {
   historical: "Shipped and ended work, by quarter",
 };
 
-/** Lifecycles that mean the work is no longer in flight. `needs_triage` is
- *  here because it is unreviewed rather than active — the same call
- *  ARCHIVE_LIFECYCLES already makes — and per the 2026-09-04 decision it
- *  lands in Historical until somebody changes its lifecycle, at which point
- *  this function routes it out again with no further input. */
-const ENDED_LIFECYCLES = new Set<ProcessLifecycle>([
-  "cancelled",
-  "churned",
-  "retired",
-  "needs_triage",
-]);
+/** Lifecycles that mean the work is no longer in flight.
+ *
+ *  `needs_triage` used to be here too (2026-09-04), on the reading that
+ *  unreviewed is not active. But it isn't ended either, and putting it here
+ *  made the lifecycle outrank the migration stage: Kort Payments' four
+ *  processes, stage In development, sat in Historical while the All-Hands
+ *  report — which reads the stage — counted them as migration in flight. Ten
+ *  production rows were in the report and in neither operational tab
+ *  (2026-10-01). sectionFor() now handles needs_triage per section. */
+const ENDED_LIFECYCLES = new Set<ProcessLifecycle>(["cancelled", "churned", "retired"]);
 
 /** The one routing rule. Order matters: an ended process is Historical
  *  whatever its migration stage says.
@@ -65,14 +64,21 @@ const ENDED_LIFECYCLES = new Set<ProcessLifecycle>([
  *  section is a migrate-or-retire to-do list, and a process running live on V1
  *  is still on the list. Applying the same rule there would move 58 of
  *  production's 65 rows out and collapse the section to 5, gutting the view of
- *  the migration programme. Two sections, two questions, two rules. */
+ *  the migration programme. Two sections, two questions, two rules.
+ *
+ *  `needs_triage` follows from the same two questions. V2 migration asks
+ *  about the stage, so an unreviewed lifecycle leaves a row on that list —
+ *  it needs a migrate-or-retire decision more than anything there. Active
+ *  work asks "is this in flight?", and an unreviewed lifecycle is no evidence
+ *  that it is, so an unreviewed V2-native row waits in Historical until
+ *  somebody triages it. */
 export function sectionFor(row: {
   lifecycle: ProcessLifecycle;
   migration_stage: MigrationStage;
 }): DeliverySection {
   if (ENDED_LIFECYCLES.has(row.lifecycle)) return "historical";
   if (row.migration_stage === "v2_native") {
-    return row.lifecycle === "live" ? "historical" : "active";
+    return row.lifecycle === "live" || row.lifecycle === "needs_triage" ? "historical" : "active";
   }
   return "v2";
 }
