@@ -19,3 +19,15 @@ export function slugifyCustomerKey(name: string): string {
     .replace(/^-+|-+$/g, "")
     .replace(/-+/g, "-");
 }
+
+/** The key a new customer is created with: the caller's, if it sent one,
+ *  otherwise derived from the name. Null when neither yields anything — a
+ *  name of only punctuation has no slug, and an empty key would break every
+ *  /customers/[key] link. Derived server-side because the /customers page's
+ *  "Add customer" sends only a name, and failed validation on every add
+ *  until 2026-10-01 for want of this. */
+export function customerKeyFor(input: { key?: string; display_name: string }): string | null {
+  const explicit = input.key?.trim();
+  if (explicit) return explicit;
+  return slugifyCustomerKey(input.display_name) || null;
+}

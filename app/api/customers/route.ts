@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createCustomer, listCustomers } from "@/lib/customers";
 import { parseBody, CustomerCreateSchema } from "@/lib/api/schemas";
+import { customerKeyFor } from "@/lib/customers/slug";
 import { logger, errorCtx } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,15 @@ export async function GET() {
 export async function POST(request: Request) {
   const parsed = await parseBody(request, CustomerCreateSchema);
   if (!parsed.ok) return parsed.response;
+  const key = customerKeyFor(parsed.data);
+  if (!key) {
+    return NextResponse.json(
+      { error: "Customer name needs at least one letter or digit." },
+      { status: 400 }
+    );
+  }
   try {
-    const customer = await createCustomer(parsed.data);
+    const customer = await createCustomer({ ...parsed.data, key });
     log.info("Customer created", { key: customer.key });
     return NextResponse.json({ customer }, { status: 201 });
   } catch (err) {

@@ -16,7 +16,9 @@ export type ChatPostInput = z.infer<typeof ChatPostSchema>;
 // ── Customers ─────────────────────────────────────────────────────────────────
 
 export const CustomerCreateSchema = z.object({
-  key: z.string().min(1).max(64),
+  // Optional: POST /api/customers derives it from display_name when absent
+  // (customerKeyFor in lib/customers/slug.ts).
+  key: z.string().max(64).optional(),
   display_name: z.string().min(1).max(128),
   slack_channel: z.string().max(80).optional(),
   email_alias: z.string().email().optional(),
